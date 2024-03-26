@@ -1,0 +1,16 @@
+-- feeds.json --
+[
+  "https://example.com/feed.xml"
+]
+-- filters.json --
+{
+  "https://example.com/feed.xml": {
+    "ignore_rule": "(?i)2019-07-01T00:00:00Z"
+  }
+}
+-- state.json --
+{
+  "https://example.com/feed.xml": {
+    "last_updated": "0001-01-01T00:00:00Z"
+  }
+}

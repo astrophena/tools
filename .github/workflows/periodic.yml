@@ -1,0 +1,24 @@
+name: 'Periodic'
+on:
+  schedule:
+    # Every day (at 07:00, 12:00 and 17:00).
+    - cron: '0 4,9,14 * * *'
+  workflow_dispatch:
+jobs:
+  tgfeed:
+    name: 'Fetch RSS feeds and send new articles and videos to Telegram'
+    runs-on: 'ubuntu-latest'
+    steps:
+      - name: 'Check out'
+        uses: 'actions/checkout@v4'
+      - name: 'Set up Go'
+        uses: 'actions/setup-go@v5'
+        with:
+          go-version-file: 'go.mod'
+      - name: 'Run tgfeed'
+        env:
+          CHAT_ID: '${{ secrets.TGFEED_CHAT_ID }}'
+          GIST_ID: '${{ secrets.TGFEED_GIST_ID }}'
+          GITHUB_TOKEN: '${{ secrets.TGFEED_GIST_TOKEN }}'
+          TELEGRAM_TOKEN: '${{ secrets.TGFEED_TOKEN }}'
+        run: 'go run ./cmd/tgfeed'
