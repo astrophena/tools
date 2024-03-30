@@ -25,7 +25,25 @@ func main() {
 	}
 	dir := flag.Args()[0]
 
-	hashes := make(map[string]string)
+	dups, err := lookup(dir)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	for _, d := range dups {
+		log.Printf("duplicate file %s of %s", d.cur, d.prev)
+	}
+}
+
+type dup struct {
+	cur, prev string
+}
+
+func lookup(dir string) ([]dup, error) {
+	var (
+		dups   []dup
+		hashes = make(map[string]string)
+	)
 
 	if err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -49,15 +67,29 @@ func main() {
 
 		hh := fmt.Sprintf("%x", h.Sum(nil))
 
-		prev, dup := hashes[hh]
-		if dup {
-			log.Printf("duplicate file %s, previously was at %s", path, prev)
+		prev, hasDup := hashes[hh]
+		if hasDup {
+			bpath, err := filepath.Rel(dir, path)
+			if err != nil {
+				return err
+			}
+			bprev, err := filepath.Rel(dir, prev)
+			if err != nil {
+				return err
+			}
+
+			dups = append(dups, dup{
+				cur:  bpath,
+				prev: bprev,
+			})
 			return nil
 		}
 
 		hashes[hh] = path
 		return nil
 	}); err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
+
+	return dups, nil
 }

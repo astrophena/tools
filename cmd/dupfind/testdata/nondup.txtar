@@ -1,0 +1,11 @@
+-- a.txt --
+hello
+-- b.txt --
+world
+-- c.rb --
+class Greeter
+  def self.greet(name)
+    puts "Hello, #{name}!"
+  end
+end
+Greeter.greet("Ilya")
