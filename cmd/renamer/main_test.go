@@ -10,7 +10,6 @@ import (
 
 	"go.astrophena.name/tools/internal/testutil"
 
-	"github.com/google/go-cmp/cmp"
 	"golang.org/x/tools/txtar"
 )
 
@@ -63,9 +62,7 @@ func TestRename(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if diff := cmp.Diff(want, got); diff != "" {
-				t.Fatalf("(-want +got): \n%s", diff)
-			}
+			testutil.AssertEqual(t, want, got)
 		})
 	}
 }
