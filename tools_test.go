@@ -36,10 +36,14 @@ func TestReadme(t *testing.T) {
 func TestGofmt(t *testing.T) {
 	var w bytes.Buffer
 
-	gofmt := exec.Command("gofmt", "-d", ".")
+	gofmt := exec.Command("gofmt", "-l", ".")
 	gofmt.Stdout = &w
 	gofmt.Stderr = &w
 	if err := gofmt.Run(); err != nil {
 		t.Fatalf("gofmt failed: %v\n\n%v", err, w)
+	}
+
+	if diff := w.String(); diff != "" {
+		t.Fatalf("run gofmt on these files:\n\t%v", diff)
 	}
 }
