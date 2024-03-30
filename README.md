@@ -5,3 +5,9 @@ This repository holds personal tools:
 - mp3renamer renames MP3 files by their track number and title.
 - renamer renames files sequentially.
 - tgfeed fetches RSS feeds and sends new articles via Telegram.
+
+Install them:
+
+```sh
+$ go install go.astrophena.name/tools/cmd/...@master
+```
