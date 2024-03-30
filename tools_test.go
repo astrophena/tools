@@ -1,6 +1,6 @@
 package tools
 
-//go:generate bash genreadme.sh
+//go:generate bash scripts/genreadme.sh
 
 import (
 	"bytes"

@@ -1,7 +1,4 @@
-// mp3renamer is a dumb program that does just one thing: it reads from MP3 file
-// it's album track number and title and renames it.
-//
-// Files are renamed like that: [track number]. [track title].mp3.
+// mp3renamer renames MP3 files by their track number and title.
 package main
 
 import (
@@ -18,10 +15,7 @@ import (
 )
 
 func main() {
-	cli.SetDescription(`mp3renamer is a dumb program that does just one thing: it reads from MP3 file
-it's album track number and title and renames it.
-
-Files are renamed like that: [track number]. [track title].mp3.`)
+	cli.SetDescription("mp3renamer renames MP3 files by their track number and title.")
 	cli.SetArgsUsage("[dir]")
 	cli.HandleStartup()
 
