@@ -9,5 +9,5 @@ This repository holds personal tools:
 Install them:
 
 ```sh
-$ go install go.astrophena.name/tools/cmd/...@master
+go install go.astrophena.name/tools/cmd/...@master
 ```
