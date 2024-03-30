@@ -51,7 +51,7 @@ func main() {
 
 		prev, dup := hashes[hh]
 		if dup {
-			log.Printf("duplicate file %q, previously was at %q", path, prev)
+			log.Printf("duplicate file %s, previously was at %s", path, prev)
 			return nil
 		}
 
