@@ -1,7 +1,7 @@
 // Package token defines constants representing the lexical tokens of Nora.
 package token
 
-//go:generate go run golang.org/x/tools/cmd/stringer@latest -type=Type
+//go:generate go run golang.org/x/tools/cmd/stringer -type=Type
 
 // Type represents a token type.
 type Type int
