@@ -3,6 +3,7 @@ package ast
 
 import "go.astrophena.name/tools/internal/nora/token"
 
+// Node represents an AST node.
 type Node interface {
 	TokenLiteral() string
 }
@@ -17,6 +18,7 @@ type Expression interface {
 	expressionNode()
 }
 
+// Program is a root AST node, representing the Nora program.
 type Program struct {
 	Statements []Statement
 }
