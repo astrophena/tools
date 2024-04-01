@@ -1,8 +1,10 @@
 // Package token defines constants representing the lexical tokens of Nora.
 package token
 
+//go:generate go run golang.org/x/tools/cmd/stringer@latest -type=Type
+
 // Type represents a token type.
-type Type string
+type Type int
 
 // Token represents a token.
 type Token struct {
@@ -10,35 +12,53 @@ type Token struct {
 	Literal string
 }
 
-// Token types.
+// Token types. Their integer representatives may change. Don't rely on them.
 const (
-	Illegal Type = "ILLEGAL"
-	EOF     Type = "EOF"
+	Illegal Type = iota
+	EOF
 
 	// Identifiers and literals.
-	Ident Type = "IDENT" // identifiers
-	Int   Type = "INT"   // integers
+	Ident // identifiers
+	Int   // integers
 
 	// Operators.
-	Assign Type = "="
-	Plus   Type = "+"
+	Assign   // =
+	Plus     // +
+	Minus    // -
+	Bang     // !
+	Asterisk // *
+	Slash    // /
+	Lt       // <
+	Gt       // >
+	Eq       // ==
+	Ne       // !=
 
 	// Delimiters.
-	Comma      Type = ","
-	Semicolon  Type = ";"
-	LeftParen  Type = "("
-	RightParen Type = ")"
-	LeftBrace  Type = "{"
-	RightBrace Type = "}"
+	Comma      // ,
+	Semicolon  // ;
+	LeftParen  // (
+	RightParen // )
+	LeftBrace  // {
+	RightBrace // }
 
 	// Keywords.
-	Function Type = "FUNCTION"
-	Let      Type = "LET"
+	Function // fn
+	Let      // let
+	True     // true
+	False    // false
+	If       // if
+	Else     // else
+	Return   // return
 )
 
 var keywords = map[string]Type{
-	"fn":  Function,
-	"let": Let,
+	"fn":     Function,
+	"let":    Let,
+	"true":   True,
+	"false":  False,
+	"if":     If,
+	"else":   Else,
+	"return": Return,
 }
 
 // LookupIdent returns a token type for the identifier.
