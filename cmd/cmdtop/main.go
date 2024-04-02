@@ -3,6 +3,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"flag"
 	"fmt"
 	"io"
@@ -50,10 +51,10 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	io.WriteString(os.Stdout, top)
+	os.Stdout.Write(top)
 }
 
-func count(r io.Reader, num int64) (top string, err error) {
+func count(r io.Reader, num int64) (top []byte, err error) {
 	scanner := bufio.NewScanner(r)
 
 	m := make(map[string]int)
@@ -67,7 +68,7 @@ func count(r io.Reader, num int64) (top string, err error) {
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		return "", err
+		return nil, err
 	}
 
 	type kv struct {
@@ -85,13 +86,13 @@ func count(r io.Reader, num int64) (top string, err error) {
 		return ss[i].key > ss[j].key
 	})
 
-	var sb strings.Builder
+	var b bytes.Buffer
 	for i, kv := range ss {
 		if int64(i) == num {
 			break
 		}
-		fmt.Fprintf(&sb, "%d. %s (%d)\n", i+1, kv.key, kv.value)
+		fmt.Fprintf(&b, "%d. %s (%d)\n", i+1, kv.key, kv.value)
 	}
 
-	return sb.String(), nil
+	return b.Bytes(), nil
 }

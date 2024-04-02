@@ -4,7 +4,6 @@ import (
 	"flag"
 	"log"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -21,50 +20,26 @@ func TestMain(m *testing.M) {
 }
 
 func TestRename(t *testing.T) {
-	cases, err := filepath.Glob("testdata/*.txtar")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	for _, tc := range cases {
-		tcName := strings.TrimSuffix(tc, filepath.Ext(tc))
-		tcName = strings.TrimPrefix(tcName, "testdata"+string(filepath.Separator))
-
-		t.Run(tcName, func(t *testing.T) {
-			logf = t.Logf
-			t.Cleanup(func() {
-				logf = log.Printf
-			})
-
-			tca, err := txtar.ParseFile(tc)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			dir := t.TempDir()
-			testutil.ExtractTxtar(t, tca, dir)
-
-			if err := rename(dir, 1); err != nil {
-				t.Fatal(err)
-			}
-
-			got := testutil.BuildTxtar(t, dir)
-
-			golden := filepath.Join("testdata", tcName+".golden")
-			if *update {
-				if err := os.WriteFile(golden, got, 0o644); err != nil {
-					t.Fatalf("unable to write golden file %q: %v", golden, err)
-				}
-				return
-			}
-			want, err := os.ReadFile(golden)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			testutil.AssertEqual(t, want, got)
+	testutil.RunGolden(t, "testdata/*.txtar", func(t *testing.T, tc string) []byte {
+		logf = t.Logf
+		t.Cleanup(func() {
+			logf = log.Printf
 		})
-	}
+
+		tca, err := txtar.ParseFile(tc)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		dir := t.TempDir()
+		testutil.ExtractTxtar(t, tca, dir)
+
+		if err := rename(dir, 1); err != nil {
+			t.Fatal(err)
+		}
+
+		return testutil.BuildTxtar(t, dir)
+	}, *update)
 }
 
 func TestAskForConfirmation(t *testing.T) {

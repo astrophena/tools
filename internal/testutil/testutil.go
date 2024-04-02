@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -18,6 +19,55 @@ func AssertEqual(t *testing.T, want, got any) {
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Fatalf("(-want +got):\n%s", diff)
 	}
+}
+
+// Run runs a subtest for each file matching the provided glob pattern.
+func Run(t *testing.T, glob string, f func(t *testing.T, match string)) {
+	matches, err := filepath.Glob(glob)
+	if err != nil {
+		t.Fatalf("filepath.Glob(%q): %v", glob, err)
+	}
+	if len(matches) == 0 {
+		return
+	}
+
+	for _, match := range matches {
+		name, err := filepath.Rel(filepath.Dir(match), match)
+		if err != nil {
+			t.Fatalf("filepath.Rel(%q, %q): %v", filepath.Dir(match), match, err)
+		}
+		name = strings.TrimSuffix(name, filepath.Ext(match))
+
+		t.Run(name, func(t *testing.T) {
+			f(t, match)
+		})
+	}
+}
+
+// RunGolden runs a subtest for each file matching the provided glob pattern,
+// computing the result and comparing it with a golden file, or updating a
+// golden file if update is true.
+//
+// f is a function that should compute the result and return it as a byte slice.
+func RunGolden(t *testing.T, glob string, f func(t *testing.T, match string) []byte, update bool) {
+	Run(t, glob, func(t *testing.T, match string) {
+		got := f(t, match)
+
+		golden := strings.TrimSuffix(match, filepath.Ext(match)) + ".golden"
+		if update {
+			if err := os.WriteFile(golden, got, 0o644); err != nil {
+				t.Fatalf("unable to write golden file %q: %v", golden, err)
+			}
+			return
+		}
+
+		want, err := os.ReadFile(golden)
+		if err != nil {
+			t.Fatalf("unable to read golden file %q: %v", golden, err)
+		}
+
+		AssertEqual(t, want, got)
+	})
 }
 
 // ExtractTxtar extracts a txtar archive to dir.
