@@ -12,7 +12,7 @@ type Token struct {
 	Literal string
 }
 
-// Token types. Their integer representatives may change. Don't rely on them.
+// Token types. Their integer representations may change. Don't rely on them.
 const (
 	Illegal Type = iota
 	EOF
