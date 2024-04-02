@@ -8,12 +8,12 @@ import (
 	"os"
 	"os/signal"
 
-	"github.com/davecgh/go-spew/spew"
-
 	"go.astrophena.name/tools/internal/cli"
 	"go.astrophena.name/tools/internal/nora/lex"
 	"go.astrophena.name/tools/internal/nora/parse"
 	"go.astrophena.name/tools/internal/nora/repl"
+
+	"github.com/davecgh/go-spew/spew"
 )
 
 func main() {
