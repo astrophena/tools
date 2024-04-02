@@ -82,3 +82,31 @@ return 993322;
 		testutil.AssertEqual(t, "return", returnStmt.TokenLiteral())
 	}
 }
+
+func TestIdentifierExpression(t *testing.T) {
+	const input = "foobar;"
+
+	l := lex.New(input)
+	p := New(l)
+
+	prog, err := p.ParseProgram()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(prog.Statements) != 1 {
+		t.Fatalf("program should contain exactly one statement, instead got %d", len(prog.Statements))
+	}
+
+	stmt, ok := prog.Statements[0].(*ast.ExpressionStatement)
+	if !ok {
+		t.Fatalf("program statement is not ast.ExpressionStatement, got %T", prog.Statements[0])
+	}
+
+	ident, ok := stmt.Expression.(*ast.Identifier)
+	if !ok {
+		t.Fatalf("expression not *ast.Identifier, got %T", stmt.Expression)
+	}
+	testutil.AssertEqual(t, "foobar", ident.Value)
+	testutil.AssertEqual(t, "foobar", ident.TokenLiteral())
+}

@@ -10,6 +10,18 @@ import (
 	"go.astrophena.name/tools/internal/nora/token"
 )
 
+// Precedence in expression.
+const (
+	_ int = iota
+	lowest
+	equals      // ==
+	lessGreater // > or <
+	sum         // +
+	product     // *
+	prefix      // -X or !X
+	call        // myFunction(x)
+)
+
 type (
 	prefixParseFunc func() ast.Expression
 	infixParseFunc  func(ast.Expression) ast.Expression
@@ -42,6 +54,9 @@ func New(l *lex.Lexer) *Parser {
 
 	p.nextToken()
 	p.nextToken()
+
+	p.prefixParseFuncs = make(map[token.Type]prefixParseFunc)
+	p.registerPrefix(token.Ident, p.parseIdentifier)
 
 	return p
 }
@@ -88,7 +103,7 @@ func (p *Parser) parseStatement() ast.Statement {
 	case token.Return:
 		return p.parseReturnStatement()
 	default:
-		return nil
+		return p.parseExpressionStatement()
 	}
 }
 
@@ -122,6 +137,32 @@ func (p *Parser) parseReturnStatement() *ast.ReturnStatement {
 	}
 
 	return stmt
+}
+
+func (p *Parser) parseExpressionStatement() *ast.ExpressionStatement {
+	stmt := &ast.ExpressionStatement{Token: p.curToken}
+
+	stmt.Expression = p.parseExpression(lowest)
+
+	if p.peekTokenIs(token.Semicolon) {
+		p.nextToken()
+	}
+
+	return stmt
+}
+
+func (p *Parser) parseExpression(precedence int) ast.Expression {
+	prefix := p.prefixParseFuncs[p.curToken.Type]
+	if prefix == nil {
+		return nil
+	}
+	leftExp := prefix()
+
+	return leftExp
+}
+
+func (p *Parser) parseIdentifier() ast.Expression {
+	return &ast.Identifier{Token: p.curToken, Value: p.curToken.Literal}
 }
 
 func (p *Parser) curTokenIs(t token.Type) bool {
