@@ -213,6 +213,12 @@ func (f *fetcher) run(ctx context.Context) error {
 			html.EscapeString(item.Title),
 		)
 
+		// hnrss.org feeds have Hacker News entry URL set as GUID. Also send it
+		// because I often read comments on Hacker News entries.
+		if strings.HasPrefix(item.GUID, "https://news.ycombinator.com/item?id=") {
+			msg += fmt.Sprintf("\n\n💬 <a href=\"%s\">Comments</a>", item.GUID)
+		}
+
 		if f.dryRun {
 			f.log.Println(msg)
 			continue
