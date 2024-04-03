@@ -8,7 +8,7 @@ type Lexer struct {
 	input   string
 	pos     int  // current position in input (points to current char)
 	readPos int  // current reading position in input (after current char)
-	ch      byte // currently examined char
+	ch      rune // currently examined char
 }
 
 // New returns a new Lexer lexing input.
@@ -87,7 +87,7 @@ func (l *Lexer) NextToken() token.Token {
 	return tok
 }
 
-func newToken(typ token.Type, ch byte) token.Token {
+func newToken(typ token.Type, ch rune) token.Token {
 	return token.Token{Type: typ, Literal: string(ch)}
 }
 
@@ -95,17 +95,17 @@ func (l *Lexer) readChar() {
 	if l.readPos >= len(l.input) {
 		l.ch = 0
 	} else {
-		l.ch = l.input[l.readPos]
+		l.ch = rune(l.input[l.readPos])
 	}
 	l.pos = l.readPos
 	l.readPos += 1
 }
 
-func (l *Lexer) peekChar() byte {
+func (l *Lexer) peekChar() rune {
 	if l.readPos >= len(l.input) {
 		return 0
 	}
-	return l.input[l.readPos]
+	return rune(l.input[l.readPos])
 }
 
 func (l *Lexer) readNum() string {
@@ -130,10 +130,10 @@ func (l *Lexer) skipWhitespace() {
 	}
 }
 
-func isLetter(ch byte) bool {
+func isLetter(ch rune) bool {
 	return 'a' <= ch && ch <= 'z' || 'A' <= ch && ch <= 'Z' || ch == '_'
 }
 
-func isDigit(ch byte) bool {
+func isDigit(ch rune) bool {
 	return '0' <= ch && ch <= '9'
 }
