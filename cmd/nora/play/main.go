@@ -1,3 +1,5 @@
+//go:build js
+
 // play implements a Nora playground, running on WebAssembly in browser.
 package main
 
