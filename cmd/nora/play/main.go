@@ -10,7 +10,7 @@ import (
 	"go.astrophena.name/tools/internal/nora/token"
 )
 
-func runNora() js.Func {
+func run() js.Func {
 	return js.FuncOf(func(this js.Value, args []js.Value) any {
 		if len(args) != 1 {
 			return "no arguments passed"
@@ -38,6 +38,6 @@ func runNora() js.Func {
 }
 
 func main() {
-	js.Global().Set("runNora", runNora())
+	js.Global().Set("run", run())
 	<-make(chan struct{})
 }

@@ -8,11 +8,15 @@
         go.run(result.instance);
       });
     </script>
+    <link rel="stylesheet" href="/style.css" />
     <title>Nora Play</title>
-	</head>
-	<body>
-    <textarea id="input" name="input" cols="80" rows="20"></textarea>
+  </head>
+  <body>
+    <h1>Nora Play</h1>
+    <div class="container">
+      <textarea id="input" name="input" cols="80" rows="20"></textarea>
+      <textarea id="output" name="output" cols="80" rows="20" disabled></textarea>
+    </div>
     <input id="button" type="submit" name="button" value="run" onclick="runNora(input.value)"/>
-    <textarea id="output" name="output" cols="80" rows="20"></textarea>
   </body>
 </html>
