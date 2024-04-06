@@ -16,3 +16,27 @@ greet("Ilya");
 ```
 
 It's built with help of [Writing An Interpreter In Go](book.pdf) book.
+
+## To-do
+
+- [ ] Parsing:
+  - [ ] Prefix Operators
+  - [ ] Infix Operators
+  - [ ] Boolean Literals
+  - [ ] Grouped Expressions
+  - [ ] If Expressions
+  - [ ] Function Literals
+  - [ ] Call Expressions
+- [ ] Evaluation:
+  - [ ] Object System
+  - [ ] Evaluating Expressions
+  - [ ] Conditionals
+  - [ ] Return Statements
+  - [ ] Error Handling
+  - [ ] Bindings & The Environment
+  - [ ] Functions & Functions Calls
+- [ ] Built-in Functions
+- [ ] Arrays
+- [ ] Hashes
+- [ ] Formatting
+- [ ] Playground
