@@ -25,13 +25,18 @@ type Info struct {
 func (i Info) String() string {
 	var sb strings.Builder
 
-	sb.WriteString(CmdName() + " " + i.Version + " (" + i.Go + ", " + i.OS + "/" + i.Arch + ")" + "\n")
+	sb.WriteString(i.Short())
 	if i.Commit != "" && i.BuiltAt != "" {
 		sb.WriteString("commit " + i.Commit + "\n")
 		sb.WriteString("built at " + i.BuiltAt + "\n")
 	}
 
 	return sb.String()
+}
+
+// Short returns the short version information.
+func (i Info) Short() string {
+	return CmdName() + " " + i.Version + " (" + i.Go + ", " + i.OS + "/" + i.Arch + ")"
 }
 
 var (

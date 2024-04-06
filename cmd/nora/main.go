@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -12,6 +13,8 @@ import (
 	"go.astrophena.name/tools/internal/nora/lex"
 	"go.astrophena.name/tools/internal/nora/parse"
 	"go.astrophena.name/tools/internal/nora/repl"
+	"go.astrophena.name/tools/internal/nora/token"
+	"go.astrophena.name/tools/internal/version"
 
 	"github.com/davecgh/go-spew/spew"
 )
@@ -43,9 +46,26 @@ func main() {
 		return
 	}
 
+	if len(flag.Args()) > 0 {
+		file := flag.Args()[0]
+
+		b, err := os.ReadFile(file)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		l := lex.New(string(b))
+		for tok := l.NextToken(); tok.Type != token.EOF; tok = l.NextToken() {
+			fmt.Fprintf(os.Stdout, "%+v\n", tok)
+		}
+
+		return
+	}
+
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 
+	log.Println(version.Version().Short())
 	log.Println("Use Ctrl+D to exit.")
 	if err := repl.Start(ctx, os.Stdin, os.Stdout); err != nil {
 		log.Fatal(err)

@@ -17,16 +17,20 @@ const prompt = ">> "
 func Start(ctx context.Context, r io.Reader, w io.Writer) error {
 	s := bufio.NewScanner(r)
 
-	for s.Scan() {
-		fmt.Fprintf(w, prompt)
+	fmt.Fprintf(w, prompt)
 
+	for s.Scan() {
 		line := s.Text()
 		l := lex.New(line)
 
 		for tok := l.NextToken(); tok.Type != token.EOF; tok = l.NextToken() {
 			fmt.Fprintf(w, "%+v\n", tok)
 		}
+
+		fmt.Fprintf(w, prompt)
 	}
+
+	fmt.Fprintf(w, "\n")
 
 	return s.Err()
 }
