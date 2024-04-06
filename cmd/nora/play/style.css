@@ -1,18 +1,15 @@
-/* HTML & Body styles to fill the whole viewport */
 html, body {
   height: 100%;
   margin: 0;
 }
 
-/* Container styles to hold the textareas */
 .container {
   display: flex;
-  height: 100%; /* Make container fill the whole viewport height */
+  height: 100%;
 }
 
-/* Textarea styles */
 textarea {
-  flex: 1; /* Make textareas fill remaining space equally */
-  box-sizing: border-box; /* Include padding and border in the width */
+  flex: 1;
+  box-sizing: border-box;
   padding: 10px;
 }

@@ -85,7 +85,17 @@ return 993322;
 
 func TestIdentifierExpression(t *testing.T) {
 	const input = "foobar;"
+	stmt := parseExpressionStatement(t, input)
 
+	ident, ok := stmt.Expression.(*ast.Identifier)
+	if !ok {
+		t.Fatalf("expression not *ast.Identifier, got %T", stmt.Expression)
+	}
+	testutil.AssertEqual(t, "foobar", ident.Value)
+	testutil.AssertEqual(t, "foobar", ident.TokenLiteral())
+}
+
+func parseExpressionStatement(t *testing.T, input string) *ast.ExpressionStatement {
 	l := lex.New(input)
 	p := New(l)
 
@@ -103,10 +113,5 @@ func TestIdentifierExpression(t *testing.T) {
 		t.Fatalf("program statement is not ast.ExpressionStatement, got %T", prog.Statements[0])
 	}
 
-	ident, ok := stmt.Expression.(*ast.Identifier)
-	if !ok {
-		t.Fatalf("expression not *ast.Identifier, got %T", stmt.Expression)
-	}
-	testutil.AssertEqual(t, "foobar", ident.Value)
-	testutil.AssertEqual(t, "foobar", ident.TokenLiteral())
+	return stmt
 }

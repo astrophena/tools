@@ -1,6 +1,16 @@
 //go:build js
 
-// play implements a Nora playground, running on WebAssembly in browser.
+//go:generate cp "$(go env GOROOT)/misc/wasm/wasm_exec.js" .
+
+// play is a Nora playground, running on WebAssembly in browser.
+//
+// # Getting started
+//
+// Run:
+//
+//	$ make serve
+//
+// Open http://localhost:3000 in your browser.
 package main
 
 import (
