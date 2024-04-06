@@ -25,7 +25,7 @@ type Info struct {
 func (i Info) String() string {
 	var sb strings.Builder
 
-	sb.WriteString(i.Short())
+	sb.WriteString(i.Short() + "\n")
 	if i.Commit != "" && i.BuiltAt != "" {
 		sb.WriteString("commit " + i.Commit + "\n")
 		sb.WriteString("built at " + i.BuiltAt + "\n")
