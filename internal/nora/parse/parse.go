@@ -57,6 +57,7 @@ func New(l *lex.Lexer) *Parser {
 
 	p.prefixParseFuncs = make(map[token.Type]prefixParseFunc)
 	p.registerPrefix(token.Ident, p.parseIdentifier)
+	p.registerPrefix(token.String, p.parseString)
 
 	return p
 }
@@ -163,6 +164,10 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 
 func (p *Parser) parseIdentifier() ast.Expression {
 	return &ast.Identifier{Token: p.curToken, Value: p.curToken.Literal}
+}
+
+func (p *Parser) parseString() ast.Expression {
+	return &ast.StringLiteral{Token: p.curToken, Value: p.curToken.Literal}
 }
 
 func (p *Parser) curTokenIs(t token.Type) bool {

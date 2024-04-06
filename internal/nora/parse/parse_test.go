@@ -95,6 +95,17 @@ func TestIdentifierExpression(t *testing.T) {
 	testutil.AssertEqual(t, "foobar", ident.TokenLiteral())
 }
 
+func TestStringExpression(t *testing.T) {
+	const input = `"hello world";`
+	stmt := parseExpressionStatement(t, input)
+
+	sl, ok := stmt.Expression.(*ast.StringLiteral)
+	if !ok {
+		t.Fatalf("expression not *ast.StringLiteral, got %T", stmt.Expression)
+	}
+	testutil.AssertEqual(t, "hello world", sl.Value)
+}
+
 func parseExpressionStatement(t *testing.T, input string) *ast.ExpressionStatement {
 	l := lex.New(input)
 	p := New(l)
