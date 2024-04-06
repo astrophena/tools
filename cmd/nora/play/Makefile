@@ -5,6 +5,6 @@ clean:
 	@ rm -f nora.wasm
 
 serve: build
-	@ python3 -m http.server 3000
+	@ go run serve.go
 
 .PHONY: build clean serve
