@@ -124,3 +124,12 @@ type StringLiteral struct {
 func (sl *StringLiteral) expressionNode()      {}
 func (sl *StringLiteral) TokenLiteral() string { return sl.Token.Literal }
 func (sl *StringLiteral) String() string       { return sl.Token.Literal }
+
+type CommentStatement struct {
+	Token token.Token // token.Comment
+	Value string
+}
+
+func (cs *CommentStatement) statementNode()       {}
+func (cs *CommentStatement) TokenLiteral() string { return cs.Token.Literal }
+func (cs *CommentStatement) String() string       { return "// " + cs.Token.Literal + "\n" }

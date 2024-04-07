@@ -99,6 +99,8 @@ func (p *Parser) ParseProgram() (*ast.Program, error) {
 
 func (p *Parser) parseStatement() ast.Statement {
 	switch p.curToken.Type {
+	case token.Comment:
+		return p.parseCommentStatement()
 	case token.Let:
 		return p.parseLetStatement()
 	case token.Return:
@@ -126,6 +128,10 @@ func (p *Parser) parseLetStatement() *ast.LetStatement {
 	}
 
 	return stmt
+}
+
+func (p *Parser) parseCommentStatement() *ast.CommentStatement {
+	return &ast.CommentStatement{Token: p.curToken, Value: p.curToken.Literal}
 }
 
 func (p *Parser) parseReturnStatement() *ast.ReturnStatement {
