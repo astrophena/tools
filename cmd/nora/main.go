@@ -10,38 +10,33 @@ import (
 	"os/signal"
 
 	"go.astrophena.name/tools/internal/cli"
+	"go.astrophena.name/tools/internal/nora/format"
 	"go.astrophena.name/tools/internal/nora/lex"
-	"go.astrophena.name/tools/internal/nora/parse"
 	"go.astrophena.name/tools/internal/nora/repl"
 	"go.astrophena.name/tools/internal/nora/token"
 	"go.astrophena.name/tools/internal/version"
-
-	"github.com/davecgh/go-spew/spew"
 )
 
 func main() {
 	var (
-		dumpAST = flag.String("dump-ast", "", "Dump AST of a Nora program from `file`.")
+		fmtFlag = flag.String("fmt", "", "Format Nora source from `file`.")
 	)
 	cli.SetDescription("nora is a Nora programming language interpreter and REPL.")
 	cli.SetArgsUsage("[*.nora]")
 	cli.HandleStartup()
 
-	if *dumpAST != "" {
-		b, err := os.ReadFile(*dumpAST)
+	if *fmtFlag != "" {
+		b, err := os.ReadFile(*fmtFlag)
 		if err != nil {
 			log.Fatal(err)
 		}
 
-		l := lex.New(string(b))
-		p := parse.New(l)
-
-		prog, err := p.ParseProgram()
+		src, err := format.Source(b)
 		if err != nil {
 			log.Fatal(err)
 		}
 
-		spew.Fdump(os.Stdout, prog)
+		os.Stdout.Write(src)
 
 		return
 	}
