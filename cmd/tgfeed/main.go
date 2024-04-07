@@ -1,6 +1,22 @@
-// tgfeed fetches RSS feeds and sends new articles via Telegram.
-//
-// It runs on GitHub Actions and stores it's state on GitHub Gist.
+/*
+tgfeed fetches RSS feeds and sends new articles via Telegram.
+
+It runs as a GitHub Actions workflow and stores it's state on GitHub Gist.
+
+tgfeed fetches RSS feeds from URLs provided in the feeds.json file. It applies
+filters to the fetched articles based on regex rules defined in the filters.json
+file. Filters include keep_rule to keep items with titles matching a regex
+pattern and ignore_rule to ignore items with titles matching a regex pattern.
+
+New articles are sent to a Telegram chat specified by the CHAT_ID environment
+variable.
+
+tgfeed maintains a state for each feed, including last modified time, last
+updated time, ETag, error count, and last error message. It keeps track of
+failing feeds and disables them after a certain threshold of consecutive
+failures. State information is stored and updated in the state.json file on
+GitHub Gist.
+*/
 package main
 
 import (
