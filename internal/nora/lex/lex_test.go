@@ -8,6 +8,9 @@ import (
 
 func TestNextToken(t *testing.T) {
 	const in = `let five = 5;
+
+// Hello, world!
+
 let ten = 10;
 
 let add = fn(x, y) {
@@ -40,6 +43,8 @@ if (5 < 10) {
 		{token.Assign, "="},
 		{token.Int, "5"},
 		{token.Semicolon, ";"},
+
+		{token.Comment, "Hello, world!"},
 
 		{token.Let, "let"},
 		{token.Ident, "ten"},

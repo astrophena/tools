@@ -1,7 +1,11 @@
 // Package lex implements the Nora lexer.
 package lex
 
-import "go.astrophena.name/tools/internal/nora/token"
+import (
+	"strings"
+
+	"go.astrophena.name/tools/internal/nora/token"
+)
 
 // Lexer is the Nora lexer.
 type Lexer struct {
@@ -56,6 +60,12 @@ func (l *Lexer) NextToken() token.Token {
 			tok = newToken(token.Bang, l.ch)
 		}
 	case '/':
+		if l.peekChar() == '/' {
+			l.readChar()
+			tok.Literal = l.readComment()
+			tok.Type = token.Comment
+			return tok
+		}
 		tok = newToken(token.Slash, l.ch)
 	case '*':
 		tok = newToken(token.Asterisk, l.ch)
@@ -136,6 +146,17 @@ func (l *Lexer) readString() string {
 		}
 	}
 	return l.input[pos:l.pos]
+}
+
+func (l *Lexer) readComment() string {
+	pos := l.pos + 1
+	for {
+		l.readChar()
+		if l.ch == '\n' || l.ch == 0 {
+			break
+		}
+	}
+	return strings.TrimSpace(l.input[pos:l.pos])
 }
 
 func (l *Lexer) skipWhitespace() {

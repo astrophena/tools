@@ -18,9 +18,10 @@ const (
 	EOF
 
 	// Identifiers and literals.
-	Ident  // identifiers
-	Int    // integers
-	String // strings
+	Ident   // identifiers
+	Int     // integers
+	String  // strings
+	Comment // comments
 
 	// Operators.
 	Assign   // =
