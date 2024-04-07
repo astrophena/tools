@@ -1,9 +1,11 @@
 /*
 tgfeed fetches RSS feeds and sends new articles via Telegram.
 
-It runs as a GitHub Actions workflow and stores it's state on GitHub Gist.
+# How it works?
 
-tgfeed fetches RSS feeds from URLs provided in the feeds.json file. It applies
+tgfeed runs as a GitHub Actions workflow.
+
+It fetches RSS feeds from URLs provided in the feeds.json file. It applies
 filters to the fetched articles based on regex rules defined in the filters.json
 file. Filters include keep_rule to keep items with titles matching a regex
 pattern and ignore_rule to ignore items with titles matching a regex pattern.
@@ -11,11 +13,53 @@ pattern and ignore_rule to ignore items with titles matching a regex pattern.
 New articles are sent to a Telegram chat specified by the CHAT_ID environment
 variable.
 
-tgfeed maintains a state for each feed, including last modified time, last
+# Where it keeps state?
+
+tgfeed stores it's state on GitHub Gist.
+
+It maintains a state for each feed, including last modified time, last
 updated time, ETag, error count, and last error message. It keeps track of
 failing feeds and disables them after a certain threshold of consecutive
 failures. State information is stored and updated in the state.json file on
 GitHub Gist.
+
+# Environment variables
+
+The tgfeed program relies on the following environment variables:
+
+  - GIST_ID: GitHub Gist ID where the program stores its state.
+  - GITHUB_TOKEN: GitHub personal access token for accessing the GitHub API.
+  - CHAT_ID: Telegram chat ID where the program sends new articles.
+  - TELEGRAM_TOKEN: Telegram bot token for accessing the Telegram Bot API.
+
+# Administration
+
+To update the list of feeds, you can use the -update-feeds flag followed by the
+file path containing the updated list of feeds. For example:
+
+	$ tgfeed -update-feeds feeds.json
+
+To update the list of filters, you can use the -update-filters flag followed by
+the file path containing the updated list of filters. For example:
+
+	$ tgfeed -update-filters filters.json
+
+To reenable a failing feed that has been disabled due to consecutive failures,
+you can use the -reenable flag followed by the URL of the feed. For example:
+
+	$ tgfeed -reenable https://example.com/feed
+
+To view the list of failing feeds, you can use the -failing flag. This will
+print the URLs of feeds that have encountered errors during fetching. For
+example:
+
+	$ tgfeed -failing
+
+To perform garbage collection and remove the state of feeds that have been
+removed from the list, you can use the -gc flag. This ensures that the program's
+state remains up-to-date with the list of feeds. For example:
+
+	$ tgfeed -gc
 */
 package main
 
