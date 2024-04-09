@@ -11,7 +11,7 @@ import (
 	"go.astrophena.name/tools/internal/nora/token"
 )
 
-// Precedence in expression.
+// Expression precedence.
 const (
 	_ int = iota
 	lowest
@@ -22,6 +22,17 @@ const (
 	prefix      // -X or !X
 	call        // myFunction(x)
 )
+
+var precedences = map[token.Type]int{
+	token.Eq:       equals,
+	token.Ne:       equals,
+	token.Lt:       lessGreater,
+	token.Gt:       lessGreater,
+	token.Plus:     sum,
+	token.Minus:    sum,
+	token.Slash:    product,
+	token.Asterisk: product,
+}
 
 type (
 	prefixParseFunc func() ast.Expression
@@ -62,6 +73,16 @@ func New(l *lex.Lexer) *Parser {
 	p.registerPrefix(token.Int, p.parseIntegerLiteral)
 	p.registerPrefix(token.Bang, p.parsePrefixExpression)
 	p.registerPrefix(token.Minus, p.parsePrefixExpression)
+
+	p.infixParseFuncs = make(map[token.Type]infixParseFunc)
+	p.registerInfix(token.Plus, p.parseInfixExpression)
+	p.registerInfix(token.Minus, p.parseInfixExpression)
+	p.registerInfix(token.Slash, p.parseInfixExpression)
+	p.registerInfix(token.Asterisk, p.parseInfixExpression)
+	p.registerInfix(token.Eq, p.parseInfixExpression)
+	p.registerInfix(token.Ne, p.parseInfixExpression)
+	p.registerInfix(token.Lt, p.parseInfixExpression)
+	p.registerInfix(token.Gt, p.parseInfixExpression)
 
 	return p
 }
@@ -174,6 +195,17 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 	}
 	leftExp := prefix()
 
+	for !p.peekTokenIs(token.Semicolon) && precedence < p.peekPrecedence() {
+		infix := p.infixParseFuncs[p.peekToken.Type]
+		if infix == nil {
+			return leftExp
+		}
+
+		p.nextToken()
+
+		leftExp = infix(leftExp)
+	}
+
 	return leftExp
 }
 
@@ -186,6 +218,20 @@ func (p *Parser) parsePrefixExpression() ast.Expression {
 	p.nextToken()
 
 	expr.Right = p.parseExpression(prefix)
+
+	return expr
+}
+
+func (p *Parser) parseInfixExpression(left ast.Expression) ast.Expression {
+	expr := &ast.InfixExpression{
+		Token:    p.curToken,
+		Operator: p.curToken.Literal,
+		Left:     left,
+	}
+
+	precedence := p.curPrecedence()
+	p.nextToken()
+	expr.Right = p.parseExpression(precedence)
 
 	return expr
 }
@@ -224,4 +270,18 @@ func (p *Parser) expectPeek(t token.Type) bool {
 	}
 	p.peekError(t)
 	return false
+}
+
+func (p *Parser) peekPrecedence() int {
+	if p, ok := precedences[p.peekToken.Type]; ok {
+		return p
+	}
+	return lowest
+}
+
+func (p *Parser) curPrecedence() int {
+	if p, ok := precedences[p.curToken.Type]; ok {
+		return p
+	}
+	return lowest
 }

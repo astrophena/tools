@@ -153,6 +153,27 @@ func (pe *PrefixExpression) String() string {
 	return sb.String()
 }
 
+type InfixExpression struct {
+	Token    token.Token // The operator token, e.g. +
+	Left     Expression
+	Operator string
+	Right    Expression
+}
+
+func (ie *InfixExpression) expressionNode()      {}
+func (ie *InfixExpression) TokenLiteral() string { return ie.Token.Literal }
+func (ie *InfixExpression) String() string {
+	var sb strings.Builder
+
+	sb.WriteString("(")
+	sb.WriteString(ie.Left.String())
+	sb.WriteString(" " + ie.Operator + " ")
+	sb.WriteString(ie.Right.String())
+	sb.WriteString(")")
+
+	return sb.String()
+}
+
 type IntegerLiteral struct {
 	Token token.Token
 	Value int64

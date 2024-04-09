@@ -160,3 +160,106 @@ func testIntegerLiteral(t *testing.T, il ast.Expression, value int64) {
 	testutil.AssertEqual(t, value, integ.Value)
 	testutil.AssertEqual(t, fmt.Sprintf("%d", value), integ.TokenLiteral())
 }
+
+func TestParsingInfixExpressions(t *testing.T) {
+	cases := []struct {
+		in       string
+		leftVal  int64
+		op       string
+		rightVal int64
+	}{
+		{"5 + 5;", 5, "+", 5},
+		{"5 - 5;", 5, "-", 5},
+		{"5 * 5;", 5, "*", 5},
+		{"5 / 5;", 5, "/", 5},
+		{"5 > 5;", 5, ">", 5},
+		{"5 < 5;", 5, "<", 5},
+		{"5 == 5;", 5, "==", 5},
+		{"5 != 5;", 5, "!=", 5},
+	}
+
+	for i, tc := range cases {
+		t.Run(fmt.Sprint(i), func(t *testing.T) {
+			stmt := parseExpressionStatement(t, tc.in)
+
+			exp, ok := stmt.Expression.(*ast.InfixExpression)
+			if !ok {
+				t.Fatalf("stmt is not *ast.InfixExpression, got %T", stmt.Expression)
+			}
+
+			testIntegerLiteral(t, exp.Left, tc.leftVal)
+			testutil.AssertEqual(t, tc.op, exp.Operator)
+			testIntegerLiteral(t, exp.Right, tc.rightVal)
+		})
+	}
+}
+
+func TestOperatorPrecedenceParsing(t *testing.T) {
+	cases := []struct {
+		in   string
+		want string
+	}{
+		{
+			"-a * b",
+			"((-a) * b)",
+		},
+		{
+			"!-a",
+			"(!(-a))",
+		},
+		{
+			"a + b + c",
+			"((a + b) + c)",
+		},
+		{
+			"a + b - c",
+			"((a + b) - c)",
+		},
+		{
+			"a * b * c",
+			"((a * b) * c)",
+		},
+		{
+			"a * b / c",
+			"((a * b) / c)",
+		},
+		{
+			"a + b / c",
+			"(a + (b / c))",
+		},
+		{
+			"a + b * c + d / e - f",
+			"(((a + (b * c)) + (d / e)) - f)",
+		},
+		{
+			"3 + 4; -5 * 5",
+			"(3 + 4)((-5) * 5)",
+		},
+		{
+			"5 > 4 == 3 < 4",
+			"((5 > 4) == (3 < 4))",
+		},
+		{
+			"5 < 4 != 3 > 4",
+			"((5 < 4) != (3 > 4))",
+		},
+		{
+			"3 + 4 * 5 == 3 * 1 + 4 * 5",
+			"((3 + (4 * 5)) == ((3 * 1) + (4 * 5)))",
+		},
+	}
+
+	for i, tc := range cases {
+		t.Run(fmt.Sprint(i), func(t *testing.T) {
+			l := lex.New(tc.in)
+			p := New(l)
+
+			prog, err := p.ParseProgram()
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			testutil.AssertEqual(t, tc.want, prog.String())
+		})
+	}
+}
