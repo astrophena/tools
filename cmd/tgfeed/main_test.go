@@ -80,6 +80,49 @@ func TestRun(t *testing.T) {
 	}
 }
 
+func TestFailingFeed(t *testing.T) {
+	var updatedGistJSON []byte
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET example.com/feed.xml", func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "I'm a teapot.", http.StatusTeapot)
+	})
+	mux.HandleFunc("GET api.github.com/gists/test", func(w http.ResponseWriter, r *http.Request) {
+		w.Write(txtarToGist(t, gistTxtar))
+	})
+	mux.HandleFunc("PATCH api.github.com/gists/test", func(w http.ResponseWriter, r *http.Request) {
+		b, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		updatedGistJSON = b
+	})
+	mux.HandleFunc("POST api.telegram.org/{token}/sendMessage", func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertEqual(t, tgToken, strings.TrimPrefix(r.PathValue("token"), "bot"))
+	})
+
+	f := testFetcher(mux, io.Discard)
+	if err := f.run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	updatedGist := new(gist)
+	if err := json.Unmarshal(updatedGistJSON, &updatedGist); err != nil {
+		t.Fatal(err)
+	}
+	stateJSON, ok := updatedGist.Files["state.json"]
+	if !ok {
+		t.Fatal("state.json has not found in updated gist")
+	}
+	var state map[string]*feedState
+	if err := json.Unmarshal([]byte(stateJSON.Content), &state); err != nil {
+		t.Fatal(err)
+	}
+
+	testutil.AssertEqual(t, f.state["https://example.com/feed.xml"].ErrorCount, 1)
+	testutil.AssertEqual(t, f.state["https://example.com/feed.xml"].LastError, "want 200, got 418")
+}
+
 func TestDryRun(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET example.com/feed.xml", func(w http.ResponseWriter, r *http.Request) {
