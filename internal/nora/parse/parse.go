@@ -4,6 +4,7 @@ package parse
 import (
 	"errors"
 	"fmt"
+	"strconv"
 
 	"go.astrophena.name/tools/internal/nora/ast"
 	"go.astrophena.name/tools/internal/nora/lex"
@@ -58,6 +59,9 @@ func New(l *lex.Lexer) *Parser {
 	p.prefixParseFuncs = make(map[token.Type]prefixParseFunc)
 	p.registerPrefix(token.Ident, p.parseIdentifier)
 	p.registerPrefix(token.String, p.parseString)
+	p.registerPrefix(token.Int, p.parseIntegerLiteral)
+	p.registerPrefix(token.Bang, p.parsePrefixExpression)
+	p.registerPrefix(token.Minus, p.parsePrefixExpression)
 
 	return p
 }
@@ -95,6 +99,10 @@ func (p *Parser) ParseProgram() (*ast.Program, error) {
 	}
 
 	return prog, nil
+}
+
+func (p *Parser) errorf(format string, args ...any) {
+	p.errors = append(p.errors, fmt.Errorf(format, args...))
 }
 
 func (p *Parser) parseStatement() ast.Statement {
@@ -161,6 +169,7 @@ func (p *Parser) parseExpressionStatement() *ast.ExpressionStatement {
 func (p *Parser) parseExpression(precedence int) ast.Expression {
 	prefix := p.prefixParseFuncs[p.curToken.Type]
 	if prefix == nil {
+		p.errorf("no prefix parse function for %s found", p.curToken.Type)
 		return nil
 	}
 	leftExp := prefix()
@@ -168,8 +177,32 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 	return leftExp
 }
 
+func (p *Parser) parsePrefixExpression() ast.Expression {
+	expr := &ast.PrefixExpression{
+		Token:    p.curToken,
+		Operator: p.curToken.Literal,
+	}
+
+	p.nextToken()
+
+	expr.Right = p.parseExpression(prefix)
+
+	return expr
+}
+
 func (p *Parser) parseIdentifier() ast.Expression {
 	return &ast.Identifier{Token: p.curToken, Value: p.curToken.Literal}
+}
+
+func (p *Parser) parseIntegerLiteral() ast.Expression {
+	lit := &ast.IntegerLiteral{Token: p.curToken}
+	value, err := strconv.ParseInt(p.curToken.Literal, 0, 64)
+	if err != nil {
+		p.errorf("could not parse %q as integer", p.curToken.Literal)
+		return nil
+	}
+	lit.Value = value
+	return lit
 }
 
 func (p *Parser) parseString() ast.Expression {

@@ -133,3 +133,31 @@ type CommentStatement struct {
 func (cs *CommentStatement) statementNode()       {}
 func (cs *CommentStatement) TokenLiteral() string { return cs.Token.Literal }
 func (cs *CommentStatement) String() string       { return "// " + cs.Token.Literal + "\n" }
+
+type PrefixExpression struct {
+	Token    token.Token // prefix token, e.g. !
+	Operator string
+	Right    Expression
+}
+
+func (pe *PrefixExpression) expressionNode()      {}
+func (pe *PrefixExpression) TokenLiteral() string { return pe.Token.Literal }
+func (pe *PrefixExpression) String() string {
+	var sb strings.Builder
+
+	sb.WriteString("(")
+	sb.WriteString(pe.Operator)
+	sb.WriteString(pe.Right.String())
+	sb.WriteString(")")
+
+	return sb.String()
+}
+
+type IntegerLiteral struct {
+	Token token.Token
+	Value int64
+}
+
+func (il *IntegerLiteral) expressionNode()      {}
+func (il *IntegerLiteral) TokenLiteral() string { return il.Token.Literal }
+func (il *IntegerLiteral) String() string       { return il.Token.Literal }

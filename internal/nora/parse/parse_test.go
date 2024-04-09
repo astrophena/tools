@@ -126,3 +126,37 @@ func parseExpressionStatement(t *testing.T, input string) *ast.ExpressionStateme
 
 	return stmt
 }
+
+func TestParsingPrefixExpressions(t *testing.T) {
+	cases := []struct {
+		in  string
+		op  string
+		val int64
+	}{
+		{"!5;", "!", 5},
+		{"-15;", "-", 15},
+	}
+
+	for i, tc := range cases {
+		t.Run(fmt.Sprint(i), func(t *testing.T) {
+			stmt := parseExpressionStatement(t, tc.in)
+
+			exp, ok := stmt.Expression.(*ast.PrefixExpression)
+			if !ok {
+				t.Fatalf("stmt is not *ast.PrefixExpression, got %T", stmt.Expression)
+			}
+
+			testutil.AssertEqual(t, tc.op, exp.Operator)
+			testIntegerLiteral(t, exp.Right, tc.val)
+		})
+	}
+}
+
+func testIntegerLiteral(t *testing.T, il ast.Expression, value int64) {
+	integ, ok := il.(*ast.IntegerLiteral)
+	if !ok {
+		t.Errorf("il not *ast.IntegerLiteral. got %T", il)
+	}
+	testutil.AssertEqual(t, value, integ.Value)
+	testutil.AssertEqual(t, fmt.Sprintf("%d", value), integ.TokenLiteral())
+}

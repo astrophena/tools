@@ -20,7 +20,7 @@ It's built with help of [Writing An Interpreter In Go](book.pdf) book.
 ## To-do
 
 - [ ] Parsing:
-  - [ ] Prefix Operators
+  - [X] Prefix Operators
   - [ ] Infix Operators
   - [ ] Boolean Literals
   - [ ] Grouped Expressions
