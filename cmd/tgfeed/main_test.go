@@ -11,6 +11,7 @@ import (
 	"log"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -91,11 +92,7 @@ func TestFailingFeed(t *testing.T) {
 		w.Write(txtarToGist(t, gistTxtar))
 	})
 	mux.HandleFunc("PATCH api.github.com/gists/test", func(w http.ResponseWriter, r *http.Request) {
-		b, err := io.ReadAll(r.Body)
-		if err != nil {
-			t.Fatal(err)
-		}
-		updatedGistJSON = b
+		updatedGistJSON = read(t, r.Body)
 	})
 	mux.HandleFunc("POST api.telegram.org/{token}/sendMessage", func(w http.ResponseWriter, r *http.Request) {
 		testutil.AssertEqual(t, tgToken, strings.TrimPrefix(r.PathValue("token"), "bot"))
@@ -114,13 +111,78 @@ func TestFailingFeed(t *testing.T) {
 	if !ok {
 		t.Fatal("state.json has not found in updated gist")
 	}
-	var state map[string]*feedState
-	if err := json.Unmarshal([]byte(stateJSON.Content), &state); err != nil {
-		t.Fatal(err)
+	state := unmarshal[map[string]*feedState](t, []byte(stateJSON.Content))
+
+	testutil.AssertEqual(t, state["https://example.com/feed.xml"].ErrorCount, 1)
+	testutil.AssertEqual(t, state["https://example.com/feed.xml"].LastError, "want 200, got 418")
+}
+
+func TestDisablingFailingFeed(t *testing.T) {
+	var (
+		updatedGistJSON []byte
+		sentMessages    []url.Values
+	)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET example.com/feed.xml", func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "I'm a teapot.", http.StatusTeapot)
+	})
+	mux.HandleFunc("GET api.github.com/gists/test", func(w http.ResponseWriter, r *http.Request) {
+		if updatedGistJSON != nil {
+			w.Write(updatedGistJSON)
+			return
+		}
+		w.Write(txtarToGist(t, gistTxtar))
+	})
+	mux.HandleFunc("PATCH api.github.com/gists/test", func(w http.ResponseWriter, r *http.Request) {
+		updatedGistJSON = read(t, r.Body)
+	})
+	mux.HandleFunc("POST api.telegram.org/{token}/sendMessage", func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertEqual(t, tgToken, strings.TrimPrefix(r.PathValue("token"), "bot"))
+		if err := r.ParseForm(); err != nil {
+			t.Fatal(err)
+		}
+		sentMessages = append(sentMessages, r.PostForm)
+	})
+
+	f := testFetcher(mux, io.Discard)
+
+	const attempts = errorThreshold + 2
+	for range attempts {
+		if err := f.run(context.Background()); err != nil {
+			t.Fatal(err)
+		}
 	}
 
-	testutil.AssertEqual(t, f.state["https://example.com/feed.xml"].ErrorCount, 1)
-	testutil.AssertEqual(t, f.state["https://example.com/feed.xml"].LastError, "want 200, got 418")
+	updatedGist := unmarshal[gist](t, updatedGistJSON)
+	stateJSON, ok := updatedGist.Files["state.json"]
+	if !ok {
+		t.Fatal("state.json has not found in updated gist")
+	}
+	state := unmarshal[map[string]*feedState](t, []byte(stateJSON.Content))
+
+	testutil.AssertEqual(t, state["https://example.com/feed.xml"].Disabled, true)
+	testutil.AssertEqual(t, state["https://example.com/feed.xml"].ErrorCount, attempts-1)
+	testutil.AssertEqual(t, state["https://example.com/feed.xml"].LastError, "want 200, got 418")
+
+	testutil.AssertEqual(t, len(sentMessages), 1)
+	testutil.AssertEqual(t, sentMessages[0].Get("text"), "❌ Something went wrong:\n<pre><code>fetching feed \"https://example.com/feed.xml\" failed after 13 previous attempts: want 200, got 418; feed was disabled, to reenable it run 'tgfeed -reenable \"https://example.com/feed.xml\"'</code></pre>")
+}
+
+func read(t *testing.T, r io.Reader) []byte {
+	b, err := io.ReadAll(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b
+}
+
+func unmarshal[V any](t *testing.T, b []byte) V {
+	var v V
+	if err := json.Unmarshal(b, &v); err != nil {
+		t.Fatal(err)
+	}
+	return v
 }
 
 func TestDryRun(t *testing.T) {

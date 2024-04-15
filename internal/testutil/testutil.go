@@ -14,10 +14,10 @@ import (
 
 // AssertEqual compares two values and if they differ, fails the test and
 // prints the difference between them.
-func AssertEqual(t *testing.T, want, got any) {
+func AssertEqual(t *testing.T, got, want any) {
 	t.Helper()
-	if diff := cmp.Diff(want, got); diff != "" {
-		t.Fatalf("(-want +got):\n%s", diff)
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Fatalf("(-got +want):\n%s", diff)
 	}
 }
 
