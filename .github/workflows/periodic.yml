@@ -21,4 +21,5 @@ jobs:
           GIST_ID: '${{ secrets.TGFEED_GIST_ID }}'
           GITHUB_TOKEN: '${{ secrets.TGFEED_GIST_TOKEN }}'
           TELEGRAM_TOKEN: '${{ secrets.TGFEED_TOKEN }}'
+          YAGPT_TOKEN: '${{ secrets.TGFEED_YAGPT_TOKEN }}'
         run: 'go run ./cmd/tgfeed'

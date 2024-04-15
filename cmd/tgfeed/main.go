@@ -11,7 +11,8 @@ file. Filters include keep_rule to keep items with titles matching a regex
 pattern and ignore_rule to ignore items with titles matching a regex pattern.
 
 New articles are sent to a Telegram chat specified by the CHAT_ID environment
-variable.
+variable. Also tgfeed summarizes articles and videos using YandexGPT through
+300.ya.ru API.
 
 # Where it keeps state?
 
@@ -27,10 +28,11 @@ GitHub Gist.
 
 The tgfeed program relies on the following environment variables:
 
+  - CHAT_ID: Telegram chat ID where the program sends new articles.
   - GIST_ID: GitHub Gist ID where the program stores its state.
   - GITHUB_TOKEN: GitHub personal access token for accessing the GitHub API.
-  - CHAT_ID: Telegram chat ID where the program sends new articles.
   - TELEGRAM_TOKEN: Telegram bot token for accessing the Telegram Bot API.
+  - YAGPT_TOKEN: 300.ya.ru access token for summarizing articles using YandexGPT.
 
 # Administration
 
@@ -97,6 +99,7 @@ const (
 	userAgent      = "tgfeed (https://astrophena.name/bleep-bloop)"
 	ghAPI          = "https://api.github.com"
 	tgAPI          = "https://api.telegram.org"
+	ya300API       = "https://300.ya.ru/api/sharing-url"
 	errorThreshold = 12 // failing continuously for four days will disable feed and complain loudly
 )
 
@@ -118,11 +121,12 @@ func main() {
 		httpc: &http.Client{
 			Timeout: 10 * time.Second,
 		},
-		dryRun:  *dryRun,
-		gistID:  os.Getenv("GIST_ID"),
-		ghToken: os.Getenv("GITHUB_TOKEN"),
-		chatID:  os.Getenv("CHAT_ID"),
-		tgToken: os.Getenv("TELEGRAM_TOKEN"),
+		dryRun:     *dryRun,
+		gistID:     os.Getenv("GIST_ID"),
+		ghToken:    os.Getenv("GITHUB_TOKEN"),
+		chatID:     os.Getenv("CHAT_ID"),
+		tgToken:    os.Getenv("TELEGRAM_TOKEN"),
+		ya300Token: os.Getenv("YAGPT_TOKEN"),
 	}
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
@@ -204,10 +208,11 @@ type fetcher struct {
 	gistID  string
 	ghToken string
 
-	feeds   []string
-	filters map[string]*feedFilter
-	chatID  string
-	tgToken string
+	feeds      []string
+	filters    map[string]*feedFilter
+	chatID     string
+	tgToken    string
+	ya300Token string
 
 	errorTemplate    string
 	state, prevState map[string]*feedState
@@ -284,6 +289,14 @@ func (f *fetcher) run(ctx context.Context) error {
 		if f.dryRun {
 			f.log.Println(msg)
 			continue
+		}
+
+		if !inTest {
+			if summaryURL, err := f.summarize(ctx, item.Link); err != nil {
+				log.Printf("summarizing article %q using 300.ya.ru failed: %v", item.Link, err)
+			} else {
+				msg += fmt.Sprintf("\n\n ℹ️ <a href=\"%s\"Summary</a>", summaryURL)
+			}
 		}
 
 		if err := f.send(ctx, msg); err != nil {
@@ -524,6 +537,32 @@ func (f *fetcher) send(ctx context.Context, message string) error {
 	})
 }
 
+func (f *fetcher) summarize(ctx context.Context, url string) (sharingURL string, err error) {
+	b, err := f.makeRequest(ctx, requestParams{
+		method: http.MethodPost,
+		url:    ya300API,
+		body:   strings.NewReader(fmt.Sprintf(`{"article_url":"%s"}`, url)),
+		headers: map[string]string{
+			"Authorization": "OAuth " + f.ya300Token,
+		},
+	})
+	if err != nil {
+		return "", err
+	}
+
+	var resp struct {
+		Status     string `json:"status"`
+		SharingURL string `json:"sharing_url"`
+	}
+	if err := json.Unmarshal(b, &resp); err != nil {
+		return "", err
+	}
+	if resp.Status != "success" {
+		return "", fmt.Errorf("want status success, got %s", resp.Status)
+	}
+	return resp.SharingURL, nil
+}
+
 var inTest bool // set true when testing
 
 func (f *fetcher) saveToGist(ctx context.Context) error {
@@ -580,41 +619,50 @@ func (f *fetcher) makeTelegramRequest(ctx context.Context, method string, args m
 	for k, v := range args {
 		data.Set(k, v)
 	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, tgAPI+"/bot"+f.tgToken+"/"+method, strings.NewReader(data.Encode()))
-	if err != nil {
+	if _, err := f.makeRequest(ctx, requestParams{
+		method: http.MethodPost,
+		url:    tgAPI + "/bot" + f.tgToken + "/" + method,
+		headers: map[string]string{
+			"Content-Type": "application/x-www-form-urlencoded",
+			"User-Agent":   userAgent,
+		},
+		body: strings.NewReader(data.Encode()),
+	}); err != nil {
 		return err
 	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("User-Agent", userAgent)
-
-	res, err := f.httpc.Do(req)
-	if err != nil {
-		return err
-	}
-	defer res.Body.Close()
-
-	b, err := io.ReadAll(res.Body)
-	if err != nil {
-		return err
-	}
-
-	if res.StatusCode != http.StatusOK {
-		return fmt.Errorf("want 200, got %d: %s", res.StatusCode, b)
-	}
-
 	return nil
 }
 
 func (f *fetcher) makeGistRequest(ctx context.Context, method string, body io.Reader) ([]byte, error) {
-	req, err := http.NewRequestWithContext(ctx, method, ghAPI+"/gists/"+f.gistID, body)
+	return f.makeRequest(ctx, requestParams{
+		method: method,
+		url:    ghAPI + "/gists/" + f.gistID,
+		headers: map[string]string{
+			"Accept":               "application/vnd.github+json",
+			"X-GitHub-Api-Version": "2022-11-28",
+			"Authorization":        "Bearer " + f.ghToken,
+			"User-Agent":           userAgent,
+		},
+		body: body,
+	})
+}
+
+type requestParams struct {
+	method  string
+	url     string
+	headers map[string]string
+	body    io.Reader
+}
+
+func (f *fetcher) makeRequest(ctx context.Context, params requestParams) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, params.method, params.url, params.body)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
-	req.Header.Set("Authorization", "Bearer "+f.ghToken)
-	req.Header.Set("User-Agent", userAgent)
+
+	for k, v := range params.headers {
+		req.Header.Set(k, v)
+	}
 
 	res, err := f.httpc.Do(req)
 	if err != nil {
