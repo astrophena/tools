@@ -291,7 +291,7 @@ func (f *fetcher) run(ctx context.Context) error {
 			continue
 		}
 
-		if !inTest {
+		if f.ya300Token != "" {
 			if summaryURL, err := f.summarize(ctx, item.Link); err != nil {
 				f.log.Printf("summarizing article %q using 300.ya.ru failed: %v", item.Link, err)
 			} else {
