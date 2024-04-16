@@ -295,7 +295,7 @@ func (f *fetcher) run(ctx context.Context) error {
 			if summaryURL, err := f.summarize(ctx, item.Link); err != nil {
 				f.log.Printf("summarizing article %q using 300.ya.ru failed: %v", item.Link, err)
 			} else {
-				msg += fmt.Sprintf("\n\n ℹ️ <a href=\"%s\"Summary</a>", summaryURL)
+				msg += fmt.Sprintf("\n\n ℹ️ <a href=\"%s\">Summary</a>", summaryURL)
 			}
 		}
 
