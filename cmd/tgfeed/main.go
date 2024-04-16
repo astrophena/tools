@@ -544,6 +544,7 @@ func (f *fetcher) summarize(ctx context.Context, url string) (sharingURL string,
 		body:   strings.NewReader(fmt.Sprintf(`{"article_url":"%s"}`, url)),
 		headers: map[string]string{
 			"Authorization": "OAuth " + f.ya300Token,
+			"Content-Type":  "application/json",
 		},
 	})
 	if err != nil {
