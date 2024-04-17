@@ -124,7 +124,7 @@ func TestFailingFeed(t *testing.T) {
 func TestDisablingFailingFeed(t *testing.T) {
 	var (
 		updatedGistJSON []byte
-		sentMessages    []map[string]string
+		sentMessages    []map[string]any
 	)
 
 	mux := http.NewServeMux()
@@ -144,7 +144,7 @@ func TestDisablingFailingFeed(t *testing.T) {
 	})
 	mux.HandleFunc("POST api.telegram.org/{token}/sendMessage", func(w http.ResponseWriter, r *http.Request) {
 		testutil.AssertEqual(t, tgToken, strings.TrimPrefix(r.PathValue("token"), "bot"))
-		sentMessages = append(sentMessages, unmarshal[map[string]string](t, read(t, r.Body)))
+		sentMessages = append(sentMessages, unmarshal[map[string]any](t, read(t, r.Body)))
 	})
 
 	f := testFetcher(mux, io.Discard)

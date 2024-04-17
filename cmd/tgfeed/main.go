@@ -190,7 +190,7 @@ func main() {
 	}
 
 	if err := f.run(ctx); err != nil {
-		f.send(ctx, fmt.Sprintf(f.errorTemplate, err))
+		f.send(ctx, fmt.Sprintf(f.errorTemplate, err), disableLinkPreview)
 		log.Fatal(err)
 	}
 }
@@ -263,7 +263,7 @@ func (f *fetcher) run(ctx context.Context) error {
 				state.ErrorCount += 1
 				err = fmt.Errorf("fetching feed %q failed after %d previous attempts: %v; feed was disabled, to reenable it run 'tgfeed -reenable %q'", url, state.ErrorCount, err, url)
 				state.Disabled = true
-				f.send(ctx, fmt.Sprintf(f.errorTemplate, err))
+				f.send(ctx, fmt.Sprintf(f.errorTemplate, err), disableLinkPreview)
 				continue
 			}
 			// Otherwise, carry on.
@@ -279,10 +279,15 @@ func (f *fetcher) run(ctx context.Context) error {
 			html.EscapeString(item.Title),
 		)
 
+		var inlineKeyboardButtons []inlineKeyboardButton
+
 		// hnrss.org feeds have Hacker News entry URL set as GUID. Also send it
 		// because I often read comments on Hacker News entries.
 		if strings.HasPrefix(item.GUID, "https://news.ycombinator.com/item?id=") {
-			msg += fmt.Sprintf("\n\n💬 <a href=\"%s\">Comments</a>", item.GUID)
+			inlineKeyboardButtons = append(inlineKeyboardButtons, inlineKeyboardButton{
+				Text: "💬 Comments",
+				URL:  item.GUID,
+			})
 		}
 
 		if f.dryRun {
@@ -291,14 +296,25 @@ func (f *fetcher) run(ctx context.Context) error {
 		}
 
 		if f.ya300Token != "" {
-			if summaryURL, err := f.summarize(ctx, item.Link); err != nil {
+			summaryURL, err := f.summarize(ctx, item.Link)
+			if err != nil {
 				f.log.Printf("summarizing article %q using 300.ya.ru failed: %v", item.Link, err)
 			} else {
-				msg += fmt.Sprintf("\n\n ℹ️ <a href=\"%s\">Summary</a>", summaryURL)
+				inlineKeyboardButtons = append(inlineKeyboardButtons, inlineKeyboardButton{
+					Text: "ℹ️ Summary",
+					URL:  summaryURL,
+				})
 			}
 		}
 
-		if err := f.send(ctx, msg); err != nil {
+		if err := f.send(ctx, msg, func(args map[string]any) {
+			args["link_preview_options"] = linkPreviewOptions{
+				URL: item.Link,
+			}
+			args["reply_markup"] = map[string]any{
+				"inline_keyboard": [][]inlineKeyboardButton{inlineKeyboardButtons},
+			}
+		}); err != nil {
 			return fmt.Errorf("sending %q to %q failed: %w", msg, f.chatID, err)
 		}
 	}
@@ -523,12 +539,36 @@ func (f *fetcher) fetch(ctx context.Context, url string) error {
 	return nil
 }
 
-func (f *fetcher) send(ctx context.Context, message string) error {
-	return f.makeTelegramRequest(ctx, "sendMessage", map[string]string{
+func (f *fetcher) send(ctx context.Context, message string, modify func(args map[string]any)) error {
+	args := map[string]any{
 		"chat_id":    f.chatID,
 		"parse_mode": "HTML",
 		"text":       message,
-	})
+	}
+	if modify != nil {
+		modify(args)
+	}
+	return f.makeTelegramRequest(ctx, "sendMessage", args)
+}
+
+// https://core.telegram.org/bots/api#linkpreviewoptions
+type linkPreviewOptions struct {
+	IsDisabled bool   `json:"is_disabled"`
+	URL        string `json:"url"`
+}
+
+func disableLinkPreview(args map[string]any) {
+	args["link_preview_options"] = linkPreviewOptions{
+		IsDisabled: true,
+	}
+}
+
+type inlineKeyboard [][]inlineKeyboardButton
+
+// https://core.telegram.org/bots/api#inlinekeyboardbutton
+type inlineKeyboardButton struct {
+	Text string `json:"text"`
+	URL  string `json:"url"`
 }
 
 func (f *fetcher) summarize(ctx context.Context, url string) (sharingURL string, err error) {
@@ -596,7 +636,7 @@ func (f *fetcher) saveToGist(ctx context.Context) error {
 	return err
 }
 
-func (f *fetcher) makeTelegramRequest(ctx context.Context, method string, args map[string]string) error {
+func (f *fetcher) makeTelegramRequest(ctx context.Context, method string, args any) error {
 	if _, err := makeRequest[any](f, ctx, requestParams{
 		method: http.MethodPost,
 		url:    tgAPI + "/bot" + f.tgToken + "/" + method,
