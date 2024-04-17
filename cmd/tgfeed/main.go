@@ -563,8 +563,6 @@ func disableLinkPreview(args map[string]any) {
 	}
 }
 
-type inlineKeyboard [][]inlineKeyboardButton
-
 // https://core.telegram.org/bots/api#inlinekeyboardbutton
 type inlineKeyboardButton struct {
 	Text string `json:"text"`
