@@ -570,6 +570,11 @@ type inlineKeyboardButton struct {
 }
 
 func (f *fetcher) summarize(ctx context.Context, url string) (sharingURL string, err error) {
+	var req struct {
+		ArticleURL string `json:"article_url"`
+	}
+	req.ArticleURL = url
+
 	type responseSchema struct {
 		Status     string `json:"status"`
 		SharingURL string `json:"sharing_url"`
@@ -578,10 +583,9 @@ func (f *fetcher) summarize(ctx context.Context, url string) (sharingURL string,
 	resp, err := makeRequest[*responseSchema](f, ctx, requestParams{
 		method: http.MethodPost,
 		url:    ya300API,
-		body:   strings.NewReader(fmt.Sprintf(`{"article_url":"%s"}`, url)),
+		body:   req,
 		headers: map[string]string{
 			"Authorization": "OAuth " + f.ya300Token,
-			"Content-Type":  "application/json",
 		},
 	})
 	if err != nil {
