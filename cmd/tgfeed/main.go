@@ -279,7 +279,7 @@ func (f *fetcher) run(ctx context.Context) error {
 			html.EscapeString(item.Title),
 		)
 
-		var inlineKeyboardButtons []inlineKeyboardButton
+		inlineKeyboardButtons := []inlineKeyboardButton{}
 
 		// hnrss.org feeds have Hacker News entry URL set as GUID. Also send it
 		// because I often read comments on Hacker News entries.
