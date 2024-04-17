@@ -76,7 +76,6 @@ import (
 	"log"
 	"maps"
 	"net/http"
-	"net/url"
 	"os"
 	"os/signal"
 	"regexp"
@@ -387,13 +386,8 @@ type gistFile struct {
 }
 
 func (f *fetcher) loadFromGist(ctx context.Context) error {
-	b, err := f.makeGistRequest(ctx, http.MethodGet, nil)
+	g, err := f.makeGistRequest(ctx, http.MethodGet, nil)
 	if err != nil {
-		return err
-	}
-
-	g := new(gist)
-	if err := json.Unmarshal(b, &g); err != nil {
 		return err
 	}
 
@@ -538,7 +532,12 @@ func (f *fetcher) send(ctx context.Context, message string) error {
 }
 
 func (f *fetcher) summarize(ctx context.Context, url string) (sharingURL string, err error) {
-	b, err := f.makeRequest(ctx, requestParams{
+	type responseSchema struct {
+		Status     string `json:"status"`
+		SharingURL string `json:"sharing_url"`
+	}
+
+	resp, err := makeRequest[*responseSchema](f, ctx, requestParams{
 		method: http.MethodPost,
 		url:    ya300API,
 		body:   strings.NewReader(fmt.Sprintf(`{"article_url":"%s"}`, url)),
@@ -551,13 +550,6 @@ func (f *fetcher) summarize(ctx context.Context, url string) (sharingURL string,
 		return "", err
 	}
 
-	var resp struct {
-		Status     string `json:"status"`
-		SharingURL string `json:"sharing_url"`
-	}
-	if err := json.Unmarshal(b, &resp); err != nil {
-		return "", err
-	}
 	if resp.Status != "success" {
 		return "", fmt.Errorf("want status success, got %s", resp.Status)
 	}
@@ -591,58 +583,38 @@ func (f *fetcher) saveToGist(ctx context.Context) error {
 		return err
 	}
 
-	type file struct {
-		Content string `json:"content"`
-	}
-	var data struct {
-		Files map[string]file `json:"files"`
-	}
-
-	data.Files = make(map[string]file)
-	stateFile := file{Content: string(state)}
-	feedsFile := file{Content: string(feeds)}
-	filtersFile := file{Content: string(filters)}
+	data := new(gist)
+	data.Files = make(map[string]*gistFile)
+	stateFile := &gistFile{Content: string(state)}
+	feedsFile := &gistFile{Content: string(feeds)}
+	filtersFile := &gistFile{Content: string(filters)}
 	data.Files["feeds.json"] = feedsFile
 	data.Files["state.json"] = stateFile
 	data.Files["filters.json"] = filtersFile
 
-	body, err := json.Marshal(data)
-	if err != nil {
-		return err
-	}
-
-	_, err = f.makeGistRequest(ctx, http.MethodPatch, bytes.NewReader(body))
+	_, err = f.makeGistRequest(ctx, http.MethodPatch, data)
 	return err
 }
 
 func (f *fetcher) makeTelegramRequest(ctx context.Context, method string, args map[string]string) error {
-	data := &url.Values{}
-	for k, v := range args {
-		data.Set(k, v)
-	}
-	if _, err := f.makeRequest(ctx, requestParams{
+	if _, err := makeRequest[any](f, ctx, requestParams{
 		method: http.MethodPost,
 		url:    tgAPI + "/bot" + f.tgToken + "/" + method,
-		headers: map[string]string{
-			"Content-Type": "application/x-www-form-urlencoded",
-			"User-Agent":   userAgent,
-		},
-		body: strings.NewReader(data.Encode()),
+		body:   args,
 	}); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (f *fetcher) makeGistRequest(ctx context.Context, method string, body io.Reader) ([]byte, error) {
-	return f.makeRequest(ctx, requestParams{
+func (f *fetcher) makeGistRequest(ctx context.Context, method string, body any) (*gist, error) {
+	return makeRequest[*gist](f, ctx, requestParams{
 		method: method,
 		url:    ghAPI + "/gists/" + f.gistID,
 		headers: map[string]string{
 			"Accept":               "application/vnd.github+json",
 			"X-GitHub-Api-Version": "2022-11-28",
 			"Authorization":        "Bearer " + f.ghToken,
-			"User-Agent":           userAgent,
 		},
 		body: body,
 	})
@@ -652,33 +624,53 @@ type requestParams struct {
 	method  string
 	url     string
 	headers map[string]string
-	body    io.Reader
+	body    any
 }
 
-func (f *fetcher) makeRequest(ctx context.Context, params requestParams) ([]byte, error) {
-	req, err := http.NewRequestWithContext(ctx, params.method, params.url, params.body)
-	if err != nil {
-		return nil, err
+func makeRequest[R any](f *fetcher, ctx context.Context, params requestParams) (R, error) {
+	var resp R
+
+	var data []byte
+	if params.body != nil {
+		var err error
+		data, err = json.Marshal(params.body)
+		if err != nil {
+			return resp, err
+		}
 	}
 
-	for k, v := range params.headers {
-		req.Header.Set(k, v)
+	req, err := http.NewRequestWithContext(ctx, params.method, params.url, bytes.NewReader(data))
+	if err != nil {
+		return resp, err
+	}
+
+	if params.headers != nil {
+		for k, v := range params.headers {
+			req.Header.Set(k, v)
+		}
+	}
+	req.Header.Set("User-Agent", userAgent)
+	if data != nil {
+		req.Header.Set("Content-Type", "application/json")
 	}
 
 	res, err := f.httpc.Do(req)
 	if err != nil {
-		return nil, err
+		return resp, err
 	}
 	defer res.Body.Close()
 
 	b, err := io.ReadAll(res.Body)
 	if err != nil {
-		return nil, err
+		return resp, err
 	}
 
 	if res.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("want 200, got %d: %s", res.StatusCode, b)
+		return resp, fmt.Errorf("want 200, got %d: %s", res.StatusCode, b)
 	}
 
-	return b, nil
+	if err := json.Unmarshal(b, &resp); err != nil {
+		return resp, err
+	}
+	return resp, nil
 }

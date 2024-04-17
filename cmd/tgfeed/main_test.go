@@ -11,7 +11,6 @@ import (
 	"log"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -63,13 +62,15 @@ func TestRun(t *testing.T) {
 				w.Write(txtarToGist(t, gistTxtar))
 			})
 			mux.HandleFunc("PATCH api.github.com/gists/test", func(w http.ResponseWriter, r *http.Request) {
-				// We don't care about the output, so return nothing.
+				w.Write(read(t, r.Body))
 			})
 			mux.HandleFunc("POST api.telegram.org/{token}/sendMessage", func(w http.ResponseWriter, r *http.Request) {
 				testutil.AssertEqual(t, tgToken, strings.TrimPrefix(r.PathValue("token"), "bot"))
 				if tc.failSending {
 					w.WriteHeader(http.StatusInternalServerError)
 				}
+				// Just to appease makeRequest.
+				w.Write([]byte("{}"))
 			})
 
 			f := testFetcher(mux, io.Discard)
@@ -93,9 +94,12 @@ func TestFailingFeed(t *testing.T) {
 	})
 	mux.HandleFunc("PATCH api.github.com/gists/test", func(w http.ResponseWriter, r *http.Request) {
 		updatedGistJSON = read(t, r.Body)
+		w.Write(updatedGistJSON)
 	})
 	mux.HandleFunc("POST api.telegram.org/{token}/sendMessage", func(w http.ResponseWriter, r *http.Request) {
 		testutil.AssertEqual(t, tgToken, strings.TrimPrefix(r.PathValue("token"), "bot"))
+		// Just to appease makeRequest.
+		w.Write([]byte("{}"))
 	})
 
 	f := testFetcher(mux, io.Discard)
@@ -120,7 +124,7 @@ func TestFailingFeed(t *testing.T) {
 func TestDisablingFailingFeed(t *testing.T) {
 	var (
 		updatedGistJSON []byte
-		sentMessages    []url.Values
+		sentMessages    []map[string]string
 	)
 
 	mux := http.NewServeMux()
@@ -136,13 +140,11 @@ func TestDisablingFailingFeed(t *testing.T) {
 	})
 	mux.HandleFunc("PATCH api.github.com/gists/test", func(w http.ResponseWriter, r *http.Request) {
 		updatedGistJSON = read(t, r.Body)
+		w.Write(updatedGistJSON)
 	})
 	mux.HandleFunc("POST api.telegram.org/{token}/sendMessage", func(w http.ResponseWriter, r *http.Request) {
 		testutil.AssertEqual(t, tgToken, strings.TrimPrefix(r.PathValue("token"), "bot"))
-		if err := r.ParseForm(); err != nil {
-			t.Fatal(err)
-		}
-		sentMessages = append(sentMessages, r.PostForm)
+		sentMessages = append(sentMessages, unmarshal[map[string]string](t, read(t, r.Body)))
 	})
 
 	f := testFetcher(mux, io.Discard)
@@ -166,7 +168,7 @@ func TestDisablingFailingFeed(t *testing.T) {
 	testutil.AssertEqual(t, state["https://example.com/feed.xml"].LastError, "want 200, got 418")
 
 	testutil.AssertEqual(t, len(sentMessages), 1)
-	testutil.AssertEqual(t, sentMessages[0].Get("text"), "❌ Something went wrong:\n<pre><code>fetching feed \"https://example.com/feed.xml\" failed after 13 previous attempts: want 200, got 418; feed was disabled, to reenable it run 'tgfeed -reenable \"https://example.com/feed.xml\"'</code></pre>")
+	testutil.AssertEqual(t, sentMessages[0]["text"], "❌ Something went wrong:\n<pre><code>fetching feed \"https://example.com/feed.xml\" failed after 13 previous attempts: want 200, got 418; feed was disabled, to reenable it run 'tgfeed -reenable \"https://example.com/feed.xml\"'</code></pre>")
 }
 
 func read(t *testing.T, r io.Reader) []byte {
