@@ -149,7 +149,7 @@ func TestDisablingFailingFeed(t *testing.T) {
 
 	f := testFetcher(mux, io.Discard)
 
-	const attempts = errorThreshold + 2
+	const attempts = errorThreshold
 	for range attempts {
 		if err := f.run(context.Background()); err != nil {
 			t.Fatal(err)
@@ -168,7 +168,7 @@ func TestDisablingFailingFeed(t *testing.T) {
 	testutil.AssertEqual(t, state["https://example.com/feed.xml"].LastError, "want 200, got 418")
 
 	testutil.AssertEqual(t, len(sentMessages), 1)
-	testutil.AssertEqual(t, sentMessages[0]["text"], "❌ Something went wrong:\n<pre><code>fetching feed \"https://example.com/feed.xml\" failed after 13 previous attempts: want 200, got 418; feed was disabled, to reenable it run 'tgfeed -reenable \"https://example.com/feed.xml\"'</code></pre>")
+	testutil.AssertEqual(t, sentMessages[0]["text"], "❌ Something went wrong:\n<pre><code>fetching feed \"https://example.com/feed.xml\" failed after 12 previous attempts: want 200, got 418; feed was disabled, to reenable it run 'tgfeed -reenable \"https://example.com/feed.xml\"'</code></pre>")
 }
 
 func read(t *testing.T, r io.Reader) []byte {
