@@ -164,7 +164,7 @@ func TestDisablingFailingFeed(t *testing.T) {
 	state := unmarshal[map[string]*feedState](t, []byte(stateJSON.Content))
 
 	testutil.AssertEqual(t, state["https://example.com/feed.xml"].Disabled, true)
-	testutil.AssertEqual(t, state["https://example.com/feed.xml"].ErrorCount, attempts-1)
+	testutil.AssertEqual(t, state["https://example.com/feed.xml"].ErrorCount, attempts)
 	testutil.AssertEqual(t, state["https://example.com/feed.xml"].LastError, "want 200, got 418")
 
 	testutil.AssertEqual(t, len(sentMessages), 1)
