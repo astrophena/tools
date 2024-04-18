@@ -259,12 +259,9 @@ func (f *fetcher) run(ctx context.Context) error {
 			state := f.state[url]
 			// Complain loudly and disable feed, if we failed previously enough.
 			if state.ErrorCount >= errorThreshold {
-				state.LastError = err.Error()
-				state.ErrorCount += 1
 				err = fmt.Errorf("fetching feed %q failed after %d previous attempts: %v; feed was disabled, to reenable it run 'tgfeed -reenable %q'", url, state.ErrorCount, err, url)
 				state.Disabled = true
 				f.send(ctx, fmt.Sprintf(f.errorTemplate, err), disableLinkPreview)
-				continue
 			}
 			// Otherwise, carry on.
 			state.ErrorCount += 1
