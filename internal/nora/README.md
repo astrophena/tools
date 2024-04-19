@@ -22,8 +22,8 @@ It's built with help of [Writing An Interpreter In Go](book.pdf) book.
 - [ ] Parsing:
   - [X] Prefix Operators
   - [X] Infix Operators
-  - [ ] Boolean Literals
-  - [ ] Grouped Expressions
+  - [X] Boolean Literals
+  - [X] Grouped Expressions
   - [ ] If Expressions
   - [ ] Function Literals
   - [ ] Call Expressions
