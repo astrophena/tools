@@ -3,7 +3,6 @@ module go.astrophena.name/tools
 go 1.22.2
 
 require (
-	github.com/davecgh/go-spew v1.1.1
 	github.com/google/go-cmp v0.6.0
 	github.com/mmcdole/gofeed v1.3.0
 	golang.org/x/tools v0.20.0
