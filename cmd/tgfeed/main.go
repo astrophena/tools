@@ -5,14 +5,10 @@ tgfeed fetches RSS feeds and sends new articles via Telegram.
 
 tgfeed runs as a GitHub Actions workflow.
 
-It fetches RSS feeds from URLs provided in the feeds.json file. It applies
-filters to the fetched articles based on regex rules defined in the filters.json
-file. Filters include keep_rule to keep items with titles matching a regex
-pattern and ignore_rule to ignore items with titles matching a regex pattern.
+It fetches RSS feeds from URLs provided in the feeds.json file.
 
 New articles are sent to a Telegram chat specified by the CHAT_ID environment
-variable. Also tgfeed summarizes articles and videos using YandexGPT through
-300.ya.ru API.
+variable.
 
 # Where it keeps state?
 
@@ -32,7 +28,6 @@ The tgfeed program relies on the following environment variables:
   - GIST_ID: GitHub Gist ID where the program stores its state.
   - GITHUB_TOKEN: GitHub personal access token for accessing the GitHub API.
   - TELEGRAM_TOKEN: Telegram bot token for accessing the Telegram Bot API.
-  - YAGPT_TOKEN: 300.ya.ru access token for summarizing articles using YandexGPT.
 
 # Administration
 
@@ -40,11 +35,6 @@ To update the list of feeds, you can use the -update-feeds flag followed by the
 file path containing the updated list of feeds. For example:
 
 	$ tgfeed -update-feeds feeds.json
-
-To update the list of filters, you can use the -update-filters flag followed by
-the file path containing the updated list of filters. For example:
-
-	$ tgfeed -update-filters filters.json
 
 To reenable a failing feed that has been disabled due to consecutive failures,
 you can use the -reenable flag followed by the URL of the feed. For example:
@@ -74,11 +64,9 @@ import (
 	"html"
 	"io"
 	"log"
-	"maps"
 	"net/http"
 	"os"
 	"os/signal"
-	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -87,8 +75,6 @@ import (
 
 	"go.astrophena.name/tools/internal/cli"
 
-	"github.com/davecgh/go-spew/spew"
-	"github.com/google/go-cmp/cmp"
 	"github.com/mmcdole/gofeed"
 )
 
@@ -98,19 +84,17 @@ const (
 	userAgent      = "tgfeed (https://astrophena.name/bleep-bloop)"
 	ghAPI          = "https://api.github.com"
 	tgAPI          = "https://api.telegram.org"
-	ya300API       = "https://300.ya.ru/api/sharing-url"
 	errorThreshold = 12 // failing continuously for four days will disable feed and complain loudly
 )
 
 func main() {
 	var (
-		dryRun        = flag.Bool("dry-run", false, "Fetch feeds, but only print what will be sent and difference between previous and new state.")
-		dumpAll       = flag.Bool("dump-all", false, "Dump feeds, filters and state.")
-		failing       = flag.Bool("failing", false, "Print the list of failing feeds.")
-		gc            = flag.Bool("gc", false, "Remove state of feeds that was removed from the list.")
-		updateFeeds   = flag.String("update-feeds", "", "Update feeds list from `file`.")
-		updateFilters = flag.String("update-filters", "", "Update feed filters from `file`.")
-		reenable      = flag.String("reenable", "", "Reenable previously failing and disabled `feed`.")
+		dryRun      = flag.Bool("dry-run", false, "Fetch feeds, but only print what will be sent and difference between previous and new state.")
+		dumpAll     = flag.Bool("dump-all", false, "Dump feeds, filters and state.")
+		failing     = flag.Bool("failing", false, "Print the list of failing feeds.")
+		gc          = flag.Bool("gc", false, "Remove state of feeds that was removed from the list.")
+		updateFeeds = flag.String("update-feeds", "", "Update feeds list from `file`.")
+		reenable    = flag.String("reenable", "", "Reenable previously failing and disabled `feed`.")
 	)
 	cli.SetDescription("tgfeed fetches RSS feeds and sends new articles via Telegram.")
 	cli.SetArgsUsage("[flags]")
@@ -120,12 +104,11 @@ func main() {
 		httpc: &http.Client{
 			Timeout: 10 * time.Second,
 		},
-		dryRun:     *dryRun,
-		gistID:     os.Getenv("GIST_ID"),
-		ghToken:    os.Getenv("GITHUB_TOKEN"),
-		chatID:     os.Getenv("CHAT_ID"),
-		tgToken:    os.Getenv("TELEGRAM_TOKEN"),
-		ya300Token: os.Getenv("YAGPT_TOKEN"),
+		dryRun:  *dryRun,
+		gistID:  os.Getenv("GIST_ID"),
+		ghToken: os.Getenv("GITHUB_TOKEN"),
+		chatID:  os.Getenv("CHAT_ID"),
+		tgToken: os.Getenv("TELEGRAM_TOKEN"),
 	}
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
@@ -135,12 +118,23 @@ func main() {
 		if err := f.loadFromGist(ctx); err != nil {
 			log.Fatal(err)
 		}
-		log.Println("=== Feeds ===")
-		spew.Fdump(os.Stderr, f.feeds)
-		log.Println("=== Filters ===")
-		spew.Fdump(os.Stderr, f.filters)
-		log.Println("=== State ===")
-		spew.Fdump(os.Stderr, f.state)
+
+		io.WriteString(os.Stdout, "Feeds:\n")
+		feedsJSON, err := json.MarshalIndent(f.feeds, "", "  ")
+		if err != nil {
+			log.Printf("Failed to marshal feeds: %v.", err)
+		}
+		os.Stdout.Write(feedsJSON)
+		os.Stdout.Write([]byte("\n"))
+
+		io.WriteString(os.Stdout, "State:\n")
+		stateJSON, err := json.MarshalIndent(f.state, "", "  ")
+		if err != nil {
+			log.Printf("Failed to marshal state: %v.", err)
+		}
+		os.Stdout.Write(stateJSON)
+		os.Stdout.Write([]byte("\n"))
+
 		return
 	}
 
@@ -175,13 +169,6 @@ func main() {
 		return
 	}
 
-	if *updateFilters != "" {
-		if err := f.updateFiltersFromFile(ctx, *updateFilters); err != nil {
-			log.Fatal(err)
-		}
-		return
-	}
-
 	if *reenable != "" {
 		if err := f.reenable(ctx, *reenable); err != nil {
 			log.Fatal(err)
@@ -207,22 +194,13 @@ type fetcher struct {
 	gistID  string
 	ghToken string
 
-	feeds      []string
-	filters    map[string]*feedFilter
-	chatID     string
-	tgToken    string
-	ya300Token string
+	feeds   []string
+	chatID  string
+	tgToken string
 
-	errorTemplate    string
-	state, prevState map[string]*feedState
-	updates          []*gofeed.Item
-}
-
-type feedFilter struct {
-	KeepRule   string `json:"keep_rule"`   // keep only the items with a title that matches the regex
-	IgnoreRule string `json:"ignore_rule"` // ignore items with a title that match the regex; ignored when KeepRule is set
-
-	keepRe, ignoreRe *regexp.Regexp // compiled rules
+	errorTemplate string
+	state         map[string]*feedState
+	updates       []*gofeed.Item
 }
 
 type feedState struct {
@@ -291,18 +269,6 @@ func (f *fetcher) run(ctx context.Context) error {
 			continue
 		}
 
-		if f.ya300Token != "" {
-			summaryURL, err := f.summarize(ctx, item.Link)
-			if err != nil {
-				f.log.Printf("summarizing article %q using 300.ya.ru failed: %v", item.Link, err)
-			} else {
-				inlineKeyboardButtons = append(inlineKeyboardButtons, inlineKeyboardButton{
-					Text: "ℹ️ Summary",
-					URL:  summaryURL,
-				})
-			}
-		}
-
 		if err := f.send(ctx, msg, func(args map[string]any) {
 			args["link_preview_options"] = linkPreviewOptions{
 				URL: item.Link,
@@ -315,7 +281,12 @@ func (f *fetcher) run(ctx context.Context) error {
 		}
 	}
 
-	return f.saveToGist(ctx)
+	if !f.dryRun {
+		if err := f.saveToGist(ctx); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (f *fetcher) gc(ctx context.Context) error {
@@ -334,22 +305,6 @@ func (f *fetcher) gc(ctx context.Context) error {
 		if !found {
 			delete(f.state, url)
 		}
-	}
-
-	return f.saveToGist(ctx)
-}
-
-func (f *fetcher) updateFiltersFromFile(ctx context.Context, file string) error {
-	if err := f.loadFromGist(ctx); err != nil {
-		return err
-	}
-
-	b, err := os.ReadFile(file)
-	if err != nil {
-		return err
-	}
-	if err := json.Unmarshal(b, &f.filters); err != nil {
-		return err
 	}
 
 	return f.saveToGist(ctx)
@@ -418,18 +373,8 @@ func (f *fetcher) loadFromGist(ctx context.Context) error {
 	f.state = make(map[string]*feedState)
 	state, ok := g.Files["state.json"]
 	if ok {
-		if err := json.Unmarshal([]byte(state.Content), &f.state); err != nil {
-			return err
-		}
+		return json.Unmarshal([]byte(state.Content), &f.state)
 	}
-	f.prevState = maps.Clone(f.state)
-
-	f.filters = make(map[string]*feedFilter)
-	filters, ok := g.Files["filters.json"]
-	if ok {
-		return json.Unmarshal([]byte(filters.Content), &f.filters)
-	}
-
 	return nil
 }
 
@@ -494,36 +439,8 @@ func (f *fetcher) fetch(ctx context.Context, url string) error {
 		}
 	}
 
-	// Try to parse a feed filter, if it does exist.
-	filter, ok := f.filters[url]
-	if ok {
-		if filter.KeepRule != "" {
-			keepRe, err := regexp.Compile(filter.KeepRule)
-			if err == nil {
-				filter.keepRe = keepRe
-			} else {
-				f.log.Printf("%s: invalid keep rule %q: %v", url, filter.KeepRule, err)
-			}
-		}
-
-		if filter.keepRe == nil && filter.IgnoreRule != "" {
-			ignoreRe, err := regexp.Compile(filter.IgnoreRule)
-			if err == nil {
-				filter.ignoreRe = ignoreRe
-			} else {
-				f.log.Printf("%s: invalid ignore rule %q: %v", url, filter.IgnoreRule, err)
-			}
-		}
-	}
-
 	for _, item := range feed.Items {
 		if item.PublishedParsed.Before(state.LastUpdated) {
-			continue
-		}
-		if filter != nil && filter.keepRe != nil && !filter.keepRe.MatchString(item.Title) {
-			continue
-		}
-		if filter != nil && filter.ignoreRe != nil && filter.ignoreRe.MatchString(item.Title) {
 			continue
 		}
 		f.updates = append(f.updates, item)
@@ -565,49 +482,9 @@ type inlineKeyboardButton struct {
 	URL  string `json:"url"`
 }
 
-func (f *fetcher) summarize(ctx context.Context, url string) (sharingURL string, err error) {
-	var req struct {
-		ArticleURL string `json:"article_url"`
-	}
-	req.ArticleURL = url
-
-	type responseSchema struct {
-		Status     string `json:"status"`
-		SharingURL string `json:"sharing_url"`
-	}
-
-	resp, err := makeRequest[*responseSchema](f, ctx, requestParams{
-		method: http.MethodPost,
-		url:    ya300API,
-		body:   req,
-		headers: map[string]string{
-			"Authorization": "OAuth " + f.ya300Token,
-		},
-	})
-	if err != nil {
-		return "", err
-	}
-
-	if resp.Status != "success" {
-		return "", fmt.Errorf("want status success, got %s", resp.Status)
-	}
-	return resp.SharingURL, nil
-}
-
 var inTest bool // set true when testing
 
 func (f *fetcher) saveToGist(ctx context.Context) error {
-	// Don't save to gist in dry run mode. Print a diff instead between previous
-	// state and new state. Except inside tests.
-	if f.dryRun {
-		if !inTest {
-			if diff := cmp.Diff(f.prevState, f.state); diff != "" {
-				f.log.Printf("state changed:\n%s", diff)
-			}
-		}
-		return nil
-	}
-
 	state, err := json.MarshalIndent(f.state, "", "  ")
 	if err != nil {
 		return err
@@ -616,19 +493,13 @@ func (f *fetcher) saveToGist(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	filters, err := json.MarshalIndent(f.filters, "", "  ")
-	if err != nil {
-		return err
-	}
 
 	data := new(gist)
 	data.Files = make(map[string]*gistFile)
 	stateFile := &gistFile{Content: string(state)}
 	feedsFile := &gistFile{Content: string(feeds)}
-	filtersFile := &gistFile{Content: string(filters)}
 	data.Files["feeds.json"] = feedsFile
 	data.Files["state.json"] = stateFile
-	data.Files["filters.json"] = filtersFile
 
 	_, err = f.makeGistRequest(ctx, http.MethodPatch, data)
 	return err

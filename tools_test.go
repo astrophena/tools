@@ -1,49 +1,37 @@
 package tools
 
-//go:generate bash scripts/genreadme.sh
+//go:generate bash genreadme.sh
 
 import (
 	"bytes"
 	"os"
 	"os/exec"
 	"testing"
-
-	"go.astrophena.name/tools/internal/testutil"
 )
 
-func TestReadme(t *testing.T) {
+func TestGenerate(t *testing.T) {
 	if os.Getenv("CI") != "true" {
 		t.Skip("this test is only run in CI")
 	}
-
-	read := func() []byte {
-		b, err := os.ReadFile("README.md")
-		if err != nil {
-			t.Fatal(err)
-		}
-		return b
-	}
-
-	got := read()
-	if err := exec.Command("go", "generate").Run(); err != nil {
-		t.Fatalf("go generate failed: %v", err)
-	}
-	want := read()
-
-	testutil.AssertEqual(t, want, got)
+	var w bytes.Buffer
+	run(t, &w, "go", "generate")
+	run(t, &w, "git", "diff", "--exit-code")
 }
 
 func TestGofmt(t *testing.T) {
 	var w bytes.Buffer
-
-	gofmt := exec.Command("gofmt", "-l", ".")
-	gofmt.Stdout = &w
-	gofmt.Stderr = &w
-	if err := gofmt.Run(); err != nil {
-		t.Fatalf("gofmt failed: %v\n\n%v", err, w)
-	}
-
+	run(t, &w, "gofmt", "-d", ".")
 	if diff := w.String(); diff != "" {
 		t.Fatalf("run gofmt on these files:\n\t%v", diff)
+	}
+}
+
+func run(t *testing.T, buf *bytes.Buffer, cmd string, args ...string) {
+	buf.Reset()
+	c := exec.Command(cmd, args...)
+	c.Stdout = buf
+	c.Stderr = buf
+	if err := c.Run(); err != nil {
+		t.Fatalf("%s failed: %v:\n\t%v", cmd, err, buf.String())
 	}
 }
