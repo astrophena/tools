@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	_ "embed"
 	"encoding/json"
@@ -12,7 +11,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -35,7 +33,6 @@ var (
 )
 
 func TestMain(m *testing.M) {
-	inTest = true
 	flag.Parse()
 	os.Exit(m.Run())
 }
@@ -185,41 +182,6 @@ func unmarshal[V any](t *testing.T, b []byte) V {
 		t.Fatal(err)
 	}
 	return v
-}
-
-func TestDryRun(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET example.com/feed.xml", func(w http.ResponseWriter, r *http.Request) {
-		w.Write(feedXML)
-	})
-	mux.HandleFunc("GET api.github.com/gists/test", func(w http.ResponseWriter, r *http.Request) {
-		w.Write(txtarToGist(t, gistTxtar))
-	})
-
-	lbuf := new(bytes.Buffer)
-
-	f := testFetcher(mux, lbuf)
-	f.dryRun = true
-
-	if err := f.run(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-
-	got := lbuf.Bytes()
-
-	wantFile := filepath.Join("testdata", "dry_run.golden")
-	if *update {
-		if err := os.WriteFile(wantFile, got, 0o644); err != nil {
-			t.Fatal(err)
-		}
-		return
-	}
-	want, err := os.ReadFile(wantFile)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	testutil.AssertEqual(t, string(want), string(got))
 }
 
 var (

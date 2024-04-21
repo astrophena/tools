@@ -31,21 +31,25 @@ The tgfeed program relies on the following environment variables:
 
 # Administration
 
-To update the list of feeds, you can use the -update-feeds flag followed by the
-file path containing the updated list of feeds. For example:
+To subscribe to a feed, you can use the -subscribe flag followed by the URL of
+the feed. For example:
 
-	$ tgfeed -update-feeds feeds.json
+	$ tgfeed -subscribe https://example.com/feed
+
+To unsubscribe from a feed, you can use the -unsubscribe flag followed by the URL of
+the feed. For example:
+
+	$ tgfeed -unsubscribe https://example.com/feed
 
 To reenable a failing feed that has been disabled due to consecutive failures,
 you can use the -reenable flag followed by the URL of the feed. For example:
 
 	$ tgfeed -reenable https://example.com/feed
 
-To view the list of failing feeds, you can use the -failing flag. This will
-print the URLs of feeds that have encountered errors during fetching. For
-example:
+To view the list of feeds, you can use the -feeds flag. This will also print the
+URLs of feeds that have encountered errors during fetching. For example:
 
-	$ tgfeed -failing
+	$ tgfeed -feeds
 
 To perform garbage collection and remove the state of feeds that have been
 removed from the list, you can use the -gc flag. This ensures that the program's
@@ -89,12 +93,11 @@ const (
 
 func main() {
 	var (
-		dryRun      = flag.Bool("dry-run", false, "Fetch feeds, but only print what will be sent and difference between previous and new state.")
-		dumpAll     = flag.Bool("dump-all", false, "Dump feeds, filters and state.")
-		failing     = flag.Bool("failing", false, "Print the list of failing feeds.")
+		feeds       = flag.Bool("feeds", false, "List subscribed feeds.")
 		gc          = flag.Bool("gc", false, "Remove state of feeds that was removed from the list.")
-		updateFeeds = flag.String("update-feeds", "", "Update feeds list from `file`.")
 		reenable    = flag.String("reenable", "", "Reenable previously failing and disabled `feed`.")
+		subscribe   = flag.String("subscribe", "", "Subscribe to a `feed`.")
+		unsubscribe = flag.String("unsubscribe", "", "Unsubscribe from a `feed`.")
 	)
 	cli.SetDescription("tgfeed fetches RSS feeds and sends new articles via Telegram.")
 	cli.SetArgsUsage("[flags]")
@@ -104,7 +107,6 @@ func main() {
 		httpc: &http.Client{
 			Timeout: 10 * time.Second,
 		},
-		dryRun:  *dryRun,
 		gistID:  os.Getenv("GIST_ID"),
 		ghToken: os.Getenv("GITHUB_TOKEN"),
 		chatID:  os.Getenv("CHAT_ID"),
@@ -114,63 +116,32 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
-	if *dumpAll {
-		if err := f.loadFromGist(ctx); err != nil {
+	if *feeds {
+		if err := f.listFeeds(ctx, os.Stderr); err != nil {
 			log.Fatal(err)
-		}
-
-		io.WriteString(os.Stdout, "Feeds:\n")
-		feedsJSON, err := json.MarshalIndent(f.feeds, "", "  ")
-		if err != nil {
-			log.Printf("Failed to marshal feeds: %v.", err)
-		}
-		os.Stdout.Write(feedsJSON)
-		os.Stdout.Write([]byte("\n"))
-
-		io.WriteString(os.Stdout, "State:\n")
-		stateJSON, err := json.MarshalIndent(f.state, "", "  ")
-		if err != nil {
-			log.Printf("Failed to marshal state: %v.", err)
-		}
-		os.Stdout.Write(stateJSON)
-		os.Stdout.Write([]byte("\n"))
-
-		return
-	}
-
-	if *failing {
-		if err := f.loadFromGist(ctx); err != nil {
-			log.Fatal(err)
-		}
-		for url, state := range f.state {
-			if state.ErrorCount == 0 {
-				continue
-			}
-			failText := "once"
-			if state.ErrorCount > 1 {
-				failText = fmt.Sprintf("%d times", state.ErrorCount)
-			}
-			log.Printf("%s (failed %s, last error: %q)", url, failText, state.LastError)
 		}
 		return
 	}
-
 	if *gc {
 		if err := f.gc(ctx); err != nil {
 			log.Fatal(err)
 		}
 		return
 	}
-
-	if *updateFeeds != "" {
-		if err := f.updateFeedsFromFile(ctx, *updateFeeds); err != nil {
+	if *reenable != "" {
+		if err := f.reenable(ctx, *reenable); err != nil {
 			log.Fatal(err)
 		}
 		return
 	}
-
-	if *reenable != "" {
-		if err := f.reenable(ctx, *reenable); err != nil {
+	if *subscribe != "" {
+		if err := f.subscribe(ctx, *subscribe); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
+	if *unsubscribe != "" {
+		if err := f.unsubscribe(ctx, *unsubscribe); err != nil {
 			log.Fatal(err)
 		}
 		return
@@ -188,8 +159,7 @@ type fetcher struct {
 	httpc *http.Client
 	fp    *gofeed.Parser
 
-	dryRun bool
-	log    *log.Logger
+	log *log.Logger
 
 	gistID  string
 	ghToken string
@@ -219,10 +189,6 @@ func (f *fetcher) doInit() {
 
 	if f.errorTemplate == "" {
 		f.errorTemplate = defaultErrorTemplate
-	}
-
-	if f.log == nil {
-		f.log = log.New(os.Stderr, "", 0)
 	}
 }
 
@@ -264,11 +230,6 @@ func (f *fetcher) run(ctx context.Context) error {
 			})
 		}
 
-		if f.dryRun {
-			f.log.Println(msg)
-			continue
-		}
-
 		if err := f.send(ctx, msg, func(args map[string]any) {
 			args["link_preview_options"] = linkPreviewOptions{
 				URL: item.Link,
@@ -281,12 +242,7 @@ func (f *fetcher) run(ctx context.Context) error {
 		}
 	}
 
-	if !f.dryRun {
-		if err := f.saveToGist(ctx); err != nil {
-			return err
-		}
-	}
-	return nil
+	return f.saveToGist(ctx)
 }
 
 func (f *fetcher) gc(ctx context.Context) error {
@@ -310,23 +266,6 @@ func (f *fetcher) gc(ctx context.Context) error {
 	return f.saveToGist(ctx)
 }
 
-func (f *fetcher) updateFeedsFromFile(ctx context.Context, file string) error {
-	if err := f.loadFromGist(ctx); err != nil {
-		return err
-	}
-
-	b, err := os.ReadFile(file)
-	if err != nil {
-		return err
-	}
-	if err := json.Unmarshal(b, &f.feeds); err != nil {
-		return err
-	}
-	slices.Sort(f.feeds)
-
-	return f.saveToGist(ctx)
-}
-
 func (f *fetcher) reenable(ctx context.Context, url string) error {
 	if err := f.loadFromGist(ctx); err != nil {
 		return err
@@ -341,6 +280,59 @@ func (f *fetcher) reenable(ctx context.Context, url string) error {
 	state.ErrorCount = 0
 	state.LastError = ""
 
+	return f.saveToGist(ctx)
+}
+
+func (f *fetcher) listFeeds(ctx context.Context, w io.Writer) error {
+	if err := f.loadFromGist(ctx); err != nil {
+		return err
+	}
+
+	var sb strings.Builder
+
+	for _, url := range f.feeds {
+		state, hasState := f.state[url]
+		fmt.Fprintf(&sb, "%s", url)
+		if !hasState {
+			fmt.Fprintf(&sb, " \n")
+			continue
+		}
+		fmt.Fprintf(&sb, " (last updated %s", state.LastUpdated.Format(time.DateTime))
+		if state.ErrorCount > 0 {
+			failCount := "once"
+			if state.ErrorCount > 1 {
+				failCount = fmt.Sprintf("%d times", state.ErrorCount)
+			}
+			fmt.Fprintf(&sb, ", failed %s, last error was %q", failCount, state.LastError)
+		}
+		fmt.Fprintf(&sb, ")\n")
+	}
+
+	io.WriteString(w, sb.String())
+	return nil
+}
+
+func (f *fetcher) subscribe(ctx context.Context, url string) error {
+	if err := f.loadFromGist(ctx); err != nil {
+		return err
+	}
+	if slices.Contains(f.feeds, url) {
+		return fmt.Errorf("%q is already in list of feeds", url)
+	}
+	f.feeds = append(f.feeds, url)
+	return f.saveToGist(ctx)
+}
+
+func (f *fetcher) unsubscribe(ctx context.Context, url string) error {
+	if err := f.loadFromGist(ctx); err != nil {
+		return err
+	}
+	if !slices.Contains(f.feeds, url) {
+		return fmt.Errorf("%q isn't in list of feeds", url)
+	}
+	f.feeds = slices.DeleteFunc(f.feeds, func(sub string) bool {
+		return sub == url
+	})
 	return f.saveToGist(ctx)
 }
 
@@ -481,8 +473,6 @@ type inlineKeyboardButton struct {
 	Text string `json:"text"`
 	URL  string `json:"url"`
 }
-
-var inTest bool // set true when testing
 
 func (f *fetcher) saveToGist(ctx context.Context) error {
 	state, err := json.MarshalIndent(f.state, "", "  ")
