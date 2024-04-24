@@ -30,7 +30,7 @@ func AssertContains[S ~[]V, V comparable](t *testing.T, s S, v V) {
 	}
 }
 
-// AssertContains fails the test if v is present in s.
+// AssertNotContains fails the test if v is present in s.
 func AssertNotContains[S ~[]V, V comparable](t *testing.T, s S, v V) {
 	if slices.Contains(s, v) {
 		t.Fatalf("%v is present in %v", v, s)
