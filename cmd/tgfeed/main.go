@@ -159,8 +159,6 @@ type fetcher struct {
 	httpc *http.Client
 	fp    *gofeed.Parser
 
-	log *log.Logger
-
 	gistID  string
 	ghToken string
 

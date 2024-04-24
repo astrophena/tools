@@ -2,15 +2,40 @@
 package testutil
 
 import (
+	"encoding/json"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"golang.org/x/tools/txtar"
 )
+
+// UnmarshalJSON parses the JSON data into v, failing the test in case of failure.
+func UnmarshalJSON[V any](t *testing.T, b []byte) V {
+	var v V
+	if err := json.Unmarshal(b, &v); err != nil {
+		t.Fatal(err)
+	}
+	return v
+}
+
+// AssertContains fails the test if v is not present in s.
+func AssertContains[S ~[]V, V comparable](t *testing.T, s S, v V) {
+	if !slices.Contains(s, v) {
+		t.Fatalf("%v is not present in %v", v, s)
+	}
+}
+
+// AssertContains fails the test if v is present in s.
+func AssertNotContains[S ~[]V, V comparable](t *testing.T, s S, v V) {
+	if slices.Contains(s, v) {
+		t.Fatalf("%v is present in %v", v, s)
+	}
+}
 
 // AssertEqual compares two values and if they differ, fails the test and
 // prints the difference between them.

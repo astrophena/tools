@@ -4,13 +4,10 @@ import (
 	"context"
 	_ "embed"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
 
@@ -18,8 +15,6 @@ import (
 
 	"golang.org/x/tools/txtar"
 )
-
-var update = flag.Bool("update", false, "update golden files in testdata")
 
 // Typical Telegram Bot API token, copied from docs.
 const tgToken = "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
@@ -32,50 +27,26 @@ var (
 	feedXML []byte
 )
 
-func TestMain(m *testing.M) {
-	flag.Parse()
-	os.Exit(m.Run())
+func TestSubscribeAndUnsubscribe(t *testing.T) {
+	f := testFetcher(testMux(t).mux)
+
+	const feedURL = "https://example.com/feed2.xml"
+
+	testutil.AssertNotContains(t, f.feeds, feedURL)
+	if err := f.subscribe(context.Background(), feedURL); err != nil {
+		t.Fatal(err)
+	}
+	testutil.AssertContains(t, f.feeds, feedURL)
+	if err := f.unsubscribe(context.Background(), feedURL); err != nil {
+		t.Fatal(err)
+	}
+	testutil.AssertNotContains(t, f.feeds, feedURL)
 }
 
 func TestRun(t *testing.T) {
-	cases := map[string]struct {
-		failSending bool
-	}{
-		"succeeds": {
-			failSending: false,
-		},
-		"fails to send message": {
-			failSending: true,
-		},
-	}
-
-	for name, tc := range cases {
-		t.Run(name, func(t *testing.T) {
-			mux := http.NewServeMux()
-			mux.HandleFunc("GET example.com/feed.xml", func(w http.ResponseWriter, r *http.Request) {
-				w.Write(feedXML)
-			})
-			mux.HandleFunc("GET api.github.com/gists/test", func(w http.ResponseWriter, r *http.Request) {
-				w.Write(txtarToGist(t, gistTxtar))
-			})
-			mux.HandleFunc("PATCH api.github.com/gists/test", func(w http.ResponseWriter, r *http.Request) {
-				w.Write(read(t, r.Body))
-			})
-			mux.HandleFunc("POST api.telegram.org/{token}/sendMessage", func(w http.ResponseWriter, r *http.Request) {
-				testutil.AssertEqual(t, tgToken, strings.TrimPrefix(r.PathValue("token"), "bot"))
-				if tc.failSending {
-					w.WriteHeader(http.StatusInternalServerError)
-				}
-				// Just to appease makeRequest.
-				w.Write([]byte("{}"))
-			})
-
-			f := testFetcher(mux, io.Discard)
-
-			if err := f.run(context.Background()); err != nil && !tc.failSending {
-				t.Fatal(err)
-			}
-		})
+	f := testFetcher(testMux(t).mux)
+	if err := f.run(context.Background()); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -99,7 +70,7 @@ func TestFailingFeed(t *testing.T) {
 		w.Write([]byte("{}"))
 	})
 
-	f := testFetcher(mux, io.Discard)
+	f := testFetcher(mux)
 	if err := f.run(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +83,7 @@ func TestFailingFeed(t *testing.T) {
 	if !ok {
 		t.Fatal("state.json has not found in updated gist")
 	}
-	state := unmarshal[map[string]*feedState](t, []byte(stateJSON.Content))
+	state := testutil.UnmarshalJSON[map[string]*feedState](t, []byte(stateJSON.Content))
 
 	testutil.AssertEqual(t, state["https://example.com/feed.xml"].ErrorCount, 1)
 	testutil.AssertEqual(t, state["https://example.com/feed.xml"].LastError, "want 200, got 418")
@@ -141,10 +112,10 @@ func TestDisablingFailingFeed(t *testing.T) {
 	})
 	mux.HandleFunc("POST api.telegram.org/{token}/sendMessage", func(w http.ResponseWriter, r *http.Request) {
 		testutil.AssertEqual(t, tgToken, strings.TrimPrefix(r.PathValue("token"), "bot"))
-		sentMessages = append(sentMessages, unmarshal[map[string]any](t, read(t, r.Body)))
+		sentMessages = append(sentMessages, testutil.UnmarshalJSON[map[string]any](t, read(t, r.Body)))
 	})
 
-	f := testFetcher(mux, io.Discard)
+	f := testFetcher(mux)
 
 	const attempts = errorThreshold
 	for range attempts {
@@ -153,12 +124,12 @@ func TestDisablingFailingFeed(t *testing.T) {
 		}
 	}
 
-	updatedGist := unmarshal[gist](t, updatedGistJSON)
+	updatedGist := testutil.UnmarshalJSON[gist](t, updatedGistJSON)
 	stateJSON, ok := updatedGist.Files["state.json"]
 	if !ok {
 		t.Fatal("state.json has not found in updated gist")
 	}
-	state := unmarshal[map[string]*feedState](t, []byte(stateJSON.Content))
+	state := testutil.UnmarshalJSON[map[string]*feedState](t, []byte(stateJSON.Content))
 
 	testutil.AssertEqual(t, state["https://example.com/feed.xml"].Disabled, true)
 	testutil.AssertEqual(t, state["https://example.com/feed.xml"].ErrorCount, attempts)
@@ -176,14 +147,6 @@ func read(t *testing.T, r io.Reader) []byte {
 	return b
 }
 
-func unmarshal[V any](t *testing.T, b []byte) V {
-	var v V
-	if err := json.Unmarshal(b, &v); err != nil {
-		t.Fatal(err)
-	}
-	return v
-}
-
 var (
 	//go:embed testdata/load/gist.json
 	gistJSON []byte
@@ -199,7 +162,7 @@ func TestLoadFromGist(t *testing.T) {
 		w.Write(gistJSON)
 	})
 
-	f := testFetcher(mux, io.Discard)
+	f := testFetcher(mux)
 
 	if err := f.loadFromGist(context.Background()); err != nil {
 		t.Fatal(err)
@@ -214,7 +177,7 @@ func TestLoadFromGistHandleError(t *testing.T) {
 		w.WriteHeader(http.StatusNotFound)
 		w.Write(gistErrorJSON)
 	})
-	f := testFetcher(mux, io.Discard)
+	f := testFetcher(mux)
 	err := f.loadFromGist(context.Background())
 	testutil.AssertEqual(t, err.Error(), fmt.Sprintf("want 200, got 404: %s", gistErrorJSON))
 }
@@ -225,7 +188,7 @@ func (s roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) {
 	return s(r)
 }
 
-func testFetcher(mux *http.ServeMux, lw io.Writer) *fetcher {
+func testFetcher(mux *http.ServeMux) *fetcher {
 	return &fetcher{
 		httpc: &http.Client{
 			Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
@@ -234,12 +197,37 @@ func testFetcher(mux *http.ServeMux, lw io.Writer) *fetcher {
 				return w.Result(), nil
 			}),
 		},
-		log:     log.New(lw, "", 0),
 		ghToken: "test",
 		gistID:  "test",
 		tgToken: tgToken,
 		chatID:  "test",
 	}
+}
+
+type mux struct {
+	mux  *http.ServeMux
+	gist []byte
+}
+
+func testMux(t *testing.T) *mux {
+	m := &mux{mux: http.NewServeMux()}
+	m.mux.HandleFunc("GET api.github.com/gists/test", func(w http.ResponseWriter, r *http.Request) {
+		if m.gist != nil {
+			w.Write(m.gist)
+			return
+		}
+		w.Write(txtarToGist(t, gistTxtar))
+	})
+	m.mux.HandleFunc("PATCH api.github.com/gists/test", func(w http.ResponseWriter, r *http.Request) {
+		m.gist = read(t, r.Body)
+		w.Write(m.gist)
+	})
+	m.mux.HandleFunc("POST api.telegram.org/{token}/sendMessage", func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertEqual(t, tgToken, strings.TrimPrefix(r.PathValue("token"), "bot"))
+		// makeRequest tries to unmarshal response, which we didn't even use, so fool it.
+		w.Write([]byte("{}"))
+	})
+	return m
 }
 
 func txtarToGist(t *testing.T, b []byte) []byte {
