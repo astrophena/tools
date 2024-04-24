@@ -1,13 +1,17 @@
 package main
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
 	_ "embed"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 
@@ -23,9 +27,19 @@ var (
 	//go:embed testdata/gist.txtar
 	gistTxtar []byte
 
+	//go:embed testdata/gist_feed.txtar
+	gistFeedTxtar []byte
+
 	//go:embed testdata/feed.xml
 	feedXML []byte
 )
+
+var update = flag.Bool("update", false, "update golden files in testdata")
+
+func TestMain(m *testing.M) {
+	flag.Parse()
+	os.Exit(m.Run())
+}
 
 func TestRun(t *testing.T) {
 	t.Parallel()
@@ -33,6 +47,54 @@ func TestRun(t *testing.T) {
 	if err := f.run(context.Background()); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func TestFetch(t *testing.T) {
+	t.Parallel()
+
+	testutil.RunGolden(t, "testdata/feeds/*.xml.gz", func(t *testing.T, tc string) []byte {
+		t.Parallel()
+
+		zb, err := os.ReadFile(tc)
+		if err != nil {
+			t.Fatal(err)
+		}
+		b := unzip(t, zb)
+
+		tm := testMux(t, map[string]http.HandlerFunc{
+			"GET example.com/feed.xml": func(w http.ResponseWriter, r *http.Request) {
+				w.Write(b)
+			},
+		})
+		tm.gist = txtarToGist(t, gistFeedTxtar)
+		f := testFetcher(tm)
+
+		if err := f.run(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+
+		u, err := json.MarshalIndent(f.updates, "", " ")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return u
+	}, *update)
+}
+
+func unzip(t *testing.T, gz []byte) []byte {
+	r := bytes.NewReader(gz)
+	zr, err := gzip.NewReader(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer zr.Close()
+
+	var buf bytes.Buffer
+	_, err = io.Copy(&buf, zr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
 }
 
 func TestSubscribeAndUnsubscribe(t *testing.T) {
