@@ -178,6 +178,8 @@ type feedState struct {
 	Disabled     bool      `json:"disabled"`
 	ErrorCount   int       `json:"error_count"`
 	LastError    string    `json:"last_error"`
+	// Only return updates matching this list of categories.
+	FilteredCategories []string `json:"filtered_categories"`
 }
 
 func (f *fetcher) doInit() {
@@ -432,6 +434,13 @@ func (f *fetcher) fetch(ctx context.Context, url string) error {
 	for _, item := range feed.Items {
 		if item.PublishedParsed.Before(state.LastUpdated) {
 			continue
+		}
+		if len(state.FilteredCategories) > 0 {
+			if !slices.ContainsFunc(item.Categories, func(category string) bool {
+				return slices.Contains(state.FilteredCategories, category)
+			}) {
+				continue
+			}
 		}
 		f.updates = append(f.updates, item)
 	}

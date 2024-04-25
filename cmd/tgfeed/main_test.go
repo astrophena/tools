@@ -24,14 +24,11 @@ import (
 const tgToken = "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
 
 var (
-	//go:embed testdata/gist.txtar
+	//go:embed testdata/gists/main.txtar
 	gistTxtar []byte
 
-	//go:embed testdata/gist_feed.txtar
+	//go:embed testdata/gists/feed.txtar
 	gistFeedTxtar []byte
-
-	//go:embed testdata/feed.xml
-	feedXML []byte
 )
 
 var update = flag.Bool("update", false, "update golden files in testdata")
