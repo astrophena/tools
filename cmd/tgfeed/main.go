@@ -399,7 +399,9 @@ func (f *fetcher) fetch(ctx context.Context, url string) error {
 	if state.ETag != "" {
 		req.Header.Set("If-None-Match", fmt.Sprintf(`"%s"`, state.ETag))
 	}
-	req.Header.Set("If-Modified-Since", state.LastModified.In(time.UTC).Format(time.RFC1123))
+	if !state.LastModified.IsZero() {
+		req.Header.Set("If-Modified-Since", state.LastModified.In(time.UTC).Format(time.RFC1123))
+	}
 
 	res, err := f.httpc.Do(req)
 	if err != nil {
