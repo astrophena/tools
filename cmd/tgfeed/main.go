@@ -65,7 +65,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"html"
 	"io"
 	"log"
 	"net/http"
