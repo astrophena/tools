@@ -172,7 +172,7 @@ var (
 	//go:embed testdata/load/gist.json
 	gistJSON []byte
 
-	//go:embed testdata/load/gist_error.json
+	//go:embed testdata/load/gist-error.json
 	gistErrorJSON []byte
 )
 
