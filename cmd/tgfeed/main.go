@@ -177,6 +177,9 @@ type feedState struct {
 	Disabled     bool      `json:"disabled"`
 	ErrorCount   int       `json:"error_count"`
 	LastError    string    `json:"last_error"`
+
+	// Special flags. Not covered by tests or any common sense.
+
 	// Only return updates matching this list of categories.
 	FilteredCategories []string `json:"filtered_categories"`
 }
