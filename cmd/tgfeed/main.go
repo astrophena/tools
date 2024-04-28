@@ -117,7 +117,7 @@ func main() {
 	defer cancel()
 
 	if *feeds {
-		if err := f.listFeeds(ctx, os.Stderr); err != nil {
+		if err := f.listFeeds(ctx, os.Stdout); err != nil {
 			log.Fatal(err)
 		}
 		return
