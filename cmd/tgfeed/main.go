@@ -67,6 +67,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math/rand/v2"
 	"net/http"
 	"os"
 	"os/signal"
@@ -200,7 +201,7 @@ func (f *fetcher) run(ctx context.Context) error {
 	}
 	f.initOnce.Do(f.doInit)
 
-	for _, url := range f.feeds {
+	for _, url := range shuffle(f.feeds) {
 		if err := f.fetch(ctx, url); err != nil {
 			state := f.state[url]
 			state.ErrorCount += 1
@@ -253,6 +254,13 @@ func (f *fetcher) run(ctx context.Context) error {
 	}
 
 	return f.saveToGist(ctx)
+}
+
+func shuffle[S any](s []S) []S {
+	rand.Shuffle(len(s), func(i, j int) {
+		s[i], s[j] = s[j], s[i]
+	})
+	return s
 }
 
 func (f *fetcher) gc(ctx context.Context) error {
