@@ -214,6 +214,14 @@ func (f *fetcher) run(ctx context.Context) error {
 		}
 	}
 
+	if len(f.updates) > 0 {
+		// Tell the user that we are about to send updates. Don't worry if it fails.
+		f.makeTelegramRequest(ctx, "sendChatAction", map[string]any{
+			"chat_id": f.chatID,
+			"action":  "typing",
+		})
+	}
+
 	for _, item := range f.updates {
 		msg := fmt.Sprintf(
 			`<a href="%[1]s">%[2]s</a>`,
