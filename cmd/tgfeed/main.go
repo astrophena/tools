@@ -253,14 +253,16 @@ func (f *fetcher) run(ctx context.Context) error {
 		}
 	}
 
+	slices.Sort(f.feeds)
 	return f.saveToGist(ctx)
 }
 
 func shuffle[S any](s []S) []S {
-	rand.Shuffle(len(s), func(i, j int) {
-		s[i], s[j] = s[j], s[i]
+	s2 := slices.Clone(s)
+	rand.Shuffle(len(s2), func(i, j int) {
+		s2[i], s2[j] = s2[j], s2[i]
 	})
-	return s
+	return s2
 }
 
 func (f *fetcher) gc(ctx context.Context) error {
