@@ -325,6 +325,9 @@ func (f *fetcher) listFeeds(ctx context.Context, w io.Writer) error {
 			}
 			fmt.Fprintf(&sb, ", failed %s, last error was %q", failCount, state.LastError)
 		}
+		if state.Disabled {
+			fmt.Fprintf(&sb, ", disabled")
+		}
 		fmt.Fprintf(&sb, ")\n")
 	}
 

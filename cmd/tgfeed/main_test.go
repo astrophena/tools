@@ -38,6 +38,25 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
+func TestListFeeds(t *testing.T) {
+	t.Parallel()
+
+	testutil.RunGolden(t, "testdata/list/*.txtar", func(t *testing.T, tc string) []byte {
+		t.Parallel()
+
+		tm := testMux(t, nil)
+		tm.gist = txtarToGist(t, readFile(t, tc))
+		f := testFetcher(tm)
+
+		var buf bytes.Buffer
+		if err := f.listFeeds(context.Background(), &buf); err != nil {
+			t.Fatal(err)
+		}
+
+		return buf.Bytes()
+	}, *update)
+}
+
 func TestRun(t *testing.T) {
 	t.Parallel()
 	f := testFetcher(testMux(t, nil))
@@ -52,11 +71,7 @@ func TestFetch(t *testing.T) {
 	testutil.RunGolden(t, "testdata/feeds/*.xml.gz", func(t *testing.T, tc string) []byte {
 		t.Parallel()
 
-		zb, err := os.ReadFile(tc)
-		if err != nil {
-			t.Fatal(err)
-		}
-		b := unzip(t, zb)
+		b := unzip(t, readFile(t, tc))
 
 		tm := testMux(t, map[string]http.HandlerFunc{
 			"GET example.com/feed.xml": func(w http.ResponseWriter, r *http.Request) {
@@ -202,6 +217,14 @@ func TestLoadFromGistHandleError(t *testing.T) {
 	f := testFetcher(tm)
 	err := f.loadFromGist(context.Background())
 	testutil.AssertEqual(t, err.Error(), fmt.Sprintf("want 200, got 404: %s", gistErrorJSON))
+}
+
+func readFile(t *testing.T, path string) []byte {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b
 }
 
 type roundTripFunc func(r *http.Request) (*http.Response, error)

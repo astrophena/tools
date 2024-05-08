@@ -1,0 +1,738 @@
+-- feeds.json --
+[
+  "https://100r.co/links/rss.xml",
+  "https://adnano.co/atom.xml",
+  "https://alexwlchan.net/atom.xml",
+  "https://andrewkelley.me/rss.xml",
+  "https://apenwarr.ca/log/rss.php",
+  "https://astrophena.name/feed.xml",
+  "https://auto.onliner.by/feed",
+  "https://bengarney.com/feed/",
+  "https://benhoyt.com/writings/rss.xml",
+  "https://blisch.by/tag/gorodskie-zarisovki/feed",
+  "https://blog.wesleyac.com/feed.xml",
+  "https://brandur.org/articles.atom",
+  "https://brandur.org/atoms.atom",
+  "https://brandur.org/fragments.atom",
+  "https://brandur.org/nanoglyphs.atom",
+  "https://cblgh.org/all.xml",
+  "https://ciechanow.ski/atom.xml",
+  "https://commandcenter.blogspot.com/feeds/posts/default",
+  "https://crawshaw.io/atom.xml",
+  "https://danluu.com/atom.xml",
+  "https://drewdevault.com/blog/index.xml",
+  "https://emersion.fr/blog/atom.xml",
+  "https://fasterthanli.me/index.xml",
+  "https://fathy.fr/atom.xml",
+  "https://flak.tedunangst.com/rss",
+  "https://forum.merveilles.town/rss.xml",
+  "https://habr.com/ru/rss/users/bodyawm/articles/?fl=ru",
+  "https://herman.bearblog.dev/feed/?type=rss",
+  "https://hnrss.org/best",
+  "https://infrequently.org/feed/",
+  "https://jcs.org/rss",
+  "https://jvns.ca/atom.xml",
+  "https://ktostudent.ru/feed/",
+  "https://liberda.nl/weblog/atom.xml",
+  "https://manuelmoreale.com/feed/rss",
+  "https://maximilyahov.ru/blog/rss/",
+  "https://milan.cvitkovic.net/writing/index.xml",
+  "https://notebook.wesleyac.com/atom.xml",
+  "https://optozorax.github.io/atom.xml",
+  "https://orib.dev/feed.rss",
+  "https://research.swtch.com/feed.atom",
+  "https://rys.io/en/feed.rss",
+  "https://samwho.dev/rss.xml",
+  "https://sheepdev.xyz/blog/index.xml",
+  "https://subpixel.space/feed.xml",
+  "https://systemstack.dev/index.xml",
+  "https://taylor.town/feed.xml",
+  "https://tedinski.com/feed.xml",
+  "https://tg.i-c-a.su/rss/botnews",
+  "https://tg.i-c-a.su/rss/durov",
+  "https://tg.i-c-a.su/rss/nikitonsky_pub",
+  "https://thesephist.com/index.xml",
+  "https://til.simonwillison.net/tils/feed.atom",
+  "https://tonsky.me/atom.xml",
+  "https://tudorr.ro/feed.rss",
+  "https://v5.chriskrycho.com/essays/feed.xml",
+  "https://vas3k.blog/rss/",
+  "https://www.arp242.net/feed.xml",
+  "https://www.copetti.org/index.xml",
+  "https://www.debian.org/News/news",
+  "https://www.spicyweb.dev/feed.xml",
+  "https://www.youtube.com/feeds/videos.xml?channel_id=UC5dgoavpIertLkNDDITDoBQ",
+  "https://www.youtube.com/feeds/videos.xml?channel_id=UC8uT9cgJorJPWu7ITLGo9Ww",
+  "https://www.youtube.com/feeds/videos.xml?channel_id=UCBNG0osIBAprVcZZ3ic84vw",
+  "https://www.youtube.com/feeds/videos.xml?channel_id=UCCzVNbWZfYpBfyofCCUD_0w",
+  "https://www.youtube.com/feeds/videos.xml?channel_id=UCGzfpg1YiBIlgcODQI4lDvQ",
+  "https://www.youtube.com/feeds/videos.xml?channel_id=UCJ8V9aiz50m6NVn0ix5v8RQ",
+  "https://www.youtube.com/feeds/videos.xml?channel_id=UCMCgOm8GZkHp8zJ6l7_hIuA",
+  "https://www.youtube.com/feeds/videos.xml?channel_id=UCMiyV_Ib77XLpzHPQH_q0qQ",
+  "https://www.youtube.com/feeds/videos.xml?channel_id=UCfA5byBIXIw0hJQ27yDw-Gw",
+  "https://www.youtube.com/feeds/videos.xml?playlist_id=PLr0vtm6PM7z0xMS4mKgYYr6sbNG-bm9av",
+  "https://xeiaso.net/blog.rss",
+  "https://zserge.com/rss.xml"
+]
+-- state.json --
+{
+  "https://100r.co/links/rss.xml": {
+    "last_modified": "2024-05-08T00:34:27Z",
+    "last_updated": "2024-05-08T09:08:42.108157614Z",
+    "etag": "W/\"663ac893-2c4c8\"",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://adnano.co/atom.xml": {
+    "last_modified": "2024-01-11T11:48:28Z",
+    "last_updated": "2024-05-08T09:08:11.839118551Z",
+    "etag": "",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://alexwlchan.net/atom.xml": {
+    "last_modified": "0001-01-01T00:00:00Z",
+    "last_updated": "2024-05-08T09:08:24.394273677Z",
+    "etag": "\"89e9819bceed4c6047682f5bba25cf72-ssl-df\"",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://andrewkelley.me/rss.xml": {
+    "last_modified": "2024-03-25T05:05:53Z",
+    "last_updated": "2024-03-26T16:18:23.585626658Z",
+    "etag": "W/\"004a007c6ad308b84585d71a747202fd\"",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://apenwarr.ca/log/rss.php": {
+    "last_modified": "0001-01-01T00:00:00Z",
+    "last_updated": "2024-05-08T09:08:30.913871083Z",
+    "etag": "W/\"df140380302d6a048932198aab534969f98aa051\"",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://astrophena.name/feed.xml": {
+    "last_modified": "2024-05-07T10:42:34Z",
+    "last_updated": "2024-05-08T09:08:38.180814887Z",
+    "etag": "W/\"663a059a-73f\"",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://auto.onliner.by/feed": {
+    "last_modified": "0001-01-01T00:00:00Z",
+    "last_updated": "2024-05-08T09:08:35.620496991Z",
+    "etag": "",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": [
+      "Разбор с Красновым"
+    ]
+  },
+  "https://bengarney.com/feed/": {
+    "last_modified": "2024-04-04T05:07:53Z",
+    "last_updated": "2024-05-08T09:08:43.533758366Z",
+    "etag": "",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://benhoyt.com/writings/rss.xml": {
+    "last_modified": "2024-04-13T08:50:40Z",
+    "last_updated": "2024-05-08T09:08:14.803492319Z",
+    "etag": "W/\"661a4760-5326\"",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://blisch.by/tag/gorodskie-zarisovki/feed": {
+    "last_modified": "2024-05-07T06:41:56Z",
+    "last_updated": "2024-05-08T09:08:23.085435787Z",
+    "etag": "\"f1bd42e683ce52c1cba727f9dba00c9f\"",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://blog.wesleyac.com/feed.xml": {
+    "last_modified": "2024-02-17T03:32:49Z",
+    "last_updated": "2024-05-08T09:08:24.693400399Z",
+    "etag": "W/\"65d028e1-1302d\"",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://brandur.org/articles.atom": {
+    "last_modified": "2024-05-06T11:18:18Z",
+    "last_updated": "2024-05-08T09:08:25.378852882Z",
+    "etag": "W/\"8a7e494194c340b9ed7d7d62033dba81\"",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://brandur.org/atoms.atom": {
+    "last_modified": "2024-05-07T06:32:59Z",
+    "last_updated": "2024-05-08T09:08:35.626024393Z",
+    "etag": "W/\"3a0a2acd77cf7719de1d6482eb1cd3bd\"",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://brandur.org/fragments.atom": {
+    "last_modified": "2024-05-07T08:33:11Z",
+    "last_updated": "2024-05-08T09:08:24.565140969Z",
+    "etag": "W/\"984ab0178dd2eadd64770895787fade5\"",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://brandur.org/nanoglyphs.atom": {
+    "last_modified": "2024-05-07T08:33:11Z",
+    "last_updated": "2024-05-08T09:08:30.712830711Z",
+    "etag": "W/\"021e9e38ddedae1929cb679806ef51f8\"",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://cblgh.org/all.xml": {
+    "last_modified": "2024-04-27T10:01:05Z",
+    "last_updated": "2024-05-08T09:08:42.798028039Z",
+    "etag": "\"662ccce1-1f00\"",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://ciechanow.ski/atom.xml": {
+    "last_modified": "2024-04-01T23:58:05Z",
+    "last_updated": "2024-05-08T09:08:34.498954953Z",
+    "etag": "W/\"660b4a0d-a70\"",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://commandcenter.blogspot.com/feeds/posts/default": {
+    "last_modified": "2024-03-13T03:59:07Z",
+    "last_updated": "2024-03-26T16:18:30.082895072Z",
+    "etag": "W/\"2cb632f4d8257cdeb25411e57f979024f7f20b00ecdbd011a7989a17adbfa996\"",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://crawshaw.io/atom.xml": {
+    "last_modified": "2024-03-20T23:28:30Z",
+    "last_updated": "2024-05-08T09:08:24.244145782Z",
+    "etag": "",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://danluu.com/atom.xml": {
+    "last_modified": "2024-03-31T06:37:58Z",
+    "last_updated": "2024-05-08T09:08:25.010967267Z",
+    "etag": "W/\"660904c6-6e8a93\"",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://drewdevault.com/blog/index.xml": {
+    "last_modified": "2024-04-25T18:36:35Z",
+    "last_updated": "2024-05-08T09:08:39.364307601Z",
+    "etag": "",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://emersion.fr/blog/atom.xml": {
+    "last_modified": "2024-04-17T15:05:58Z",
+    "last_updated": "2024-05-08T09:08:14.688058954Z",
+    "etag": "",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://fasterthanli.me/index.xml": {
+    "last_modified": "0001-01-01T00:00:00Z",
+    "last_updated": "2024-05-08T09:08:39.451343893Z",
+    "etag": "",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://fathy.fr/atom.xml": {
+    "last_modified": "0001-01-01T00:00:00Z",
+    "last_updated": "2024-05-08T09:08:46.28215741Z",
+    "etag": "W/\"3d4009e80702a9b62776710bc8f1de6b\"",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://flak.tedunangst.com/rss": {
+    "last_modified": "2024-05-01T22:38:26Z",
+    "last_updated": "2024-05-08T09:08:37.726749828Z",
+    "etag": "",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://forum.merveilles.town/rss.xml": {
+    "last_modified": "0001-01-01T00:00:00Z",
+    "last_updated": "2024-05-08T09:08:17.051701433Z",
+    "etag": "",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://habr.com/ru/rss/users/bodyawm/articles/?fl=ru": {
+    "last_modified": "0001-01-01T00:00:00Z",
+    "last_updated": "2024-05-08T09:08:37.411935332Z",
+    "etag": "",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://herman.bearblog.dev/feed/?type=rss": {
+    "last_modified": "0001-01-01T00:00:00Z",
+    "last_updated": "2024-05-08T09:08:46.86974642Z",
+    "etag": "",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://hnrss.org/best": {
+    "last_modified": "2024-05-07T15:36:05Z",
+    "last_updated": "2024-05-08T04:08:14.273382914Z",
+    "etag": "",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://infrequently.org/feed/": {
+    "last_modified": "0001-01-01T00:00:00Z",
+    "last_updated": "2024-05-05T04:10:32.83399534Z",
+    "etag": "\"5dd75ad4ba34e8925a4e385b1fcc5a07-ssl-df\"",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://jcs.org/rss": {
+    "last_modified": "0001-01-01T00:00:00Z",
+    "last_updated": "2024-05-08T09:08:28.928544971Z",
+    "etag": "W/\"6632e5db-15afc\"",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://jvns.ca/atom.xml": {
+    "last_modified": "0001-01-01T00:00:00Z",
+    "last_updated": "2024-04-11T04:09:29.985634638Z",
+    "etag": "\"61fd6d60720c82d37e49b33cc2f8e1f6-ssl-df\"",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://ktostudent.ru/feed/": {
+    "last_modified": "2024-05-06T10:05:34Z",
+    "last_updated": "2024-05-06T14:08:47.07537766Z",
+    "etag": "\"e9b0fe0446a9a40f91ba463485409299\"",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://liberda.nl/weblog/atom.xml": {
+    "last_modified": "2024-04-10T16:08:15Z",
+    "last_updated": "2024-05-08T09:08:24.042872305Z",
+    "etag": "\"6616b96f-48ec\"",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://manuelmoreale.com/feed/rss": {
+    "last_modified": "0001-01-01T00:00:00Z",
+    "last_updated": "2024-05-08T09:08:28.190343246Z",
+    "etag": "",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://maximilyahov.ru/blog/rss/": {
+    "last_modified": "2024-05-05T13:02:42Z",
+    "last_updated": "2024-05-08T09:08:46.069797438Z",
+    "etag": "",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://milan.cvitkovic.net/writing/index.xml": {
+    "last_modified": "2024-02-17T22:29:23Z",
+    "last_updated": "2024-05-08T09:08:26.520388365Z",
+    "etag": "W/\"65d13343-54f39\"",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://notebook.wesleyac.com/atom.xml": {
+    "last_modified": "2024-05-03T13:50:06Z",
+    "last_updated": "2024-05-08T09:08:12.512795321Z",
+    "etag": "\"6634eb8e-67ba\"",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://optozorax.github.io/atom.xml": {
+    "last_modified": "2023-08-06T12:24:35Z",
+    "last_updated": "2024-05-08T09:08:46.401754393Z",
+    "etag": "W/\"64cf9103-60a1\"",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://orib.dev/feed.rss": {
+    "last_modified": "2023-04-28T15:36:32Z",
+    "last_updated": "2024-05-08T09:08:43.293230946Z",
+    "etag": "",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://research.swtch.com/feed.atom": {
+    "last_modified": "2024-04-05T19:43:22Z",
+    "last_updated": "2024-04-06T04:10:39.467948402Z",
+    "etag": "\"0204b176344f5546d7eaede191e2f330\"",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://rys.io/en/feed.rss": {
+    "last_modified": "2024-01-07T23:38:26Z",
+    "last_updated": "2024-05-08T09:08:18.418764213Z",
+    "etag": "\"659b35f2-1a9ab\"",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://samwho.dev/rss.xml": {
+    "last_modified": "2024-05-07T21:03:30Z",
+    "last_updated": "2024-05-08T09:08:25.363236921Z",
+    "etag": "W/\"663a9722-5d560\"",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://sheepdev.xyz/blog/index.xml": {
+    "last_modified": "2024-04-10T20:22:41Z",
+    "last_updated": "2024-05-08T09:08:15.509923337Z",
+    "etag": "W/\"6616f511-88dd\"",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://subpixel.space/feed.xml": {
+    "last_modified": "2024-03-14T17:44:40Z",
+    "last_updated": "2024-05-08T09:08:11.896745827Z",
+    "etag": "W/\"65f33788-39418\"",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://systemstack.dev/index.xml": {
+    "last_modified": "2023-07-02T13:12:33Z",
+    "last_updated": "2024-05-08T09:08:26.165351835Z",
+    "etag": "W/\"1739-5ff80cd8cb240\"",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://taylor.town/feed.xml": {
+    "last_modified": "0001-01-01T00:00:00Z",
+    "last_updated": "2024-05-08T09:08:29.222664296Z",
+    "etag": "\"55845266adffcf212c9f9db8c0cbbfbc\"",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://tedinski.com/feed.xml": {
+    "last_modified": "2023-03-15T00:21:59Z",
+    "last_updated": "2024-05-08T09:08:29.736882694Z",
+    "etag": "W/\"64110fa7-2204d\"",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://tg.i-c-a.su/rss/botnews": {
+    "last_modified": "0001-01-01T00:00:00Z",
+    "last_updated": "2024-05-08T09:08:21.663168664Z",
+    "etag": "",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://tg.i-c-a.su/rss/durov": {
+    "last_modified": "0001-01-01T00:00:00Z",
+    "last_updated": "2024-05-08T09:08:42.082239623Z",
+    "etag": "",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://tg.i-c-a.su/rss/nikitonsky_pub": {
+    "last_modified": "0001-01-01T00:00:00Z",
+    "last_updated": "2024-05-08T09:08:34.147041946Z",
+    "etag": "",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://thesephist.com/index.xml": {
+    "last_modified": "2023-10-28T05:05:53Z",
+    "last_updated": "2024-05-08T09:08:18.471947607Z",
+    "etag": "\"653c96b1-4ea44\"",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://til.simonwillison.net/tils/feed.atom": {
+    "last_modified": "0001-01-01T00:00:00Z",
+    "last_updated": "2024-05-08T09:08:47.1549795Z",
+    "etag": "",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://tonsky.me/atom.xml": {
+    "last_modified": "2024-04-30T00:00:00Z",
+    "last_updated": "2024-05-08T09:08:31.876992156Z",
+    "etag": "W/\"18f557ff400\"",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://tudorr.ro/feed.rss": {
+    "last_modified": "2024-04-09T16:37:59Z",
+    "last_updated": "2024-05-08T09:08:44.399580014Z",
+    "etag": "\"sboovb1fz7\"",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://v5.chriskrycho.com/essays/feed.xml": {
+    "last_modified": "0001-01-01T00:00:00Z",
+    "last_updated": "2024-05-08T09:08:25.169735877Z",
+    "etag": "\"b01566e5311d72cb845eec463c3732c9-ssl-df\"",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://vas3k.blog/rss/": {
+    "last_modified": "2024-03-19T18:30:40Z",
+    "last_updated": "2024-05-08T09:08:10.712924626Z",
+    "etag": "",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://www.arp242.net/feed.xml": {
+    "last_modified": "0001-01-01T00:00:00Z",
+    "last_updated": "2024-05-04T09:09:33.228478327Z",
+    "etag": "\"afa44b8169a609b28cc6528678faba52-ssl-df\"",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://www.copetti.org/index.xml": {
+    "last_modified": "0001-01-01T00:00:00Z",
+    "last_updated": "2024-04-24T04:09:31.793354358Z",
+    "etag": "\"377bd05235589b9883ff05ef1ab51c32-ssl-df\"",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://www.debian.org/News/news": {
+    "last_modified": "2024-05-03T23:40:25Z",
+    "last_updated": "2024-05-08T09:08:30.066868474Z",
+    "etag": "\"12b8-617953e6cf0e9;617981f3a6b9c",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://www.spicyweb.dev/feed.xml": {
+    "last_modified": "2024-04-14T23:32:14Z",
+    "last_updated": "2024-05-08T09:08:30.693913938Z",
+    "etag": "\"44749991af9d0fc6eb705a024ccf6194\"",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://www.youtube.com/feeds/videos.xml?channel_id=UC5dgoavpIertLkNDDITDoBQ": {
+    "last_modified": "0001-01-01T00:00:00Z",
+    "last_updated": "2024-05-08T09:08:26.899826191Z",
+    "etag": "",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://www.youtube.com/feeds/videos.xml?channel_id=UC8uT9cgJorJPWu7ITLGo9Ww": {
+    "last_modified": "0001-01-01T00:00:00Z",
+    "last_updated": "2024-05-08T09:08:12.069290968Z",
+    "etag": "",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://www.youtube.com/feeds/videos.xml?channel_id=UCBNG0osIBAprVcZZ3ic84vw": {
+    "last_modified": "0001-01-01T00:00:00Z",
+    "last_updated": "2024-05-08T09:08:44.872997492Z",
+    "etag": "",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://www.youtube.com/feeds/videos.xml?channel_id=UCCzVNbWZfYpBfyofCCUD_0w": {
+    "last_modified": "0001-01-01T00:00:00Z",
+    "last_updated": "2024-05-08T09:08:30.071704054Z",
+    "etag": "",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://www.youtube.com/feeds/videos.xml?channel_id=UCGzfpg1YiBIlgcODQI4lDvQ": {
+    "last_modified": "0001-01-01T00:00:00Z",
+    "last_updated": "2024-05-08T09:08:43.398439751Z",
+    "etag": "",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://www.youtube.com/feeds/videos.xml?channel_id=UCJ8V9aiz50m6NVn0ix5v8RQ": {
+    "last_modified": "0001-01-01T00:00:00Z",
+    "last_updated": "2024-05-08T09:08:39.455734342Z",
+    "etag": "",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://www.youtube.com/feeds/videos.xml?channel_id=UCMCgOm8GZkHp8zJ6l7_hIuA": {
+    "last_modified": "0001-01-01T00:00:00Z",
+    "last_updated": "2024-05-08T09:08:34.505768344Z",
+    "etag": "",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://www.youtube.com/feeds/videos.xml?channel_id=UCMiyV_Ib77XLpzHPQH_q0qQ": {
+    "last_modified": "0001-01-01T00:00:00Z",
+    "last_updated": "2024-05-08T09:08:30.333955715Z",
+    "etag": "",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://www.youtube.com/feeds/videos.xml?channel_id=UCfA5byBIXIw0hJQ27yDw-Gw": {
+    "last_modified": "0001-01-01T00:00:00Z",
+    "last_updated": "2024-05-08T09:08:21.757753725Z",
+    "etag": "",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://www.youtube.com/feeds/videos.xml?playlist_id=PLr0vtm6PM7z0xMS4mKgYYr6sbNG-bm9av": {
+    "last_modified": "0001-01-01T00:00:00Z",
+    "last_updated": "2024-05-08T09:08:42.264104579Z",
+    "etag": "",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://xeiaso.net/blog.rss": {
+    "last_modified": "2024-05-06T17:12:52Z",
+    "last_updated": "2024-05-08T09:08:11.017506079Z",
+    "etag": "",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  },
+  "https://zserge.com/rss.xml": {
+    "last_modified": "2024-01-07T18:32:14Z",
+    "last_updated": "2024-05-08T09:08:29.293141758Z",
+    "etag": "W/\"659aee2e-df43\"",
+    "disabled": false,
+    "error_count": 0,
+    "last_error": "",
+    "filtered_categories": null
+  }
+}
