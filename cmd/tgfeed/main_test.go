@@ -151,7 +151,7 @@ func TestFailingFeed(t *testing.T) {
 	testutil.AssertEqual(t, state["https://example.com/feed.xml"].LastError, "want 200, got 418")
 }
 
-func TestDisablingFailingFeed(t *testing.T) {
+func TestDisablingAndReenablingFailingFeed(t *testing.T) {
 	t.Parallel()
 
 	tm := testMux(t, map[string]http.HandlerFunc{
@@ -168,12 +168,15 @@ func TestDisablingFailingFeed(t *testing.T) {
 		}
 	}
 
-	updatedGist := testutil.UnmarshalJSON[gist](t, tm.gist)
-	stateJSON, ok := updatedGist.Files["state.json"]
-	if !ok {
-		t.Fatal("state.json has not found in updated gist")
+	getState := func() map[string]*feedState {
+		updatedGist := testutil.UnmarshalJSON[gist](t, tm.gist)
+		stateJSON, ok := updatedGist.Files["state.json"]
+		if !ok {
+			t.Fatal("state.json has not found in updated gist")
+		}
+		return testutil.UnmarshalJSON[map[string]*feedState](t, []byte(stateJSON.Content))
 	}
-	state := testutil.UnmarshalJSON[map[string]*feedState](t, []byte(stateJSON.Content))
+	state := getState()
 
 	testutil.AssertEqual(t, state["https://example.com/feed.xml"].Disabled, true)
 	testutil.AssertEqual(t, state["https://example.com/feed.xml"].ErrorCount, attempts)
@@ -181,6 +184,14 @@ func TestDisablingFailingFeed(t *testing.T) {
 
 	testutil.AssertEqual(t, len(tm.sentMessages), 1)
 	testutil.AssertEqual(t, tm.sentMessages[0]["text"], "❌ Something went wrong:\n<pre><code>fetching feed \"https://example.com/feed.xml\" failed after 12 previous attempts: want 200, got 418; feed was disabled, to reenable it run 'tgfeed -reenable \"https://example.com/feed.xml\"'</code></pre>")
+
+	if err := f.reenable(context.Background(), "https://example.com/feed.xml"); err != nil {
+		t.Fatal(err)
+	}
+	state = getState()
+	testutil.AssertEqual(t, state["https://example.com/feed.xml"].Disabled, false)
+	testutil.AssertEqual(t, state["https://example.com/feed.xml"].ErrorCount, 0)
+	testutil.AssertEqual(t, state["https://example.com/feed.xml"].LastError, "")
 }
 
 var (
