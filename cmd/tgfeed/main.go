@@ -516,13 +516,12 @@ func (f *fetcher) saveToGist(ctx context.Context) error {
 		return err
 	}
 
-	data := new(gist)
-	data.Files = make(map[string]*gistFile)
-	stateFile := &gistFile{Content: string(state)}
-	feedsFile := &gistFile{Content: string(feeds)}
-	data.Files["feeds.json"] = feedsFile
-	data.Files["state.json"] = stateFile
-
+	data := &gist{
+		Files: map[string]*gistFile{
+			"feeds.json": &gistFile{Content: string(feeds)},
+			"state.json": &gistFile{Content: string(state)},
+		},
+	}
 	_, err = f.makeGistRequest(ctx, http.MethodPatch, data)
 	return err
 }
