@@ -27,7 +27,9 @@ func (i Info) String() string {
 
 	sb.WriteString(i.Short() + "\n")
 	if i.Commit != "" && i.BuiltAt != "" {
-		sb.WriteString("commit " + i.Commit + "\n")
+		if !strings.Contains(i.Short(), i.Commit) {
+			sb.WriteString("commit " + i.Commit + "\n")
+		}
 		sb.WriteString("built at " + i.BuiltAt + "\n")
 	}
 
@@ -36,7 +38,11 @@ func (i Info) String() string {
 
 // Short returns the short version information.
 func (i Info) Short() string {
-	return CmdName() + " " + i.Version + " (" + i.Go + ", " + i.OS + "/" + i.Arch + ")"
+	ver := i.Version
+	if ver == "devel" && i.Commit != "" {
+		ver = i.Commit
+	}
+	return CmdName() + " " + ver + " (" + i.Go + ", " + i.OS + "/" + i.Arch + ")"
 }
 
 var (
