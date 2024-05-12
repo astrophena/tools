@@ -127,6 +127,32 @@ func TestSubscribeAndUnsubscribe(t *testing.T) {
 	testutil.AssertNotContains(t, f.feeds, feedURL)
 }
 
+func TestUnsubscribeRemovesState(t *testing.T) {
+	t.Parallel()
+
+	f := testFetcher(testMux(t, nil))
+
+	if err := f.run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	const feedURL = "https://example.com/feed.xml"
+	_, hasState := f.state[feedURL]
+	if !hasState {
+		t.Fatalf("f.state doesn't contain state for feed %s", feedURL)
+	}
+
+	if err := f.unsubscribe(context.Background(), feedURL); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	_, hasState = f.state[feedURL]
+	if hasState {
+		t.Fatalf("f.state still contains state for feed %s even after unsubscribing", feedURL)
+	}
+}
+
 func TestFailingFeed(t *testing.T) {
 	t.Parallel()
 

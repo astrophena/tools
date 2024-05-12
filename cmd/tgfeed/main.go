@@ -50,12 +50,6 @@ To view the list of feeds, you can use the -feeds flag. This will also print the
 URLs of feeds that have encountered errors during fetching. For example:
 
 	$ tgfeed -feeds
-
-To perform garbage collection and remove the state of feeds that have been
-removed from the list, you can use the -gc flag. This ensures that the program's
-state remains up-to-date with the list of feeds. For example:
-
-	$ tgfeed -gc
 */
 package main
 
@@ -94,7 +88,6 @@ const (
 func main() {
 	var (
 		feeds       = flag.Bool("feeds", false, "List subscribed feeds.")
-		gc          = flag.Bool("gc", false, "Remove state of feeds that was removed from the list.")
 		reenable    = flag.String("reenable", "", "Reenable previously failing and disabled `feed`.")
 		subscribe   = flag.String("subscribe", "", "Subscribe to a `feed`.")
 		unsubscribe = flag.String("unsubscribe", "", "Unsubscribe from a `feed`.")
@@ -118,12 +111,6 @@ func main() {
 
 	if *feeds {
 		if err := f.listFeeds(ctx, os.Stdout); err != nil {
-			log.Fatal(err)
-		}
-		return
-	}
-	if *gc {
-		if err := f.gc(ctx); err != nil {
 			log.Fatal(err)
 		}
 		return
@@ -265,27 +252,6 @@ func shuffle[S any](s []S) []S {
 	return s2
 }
 
-func (f *fetcher) gc(ctx context.Context) error {
-	if err := f.loadFromGist(ctx); err != nil {
-		return err
-	}
-
-	for url := range f.state {
-		var found bool
-		for _, existing := range f.feeds {
-			if url == existing {
-				found = true
-				break
-			}
-		}
-		if !found {
-			delete(f.state, url)
-		}
-	}
-
-	return f.saveToGist(ctx)
-}
-
 func (f *fetcher) reenable(ctx context.Context, url string) error {
 	if err := f.loadFromGist(ctx); err != nil {
 		return err
@@ -356,6 +322,7 @@ func (f *fetcher) unsubscribe(ctx context.Context, url string) error {
 	f.feeds = slices.DeleteFunc(f.feeds, func(sub string) bool {
 		return sub == url
 	})
+	delete(f.state, url)
 	return f.saveToGist(ctx)
 }
 
