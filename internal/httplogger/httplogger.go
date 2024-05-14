@@ -12,23 +12,29 @@
 package httplogger
 
 import (
-	"fmt"
+	"log"
 	"net/http"
-	"os"
 	"strings"
 	"sync"
 	"time"
 )
 
+// Logf is a simple printf-like logging function.
+type Logf func(format string, args ...any)
+
 // New creates a new http.RoundTripper that logs information about HTTP requests
 // and responses.
-func New(t http.RoundTripper) http.RoundTripper {
-	return &loggingTransport{transport: t}
+func New(t http.RoundTripper, logf Logf) http.RoundTripper {
+	if logf == nil {
+		logf = log.Printf
+	}
+	return &loggingTransport{transport: t, logf: logf}
 }
 
 type loggingTransport struct {
 	transport http.RoundTripper
 	mu        sync.Mutex
+	logf      Logf
 	active    []byte
 }
 
@@ -36,7 +42,7 @@ func (t *loggingTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 	t.mu.Lock()
 	index := len(t.active)
 	start := time.Now()
-	fmt.Fprintf(os.Stderr, "HTTP: %s %s+ %s\n", timeFormat(start), t.active, r.URL)
+	t.logf("HTTP: %s %s+ %s", timeFormat(start), t.active, r.URL)
 	t.active = append(t.active, '|')
 	t.mu.Unlock()
 
@@ -57,7 +63,7 @@ func (t *loggingTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 
 	t.mu.Lock()
 	t.active[index] = '-'
-	fmt.Fprintf(os.Stderr, "HTTP: %s %s %s (%.3fs)\n", timeFormat(now), t.active, display, now.Sub(start).Seconds())
+	t.logf("HTTP: %s %s %s (%.3fs)", timeFormat(now), t.active, display, now.Sub(start).Seconds())
 	t.active[index] = ' '
 	n := len(t.active)
 	for n%4 == 0 && n >= 4 && t.active[n-1] == ' ' && t.active[n-2] == ' ' && t.active[n-3] == ' ' && t.active[n-4] == ' ' {

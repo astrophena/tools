@@ -15,6 +15,7 @@ import (
 	"strings"
 	"testing"
 
+	"go.astrophena.name/tools/internal/httplogger"
 	"go.astrophena.name/tools/internal/testutil"
 
 	"golang.org/x/tools/txtar"
@@ -46,7 +47,7 @@ func TestListFeeds(t *testing.T) {
 
 		tm := testMux(t, nil)
 		tm.gist = txtarToGist(t, readFile(t, tc))
-		f := testFetcher(tm)
+		f := testFetcher(t, tm)
 
 		var buf bytes.Buffer
 		if err := f.listFeeds(context.Background(), &buf); err != nil {
@@ -59,7 +60,7 @@ func TestListFeeds(t *testing.T) {
 
 func TestRun(t *testing.T) {
 	t.Parallel()
-	f := testFetcher(testMux(t, nil))
+	f := testFetcher(t, testMux(t, nil))
 	if err := f.run(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -79,7 +80,7 @@ func TestFetch(t *testing.T) {
 			},
 		})
 		tm.gist = txtarToGist(t, gistFeedTxtar)
-		f := testFetcher(tm)
+		f := testFetcher(t, tm)
 
 		if err := f.run(context.Background()); err != nil {
 			t.Fatal(err)
@@ -112,7 +113,7 @@ func unzip(t *testing.T, gz []byte) []byte {
 func TestSubscribeAndUnsubscribe(t *testing.T) {
 	t.Parallel()
 
-	f := testFetcher(testMux(t, nil))
+	f := testFetcher(t, testMux(t, nil))
 
 	const feedURL = "https://example.com/feed2.xml"
 
@@ -130,7 +131,7 @@ func TestSubscribeAndUnsubscribe(t *testing.T) {
 func TestUnsubscribeRemovesState(t *testing.T) {
 	t.Parallel()
 
-	f := testFetcher(testMux(t, nil))
+	f := testFetcher(t, testMux(t, nil))
 
 	if err := f.run(context.Background()); err != nil {
 		t.Fatal(err)
@@ -161,7 +162,7 @@ func TestFailingFeed(t *testing.T) {
 			http.Error(w, "I'm a teapot.", http.StatusTeapot)
 		},
 	})
-	f := testFetcher(tm)
+	f := testFetcher(t, tm)
 	if err := f.run(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -185,7 +186,7 @@ func TestDisablingAndReenablingFailingFeed(t *testing.T) {
 			http.Error(w, "I'm a teapot.", http.StatusTeapot)
 		},
 	})
-	f := testFetcher(tm)
+	f := testFetcher(t, tm)
 
 	const attempts = errorThreshold
 	for range attempts {
@@ -233,7 +234,7 @@ func TestLoadFromGist(t *testing.T) {
 
 	tm := testMux(t, nil)
 	tm.gist = gistJSON
-	f := testFetcher(tm)
+	f := testFetcher(t, tm)
 
 	if err := f.loadFromGist(context.Background()); err != nil {
 		t.Fatal(err)
@@ -251,7 +252,7 @@ func TestLoadFromGistHandleError(t *testing.T) {
 			w.Write(gistErrorJSON)
 		},
 	})
-	f := testFetcher(tm)
+	f := testFetcher(t, tm)
 	err := f.loadFromGist(context.Background())
 	testutil.AssertEqual(t, err.Error(), fmt.Sprintf("want 200, got 404: %s", gistErrorJSON))
 }
@@ -270,8 +271,8 @@ func (s roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) {
 	return s(r)
 }
 
-func testFetcher(m *mux) *fetcher {
-	return &fetcher{
+func testFetcher(t *testing.T, m *mux) *fetcher {
+	f := &fetcher{
 		httpc: &http.Client{
 			Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
 				w := httptest.NewRecorder()
@@ -284,6 +285,10 @@ func testFetcher(m *mux) *fetcher {
 		tgToken: tgToken,
 		chatID:  "test",
 	}
+	if os.Getenv("HTTPLOG") == "1" {
+		f.httpc.Transport = httplogger.New(f.httpc.Transport, t.Logf)
+	}
+	return f
 }
 
 type mux struct {

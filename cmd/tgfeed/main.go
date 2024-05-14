@@ -111,7 +111,7 @@ func main() {
 		if f.httpc.Transport == nil {
 			f.httpc.Transport = http.DefaultTransport
 		}
-		f.httpc.Transport = httplogger.New(f.httpc.Transport)
+		f.httpc.Transport = httplogger.New(f.httpc.Transport, nil)
 	}
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
