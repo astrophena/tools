@@ -72,6 +72,7 @@ import (
 	"time"
 
 	"go.astrophena.name/tools/internal/cli"
+	"go.astrophena.name/tools/internal/httplogger"
 
 	"github.com/mmcdole/gofeed"
 )
@@ -104,6 +105,13 @@ func main() {
 		ghToken: os.Getenv("GITHUB_TOKEN"),
 		chatID:  os.Getenv("CHAT_ID"),
 		tgToken: os.Getenv("TELEGRAM_TOKEN"),
+	}
+
+	if os.Getenv("HTTPLOG") == "1" {
+		if f.httpc.Transport == nil {
+			f.httpc.Transport = http.DefaultTransport
+		}
+		f.httpc.Transport = httplogger.New(f.httpc.Transport)
 	}
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
