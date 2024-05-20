@@ -10,8 +10,9 @@ import (
 	"strings"
 	"testing"
 
+	"go.astrophena.name/tools/internal/txtar"
+
 	"github.com/google/go-cmp/cmp"
-	"golang.org/x/tools/txtar"
 )
 
 // UnmarshalJSON parses the JSON data into v, failing the test in case of failure.

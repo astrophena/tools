@@ -17,8 +17,7 @@ import (
 
 	"go.astrophena.name/tools/internal/httplogger"
 	"go.astrophena.name/tools/internal/testutil"
-
-	"golang.org/x/tools/txtar"
+	"go.astrophena.name/tools/internal/txtar"
 )
 
 // Typical Telegram Bot API token, copied from docs.
