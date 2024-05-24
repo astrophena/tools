@@ -144,7 +144,9 @@ func main() {
 	}
 
 	if err := f.run(ctx); err != nil {
-		f.send(ctx, fmt.Sprintf(f.errorTemplate, err), disableLinkPreview)
+		if err := f.send(ctx, fmt.Sprintf(f.errorTemplate, err), disableLinkPreview); err != nil {
+			log.Printf("notifying about error failed: %v", err)
+		}
 		log.Fatal(err)
 	}
 }
