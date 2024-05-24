@@ -222,7 +222,7 @@ func (f *fetcher) run(ctx context.Context) error {
 	for _, item := range f.updates {
 		title := item.Title
 		if item.Title == "" {
-			item.Title = item.Link
+			title = item.Link
 		}
 
 		msg := fmt.Sprintf(
