@@ -238,9 +238,6 @@ func (f *fetcher) run(ctx context.Context) error {
 		}
 
 		if err := f.send(ctx, msg, func(args map[string]any) {
-			args["link_preview_options"] = linkPreviewOptions{
-				URL: item.Link,
-			}
 			args["reply_markup"] = map[string]any{
 				"inline_keyboard": [][]inlineKeyboardButton{inlineKeyboardButtons},
 			}
@@ -475,8 +472,7 @@ func (f *fetcher) send(ctx context.Context, message string, modify func(args map
 
 // https://core.telegram.org/bots/api#linkpreviewoptions
 type linkPreviewOptions struct {
-	IsDisabled bool   `json:"is_disabled"`
-	URL        string `json:"url"`
+	IsDisabled bool `json:"is_disabled"`
 }
 
 func disableLinkPreview(args map[string]any) {
