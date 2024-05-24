@@ -220,10 +220,15 @@ func (f *fetcher) run(ctx context.Context) error {
 	}
 
 	for _, item := range f.updates {
+		title := item.Title
+		if item.Title == "" {
+			item.Title = item.Link
+		}
+
 		msg := fmt.Sprintf(
 			`<a href="%[1]s">%[2]s</a>`,
 			item.Link,
-			item.Title,
+			title,
 		)
 
 		inlineKeyboardButtons := []inlineKeyboardButton{}
