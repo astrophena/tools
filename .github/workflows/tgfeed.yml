@@ -1,12 +1,12 @@
-name: 'Periodic'
+name: 'tgfeed'
 on:
   schedule:
     # Every day (at 07:00, 12:00 and 17:00).
     - cron: '0 4,9,14 * * *'
   workflow_dispatch:
 jobs:
-  tgfeed:
-    name: 'Fetch RSS feeds and send new articles and videos to Telegram'
+  run:
+    name: 'Run'
     runs-on: 'ubuntu-latest'
     steps:
       - name: 'Check out'
