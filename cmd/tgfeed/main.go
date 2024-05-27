@@ -59,6 +59,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"html"
 	"io"
 	"log"
 	"math/rand/v2"
@@ -144,7 +145,7 @@ func main() {
 	}
 
 	if err := f.run(ctx); err != nil {
-		if err := f.send(ctx, fmt.Sprintf(f.errorTemplate, err), disableLinkPreview); err != nil {
+		if err := f.send(ctx, fmt.Sprintf(f.errorTemplate, html.EscapeString(err.Error())), disableLinkPreview); err != nil {
 			log.Printf("notifying about error failed: %v", err)
 		}
 		log.Fatal(err)
@@ -208,7 +209,9 @@ func (f *fetcher) run(ctx context.Context) error {
 			if state.ErrorCount >= errorThreshold {
 				err = fmt.Errorf("fetching feed %q failed after %d previous attempts: %v; feed was disabled, to reenable it run 'tgfeed -reenable %q'", url, state.ErrorCount, err, url)
 				state.Disabled = true
-				f.send(ctx, fmt.Sprintf(f.errorTemplate, err), disableLinkPreview)
+				if err := f.send(ctx, fmt.Sprintf(f.errorTemplate, html.EscapeString(err.Error())), disableLinkPreview); err != nil {
+					log.Printf("notifying about a disabled feed: %v", err)
+				}
 			}
 		}
 	}
