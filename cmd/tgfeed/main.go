@@ -233,7 +233,7 @@ func (f *fetcher) run(ctx context.Context) error {
 		msg := fmt.Sprintf(
 			`<a href="%[1]s">%[2]s</a>`,
 			item.Link,
-			title,
+			html.EscapeString(title),
 		)
 
 		inlineKeyboardButtons := []inlineKeyboardButton{}
