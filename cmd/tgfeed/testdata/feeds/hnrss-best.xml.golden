@@ -1,0 +1,1082 @@
+[
+ {
+  "title": "Instead of “auth”, we should say “permissions” and “login”",
+  "description": "\n\u003cp\u003eArticle URL: \u003ca href=\"https://ntietz.com/blog/lets-say-instead-of-auth/\"\u003ehttps://ntietz.com/blog/lets-say-instead-of-auth/\u003c/a\u003e\u003c/p\u003e\n\u003cp\u003eComments URL: \u003ca href=\"https://news.ycombinator.com/item?id=40491480\"\u003ehttps://news.ycombinator.com/item?id=40491480\u003c/a\u003e\u003c/p\u003e\n\u003cp\u003ePoints: 351\u003c/p\u003e\n\u003cp\u003e# Comments: 205\u003c/p\u003e\n",
+  "link": "https://ntietz.com/blog/lets-say-instead-of-auth/",
+  "links": [
+   "https://ntietz.com/blog/lets-say-instead-of-auth/"
+  ],
+  "published": "Mon, 27 May 2024 15:11:38 +0000",
+  "publishedParsed": "2024-05-27T15:11:38Z",
+  "author": {
+   "name": "tambourine_man"
+  },
+  "authors": [
+   {
+    "name": "tambourine_man"
+   }
+  ],
+  "guid": "https://news.ycombinator.com/item?id=40491480",
+  "dcExt": {
+   "creator": [
+    "tambourine_man"
+   ]
+  },
+  "extensions": {
+   "dc": {
+    "creator": [
+     {
+      "name": "creator",
+      "value": "tambourine_man",
+      "attrs": {},
+      "children": {}
+     }
+    ]
+   }
+  }
+ },
+ {
+  "title": "Big data is dead (2023)",
+  "description": "\n\u003cp\u003eArticle URL: \u003ca href=\"https://motherduck.com/blog/big-data-is-dead/\"\u003ehttps://motherduck.com/blog/big-data-is-dead/\u003c/a\u003e\u003c/p\u003e\n\u003cp\u003eComments URL: \u003ca href=\"https://news.ycombinator.com/item?id=40488844\"\u003ehttps://news.ycombinator.com/item?id=40488844\u003c/a\u003e\u003c/p\u003e\n\u003cp\u003ePoints: 421\u003c/p\u003e\n\u003cp\u003e# Comments: 339\u003c/p\u003e\n",
+  "link": "https://motherduck.com/blog/big-data-is-dead/",
+  "links": [
+   "https://motherduck.com/blog/big-data-is-dead/"
+  ],
+  "published": "Mon, 27 May 2024 08:30:05 +0000",
+  "publishedParsed": "2024-05-27T08:30:05Z",
+  "author": {
+   "name": "armanke13"
+  },
+  "authors": [
+   {
+    "name": "armanke13"
+   }
+  ],
+  "guid": "https://news.ycombinator.com/item?id=40488844",
+  "dcExt": {
+   "creator": [
+    "armanke13"
+   ]
+  },
+  "extensions": {
+   "dc": {
+    "creator": [
+     {
+      "name": "creator",
+      "value": "armanke13",
+      "attrs": {},
+      "children": {}
+     }
+    ]
+   }
+  }
+ },
+ {
+  "title": "Git cheat sheet [pdf]",
+  "description": "\n\u003cp\u003eArticle URL: \u003ca href=\"https://wizardzines.com/git-cheat-sheet.pdf\"\u003ehttps://wizardzines.com/git-cheat-sheet.pdf\u003c/a\u003e\u003c/p\u003e\n\u003cp\u003eComments URL: \u003ca href=\"https://news.ycombinator.com/item?id=40486197\"\u003ehttps://news.ycombinator.com/item?id=40486197\u003c/a\u003e\u003c/p\u003e\n\u003cp\u003ePoints: 285\u003c/p\u003e\n\u003cp\u003e# Comments: 121\u003c/p\u003e\n",
+  "link": "https://wizardzines.com/git-cheat-sheet.pdf",
+  "links": [
+   "https://wizardzines.com/git-cheat-sheet.pdf"
+  ],
+  "published": "Sun, 26 May 2024 23:04:07 +0000",
+  "publishedParsed": "2024-05-26T23:04:07Z",
+  "author": {
+   "name": "tambourine_man"
+  },
+  "authors": [
+   {
+    "name": "tambourine_man"
+   }
+  ],
+  "guid": "https://news.ycombinator.com/item?id=40486197",
+  "dcExt": {
+   "creator": [
+    "tambourine_man"
+   ]
+  },
+  "extensions": {
+   "dc": {
+    "creator": [
+     {
+      "name": "creator",
+      "value": "tambourine_man",
+      "attrs": {},
+      "children": {}
+     }
+    ]
+   }
+  }
+ },
+ {
+  "title": "The t-test was invented at the Guinness brewery",
+  "description": "\n\u003cp\u003eArticle URL: \u003ca href=\"https://www.scientificamerican.com/article/how-the-guinness-brewery-invented-the-most-important-statistical-method-in/\"\u003ehttps://www.scientificamerican.com/article/how-the-guinness-brewery-invented-the-most-important-statistical-method-in/\u003c/a\u003e\u003c/p\u003e\n\u003cp\u003eComments URL: \u003ca href=\"https://news.ycombinator.com/item?id=40485313\"\u003ehttps://news.ycombinator.com/item?id=40485313\u003c/a\u003e\u003c/p\u003e\n\u003cp\u003ePoints: 363\u003c/p\u003e\n\u003cp\u003e# Comments: 117\u003c/p\u003e\n",
+  "link": "https://www.scientificamerican.com/article/how-the-guinness-brewery-invented-the-most-important-statistical-method-in/",
+  "links": [
+   "https://www.scientificamerican.com/article/how-the-guinness-brewery-invented-the-most-important-statistical-method-in/"
+  ],
+  "published": "Sun, 26 May 2024 20:55:22 +0000",
+  "publishedParsed": "2024-05-26T20:55:22Z",
+  "author": {
+   "name": "rmason"
+  },
+  "authors": [
+   {
+    "name": "rmason"
+   }
+  ],
+  "guid": "https://news.ycombinator.com/item?id=40485313",
+  "dcExt": {
+   "creator": [
+    "rmason"
+   ]
+  },
+  "extensions": {
+   "dc": {
+    "creator": [
+     {
+      "name": "creator",
+      "value": "rmason",
+      "attrs": {},
+      "children": {}
+     }
+    ]
+   }
+  }
+ },
+ {
+  "title": "The one-year anniversary of my total glossectomy",
+  "description": "\n\u003cp\u003eArticle URL: \u003ca href=\"https://jakeseliger.com/2024/05/25/the-one-year-anniversary-of-my-total-glossectomy/\"\u003ehttps://jakeseliger.com/2024/05/25/the-one-year-anniversary-of-my-total-glossectomy/\u003c/a\u003e\u003c/p\u003e\n\u003cp\u003eComments URL: \u003ca href=\"https://news.ycombinator.com/item?id=40485246\"\u003ehttps://news.ycombinator.com/item?id=40485246\u003c/a\u003e\u003c/p\u003e\n\u003cp\u003ePoints: 276\u003c/p\u003e\n\u003cp\u003e# Comments: 50\u003c/p\u003e\n",
+  "link": "https://jakeseliger.com/2024/05/25/the-one-year-anniversary-of-my-total-glossectomy/",
+  "links": [
+   "https://jakeseliger.com/2024/05/25/the-one-year-anniversary-of-my-total-glossectomy/"
+  ],
+  "published": "Sun, 26 May 2024 20:46:50 +0000",
+  "publishedParsed": "2024-05-26T20:46:50Z",
+  "author": {
+   "name": "jdkee"
+  },
+  "authors": [
+   {
+    "name": "jdkee"
+   }
+  ],
+  "guid": "https://news.ycombinator.com/item?id=40485246",
+  "dcExt": {
+   "creator": [
+    "jdkee"
+   ]
+  },
+  "extensions": {
+   "dc": {
+    "creator": [
+     {
+      "name": "creator",
+      "value": "jdkee",
+      "attrs": {},
+      "children": {}
+     }
+    ]
+   }
+  }
+ },
+ {
+  "title": "FILE_ID.DIZ Description (1994)",
+  "description": "\n\u003cp\u003eArticle URL: \u003ca href=\"http://pcmicro.com/getdiz/file_id.html\"\u003ehttp://pcmicro.com/getdiz/file_id.html\u003c/a\u003e\u003c/p\u003e\n\u003cp\u003eComments URL: \u003ca href=\"https://news.ycombinator.com/item?id=40484930\"\u003ehttps://news.ycombinator.com/item?id=40484930\u003c/a\u003e\u003c/p\u003e\n\u003cp\u003ePoints: 234\u003c/p\u003e\n\u003cp\u003e# Comments: 79\u003c/p\u003e\n",
+  "link": "http://pcmicro.com/getdiz/file_id.html",
+  "links": [
+   "http://pcmicro.com/getdiz/file_id.html"
+  ],
+  "published": "Sun, 26 May 2024 20:04:59 +0000",
+  "publishedParsed": "2024-05-26T20:04:59Z",
+  "author": {
+   "name": "Lammy"
+  },
+  "authors": [
+   {
+    "name": "Lammy"
+   }
+  ],
+  "guid": "https://news.ycombinator.com/item?id=40484930",
+  "dcExt": {
+   "creator": [
+    "Lammy"
+   ]
+  },
+  "extensions": {
+   "dc": {
+    "creator": [
+     {
+      "name": "creator",
+      "value": "Lammy",
+      "attrs": {},
+      "children": {}
+     }
+    ]
+   }
+  }
+ },
+ {
+  "title": "What the damaged Svalbard cable looked like",
+  "description": "\n\u003cp\u003eArticle URL: \u003ca href=\"https://www.nrk.no/tromsogfinnmark/this-is-what-the-damaged-svalbard-cable-looked-like-when-it-came-up-from-the-depths-1.16895904\"\u003ehttps://www.nrk.no/tromsogfinnmark/this-is-what-the-damaged-svalbard-cable-looked-like-when-it-came-up-from-the-depths-1.16895904\u003c/a\u003e\u003c/p\u003e\n\u003cp\u003eComments URL: \u003ca href=\"https://news.ycombinator.com/item?id=40484591\"\u003ehttps://news.ycombinator.com/item?id=40484591\u003c/a\u003e\u003c/p\u003e\n\u003cp\u003ePoints: 515\u003c/p\u003e\n\u003cp\u003e# Comments: 216\u003c/p\u003e\n",
+  "link": "https://www.nrk.no/tromsogfinnmark/this-is-what-the-damaged-svalbard-cable-looked-like-when-it-came-up-from-the-depths-1.16895904",
+  "links": [
+   "https://www.nrk.no/tromsogfinnmark/this-is-what-the-damaged-svalbard-cable-looked-like-when-it-came-up-from-the-depths-1.16895904"
+  ],
+  "published": "Sun, 26 May 2024 19:12:58 +0000",
+  "publishedParsed": "2024-05-26T19:12:58Z",
+  "author": {
+   "name": "ingve"
+  },
+  "authors": [
+   {
+    "name": "ingve"
+   }
+  ],
+  "guid": "https://news.ycombinator.com/item?id=40484591",
+  "dcExt": {
+   "creator": [
+    "ingve"
+   ]
+  },
+  "extensions": {
+   "dc": {
+    "creator": [
+     {
+      "name": "creator",
+      "value": "ingve",
+      "attrs": {},
+      "children": {}
+     }
+    ]
+   }
+  }
+ },
+ {
+  "title": "Kernel developer write a USB driver in 3h for Apple Xserve front-panel [video]",
+  "description": "\n\u003cp\u003eArticle URL: \u003ca href=\"https://www.youtube.com/watch?v=IXBC85SGC0Q\"\u003ehttps://www.youtube.com/watch?v=IXBC85SGC0Q\u003c/a\u003e\u003c/p\u003e\n\u003cp\u003eComments URL: \u003ca href=\"https://news.ycombinator.com/item?id=40483855\"\u003ehttps://news.ycombinator.com/item?id=40483855\u003c/a\u003e\u003c/p\u003e\n\u003cp\u003ePoints: 250\u003c/p\u003e\n\u003cp\u003e# Comments: 73\u003c/p\u003e\n",
+  "link": "https://www.youtube.com/watch?v=IXBC85SGC0Q",
+  "links": [
+   "https://www.youtube.com/watch?v=IXBC85SGC0Q"
+  ],
+  "published": "Sun, 26 May 2024 17:28:12 +0000",
+  "publishedParsed": "2024-05-26T17:28:12Z",
+  "author": {
+   "name": "explosion-s"
+  },
+  "authors": [
+   {
+    "name": "explosion-s"
+   }
+  ],
+  "guid": "https://news.ycombinator.com/item?id=40483855",
+  "dcExt": {
+   "creator": [
+    "explosion-s"
+   ]
+  },
+  "extensions": {
+   "dc": {
+    "creator": [
+     {
+      "name": "creator",
+      "value": "explosion-s",
+      "attrs": {},
+      "children": {}
+     }
+    ]
+   }
+  }
+ },
+ {
+  "title": "Google Meet rolls out multi-device adaptive audio merging",
+  "description": "\n\u003cp\u003eArticle URL: \u003ca href=\"https://workspaceupdates.googleblog.com/2024/05/google-meet-adaptive-audio.html\"\u003ehttps://workspaceupdates.googleblog.com/2024/05/google-meet-adaptive-audio.html\u003c/a\u003e\u003c/p\u003e\n\u003cp\u003eComments URL: \u003ca href=\"https://news.ycombinator.com/item?id=40482833\"\u003ehttps://news.ycombinator.com/item?id=40482833\u003c/a\u003e\u003c/p\u003e\n\u003cp\u003ePoints: 575\u003c/p\u003e\n\u003cp\u003e# Comments: 254\u003c/p\u003e\n",
+  "link": "https://workspaceupdates.googleblog.com/2024/05/google-meet-adaptive-audio.html",
+  "links": [
+   "https://workspaceupdates.googleblog.com/2024/05/google-meet-adaptive-audio.html"
+  ],
+  "published": "Sun, 26 May 2024 15:22:02 +0000",
+  "publishedParsed": "2024-05-26T15:22:02Z",
+  "author": {
+   "name": "tfsh"
+  },
+  "authors": [
+   {
+    "name": "tfsh"
+   }
+  ],
+  "guid": "https://news.ycombinator.com/item?id=40482833",
+  "dcExt": {
+   "creator": [
+    "tfsh"
+   ]
+  },
+  "extensions": {
+   "dc": {
+    "creator": [
+     {
+      "name": "creator",
+      "value": "tfsh",
+      "attrs": {},
+      "children": {}
+     }
+    ]
+   }
+  }
+ },
+ {
+  "title": "Mediocre Engineer's Guide to HTTPS",
+  "description": "\n\u003cp\u003eArticle URL: \u003ca href=\"https://devonperoutky.super.site/blog-posts/mediocre-engineers-guide-to-https\"\u003ehttps://devonperoutky.super.site/blog-posts/mediocre-engineers-guide-to-https\u003c/a\u003e\u003c/p\u003e\n\u003cp\u003eComments URL: \u003ca href=\"https://news.ycombinator.com/item?id=40482799\"\u003ehttps://news.ycombinator.com/item?id=40482799\u003c/a\u003e\u003c/p\u003e\n\u003cp\u003ePoints: 280\u003c/p\u003e\n\u003cp\u003e# Comments: 33\u003c/p\u003e\n",
+  "link": "https://devonperoutky.super.site/blog-posts/mediocre-engineers-guide-to-https",
+  "links": [
+   "https://devonperoutky.super.site/blog-posts/mediocre-engineers-guide-to-https"
+  ],
+  "published": "Sun, 26 May 2024 15:17:48 +0000",
+  "publishedParsed": "2024-05-26T15:17:48Z",
+  "author": {
+   "name": "MediumD"
+  },
+  "authors": [
+   {
+    "name": "MediumD"
+   }
+  ],
+  "guid": "https://news.ycombinator.com/item?id=40482799",
+  "dcExt": {
+   "creator": [
+    "MediumD"
+   ]
+  },
+  "extensions": {
+   "dc": {
+    "creator": [
+     {
+      "name": "creator",
+      "value": "MediumD",
+      "attrs": {},
+      "children": {}
+     }
+    ]
+   }
+  }
+ },
+ {
+  "title": "Cloudflare took down our website",
+  "description": "\n\u003cp\u003eArticle URL: \u003ca href=\"https://robindev.substack.com/p/cloudflare-took-down-our-website\"\u003ehttps://robindev.substack.com/p/cloudflare-took-down-our-website\u003c/a\u003e\u003c/p\u003e\n\u003cp\u003eComments URL: \u003ca href=\"https://news.ycombinator.com/item?id=40481808\"\u003ehttps://news.ycombinator.com/item?id=40481808\u003c/a\u003e\u003c/p\u003e\n\u003cp\u003ePoints: 895\u003c/p\u003e\n\u003cp\u003e# Comments: 433\u003c/p\u003e\n",
+  "link": "https://robindev.substack.com/p/cloudflare-took-down-our-website",
+  "links": [
+   "https://robindev.substack.com/p/cloudflare-took-down-our-website"
+  ],
+  "published": "Sun, 26 May 2024 12:57:10 +0000",
+  "publishedParsed": "2024-05-26T12:57:10Z",
+  "author": {
+   "name": "nolverostae"
+  },
+  "authors": [
+   {
+    "name": "nolverostae"
+   }
+  ],
+  "guid": "https://news.ycombinator.com/item?id=40481808",
+  "dcExt": {
+   "creator": [
+    "nolverostae"
+   ]
+  },
+  "extensions": {
+   "dc": {
+    "creator": [
+     {
+      "name": "creator",
+      "value": "nolverostae",
+      "attrs": {},
+      "children": {}
+     }
+    ]
+   }
+  }
+ },
+ {
+  "title": "Show HN: Boldly go where Gradient Descent has never gone before with DiscoGrad",
+  "description": "\n\u003cp\u003eTrying to do gradient descent using automatic differentiation over branchy programs? Or to combine them with neural networks for end-to-end training? Then this might be interesting to you.\u003cp\u003eWe develped DiscoGrad, a tool for automatic differentiation through C++ programs involving input-dependent control flow (e.g., \"if (f(x) \u003c c) { ... }\", differentiating wrt. x) and randomness. Our initial motivation was to enable the use of gradient descent with simulations, which often rely heavily on such discrete branching. The latter makes plain autodiff mostly useless, since it can only account for the single path taken through the program. Our tool offers several backends that handle this situation, giving useful descent directions for optimization by accounting for alternative branches. Besides simulations, this problem arises in many other places, for example in deep learning when trying to combine imperative programs with neural networks.\u003cp\u003eIn a nutshell, DiscoGrad applies an (LLVM-based) source-to-source transformation to your C++ program, adding some calls to our header library, which then handles the gradient computation. What sets it apart from similar tools/estimators is that it's fully automatic (no need to come up with a differentiable problem formulation/reparametrization) and that the branching condition can be any function of the program inputs (no need to know upfront what distribution the condition follows).\u003cp\u003eWe're currently a team of two working on DiscoGrad as part of a research project, so don't expect to see production-grade code quality, but we do intend for it to be more than a throwaway research prototype. Use cases we've successfully tested include calibrating simulation models of epidemics or evacuation scenarios via gradient descent, and combining simulations with neural networks in an end-to-end trainable fashion.\u003cp\u003eWe hope you find this interesting and useful, and we're happy to answer questions!\u003c/p\u003e\n\u003chr\u003e\n\u003cp\u003eComments URL: \u003ca href=\"https://news.ycombinator.com/item?id=40481578\"\u003ehttps://news.ycombinator.com/item?id=40481578\u003c/a\u003e\u003c/p\u003e\n\u003cp\u003ePoints: 223\u003c/p\u003e\n\u003cp\u003e# Comments: 64\u003c/p\u003e\n",
+  "link": "https://github.com/DiscoGrad/DiscoGrad",
+  "links": [
+   "https://github.com/DiscoGrad/DiscoGrad"
+  ],
+  "published": "Sun, 26 May 2024 12:14:19 +0000",
+  "publishedParsed": "2024-05-26T12:14:19Z",
+  "author": {
+   "name": "frankling_"
+  },
+  "authors": [
+   {
+    "name": "frankling_"
+   }
+  ],
+  "guid": "https://news.ycombinator.com/item?id=40481578",
+  "dcExt": {
+   "creator": [
+    "frankling_"
+   ]
+  },
+  "extensions": {
+   "dc": {
+    "creator": [
+     {
+      "name": "creator",
+      "value": "frankling_",
+      "attrs": {},
+      "children": {}
+     }
+    ]
+   }
+  }
+ },
+ {
+  "title": "To the brain, reading computer code is not the same as reading language (2020)",
+  "description": "\n\u003cp\u003eArticle URL: \u003ca href=\"https://news.mit.edu/2020/brain-reading-computer-code-1215\"\u003ehttps://news.mit.edu/2020/brain-reading-computer-code-1215\u003c/a\u003e\u003c/p\u003e\n\u003cp\u003eComments URL: \u003ca href=\"https://news.ycombinator.com/item?id=40480913\"\u003ehttps://news.ycombinator.com/item?id=40480913\u003c/a\u003e\u003c/p\u003e\n\u003cp\u003ePoints: 283\u003c/p\u003e\n\u003cp\u003e# Comments: 190\u003c/p\u003e\n",
+  "link": "https://news.mit.edu/2020/brain-reading-computer-code-1215",
+  "links": [
+   "https://news.mit.edu/2020/brain-reading-computer-code-1215"
+  ],
+  "published": "Sun, 26 May 2024 09:54:58 +0000",
+  "publishedParsed": "2024-05-26T09:54:58Z",
+  "author": {
+   "name": "thunderbong"
+  },
+  "authors": [
+   {
+    "name": "thunderbong"
+   }
+  ],
+  "guid": "https://news.ycombinator.com/item?id=40480913",
+  "dcExt": {
+   "creator": [
+    "thunderbong"
+   ]
+  },
+  "extensions": {
+   "dc": {
+    "creator": [
+     {
+      "name": "creator",
+      "value": "thunderbong",
+      "attrs": {},
+      "children": {}
+     }
+    ]
+   }
+  }
+ },
+ {
+  "title": "Turn Your iPhone into a Dumb Phone",
+  "description": "\n\u003cp\u003eArticle URL: \u003ca href=\"https://dumbph.com/turn-iphone-into-dumb-phone\"\u003ehttps://dumbph.com/turn-iphone-into-dumb-phone\u003c/a\u003e\u003c/p\u003e\n\u003cp\u003eComments URL: \u003ca href=\"https://news.ycombinator.com/item?id=40480323\"\u003ehttps://news.ycombinator.com/item?id=40480323\u003c/a\u003e\u003c/p\u003e\n\u003cp\u003ePoints: 216\u003c/p\u003e\n\u003cp\u003e# Comments: 173\u003c/p\u003e\n",
+  "link": "https://dumbph.com/turn-iphone-into-dumb-phone",
+  "links": [
+   "https://dumbph.com/turn-iphone-into-dumb-phone"
+  ],
+  "published": "Sun, 26 May 2024 07:30:44 +0000",
+  "publishedParsed": "2024-05-26T07:30:44Z",
+  "author": {
+   "name": "hbroadbent"
+  },
+  "authors": [
+   {
+    "name": "hbroadbent"
+   }
+  ],
+  "guid": "https://news.ycombinator.com/item?id=40480323",
+  "dcExt": {
+   "creator": [
+    "hbroadbent"
+   ]
+  },
+  "extensions": {
+   "dc": {
+    "creator": [
+     {
+      "name": "creator",
+      "value": "hbroadbent",
+      "attrs": {},
+      "children": {}
+     }
+    ]
+   }
+  }
+ },
+ {
+  "title": "Hurl, the Exceptional Language",
+  "description": "\n\u003cp\u003eArticle URL: \u003ca href=\"https://hurl.wtf/\"\u003ehttps://hurl.wtf/\u003c/a\u003e\u003c/p\u003e\n\u003cp\u003eComments URL: \u003ca href=\"https://news.ycombinator.com/item?id=40480056\"\u003ehttps://news.ycombinator.com/item?id=40480056\u003c/a\u003e\u003c/p\u003e\n\u003cp\u003ePoints: 304\u003c/p\u003e\n\u003cp\u003e# Comments: 122\u003c/p\u003e\n",
+  "link": "https://hurl.wtf/",
+  "links": [
+   "https://hurl.wtf/"
+  ],
+  "published": "Sun, 26 May 2024 05:57:52 +0000",
+  "publishedParsed": "2024-05-26T05:57:52Z",
+  "author": {
+   "name": "todsacerdoti"
+  },
+  "authors": [
+   {
+    "name": "todsacerdoti"
+   }
+  ],
+  "guid": "https://news.ycombinator.com/item?id=40480056",
+  "dcExt": {
+   "creator": [
+    "todsacerdoti"
+   ]
+  },
+  "extensions": {
+   "dc": {
+    "creator": [
+     {
+      "name": "creator",
+      "value": "todsacerdoti",
+      "attrs": {},
+      "children": {}
+     }
+    ]
+   }
+  }
+ },
+ {
+  "title": "Braid: Synchronization for HTTP",
+  "description": "\n\u003cp\u003eArticle URL: \u003ca href=\"https://braid.org/\"\u003ehttps://braid.org/\u003c/a\u003e\u003c/p\u003e\n\u003cp\u003eComments URL: \u003ca href=\"https://news.ycombinator.com/item?id=40480016\"\u003ehttps://news.ycombinator.com/item?id=40480016\u003c/a\u003e\u003c/p\u003e\n\u003cp\u003ePoints: 225\u003c/p\u003e\n\u003cp\u003e# Comments: 81\u003c/p\u003e\n",
+  "link": "https://braid.org/",
+  "links": [
+   "https://braid.org/"
+  ],
+  "published": "Sun, 26 May 2024 05:44:47 +0000",
+  "publishedParsed": "2024-05-26T05:44:47Z",
+  "author": {
+   "name": "walterbell"
+  },
+  "authors": [
+   {
+    "name": "walterbell"
+   }
+  ],
+  "guid": "https://news.ycombinator.com/item?id=40480016",
+  "dcExt": {
+   "creator": [
+    "walterbell"
+   ]
+  },
+  "extensions": {
+   "dc": {
+    "creator": [
+     {
+      "name": "creator",
+      "value": "walterbell",
+      "attrs": {},
+      "children": {}
+     }
+    ]
+   }
+  }
+ },
+ {
+  "title": "How Home Assistant is being used to protect from missile and drone attacks",
+  "description": "\n\u003cp\u003eArticle URL: \u003ca href=\"https://denysdovhan.com/home-assistant-config/config/war/\"\u003ehttps://denysdovhan.com/home-assistant-config/config/war/\u003c/a\u003e\u003c/p\u003e\n\u003cp\u003eComments URL: \u003ca href=\"https://news.ycombinator.com/item?id=40479729\"\u003ehttps://news.ycombinator.com/item?id=40479729\u003c/a\u003e\u003c/p\u003e\n\u003cp\u003ePoints: 387\u003c/p\u003e\n\u003cp\u003e# Comments: 155\u003c/p\u003e\n",
+  "link": "https://denysdovhan.com/home-assistant-config/config/war/",
+  "links": [
+   "https://denysdovhan.com/home-assistant-config/config/war/"
+  ],
+  "published": "Sun, 26 May 2024 04:10:01 +0000",
+  "publishedParsed": "2024-05-26T04:10:01Z",
+  "author": {
+   "name": "slovette"
+  },
+  "authors": [
+   {
+    "name": "slovette"
+   }
+  ],
+  "guid": "https://news.ycombinator.com/item?id=40479729",
+  "dcExt": {
+   "creator": [
+    "slovette"
+   ]
+  },
+  "extensions": {
+   "dc": {
+    "creator": [
+     {
+      "name": "creator",
+      "value": "slovette",
+      "attrs": {},
+      "children": {}
+     }
+    ]
+   }
+  }
+ },
+ {
+  "title": "Tmux is worse-is-better",
+  "description": "\n\u003cp\u003eArticle URL: \u003ca href=\"https://hiandrewquinn.github.io/til-site/posts/tmux-is-worse-is-better/\"\u003ehttps://hiandrewquinn.github.io/til-site/posts/tmux-is-worse-is-better/\u003c/a\u003e\u003c/p\u003e\n\u003cp\u003eComments URL: \u003ca href=\"https://news.ycombinator.com/item?id=40476410\"\u003ehttps://news.ycombinator.com/item?id=40476410\u003c/a\u003e\u003c/p\u003e\n\u003cp\u003ePoints: 215\u003c/p\u003e\n\u003cp\u003e# Comments: 264\u003c/p\u003e\n",
+  "link": "https://hiandrewquinn.github.io/til-site/posts/tmux-is-worse-is-better/",
+  "links": [
+   "https://hiandrewquinn.github.io/til-site/posts/tmux-is-worse-is-better/"
+  ],
+  "published": "Sat, 25 May 2024 17:20:30 +0000",
+  "publishedParsed": "2024-05-25T17:20:30Z",
+  "author": {
+   "name": "hiAndrewQuinn"
+  },
+  "authors": [
+   {
+    "name": "hiAndrewQuinn"
+   }
+  ],
+  "guid": "https://news.ycombinator.com/item?id=40476410",
+  "dcExt": {
+   "creator": [
+    "hiAndrewQuinn"
+   ]
+  },
+  "extensions": {
+   "dc": {
+    "creator": [
+     {
+      "name": "creator",
+      "value": "hiAndrewQuinn",
+      "attrs": {},
+      "children": {}
+     }
+    ]
+   }
+  }
+ },
+ {
+  "title": "Google scrambles to manually remove weird AI answers in search",
+  "description": "\n\u003cp\u003eArticle URL: \u003ca href=\"https://www.theverge.com/2024/5/24/24164119/google-ai-overview-mistakes-search-race-openai\"\u003ehttps://www.theverge.com/2024/5/24/24164119/google-ai-overview-mistakes-search-race-openai\u003c/a\u003e\u003c/p\u003e\n\u003cp\u003eComments URL: \u003ca href=\"https://news.ycombinator.com/item?id=40475578\"\u003ehttps://news.ycombinator.com/item?id=40475578\u003c/a\u003e\u003c/p\u003e\n\u003cp\u003ePoints: 268\u003c/p\u003e\n\u003cp\u003e# Comments: 359\u003c/p\u003e\n",
+  "link": "https://www.theverge.com/2024/5/24/24164119/google-ai-overview-mistakes-search-race-openai",
+  "links": [
+   "https://www.theverge.com/2024/5/24/24164119/google-ai-overview-mistakes-search-race-openai"
+  ],
+  "published": "Sat, 25 May 2024 15:24:27 +0000",
+  "publishedParsed": "2024-05-25T15:24:27Z",
+  "author": {
+   "name": "rntn"
+  },
+  "authors": [
+   {
+    "name": "rntn"
+   }
+  ],
+  "guid": "https://news.ycombinator.com/item?id=40475578",
+  "dcExt": {
+   "creator": [
+    "rntn"
+   ]
+  },
+  "extensions": {
+   "dc": {
+    "creator": [
+     {
+      "name": "creator",
+      "value": "rntn",
+      "attrs": {},
+      "children": {}
+     }
+    ]
+   }
+  }
+ },
+ {
+  "title": "The hikikomori in Asia: A life within four walls",
+  "description": "\n\u003cp\u003eArticle URL: \u003ca href=\"https://www.cnn.com/interactive/2024/05/world/hikikomori-asia-personal-stories-wellness/\"\u003ehttps://www.cnn.com/interactive/2024/05/world/hikikomori-asia-personal-stories-wellness/\u003c/a\u003e\u003c/p\u003e\n\u003cp\u003eComments URL: \u003ca href=\"https://news.ycombinator.com/item?id=40475178\"\u003ehttps://news.ycombinator.com/item?id=40475178\u003c/a\u003e\u003c/p\u003e\n\u003cp\u003ePoints: 247\u003c/p\u003e\n\u003cp\u003e# Comments: 317\u003c/p\u003e\n",
+  "link": "https://www.cnn.com/interactive/2024/05/world/hikikomori-asia-personal-stories-wellness/",
+  "links": [
+   "https://www.cnn.com/interactive/2024/05/world/hikikomori-asia-personal-stories-wellness/"
+  ],
+  "published": "Sat, 25 May 2024 14:10:36 +0000",
+  "publishedParsed": "2024-05-25T14:10:36Z",
+  "author": {
+   "name": "reqo"
+  },
+  "authors": [
+   {
+    "name": "reqo"
+   }
+  ],
+  "guid": "https://news.ycombinator.com/item?id=40475178",
+  "dcExt": {
+   "creator": [
+    "reqo"
+   ]
+  },
+  "extensions": {
+   "dc": {
+    "creator": [
+     {
+      "name": "creator",
+      "value": "reqo",
+      "attrs": {},
+      "children": {}
+     }
+    ]
+   }
+  }
+ },
+ {
+  "title": "Ask HN: What is your ChatGPT customization prompt?",
+  "description": "\n\u003cp\u003eHave you come up with a customization prompt you're happy with?\u003cp\u003eI've tried several different setups over however long the feature has been available, and for the most part I haven't found it has made much of a difference.\u003cp\u003eI'm very curious to hear if anyone has come up with any that tangibly improve their experience.\u003cp\u003eHere is what I have at the moment:\u003cp\u003e- Be as brief as possible.\n- Do not lecture me on ethics, law, or security, I always take these into consideration.\n- Don't add extra commentary.\n- When it is related to code, let the code do the talking.\n- Be assertive. If you've got suggestions, give them even if you aren't 100% sure.\u003cp\u003eThe brevity part is seemingly completely ignored. The lecturing part is hit or miss. The suggestions part I still usually have to coax it into giving me.\u003c/p\u003e\n\u003chr\u003e\n\u003cp\u003eComments URL: \u003ca href=\"https://news.ycombinator.com/item?id=40474716\"\u003ehttps://news.ycombinator.com/item?id=40474716\u003c/a\u003e\u003c/p\u003e\n\u003cp\u003ePoints: 628\u003c/p\u003e\n\u003cp\u003e# Comments: 273\u003c/p\u003e\n",
+  "link": "https://news.ycombinator.com/item?id=40474716",
+  "links": [
+   "https://news.ycombinator.com/item?id=40474716"
+  ],
+  "published": "Sat, 25 May 2024 12:50:49 +0000",
+  "publishedParsed": "2024-05-25T12:50:49Z",
+  "author": {
+   "name": "dinkleberg"
+  },
+  "authors": [
+   {
+    "name": "dinkleberg"
+   }
+  ],
+  "guid": "https://news.ycombinator.com/item?id=40474716",
+  "dcExt": {
+   "creator": [
+    "dinkleberg"
+   ]
+  },
+  "extensions": {
+   "dc": {
+    "creator": [
+     {
+      "name": "creator",
+      "value": "dinkleberg",
+      "attrs": {},
+      "children": {}
+     }
+    ]
+   }
+  }
+ },
+ {
+  "title": "Abusing Go's Infrastructure",
+  "description": "\n\u003cp\u003eArticle URL: \u003ca href=\"https://reverse.put.as/2024/05/24/abusing-go-infrastructure/\"\u003ehttps://reverse.put.as/2024/05/24/abusing-go-infrastructure/\u003c/a\u003e\u003c/p\u003e\n\u003cp\u003eComments URL: \u003ca href=\"https://news.ycombinator.com/item?id=40474712\"\u003ehttps://news.ycombinator.com/item?id=40474712\u003c/a\u003e\u003c/p\u003e\n\u003cp\u003ePoints: 379\u003c/p\u003e\n\u003cp\u003e# Comments: 77\u003c/p\u003e\n",
+  "link": "https://reverse.put.as/2024/05/24/abusing-go-infrastructure/",
+  "links": [
+   "https://reverse.put.as/2024/05/24/abusing-go-infrastructure/"
+  ],
+  "published": "Sat, 25 May 2024 12:50:00 +0000",
+  "publishedParsed": "2024-05-25T12:50:00Z",
+  "author": {
+   "name": "efge"
+  },
+  "authors": [
+   {
+    "name": "efge"
+   }
+  ],
+  "guid": "https://news.ycombinator.com/item?id=40474712",
+  "dcExt": {
+   "creator": [
+    "efge"
+   ]
+  },
+  "extensions": {
+   "dc": {
+    "creator": [
+     {
+      "name": "creator",
+      "value": "efge",
+      "attrs": {},
+      "children": {}
+     }
+    ]
+   }
+  }
+ },
+ {
+  "title": "Diffusion Models",
+  "description": "\n\u003cp\u003eArticle URL: \u003ca href=\"https://andrewkchan.dev/posts/diffusion.html\"\u003ehttps://andrewkchan.dev/posts/diffusion.html\u003c/a\u003e\u003c/p\u003e\n\u003cp\u003eComments URL: \u003ca href=\"https://news.ycombinator.com/item?id=40471419\"\u003ehttps://news.ycombinator.com/item?id=40471419\u003c/a\u003e\u003c/p\u003e\n\u003cp\u003ePoints: 302\u003c/p\u003e\n\u003cp\u003e# Comments: 25\u003c/p\u003e\n",
+  "link": "https://andrewkchan.dev/posts/diffusion.html",
+  "links": [
+   "https://andrewkchan.dev/posts/diffusion.html"
+  ],
+  "published": "Fri, 24 May 2024 23:35:26 +0000",
+  "publishedParsed": "2024-05-24T23:35:26Z",
+  "author": {
+   "name": "reasonableklout"
+  },
+  "authors": [
+   {
+    "name": "reasonableklout"
+   }
+  ],
+  "guid": "https://news.ycombinator.com/item?id=40471419",
+  "dcExt": {
+   "creator": [
+    "reasonableklout"
+   ]
+  },
+  "extensions": {
+   "dc": {
+    "creator": [
+     {
+      "name": "creator",
+      "value": "reasonableklout",
+      "attrs": {},
+      "children": {}
+     }
+    ]
+   }
+  }
+ },
+ {
+  "title": "Show HN: Spot – Simple, cross-platform, reactive desktop GUI toolkit for Go",
+  "description": "\n\u003cp\u003eHi HN, I’m excited to share Spot, a simple, cross-platform, React-like GUI library for Go. It is just a few days old and has lots of missing features but I'm happy with the results so far, and looking for some design feedback.\u003cp\u003eSpot is designed to be easy to use and provide a consistent API across different platforms (mainly Mac \u0026 Linux). It’s inspired by React, but written in Go, aiming to combine the best of both worlds: the easy tooling \u0026 performance of Go with a modern, reactive approach to UI development.\u003cp\u003eKey features:\u003cp\u003e- Cross-platform: Leveraging FLTK[1] \u0026 Cocoa[2], Spot works on Mac, Linux, and the BSDs with plans for native Windows support in the future.\u003cp\u003e- Reactive UI: Adopts a React-like model for building UIs, making it intuitive for those familiar with reactive frameworks.\u003cp\u003e- Traditional, native widget set: Utilizes native widgets where available to provide a more traditional look and feel.\u003cp\u003eWhy I built it:\u003cp\u003eI was searching for a cross-platform GUI toolkit for Go that had a more traditional appearance, and none of the existing options quite met my needs. I then started playing with Gocoa and go-fltk and suddenly I worked on an experiment to see how challenging it would be to build something like React in Go, and it kinda evolved into Spot. ¯\\_(ツ)_/¯\u003cp\u003eIn 2024, is there a still place for classic desktop GUIs—even with a modern spin?\u003cp\u003eI’d love to hear your thoughts, feedback, and any suggestions for improvement. Also, contributions are very welcome.\u003cp\u003eThank you for checking it out!\u003cp\u003e[1] \u003ca href=\"https://github.com/pwiecz/go-fltk\"\u003ehttps://github.com/pwiecz/go-fltk\u003c/a\u003e\u003cp\u003e[2] \u003ca href=\"https://github.com/roblillack/gocoa\"\u003ehttps://github.com/roblillack/gocoa\u003c/a\u003e\u003c/p\u003e\n\u003chr\u003e\n\u003cp\u003eComments URL: \u003ca href=\"https://news.ycombinator.com/item?id=40469592\"\u003ehttps://news.ycombinator.com/item?id=40469592\u003c/a\u003e\u003c/p\u003e\n\u003cp\u003ePoints: 302\u003c/p\u003e\n\u003cp\u003e# Comments: 57\u003c/p\u003e\n",
+  "link": "https://github.com/roblillack/spot",
+  "links": [
+   "https://github.com/roblillack/spot"
+  ],
+  "published": "Fri, 24 May 2024 19:19:31 +0000",
+  "publishedParsed": "2024-05-24T19:19:31Z",
+  "author": {
+   "name": "da_rob"
+  },
+  "authors": [
+   {
+    "name": "da_rob"
+   }
+  ],
+  "guid": "https://news.ycombinator.com/item?id=40469592",
+  "dcExt": {
+   "creator": [
+    "da_rob"
+   ]
+  },
+  "extensions": {
+   "dc": {
+    "creator": [
+     {
+      "name": "creator",
+      "value": "da_rob",
+      "attrs": {},
+      "children": {}
+     }
+    ]
+   }
+  }
+ },
+ {
+  "title": "Mp3tag – Universal Tag Editor",
+  "description": "\n\u003cp\u003eArticle URL: \u003ca href=\"https://www.mp3tag.de/en/\"\u003ehttps://www.mp3tag.de/en/\u003c/a\u003e\u003c/p\u003e\n\u003cp\u003eComments URL: \u003ca href=\"https://news.ycombinator.com/item?id=40468933\"\u003ehttps://news.ycombinator.com/item?id=40468933\u003c/a\u003e\u003c/p\u003e\n\u003cp\u003ePoints: 387\u003c/p\u003e\n\u003cp\u003e# Comments: 162\u003c/p\u003e\n",
+  "link": "https://www.mp3tag.de/en/",
+  "links": [
+   "https://www.mp3tag.de/en/"
+  ],
+  "published": "Fri, 24 May 2024 18:15:58 +0000",
+  "publishedParsed": "2024-05-24T18:15:58Z",
+  "author": {
+   "name": "accrual"
+  },
+  "authors": [
+   {
+    "name": "accrual"
+   }
+  ],
+  "guid": "https://news.ycombinator.com/item?id=40468933",
+  "dcExt": {
+   "creator": [
+    "accrual"
+   ]
+  },
+  "extensions": {
+   "dc": {
+    "creator": [
+     {
+      "name": "creator",
+      "value": "accrual",
+      "attrs": {},
+      "children": {}
+     }
+    ]
+   }
+  }
+ },
+ {
+  "title": "Financial Statement Analysis with Large Language Models",
+  "description": "\n\u003cp\u003eArticle URL: \u003ca href=\"https://papers.ssrn.com/sol3/papers.cfm?abstract_id=4835311\"\u003ehttps://papers.ssrn.com/sol3/papers.cfm?abstract_id=4835311\u003c/a\u003e\u003c/p\u003e\n\u003cp\u003eComments URL: \u003ca href=\"https://news.ycombinator.com/item?id=40468518\"\u003ehttps://news.ycombinator.com/item?id=40468518\u003c/a\u003e\u003c/p\u003e\n\u003cp\u003ePoints: 561\u003c/p\u003e\n\u003cp\u003e# Comments: 204\u003c/p\u003e\n",
+  "link": "https://papers.ssrn.com/sol3/papers.cfm?abstract_id=4835311",
+  "links": [
+   "https://papers.ssrn.com/sol3/papers.cfm?abstract_id=4835311"
+  ],
+  "published": "Fri, 24 May 2024 17:39:39 +0000",
+  "publishedParsed": "2024-05-24T17:39:39Z",
+  "author": {
+   "name": "mellosouls"
+  },
+  "authors": [
+   {
+    "name": "mellosouls"
+   }
+  ],
+  "guid": "https://news.ycombinator.com/item?id=40468518",
+  "dcExt": {
+   "creator": [
+    "mellosouls"
+   ]
+  },
+  "extensions": {
+   "dc": {
+    "creator": [
+     {
+      "name": "creator",
+      "value": "mellosouls",
+      "attrs": {},
+      "children": {}
+     }
+    ]
+   }
+  }
+ },
+ {
+  "title": "ICQ will stop working from June 26",
+  "description": "\n\u003cp\u003eArticle URL: \u003ca href=\"https://icq.com/desktop/en#windows\"\u003ehttps://icq.com/desktop/en#windows\u003c/a\u003e\u003c/p\u003e\n\u003cp\u003eComments URL: \u003ca href=\"https://news.ycombinator.com/item?id=40467625\"\u003ehttps://news.ycombinator.com/item?id=40467625\u003c/a\u003e\u003c/p\u003e\n\u003cp\u003ePoints: 1081\u003c/p\u003e\n\u003cp\u003e# Comments: 728\u003c/p\u003e\n",
+  "link": "https://icq.com/desktop/en#windows",
+  "links": [
+   "https://icq.com/desktop/en#windows"
+  ],
+  "published": "Fri, 24 May 2024 16:16:37 +0000",
+  "publishedParsed": "2024-05-24T16:16:37Z",
+  "author": {
+   "name": "Uncle_Sam"
+  },
+  "authors": [
+   {
+    "name": "Uncle_Sam"
+   }
+  ],
+  "guid": "https://news.ycombinator.com/item?id=40467625",
+  "dcExt": {
+   "creator": [
+    "Uncle_Sam"
+   ]
+  },
+  "extensions": {
+   "dc": {
+    "creator": [
+     {
+      "name": "creator",
+      "value": "Uncle_Sam",
+      "attrs": {},
+      "children": {}
+     }
+    ]
+   }
+  }
+ },
+ {
+  "title": "Writing a Unix clone in about a month",
+  "description": "\n\u003cp\u003eArticle URL: \u003ca href=\"https://drewdevault.com/2024/05/24/2024-05-24-Bunnix.html\"\u003ehttps://drewdevault.com/2024/05/24/2024-05-24-Bunnix.html\u003c/a\u003e\u003c/p\u003e\n\u003cp\u003eComments URL: \u003ca href=\"https://news.ycombinator.com/item?id=40467297\"\u003ehttps://news.ycombinator.com/item?id=40467297\u003c/a\u003e\u003c/p\u003e\n\u003cp\u003ePoints: 384\u003c/p\u003e\n\u003cp\u003e# Comments: 125\u003c/p\u003e\n",
+  "link": "https://drewdevault.com/2024/05/24/2024-05-24-Bunnix.html",
+  "links": [
+   "https://drewdevault.com/2024/05/24/2024-05-24-Bunnix.html"
+  ],
+  "published": "Fri, 24 May 2024 15:41:22 +0000",
+  "publishedParsed": "2024-05-24T15:41:22Z",
+  "author": {
+   "name": "drewdevault"
+  },
+  "authors": [
+   {
+    "name": "drewdevault"
+   }
+  ],
+  "guid": "https://news.ycombinator.com/item?id=40467297",
+  "dcExt": {
+   "creator": [
+    "drewdevault"
+   ]
+  },
+  "extensions": {
+   "dc": {
+    "creator": [
+     {
+      "name": "creator",
+      "value": "drewdevault",
+      "attrs": {},
+      "children": {}
+     }
+    ]
+   }
+  }
+ },
+ {
+  "title": "Helen Keller on her life before self-consciousness (1908)",
+  "description": "\n\u003cp\u003eArticle URL: \u003ca href=\"http://scentofdawn.blogspot.com/2011/07/before-soul-dawn-helen-keller-on-her.html\"\u003ehttp://scentofdawn.blogspot.com/2011/07/before-soul-dawn-helen-keller-on-her.html\u003c/a\u003e\u003c/p\u003e\n\u003cp\u003eComments URL: \u003ca href=\"https://news.ycombinator.com/item?id=40466814\"\u003ehttps://news.ycombinator.com/item?id=40466814\u003c/a\u003e\u003c/p\u003e\n\u003cp\u003ePoints: 673\u003c/p\u003e\n\u003cp\u003e# Comments: 302\u003c/p\u003e\n",
+  "link": "http://scentofdawn.blogspot.com/2011/07/before-soul-dawn-helen-keller-on-her.html",
+  "links": [
+   "http://scentofdawn.blogspot.com/2011/07/before-soul-dawn-helen-keller-on-her.html"
+  ],
+  "published": "Fri, 24 May 2024 14:48:45 +0000",
+  "publishedParsed": "2024-05-24T14:48:45Z",
+  "author": {
+   "name": "ahiknsr"
+  },
+  "authors": [
+   {
+    "name": "ahiknsr"
+   }
+  ],
+  "guid": "https://news.ycombinator.com/item?id=40466814",
+  "dcExt": {
+   "creator": [
+    "ahiknsr"
+   ]
+  },
+  "extensions": {
+   "dc": {
+    "creator": [
+     {
+      "name": "creator",
+      "value": "ahiknsr",
+      "attrs": {},
+      "children": {}
+     }
+    ]
+   }
+  }
+ },
+ {
+  "title": "Sharing details on a recent incident impacting one of our customers",
+  "description": "\n\u003cp\u003eArticle URL: \u003ca href=\"https://cloud.google.com/blog/products/infrastructure/details-of-google-cloud-gcve-incident/\"\u003ehttps://cloud.google.com/blog/products/infrastructure/details-of-google-cloud-gcve-incident/\u003c/a\u003e\u003c/p\u003e\n\u003cp\u003eComments URL: \u003ca href=\"https://news.ycombinator.com/item?id=40466810\"\u003ehttps://news.ycombinator.com/item?id=40466810\u003c/a\u003e\u003c/p\u003e\n\u003cp\u003ePoints: 304\u003c/p\u003e\n\u003cp\u003e# Comments: 124\u003c/p\u003e\n",
+  "link": "https://cloud.google.com/blog/products/infrastructure/details-of-google-cloud-gcve-incident/",
+  "links": [
+   "https://cloud.google.com/blog/products/infrastructure/details-of-google-cloud-gcve-incident/"
+  ],
+  "published": "Fri, 24 May 2024 14:48:08 +0000",
+  "publishedParsed": "2024-05-24T14:48:08Z",
+  "author": {
+   "name": "nonfamous"
+  },
+  "authors": [
+   {
+    "name": "nonfamous"
+   }
+  ],
+  "guid": "https://news.ycombinator.com/item?id=40466810",
+  "dcExt": {
+   "creator": [
+    "nonfamous"
+   ]
+  },
+  "extensions": {
+   "dc": {
+    "creator": [
+     {
+      "name": "creator",
+      "value": "nonfamous",
+      "attrs": {},
+      "children": {}
+     }
+    ]
+   }
+  }
+ }
+]
