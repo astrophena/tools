@@ -177,6 +177,7 @@ type feedState struct {
 	Disabled     bool      `json:"disabled"`
 	ErrorCount   int       `json:"error_count"`
 	LastError    string    `json:"last_error"`
+	CachedTitle  string    `json:"cached_title"`
 
 	// Special flags. Not covered by tests or any common sense.
 
@@ -308,7 +309,11 @@ func (f *fetcher) listFeeds(ctx context.Context, w io.Writer) error {
 			fmt.Fprintf(&sb, " \n")
 			continue
 		}
-		fmt.Fprintf(&sb, " (last updated %s", state.LastUpdated.Format(time.DateTime))
+		fmt.Fprintf(&sb, " (")
+		if state.CachedTitle != "" {
+			fmt.Fprintf(&sb, "%q, ", state.CachedTitle)
+		}
+		fmt.Fprintf(&sb, "last updated %s", state.LastUpdated.Format(time.DateTime))
 		if state.ErrorCount > 0 {
 			failCount := "once"
 			if state.ErrorCount > 1 {
@@ -464,6 +469,7 @@ func (f *fetcher) fetch(ctx context.Context, url string) error {
 	state.LastUpdated = time.Now()
 	state.ErrorCount = 0
 	state.LastError = ""
+	state.CachedTitle = feed.Title
 
 	return nil
 }
@@ -509,8 +515,8 @@ func (f *fetcher) saveToGist(ctx context.Context) error {
 
 	data := &gist{
 		Files: map[string]*gistFile{
-			"feeds.json": &gistFile{Content: string(feeds)},
-			"state.json": &gistFile{Content: string(state)},
+			"feeds.json": {Content: string(feeds)},
+			"state.json": {Content: string(state)},
 		},
 	}
 	_, err = f.makeGistRequest(ctx, http.MethodPatch, data)

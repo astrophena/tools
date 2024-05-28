@@ -184,7 +184,8 @@
     "disabled": false,
     "error_count": 0,
     "last_error": "",
-    "filtered_categories": null
+    "filtered_categories": null,
+    "cached_title": "Articles — brandur.org"
   },
   "https://brandur.org/atoms.atom": {
     "last_modified": "2024-05-07T06:32:59Z",
