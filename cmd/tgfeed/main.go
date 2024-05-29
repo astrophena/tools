@@ -75,6 +75,7 @@ import (
 
 	"go.astrophena.name/tools/internal/cli"
 	"go.astrophena.name/tools/internal/httplogger"
+	"go.astrophena.name/tools/internal/syncutil"
 
 	"github.com/mmcdole/gofeed"
 )
@@ -82,10 +83,11 @@ import (
 const (
 	defaultErrorTemplate = `❌ Something went wrong:
 <pre><code>%v</code></pre>`
-	userAgent      = "tgfeed (https://astrophena.name/bleep-bloop)"
-	ghAPI          = "https://api.github.com"
-	tgAPI          = "https://api.telegram.org"
-	errorThreshold = 12 // failing continuously for four days will disable feed and complain loudly
+	userAgent        = "tgfeed (https://astrophena.name/bleep-bloop)"
+	ghAPI            = "https://api.github.com"
+	tgAPI            = "https://api.telegram.org"
+	errorThreshold   = 12 // failing continuously for four days will disable feed and complain loudly
+	concurrencyLimit = 10
 )
 
 func main() {
@@ -167,8 +169,8 @@ type fetcher struct {
 
 	errorTemplate string
 
-	mu    sync.RWMutex
-	state map[string]feedState
+	mu    sync.Mutex
+	state map[string]*feedState
 
 	updates chan *gofeed.Item
 }
@@ -200,17 +202,29 @@ func (f *fetcher) doInit() {
 	f.updates = make(chan *gofeed.Item)
 }
 
-func (f *fetcher) getState(url string) (state feedState, exists bool) {
-	f.mu.RLock()
-	defer f.mu.RUnlock()
+func (f *fetcher) getState(url string) (state *feedState, exists bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	state, exists = f.state[url]
 	return
 }
 
-func (f *fetcher) putState(url string, state feedState) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.state[url] = state
+func (f *fetcher) handleFetchFailure(ctx context.Context, url string, err error) {
+	if err == nil {
+		return
+	}
+
+	state, _ := f.getState(url)
+	state.ErrorCount += 1
+	state.LastError = err.Error()
+	// Complain loudly and disable feed, if we failed previously enough.
+	if state.ErrorCount >= errorThreshold {
+		err = fmt.Errorf("fetching feed %q failed after %d previous attempts: %v; feed was disabled, to reenable it run 'tgfeed -reenable %q'", url, state.ErrorCount, err, url)
+		state.Disabled = true
+		if err := f.send(ctx, fmt.Sprintf(f.errorTemplate, html.EscapeString(err.Error())), disableLinkPreview); err != nil {
+			log.Printf("notifying about a disabled feed: %v", err)
+		}
+	}
 }
 
 func (f *fetcher) run(ctx context.Context) error {
@@ -219,30 +233,17 @@ func (f *fetcher) run(ctx context.Context) error {
 	}
 	f.initOnce.Do(f.doInit)
 
-	var wg sync.WaitGroup
+	lwg := syncutil.NewLimitedWaitGroup(concurrencyLimit)
 	for _, url := range shuffle(f.feeds) {
-		wg.Add(1)
+		lwg.Add(1)
 		go func(url string) {
-			defer wg.Done()
-
-			if err := f.fetch(ctx, url); err != nil {
-				state, _ := f.getState(url)
-				state.ErrorCount += 1
-				state.LastError = err.Error()
-				// Complain loudly and disable feed, if we failed previously enough.
-				if state.ErrorCount >= errorThreshold {
-					err = fmt.Errorf("fetching feed %q failed after %d previous attempts: %v; feed was disabled, to reenable it run 'tgfeed -reenable %q'", url, state.ErrorCount, err, url)
-					state.Disabled = true
-					if err := f.send(ctx, fmt.Sprintf(f.errorTemplate, html.EscapeString(err.Error())), disableLinkPreview); err != nil {
-						log.Printf("notifying about a disabled feed: %v", err)
-					}
-				}
-				f.putState(url, state)
-			}
+			defer lwg.Done()
+			f.handleFetchFailure(ctx, url, f.fetch(ctx, url))
 		}(url)
 	}
 
 	go func() {
+	loop:
 		for {
 			select {
 			case item, ok := <-f.updates:
@@ -281,13 +282,13 @@ func (f *fetcher) run(ctx context.Context) error {
 					continue
 				}
 			case <-ctx.Done():
-				break
+				break loop
 			}
 		}
 	}()
 
 	// Wait for all fetches to complete.
-	wg.Wait()
+	lwg.Wait()
 	// Stop sending goroutine.
 	close(f.updates)
 
@@ -326,8 +327,6 @@ func (f *fetcher) reenable(ctx context.Context, url string) error {
 	state.Disabled = false
 	state.ErrorCount = 0
 	state.LastError = ""
-
-	f.putState(url, state)
 
 	return f.saveToGist(ctx)
 }
@@ -419,7 +418,7 @@ func (f *fetcher) loadFromGist(ctx context.Context) error {
 		}
 	}
 
-	f.state = make(map[string]feedState)
+	f.state = make(map[string]*feedState)
 	state, ok := g.Files["state.json"]
 	if ok {
 		return json.Unmarshal([]byte(state.Content), &f.state)
@@ -429,17 +428,16 @@ func (f *fetcher) loadFromGist(ctx context.Context) error {
 
 func (f *fetcher) fetch(ctx context.Context, url string) error {
 	state, exists := f.getState(url)
-	defer f.putState(url, state)
-
-	if state.Disabled {
-		return nil
-	}
-
 	// If we don't remember this feed, it's probably new. Set it's last update
 	// date to current so we don't get a lot of unread articles and trigger
 	// Telegram Bot API rate limit.
 	if !exists {
 		state.LastUpdated = time.Now()
+	}
+
+	// Skip disabled feeds.
+	if state.Disabled {
+		return nil
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
@@ -461,11 +459,8 @@ func (f *fetcher) fetch(ctx context.Context, url string) error {
 	}
 	defer res.Body.Close()
 
-	// https://http.dev/420
-	const statusEnhanceYourCalm = 420
-
-	// Ignore unmodified and rate limited feeds.
-	if res.StatusCode == http.StatusNotModified || res.StatusCode == statusEnhanceYourCalm {
+	// Ignore unmodified feeds and report an error otherwise.
+	if res.StatusCode == http.StatusNotModified {
 		return nil
 	}
 	if res.StatusCode != http.StatusOK {
