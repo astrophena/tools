@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"compress/gzip"
 	"context"
 	_ "embed"
 	"encoding/json"
@@ -13,8 +12,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"go.astrophena.name/tools/internal/httplogger"
@@ -28,9 +27,6 @@ const tgToken = "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
 var (
 	//go:embed testdata/gists/main.txtar
 	gistTxtar []byte
-
-	//go:embed testdata/gists/feed.txtar
-	gistFeedTxtar []byte
 )
 
 var update = flag.Bool("update", false, "update golden files in testdata")
@@ -65,72 +61,6 @@ func TestRun(t *testing.T) {
 	if err := f.run(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-}
-
-func TestFetchAndSend(t *testing.T) {
-	t.Skip("TODO")
-
-	t.Parallel()
-
-	testutil.RunGolden(t, "testdata/feeds/*.xml.gz", func(t *testing.T, tc string) []byte {
-		t.Parallel()
-
-		b := unzip(t, readFile(t, tc))
-
-		tm := testMux(t, map[string]http.HandlerFunc{
-			"GET example.com/feed.xml": func(w http.ResponseWriter, r *http.Request) {
-				w.Write(b)
-			},
-		})
-		tm.gist = txtarToGist(t, gistFeedTxtar)
-		f := testFetcher(t, tm)
-
-		if err := f.run(context.Background()); err != nil {
-			t.Fatal(err)
-		}
-
-		// Sort the sent messages by the "text" and "url" fields
-		slices.SortStableFunc(tm.sentMessages, func(a, b map[string]any) int {
-			textCmp := strings.Compare(a["text"].(string), b["text"].(string))
-			if textCmp != 0 {
-				return textCmp
-			}
-			urlA, okA := a["url"].(string)
-			urlB, okB := b["url"].(string)
-			if !okA && !okB {
-				return 0
-			}
-			if !okA {
-				return -1
-			}
-			if !okB {
-				return 1
-			}
-			return strings.Compare(urlA, urlB)
-		})
-
-		u, err := json.MarshalIndent(tm.sentMessages, "", " ")
-		if err != nil {
-			t.Fatal(err)
-		}
-		return u
-	}, *update)
-}
-
-func unzip(t *testing.T, gz []byte) []byte {
-	r := bytes.NewReader(gz)
-	zr, err := gzip.NewReader(r)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer zr.Close()
-
-	var buf bytes.Buffer
-	_, err = io.Copy(&buf, zr)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return buf.Bytes()
 }
 
 func TestSubscribeAndUnsubscribe(t *testing.T) {
@@ -318,6 +248,7 @@ func testFetcher(t *testing.T, m *mux) *fetcher {
 
 type mux struct {
 	mux          *http.ServeMux
+	mu           sync.Mutex
 	gist         []byte
 	sentMessages []map[string]any
 }
@@ -332,6 +263,8 @@ func testMux(t *testing.T, overrides map[string]http.HandlerFunc) *mux {
 	m := &mux{mux: http.NewServeMux()}
 	m.mux.HandleFunc(getGist, orHandler(overrides[getGist], func(w http.ResponseWriter, r *http.Request) {
 		testutil.AssertEqual(t, r.Header.Get("Authorization"), "Bearer test")
+		m.mu.Lock()
+		defer m.mu.Unlock()
 		if m.gist != nil {
 			w.Write(m.gist)
 			return
@@ -340,11 +273,15 @@ func testMux(t *testing.T, overrides map[string]http.HandlerFunc) *mux {
 	}))
 	m.mux.HandleFunc(patchGist, orHandler(overrides[patchGist], func(w http.ResponseWriter, r *http.Request) {
 		testutil.AssertEqual(t, r.Header.Get("Authorization"), "Bearer test")
+		m.mu.Lock()
+		defer m.mu.Unlock()
 		m.gist = read(t, r.Body)
 		w.Write(m.gist)
 	}))
 	m.mux.HandleFunc(sendTelegram, orHandler(overrides[sendTelegram], func(w http.ResponseWriter, r *http.Request) {
 		testutil.AssertEqual(t, tgToken, strings.TrimPrefix(r.PathValue("token"), "bot"))
+		m.mu.Lock()
+		defer m.mu.Unlock()
 		sentMessage := read(t, r.Body)
 		m.sentMessages = append(m.sentMessages, testutil.UnmarshalJSON[map[string]any](t, sentMessage))
 		// makeRequest tries to unmarshal response, which we didn't even use, so fool it.
