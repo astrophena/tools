@@ -491,6 +491,10 @@ func (f *fetcher) fetch(ctx context.Context, url string) error {
 				continue
 			}
 		}
+		// Skip some ads in Telegram channels.
+		if strings.Contains(item.Description, "#реклама") {
+			continue
+		}
 		f.updates <- item
 	}
 	state.LastUpdated = time.Now()
