@@ -217,7 +217,6 @@ func (f *fetcher) run(ctx context.Context) error {
 
 	// Start sending goroutine.
 	go func() {
-	loop:
 		for {
 			select {
 			case item, valid := <-f.updates:
@@ -226,7 +225,7 @@ func (f *fetcher) run(ctx context.Context) error {
 				}
 				f.sendUpdate(ctx, item)
 			case <-ctx.Done():
-				break loop
+				return
 			}
 		}
 	}()
