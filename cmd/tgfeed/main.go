@@ -209,83 +209,37 @@ func (f *fetcher) getState(url string) (state *feedState, exists bool) {
 	return
 }
 
-func (f *fetcher) handleFetchFailure(ctx context.Context, url string, err error) {
-	if err == nil {
-		return
-	}
-
-	state, _ := f.getState(url)
-	state.ErrorCount += 1
-	state.LastError = err.Error()
-	// Complain loudly and disable feed, if we failed previously enough.
-	if state.ErrorCount >= errorThreshold {
-		err = fmt.Errorf("fetching feed %q failed after %d previous attempts: %v; feed was disabled, to reenable it run 'tgfeed -reenable %q'", url, state.ErrorCount, err, url)
-		state.Disabled = true
-		if err := f.send(ctx, fmt.Sprintf(f.errorTemplate, html.EscapeString(err.Error())), disableLinkPreview); err != nil {
-			log.Printf("notifying about a disabled feed: %v", err)
-		}
-	}
-}
-
 func (f *fetcher) run(ctx context.Context) error {
 	if err := f.loadFromGist(ctx); err != nil {
 		return fmt.Errorf("fetching gist failed: %w", err)
 	}
 	f.initOnce.Do(f.doInit)
 
-	lwg := syncutil.NewLimitedWaitGroup(concurrencyLimit)
-	for _, url := range shuffle(f.feeds) {
-		lwg.Add(1)
-		go func(url string) {
-			defer lwg.Done()
-			f.handleFetchFailure(ctx, url, f.fetch(ctx, url))
-		}(url)
-	}
-
+	// Start sending goroutine.
 	go func() {
 	loop:
 		for {
 			select {
-			case item, ok := <-f.updates:
-				if !ok {
+			case item, valid := <-f.updates:
+				if !valid {
 					return
 				}
-
-				title := item.Title
-				if item.Title == "" {
-					title = item.Link
-				}
-
-				msg := fmt.Sprintf(
-					`<a href="%[1]s">%[2]s</a>`,
-					item.Link,
-					html.EscapeString(title),
-				)
-
-				inlineKeyboardButtons := []inlineKeyboardButton{}
-
-				// hnrss.org feeds have Hacker News entry URL set as GUID. Also send it
-				// because I often read comments on Hacker News entries.
-				if strings.HasPrefix(item.GUID, "https://news.ycombinator.com/item?id=") {
-					inlineKeyboardButtons = append(inlineKeyboardButtons, inlineKeyboardButton{
-						Text: "💬 Comments",
-						URL:  item.GUID,
-					})
-				}
-
-				if err := f.send(ctx, msg, func(args map[string]any) {
-					args["reply_markup"] = map[string]any{
-						"inline_keyboard": [][]inlineKeyboardButton{inlineKeyboardButtons},
-					}
-				}); err != nil {
-					log.Printf("sending %q to %q failed: %v", msg, f.chatID, err)
-					continue
-				}
+				f.sendUpdate(ctx, item)
 			case <-ctx.Done():
 				break loop
 			}
 		}
 	}()
+
+	// Enqueue fetches.
+	lwg := syncutil.NewLimitedWaitGroup(concurrencyLimit)
+	for _, url := range shuffle(f.feeds) {
+		lwg.Add(1)
+		go func(url string) {
+			defer lwg.Done()
+			f.fetch(ctx, url)
+		}(url)
+	}
 
 	// Wait for all fetches to complete.
 	lwg.Wait()
@@ -304,6 +258,38 @@ func (f *fetcher) run(ctx context.Context) error {
 
 	slices.Sort(f.feeds)
 	return f.saveToGist(ctx)
+}
+
+func (f *fetcher) sendUpdate(ctx context.Context, item *gofeed.Item) {
+	title := item.Title
+	if item.Title == "" {
+		title = item.Link
+	}
+
+	msg := fmt.Sprintf(
+		`<a href="%[1]s">%[2]s</a>`,
+		item.Link,
+		html.EscapeString(title),
+	)
+
+	inlineKeyboardButtons := []inlineKeyboardButton{}
+
+	// hnrss.org feeds have Hacker News entry URL set as GUID. Also send it
+	// because I often read comments on Hacker News entries.
+	if strings.HasPrefix(item.GUID, "https://news.ycombinator.com/item?id=") {
+		inlineKeyboardButtons = append(inlineKeyboardButtons, inlineKeyboardButton{
+			Text: "💬 Comments",
+			URL:  item.GUID,
+		})
+	}
+
+	if err := f.send(ctx, msg, func(args map[string]any) {
+		args["reply_markup"] = map[string]any{
+			"inline_keyboard": [][]inlineKeyboardButton{inlineKeyboardButtons},
+		}
+	}); err != nil {
+		log.Printf("sending %q to %q failed: %v", msg, f.chatID, err)
+	}
 }
 
 func shuffle[S any](s []S) []S {
@@ -426,7 +412,7 @@ func (f *fetcher) loadFromGist(ctx context.Context) error {
 	return nil
 }
 
-func (f *fetcher) fetch(ctx context.Context, url string) error {
+func (f *fetcher) fetch(ctx context.Context, url string) {
 	state, exists := f.getState(url)
 	// If we don't remember this feed, it's probably new. Set it's last update
 	// date to current so we don't get a lot of unread articles and trigger
@@ -437,12 +423,13 @@ func (f *fetcher) fetch(ctx context.Context, url string) error {
 
 	// Skip disabled feeds.
 	if state.Disabled {
-		return nil
+		return
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return err
+		f.handleFetchFailure(ctx, state, url, err)
+		return
 	}
 
 	req.Header.Set("User-Agent", userAgent)
@@ -455,21 +442,24 @@ func (f *fetcher) fetch(ctx context.Context, url string) error {
 
 	res, err := f.httpc.Do(req)
 	if err != nil {
-		return err
+		f.handleFetchFailure(ctx, state, url, err)
+		return
 	}
 	defer res.Body.Close()
 
 	// Ignore unmodified feeds and report an error otherwise.
 	if res.StatusCode == http.StatusNotModified {
-		return nil
+		return
 	}
 	if res.StatusCode != http.StatusOK {
-		return fmt.Errorf("want 200, got %d", res.StatusCode)
+		f.handleFetchFailure(ctx, state, url, fmt.Errorf("want 200, got %d", res.StatusCode))
+		return
 	}
 
 	feed, err := f.fp.Parse(res.Body)
 	if err != nil {
-		return err
+		f.handleFetchFailure(ctx, state, url, err)
+		return
 	}
 
 	state.ETag = res.Header.Get("ETag")
@@ -501,8 +491,19 @@ func (f *fetcher) fetch(ctx context.Context, url string) error {
 	state.ErrorCount = 0
 	state.LastError = ""
 	state.CachedTitle = feed.Title
+}
 
-	return nil
+func (f *fetcher) handleFetchFailure(ctx context.Context, state *feedState, url string, err error) {
+	state.ErrorCount += 1
+	state.LastError = err.Error()
+	// Complain loudly and disable feed, if we failed previously enough.
+	if state.ErrorCount >= errorThreshold {
+		err = fmt.Errorf("fetching feed %q failed after %d previous attempts: %v; feed was disabled, to reenable it run 'tgfeed -reenable %q'", url, state.ErrorCount, err, url)
+		state.Disabled = true
+		if err := f.send(ctx, fmt.Sprintf(f.errorTemplate, html.EscapeString(err.Error())), disableLinkPreview); err != nil {
+			log.Printf("notifying about a disabled feed: %v", err)
+		}
+	}
 }
 
 func (f *fetcher) send(ctx context.Context, message string, modify func(args map[string]any)) error {
