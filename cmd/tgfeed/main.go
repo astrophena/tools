@@ -154,151 +154,6 @@ func main() {
 	}
 }
 
-type fetcher struct {
-	initOnce sync.Once
-
-	httpc *http.Client
-	fp    *gofeed.Parser
-
-	gistID  string
-	ghToken string
-
-	feeds   []string
-	chatID  string
-	tgToken string
-
-	errorTemplate string
-
-	mu    sync.Mutex
-	state map[string]*feedState
-
-	updates chan *gofeed.Item
-}
-
-type feedState struct {
-	LastModified time.Time `json:"last_modified"`
-	LastUpdated  time.Time `json:"last_updated"`
-	ETag         string    `json:"etag"`
-	Disabled     bool      `json:"disabled"`
-	ErrorCount   int       `json:"error_count"`
-	LastError    string    `json:"last_error"`
-	CachedTitle  string    `json:"cached_title"`
-
-	// Special flags. Not covered by tests or any common sense.
-
-	// Only return updates matching this list of categories.
-	FilteredCategories []string `json:"filtered_categories"`
-}
-
-func (f *fetcher) doInit() {
-	f.fp = gofeed.NewParser()
-	f.fp.UserAgent = userAgent
-	f.fp.Client = f.httpc
-
-	if f.errorTemplate == "" {
-		f.errorTemplate = defaultErrorTemplate
-	}
-
-	f.updates = make(chan *gofeed.Item)
-}
-
-func (f *fetcher) getState(url string) (state *feedState, exists bool) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	state, exists = f.state[url]
-	return
-}
-
-func (f *fetcher) run(ctx context.Context) error {
-	if err := f.loadFromGist(ctx); err != nil {
-		return fmt.Errorf("fetching gist failed: %w", err)
-	}
-	f.initOnce.Do(f.doInit)
-
-	// Start sending goroutine.
-	go func() {
-		for {
-			select {
-			case item, valid := <-f.updates:
-				if !valid {
-					return
-				}
-				f.sendUpdate(ctx, item)
-			case <-ctx.Done():
-				return
-			}
-		}
-	}()
-
-	// Enqueue fetches.
-	lwg := syncutil.NewLimitedWaitGroup(concurrencyLimit)
-	for _, url := range shuffle(f.feeds) {
-		lwg.Add(1)
-		go func(url string) {
-			defer lwg.Done()
-			f.fetch(ctx, url)
-		}(url)
-	}
-
-	// Wait for all fetches to complete.
-	lwg.Wait()
-	// Stop sending goroutine.
-	close(f.updates)
-
-	// Easter egg, for god's sake!
-	now := time.Now()
-	if !testing.Testing() && now.Month() == time.June && now.Day() == 10 && now.Hour() < 8 {
-		f.makeTelegramRequest(ctx, "sendVideo", map[string]any{
-			"chat_id": f.chatID,
-			"video":   "https://astrophena.name/lol.mp4",
-			"caption": "🎂",
-		})
-	}
-
-	slices.Sort(f.feeds)
-	return f.saveToGist(ctx)
-}
-
-func (f *fetcher) sendUpdate(ctx context.Context, item *gofeed.Item) {
-	title := item.Title
-	if item.Title == "" {
-		title = item.Link
-	}
-
-	msg := fmt.Sprintf(
-		`<a href="%[1]s">%[2]s</a>`,
-		item.Link,
-		html.EscapeString(title),
-	)
-
-	inlineKeyboardButtons := []inlineKeyboardButton{}
-
-	// hnrss.org feeds have Hacker News entry URL set as GUID. Also send it
-	// because I often read comments on Hacker News entries.
-	if strings.HasPrefix(item.GUID, "https://news.ycombinator.com/item?id=") {
-		inlineKeyboardButtons = append(inlineKeyboardButtons, inlineKeyboardButton{
-			Text: "💬 Comments",
-			URL:  item.GUID,
-		})
-	}
-
-	if err := f.send(ctx, msg, func(args map[string]any) {
-		args["reply_markup"] = map[string]any{
-			"inline_keyboard": [][]inlineKeyboardButton{inlineKeyboardButtons},
-		}
-	}); err != nil {
-		log.Printf("sending %q to %q failed: %v", msg, f.chatID, err)
-	}
-}
-
-func shuffle[S any](s []S) []S {
-	s2 := slices.Clone(s)
-	rand.Shuffle(len(s2), func(i, j int) {
-		s2[i], s2[j] = s2[j], s2[i]
-	})
-	return s2
-}
-
 func (f *fetcher) reenable(ctx context.Context, url string) error {
 	if err := f.loadFromGist(ctx); err != nil {
 		return err
@@ -375,6 +230,152 @@ func (f *fetcher) unsubscribe(ctx context.Context, url string) error {
 	})
 	delete(f.state, url)
 	return f.saveToGist(ctx)
+}
+
+type fetcher struct {
+	initOnce sync.Once
+
+	httpc *http.Client
+	fp    *gofeed.Parser
+
+	gistID  string
+	ghToken string
+
+	feeds   []string
+	chatID  string
+	tgToken string
+
+	errorTemplate string
+
+	mu    sync.Mutex
+	state map[string]*feedState
+
+	updates chan *gofeed.Item
+}
+
+type feedState struct {
+	LastModified time.Time `json:"last_modified"`
+	LastUpdated  time.Time `json:"last_updated"`
+	ETag         string    `json:"etag"`
+	Disabled     bool      `json:"disabled"`
+	ErrorCount   int       `json:"error_count"`
+	LastError    string    `json:"last_error"`
+	CachedTitle  string    `json:"cached_title"`
+
+	// Special flags. Not covered by tests or any common sense.
+
+	// Only return updates matching this list of categories.
+	FilteredCategories []string `json:"filtered_categories"`
+}
+
+func (f *fetcher) doInit() {
+	f.fp = gofeed.NewParser()
+	f.fp.UserAgent = userAgent
+	f.fp.Client = f.httpc
+
+	if f.errorTemplate == "" {
+		f.errorTemplate = defaultErrorTemplate
+	}
+}
+
+func (f *fetcher) run(ctx context.Context) error {
+	if err := f.loadFromGist(ctx); err != nil {
+		return fmt.Errorf("fetching gist failed: %w", err)
+	}
+	f.initOnce.Do(f.doInit)
+
+	// Recreate updates channel on each fetch.
+	f.updates = make(chan *gofeed.Item)
+
+	// Start sending goroutine.
+	go func() {
+		for {
+			select {
+			case item, valid := <-f.updates:
+				if !valid {
+					return
+				}
+				f.sendUpdate(ctx, item)
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
+	// Enqueue fetches.
+	lwg := syncutil.NewLimitedWaitGroup(concurrencyLimit)
+	for _, url := range shuffle(f.feeds) {
+		lwg.Add(1)
+		go func(url string) {
+			defer lwg.Done()
+			f.fetch(ctx, url)
+		}(url)
+	}
+
+	// Wait for all fetches to complete.
+	lwg.Wait()
+	// Stop sending goroutine.
+	close(f.updates)
+
+	// Easter egg, for god's sake!
+	now := time.Now()
+	if !testing.Testing() && now.Month() == time.June && now.Day() == 10 && now.Hour() < 8 {
+		f.makeTelegramRequest(ctx, "sendVideo", map[string]any{
+			"chat_id": f.chatID,
+			"video":   "https://astrophena.name/lol.mp4",
+			"caption": "🎂",
+		})
+	}
+
+	slices.Sort(f.feeds)
+	return f.saveToGist(ctx)
+}
+
+func shuffle[S any](s []S) []S {
+	s2 := slices.Clone(s)
+	rand.Shuffle(len(s2), func(i, j int) {
+		s2[i], s2[j] = s2[j], s2[i]
+	})
+	return s2
+}
+
+func (f *fetcher) sendUpdate(ctx context.Context, item *gofeed.Item) {
+	title := item.Title
+	if item.Title == "" {
+		title = item.Link
+	}
+
+	msg := fmt.Sprintf(
+		`<a href="%[1]s">%[2]s</a>`,
+		item.Link,
+		html.EscapeString(title),
+	)
+
+	inlineKeyboardButtons := []inlineKeyboardButton{}
+
+	// hnrss.org feeds have Hacker News entry URL set as GUID. Also send it
+	// because I often read comments on Hacker News entries.
+	if strings.HasPrefix(item.GUID, "https://news.ycombinator.com/item?id=") {
+		inlineKeyboardButtons = append(inlineKeyboardButtons, inlineKeyboardButton{
+			Text: "💬 Comments",
+			URL:  item.GUID,
+		})
+	}
+
+	if err := f.send(ctx, msg, func(args map[string]any) {
+		args["reply_markup"] = map[string]any{
+			"inline_keyboard": [][]inlineKeyboardButton{inlineKeyboardButtons},
+		}
+	}); err != nil {
+		log.Printf("sending %q to %q failed: %v", msg, f.chatID, err)
+	}
+}
+
+func (f *fetcher) getState(url string) (state *feedState, exists bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	state, exists = f.state[url]
+	return
 }
 
 type gist struct {
