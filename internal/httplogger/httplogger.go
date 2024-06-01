@@ -2,10 +2,10 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package httplogger provides a http.RoundTripper middleware that logs HTTP
+// Package httplogger provides a [http.RoundTripper] middleware that logs HTTP
 // requests and responses.
 //
-// It wraps an existing http.RoundTripper and logs information about each
+// It wraps an existing [http.RoundTripper] and logs information about each
 // request and response, including the start time, URL, method, status code (if
 // available), and any errors. The logs are formatted with timestamps and
 // indentation to visually represent the nesting of requests.
@@ -17,14 +17,13 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"go.astrophena.name/tools/internal/logger"
 )
 
-// Logf is a simple printf-like logging function.
-type Logf func(format string, args ...any)
-
-// New creates a new http.RoundTripper that logs information about HTTP requests
+// New creates a new [http.RoundTripper] that logs information about HTTP requests
 // and responses.
-func New(t http.RoundTripper, logf Logf) http.RoundTripper {
+func New(t http.RoundTripper, logf logger.Logf) http.RoundTripper {
 	if logf == nil {
 		logf = log.Printf
 	}
@@ -34,7 +33,7 @@ func New(t http.RoundTripper, logf Logf) http.RoundTripper {
 type loggingTransport struct {
 	transport http.RoundTripper
 	mu        sync.Mutex
-	logf      Logf
+	logf      logger.Logf
 	active    []byte
 }
 
