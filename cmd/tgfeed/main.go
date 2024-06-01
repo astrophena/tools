@@ -1,5 +1,5 @@
 /*
-Tgfeed fetches RSS feeds and sends new articles via Telegram.
+tgfeed fetches RSS feeds and sends new articles via Telegram.
 
 # How it works?
 
