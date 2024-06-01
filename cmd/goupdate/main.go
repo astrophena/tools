@@ -46,7 +46,7 @@ func main() {
 	}
 
 	// Update Go version in go.mod.
-	modFile.Go.Version = curGoVersion
+	modFile.AddGoStmt(curGoVersion)
 	ub, err := modFile.Format()
 	if err != nil {
 		log.Fatalf("Failed to format updated go.mod: %v", err)
@@ -60,6 +60,7 @@ func main() {
 	run("git", "checkout", "-b", branch)
 	run("git", "add", "go.mod")
 	run("git", "commit", "-m", "go.mod: update to "+curGoVersion)
+	run("git", "push", "origin", branch)
 	run("gh", "pr", "create", "-f")
 }
 
