@@ -1,4 +1,4 @@
-// cmdtop displays the top of most used commands in bash history.
+// Cmdtop displays the top of most used commands in bash history.
 package main
 
 import (

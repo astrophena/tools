@@ -1,4 +1,4 @@
-// dupfind finds duplicate files in a directory.
+// Dupfind finds duplicate files in a directory.
 package main
 
 import (
