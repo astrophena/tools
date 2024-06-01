@@ -249,8 +249,6 @@ type fetcher struct {
 
 	mu    sync.Mutex
 	state map[string]*feedState
-
-	updates chan *gofeed.Item
 }
 
 type feedState struct {
@@ -285,13 +283,13 @@ func (f *fetcher) run(ctx context.Context) error {
 	f.initOnce.Do(f.doInit)
 
 	// Recreate updates channel on each fetch.
-	f.updates = make(chan *gofeed.Item)
+	updates := make(chan *gofeed.Item)
 
 	// Start sending goroutine.
 	go func() {
 		for {
 			select {
-			case item, valid := <-f.updates:
+			case item, valid := <-updates:
 				if !valid {
 					return
 				}
@@ -308,14 +306,14 @@ func (f *fetcher) run(ctx context.Context) error {
 		lwg.Add(1)
 		go func(url string) {
 			defer lwg.Done()
-			f.fetch(ctx, url)
+			f.fetch(ctx, url, updates)
 		}(url)
 	}
 
 	// Wait for all fetches to complete.
 	lwg.Wait()
 	// Stop sending goroutine.
-	close(f.updates)
+	close(updates)
 
 	// Easter egg, for god's sake!
 	now := time.Now()
@@ -412,7 +410,7 @@ func (f *fetcher) loadFromGist(ctx context.Context) error {
 	return nil
 }
 
-func (f *fetcher) fetch(ctx context.Context, url string) {
+func (f *fetcher) fetch(ctx context.Context, url string, updates chan *gofeed.Item) {
 	state, exists := f.getState(url)
 	// If we don't remember this feed, it's probably new. Set it's last update
 	// date to current so we don't get a lot of unread articles and trigger
@@ -485,7 +483,7 @@ func (f *fetcher) fetch(ctx context.Context, url string) {
 		if strings.Contains(item.Description, "#реклама") {
 			continue
 		}
-		f.updates <- item
+		updates <- item
 	}
 	state.LastUpdated = time.Now()
 	state.ErrorCount = 0
