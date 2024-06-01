@@ -57,8 +57,8 @@ func main() {
 
 	// Create a pull request.
 	branch := "go-update-" + curGoVersion
-	run("git", "config", "user.name", "GitHub Actions")
-	run("git", "config", "user.email", "actions@github.com")
+	run("git", "config", "user.name", "github-actions[bot]")
+	run("git", "config", "user.email", "41898282+github-actions[bot]@users.noreply.github.com")
 	run("git", "checkout", "-b", branch)
 	run("git", "add", "go.mod")
 	run("git", "commit", "-m", "go.mod: update to "+curGoVersion)
