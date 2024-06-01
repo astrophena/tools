@@ -1,4 +1,4 @@
-// Goupdate checks the Go version specified in the go.mod file of a Go project,
+// goupdate checks the Go version specified in the go.mod file of a Go project,
 // updates it to the latest Go version if it is outdated, and creates a GitHub
 // pull request with the updated go.mod file.
 package main
