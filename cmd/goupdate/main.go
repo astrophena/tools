@@ -6,6 +6,7 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"flag"
 	"io"
 	"log"
 	"net/http"
@@ -20,6 +21,7 @@ import (
 
 func main() {
 	cli.SetDescription("goupdate updates the Go version in go.mod file.")
+	flag.Func("C", "Change to `dir` at startup.", os.Chdir)
 	cli.HandleStartup()
 
 	// Read go.mod and obtain it's Go version.
@@ -57,7 +59,7 @@ func main() {
 	branch := "go-update-" + curGoVersion
 	run("git", "checkout", "-b", branch)
 	run("git", "add", "go.mod")
-	run("git", "commit", "go.mod: update to "+curGoVersion)
+	run("git", "commit", "-m", "go.mod: update to "+curGoVersion)
 	run("gh", "pr", "create", "-f")
 }
 
