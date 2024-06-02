@@ -416,6 +416,10 @@ func (f *fetcher) fetch(ctx context.Context, url string, updates chan *gofeed.It
 	// date to current so we don't get a lot of unread articles and trigger
 	// Telegram Bot API rate limit.
 	if !exists {
+		f.mu.Lock()
+		f.state[url] = new(feedState)
+		state = f.state[url]
+		f.mu.Unlock()
 		state.LastUpdated = time.Now()
 	}
 
