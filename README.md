@@ -6,7 +6,6 @@ This repository holds personal tools:
 - renamer renames files sequentially.
 - starlet implements a Telegram bot written in [Starlark] language.
 - tgfeed fetches RSS feeds and sends new articles via Telegram.
-- 
 
 Install them:
 
