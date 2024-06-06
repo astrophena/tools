@@ -4,57 +4,142 @@
 package main
 
 import (
+	_ "embed"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"strings"
+	"time"
 
 	"go.astrophena.name/tools/internal/cli"
 	"go.astrophena.name/tools/internal/web"
 
-	"go.starlark.net/lib/json"
-	"go.starlark.net/lib/time"
+	starlarkjson "go.starlark.net/lib/json"
+	starlarktime "go.starlark.net/lib/time"
 	"go.starlark.net/starlark"
 )
 
+//go:embed bot.star
+var bot []byte
+
 func main() {
-	var (
-		addr = flag.String("addr", "localhost:3000", "Listen on `host:port or Unix socket`.")
+	addr := flag.String(
+		"addr", "localhost:3000",
+		"Listen on `host:port or Unix socket`. Can be overridden by PORT environment variable.",
+	)
+	tgToken := flag.String(
+		"tg-token", "",
+		"Telegram Bot API `token`. Can be overridden by TG_TOKEN environment variable.",
 	)
 	cli.HandleStartup()
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", handle)
+	if port := os.Getenv("PORT"); port != "" {
+		*addr = "0.0.0.0:" + port
+	}
+	if tok := os.Getenv("TG_TOKEN"); tok != "" {
+		*tgToken = tok
+	}
+
+	e := &engine{
+		tgToken: *tgToken,
+		httpc: &http.Client{
+			Timeout: 10 * time.Second,
+		},
+		mux: http.NewServeMux(),
+	}
+	e.mux.HandleFunc("POST /telegram/{token}", e.handleTelegramWebhook)
 
 	web.ListenAndServe(&web.ListenAndServeConfig{
-		Mux:  mux,
-		Addr: *addr,
+		Mux:        e.mux,
+		Addr:       *addr,
+		Debuggable: !isProd(),
 	})
 }
 
-func handle(w http.ResponseWriter, r *http.Request) {
-	rawUpdate, err := io.ReadAll(r.Body)
-	if err != nil {
-		errorf(w, err)
+// https://docs.render.com/environment-variables
+func isProd() bool { return os.Getenv("RENDER") == "true" }
+
+type engine struct {
+	tgToken string
+
+	httpc *http.Client
+	mux   *http.ServeMux
+}
+
+func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
+	if token := r.PathValue("token"); token != e.tgToken {
+		web.NotFound(w, r)
 		return
 	}
+
+	rawUpdate, err := io.ReadAll(r.Body)
+	if err != nil {
+		web.Error(w, r, err)
+		return
+	}
+
 	predeclared := starlark.StringDict{
 		"raw_update": starlark.String(rawUpdate),
-		"time":       time.Module,
-		"json":       json.Module,
+		"time":       starlarktime.Module,
+		"json":       starlarkjson.Module,
+		"call":       starlark.NewBuiltin("call", e.call),
 	}
-	_, err = starlark.ExecFile(&starlark.Thread{}, "bot.star", nil, predeclared)
+
+	_, err = starlark.ExecFile(&starlark.Thread{}, "bot.star", bot, predeclared)
 	if err != nil {
 		if evalErr, ok := err.(*starlark.EvalError); ok {
-			errorf(w, evalErr.Backtrace())
+			web.Error(w, r, errors.New(evalErr.Backtrace()))
 			return
 		}
-		errorf(w, err)
+		web.Error(w, r, err)
 		return
 	}
 }
 
-func errorf(w http.ResponseWriter, arg any) {
-	w.WriteHeader(http.StatusInternalServerError)
-	fmt.Fprintln(w, arg)
+func (e *engine) call(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	if len(args) > 0 {
+		return starlark.None, fmt.Errorf("call: unexpected positional arguments")
+	}
+	var (
+		method   starlark.String
+		argsDict *starlark.Dict
+	)
+	if err := starlark.UnpackArgs("call", args, kwargs, "method", &method, "args", &argsDict); err != nil {
+		return starlark.None, err
+	}
+
+	encode := starlarkjson.Module.Members["encode"]
+	val, err := starlark.Call(thread, encode, starlark.Tuple{args}, []starlark.Tuple{})
+	if err != nil {
+		return starlark.None, err
+	}
+	str, ok := val.(starlark.String)
+	if !ok {
+		panic("call: unexpected return type of json.encode Starlark function")
+	}
+
+	req, err := http.NewRequest(http.MethodPost, "https://api.telegram.org/bot"+e.tgToken+"/"+string(method), strings.NewReader(string(str)))
+	if err != nil {
+		return starlark.None, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	res, err := e.httpc.Do(req)
+	if err != nil {
+		return starlark.None, err
+	}
+	defer res.Body.Close()
+
+	bs, err := io.ReadAll(res.Body)
+	if err != nil {
+		return starlark.None, err
+	}
+	if res.StatusCode != http.StatusOK {
+		return starlark.None, fmt.Errorf("want 200, got %d: %s", res.StatusCode, bs)
+	}
+
+	return starlark.None, nil
 }

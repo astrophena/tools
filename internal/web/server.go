@@ -34,6 +34,8 @@ type ListenAndServeConfig struct {
 	// AfterShutdown specifies an optional callback function that is called when
 	// the server was shut down.
 	AfterShutdown func()
+	// Debuggable specifies whether to register debug handlers at /debug/.
+	Debuggable bool
 }
 
 func (c *ListenAndServeConfig) fatalf(format string, args ...any) {
@@ -77,7 +79,9 @@ func ListenAndServe(c *ListenAndServeConfig) {
 		http.ServeContent(w, r, "style.css", time.Time{}, bytes.NewReader(style))
 	})
 	Health(c.Mux)
-	Debugger(c.Mux)
+	if c.Debuggable {
+		Debugger(c.Mux)
+	}
 	s := &http.Server{Handler: c.Mux}
 	go func() {
 		if err := s.Serve(l); err != nil {
