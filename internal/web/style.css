@@ -1,0 +1,377 @@
+/*
+ *
+ * Based on Simple.css (https://simplecss.org)
+ *
+ * MIT License
+ *
+ * Copyright (c) 2020 Simple.css (Kev Quirk)
+ *
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy
+ * of this software and associated documentation files (the
+ * "Software"), to deal
+ * in the Software without restriction, including without limitation
+ * the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell
+ * copies of the Software, and to permit persons to whom the Software
+ * is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ * MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+ * SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+ * OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ * ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+ * DEALINGS IN THE
+ * SOFTWARE.
+ *
+*/
+
+/* Set the global variables for everything. */
+:root {
+  --sans-font: apple-system, BlinkMacSystemFont, avenir next, avenir,
+    'Nimbus Sans L', roboto, noto, segoe ui, arial, helvetica, helvetica neue,
+    sans-serif;
+  --mono-font: monospace;
+  --bg: #000000;
+  --accent-bg: #2b2b2b;
+  --text: #ababab;
+  --text-light: #808080;
+  --border: #666;
+  --accent: #b2c6e6;
+  --accent-light: #ffecb3;
+  --code: #ababab;
+}
+
+/* Set the font globally. */
+* {
+  font-family: var(--sans-font);
+}
+
+body {
+  color: var(--text);
+  background: var(--bg);
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+main {
+  margin: 0 auto;
+  max-width: 600px;
+}
+
+header {
+  padding: 1.5rem 15rem;
+  padding-bottom: 0.67rem;
+  margin-bottom: -1.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* Hide the scrollbar in navigation. */
+
+header nav {
+  /* See https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_Scrollbars#scrollbar-width. */
+  scrollbar-width: none; /* Firefox */
+}
+
+header nav::-webkit-scrollbar {
+  /* See https://developer.mozilla.org/en-US/docs/Web/CSS/::-webkit-scrollbar#-webkit-scrollbar. */
+  display: none; /* Chrome & friends */
+}
+
+/* Remove header padding and change bottom margin on smaller screens. */
+@media only screen and (max-width: 1200px) {
+  header {
+    padding: 1rem 0rem 0rem 0rem;
+    margin-bottom: -1rem;
+    margin-left: 10px;
+  }
+}
+
+/* Remove margins for header text. */
+header h1,
+header p {
+  margin: 0;
+}
+
+/* Format navigation. */
+nav {
+  font-size: 1rem;
+  white-space: nowrap;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  line-height: 2;
+  padding: 1rem 0;
+}
+
+nav a {
+  margin: 0 1rem 0 0;
+  color: var(--text) !important;
+  display: inline-block;
+  padding: 0.1rem 1rem;
+  text-decoration: none;
+}
+
+nav a:hover {
+  color: var(--accent) !important;
+  border-color: var(--accent);
+}
+
+nav a.current:hover {
+  text-decoration: none;
+}
+
+footer {
+  padding: 1rem 1rem 1.5rem 1rem;
+  color: var(--text-light);
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+/* Format links and buttons. */
+
+a,
+a:visited {
+  color: var(--accent);
+}
+
+a:hover {
+  text-decoration: none;
+}
+
+/* Format the expanding box. */
+
+details {
+  padding: 0.6rem 1rem;
+  background: var(--accent-bg);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  margin-bottom: 1rem;
+  overflow: auto;
+}
+
+summary {
+  cursor: pointer;
+  font-weight: bold;
+}
+
+details[open] {
+  padding-bottom: 0.75rem;
+}
+
+details[open] summary {
+  margin-bottom: 0.5rem;
+}
+
+details[open] > *:last-child {
+  margin-bottom: 0;
+}
+
+/* Format tables. */
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1.5rem 0;
+  overflow-x: auto;
+}
+
+td,
+th {
+  border: 1px solid var(--border);
+  text-align: left;
+  padding: 0.5rem;
+}
+
+th {
+  background: var(--accent-bg);
+  font-weight: bold;
+}
+
+tr:nth-child(even) {
+  /* Set every other cell slightly darker. Improves readability. */
+  background: var(--accent-bg);
+}
+
+table caption {
+  font-weight: bold;
+  margin-bottom: 0.5rem;
+}
+
+/* Lists. */
+ol,
+ul {
+  padding-left: 3rem;
+}
+
+/* Misc body elements. */
+
+hr {
+  color: var(--border);
+  border-top: 1px;
+  margin: 1rem auto;
+}
+
+mark {
+  padding: 3px 6px;
+  background: var(--accent-light);
+}
+
+figure {
+  margin: 0;
+}
+
+figure img {
+  display: block;
+  border-radius: 5px;
+  margin-left: auto;
+  margin-right: auto;
+  margin-bottom: 0.5rem;
+  width: 50%;
+}
+
+figcaption {
+  font-size: 0.9rem;
+  color: var(--text-light);
+  text-align: center;
+  margin-bottom: 1rem;
+}
+
+blockquote {
+  margin: 2rem 0 2rem 2rem;
+  padding: 0.4rem 0.8rem;
+  border-left: 0.35rem solid var(--accent);
+  opacity: 0.8;
+  font-style: italic;
+}
+
+cite {
+  font-size: 0.9rem;
+  color: var(--text-light);
+  font-style: normal;
+}
+
+/* Use mono font for code like elements. */
+
+code,
+pre,
+kbd,
+samp {
+  font-family: var(--mono-font);
+  color: var(--code);
+}
+
+kbd {
+  border: 1px solid var(--code);
+  border-bottom: 3px solid var(--code);
+  border-radius: 5px;
+  padding: 0.1rem;
+}
+
+pre {
+  padding: 1rem 1.4rem;
+  max-width: 100%;
+  overflow: auto;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+}
+
+/* Fix embedded code within pre. */
+pre code {
+  color: var(--text);
+  background: none;
+  margin: 0;
+  padding: 0;
+}
+pre span {
+  font-family: var(--mono-font);
+}
+
+/* Make tap targets larger. */
+li {
+  margin: 8px;
+}
+
+/* Link to the blog entry. */
+.post-link a {
+  line-height: 1;
+}
+
+/* Blog entry publication date. */
+.meta {
+  color: var(--text-light);
+  font-size: 1rem;
+  margin-top: -1rem;
+}
+
+.icon {
+  width: 24px;
+  height: 24px;
+  vertical-align: middle;
+  display: inline-block;
+  padding-right: 2px;
+  padding-bottom: 4px;
+}
+
+/* Current link in a header. */
+nav a.current {
+  color: var(--accent) !important;
+  border-color: var(--accent);
+}
+
+/* Don't underline header links. */
+header a {
+  text-decoration: none;
+}
+
+/* Avatar in a header. */
+.avatar {
+  vertical-align: text-bottom;
+  width: 40px;
+  height: 40px;
+}
+
+/* Alert box. */
+.alert {
+  background-color: #871f22;
+  border-radius: 5px;
+  color: #fff;
+  display: block;
+  margin: 10px 0;
+  padding: 10px 0;
+  text-align: center;
+}
+
+.alert a {
+  color: #fff;
+}
+
+/* Make headings overflow. */
+h1 {
+  overflow: auto;
+}
+
+/* Vanity import styles. */
+
+span.module {
+  border: .0625rem solid var(--border);
+  color: var(--text);
+  font-size: .75rem;
+  padding: .125rem .625rem;
+  vertical-align: middle;
+}
