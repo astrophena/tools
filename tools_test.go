@@ -1,5 +1,6 @@
 package tools
 
+//go:generate go run gendocs.go
 //go:generate ./genreadme.sh
 
 import (

@@ -97,7 +97,6 @@ func main() {
 		subscribe   = flag.String("subscribe", "", "Subscribe to a `feed`.")
 		unsubscribe = flag.String("unsubscribe", "", "Unsubscribe from a `feed`.")
 	)
-	cli.SetDescription("tgfeed fetches RSS feeds and sends new articles via Telegram.")
 	cli.SetArgsUsage("[flags]")
 	cli.HandleStartup()
 

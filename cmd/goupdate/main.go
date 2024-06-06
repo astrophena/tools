@@ -20,7 +20,6 @@ import (
 )
 
 func main() {
-	cli.SetDescription("goupdate updates the Go version in go.mod file.")
 	flag.Func("C", "Change to `dir` at startup.", os.Chdir)
 	cli.HandleStartup()
 

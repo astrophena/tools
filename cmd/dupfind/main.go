@@ -15,7 +15,6 @@ import (
 )
 
 func main() {
-	cli.SetDescription("dupfind finds duplicate files in a directory.")
 	cli.SetArgsUsage("[dir]")
 	cli.HandleStartup()
 

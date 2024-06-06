@@ -18,7 +18,6 @@ import (
 )
 
 func main() {
-	cli.SetDescription("starlet is a Telegram bot engine.")
 	var (
 		addr = flag.String("addr", "localhost:3000", "Listen on `host:port or Unix socket`.")
 	)

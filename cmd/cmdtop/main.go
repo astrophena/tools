@@ -18,7 +18,6 @@ import (
 )
 
 func main() {
-	cli.SetDescription("cmdtop displays the top of most used commands in bash history.")
 	cli.SetArgsUsage("[num] [flags]")
 	cli.HandleStartup()
 

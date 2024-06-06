@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"strings"
 	"sync/atomic"
 
 	"go.astrophena.name/tools/internal/version"
@@ -65,7 +66,7 @@ func HandleStartup() {
 func usage() {
 	fmt.Fprintf(os.Stderr, "Usage: %s %s\n\n", version.CmdName(), opts.argsUsage)
 	if opts.description != "" {
-		fmt.Fprintf(os.Stderr, "%s\n\n", opts.description)
+		fmt.Fprintf(os.Stderr, "%s\n\n", strings.TrimSpace(opts.description))
 	}
 	fmt.Fprint(os.Stderr, "Available flags:\n\n")
 	flag.PrintDefaults()

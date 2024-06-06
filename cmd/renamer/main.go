@@ -16,7 +16,6 @@ import (
 )
 
 func main() {
-	cli.SetDescription("renamer renames files sequentially.")
 	var (
 		dir   = flag.String("dir", ".", "Modify files in `path`.")
 		start = flag.Int("start", 1, "Start from `number`.")
