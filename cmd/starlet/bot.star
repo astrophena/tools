@@ -1,5 +1,3 @@
-# vim: ft=python
-
 def send_message(to, text):
     call(
             method = "sendMessage",
