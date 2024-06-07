@@ -34,6 +34,10 @@ func main() {
 		"tg-token", "",
 		"Telegram Bot API `token`. Can be overridden by TG_TOKEN environment variable.",
 	)
+	tgSecret := flag.String(
+		"tg-secret", "",
+		"Secret `token` used to validate Telegram Bot API updates. Can be overridden by TG_SECRET environment variable.",
+	)
 	cli.HandleStartup()
 
 	if port := os.Getenv("PORT"); port != "" {
@@ -42,15 +46,19 @@ func main() {
 	if tok := os.Getenv("TG_TOKEN"); tok != "" {
 		*tgToken = tok
 	}
+	if secret := os.Getenv("TG_SECRET"); secret != "" {
+		*tgSecret = secret
+	}
 
 	e := &engine{
-		tgToken: *tgToken,
+		tgToken:  *tgToken,
+		tgSecret: *tgSecret,
 		httpc: &http.Client{
 			Timeout: 10 * time.Second,
 		},
 		mux: http.NewServeMux(),
 	}
-	e.mux.HandleFunc("POST /telegram/{token}", e.handleTelegramWebhook)
+	e.mux.HandleFunc("POST /telegram", e.handleTelegramWebhook)
 
 	web.ListenAndServe(&web.ListenAndServeConfig{
 		Mux:        e.mux,
@@ -63,14 +71,15 @@ func main() {
 func isProd() bool { return os.Getenv("RENDER") == "true" }
 
 type engine struct {
-	tgToken string
+	tgToken  string
+	tgSecret string
 
 	httpc *http.Client
 	mux   *http.ServeMux
 }
 
 func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
-	if token := r.PathValue("token"); token != e.tgToken {
+	if r.Header.Get("X-Telegram-Bot-Api-Secret-Token") != e.tgSecret {
 		web.NotFound(w, r)
 		return
 	}
