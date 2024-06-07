@@ -121,7 +121,7 @@ func (e *engine) call(thread *starlark.Thread, b *starlark.Builtin, args starlar
 	}
 
 	encode := starlarkjson.Module.Members["encode"]
-	val, err := starlark.Call(thread, encode, starlark.Tuple{args}, []starlark.Tuple{})
+	val, err := starlark.Call(thread, encode, starlark.Tuple{argsDict}, []starlark.Tuple{})
 	if err != nil {
 		return starlark.None, err
 	}
