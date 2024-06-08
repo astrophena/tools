@@ -25,7 +25,7 @@ type Info struct {
 func (i Info) String() string {
 	var sb strings.Builder
 
-	sb.WriteString(i.Short() + "\n")
+	sb.WriteString(i.Short() + " (" + i.Go + ", " + i.OS + "/" + i.Arch + ")")
 	if i.Commit != "" && i.BuiltAt != "" {
 		if !strings.Contains(i.Short(), i.Commit) {
 			sb.WriteString("commit " + i.Commit + "\n")
@@ -42,7 +42,7 @@ func (i Info) Short() string {
 	if ver == "devel" && i.Commit != "" {
 		ver = i.Commit
 	}
-	return CmdName() + " " + ver + " (" + i.Go + ", " + i.OS + "/" + i.Arch + ")"
+	return CmdName() + " " + ver
 }
 
 var (

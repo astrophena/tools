@@ -4,17 +4,19 @@
 package main
 
 import (
+	"context"
 	_ "embed"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
-	"strings"
 	"time"
 
 	"go.astrophena.name/tools/internal/cli"
+	"go.astrophena.name/tools/internal/httputil"
 	"go.astrophena.name/tools/internal/web"
 
 	starlarkjson "go.starlark.net/lib/json"
@@ -94,7 +96,7 @@ func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 		"raw_update": starlark.String(rawUpdate),
 		"time":       starlarktime.Module,
 		"json":       starlarkjson.Module,
-		"call":       starlark.NewBuiltin("call", e.call),
+		"call":       starlark.NewBuiltin("call", e.callFunc(r.Context())),
 	}
 
 	_, err = starlark.ExecFile(&starlark.Thread{}, "bot.star", bot, predeclared)
@@ -108,47 +110,40 @@ func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (e *engine) call(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	if len(args) > 0 {
-		return starlark.None, fmt.Errorf("call: unexpected positional arguments")
-	}
-	var (
-		method   starlark.String
-		argsDict *starlark.Dict
-	)
-	if err := starlark.UnpackArgs("call", args, kwargs, "method", &method, "args", &argsDict); err != nil {
-		return starlark.None, err
-	}
+type starlarkBuiltin func(*starlark.Thread, *starlark.Builtin, starlark.Tuple, []starlark.Tuple) (starlark.Value, error)
 
-	encode := starlarkjson.Module.Members["encode"]
-	val, err := starlark.Call(thread, encode, starlark.Tuple{argsDict}, []starlark.Tuple{})
-	if err != nil {
-		return starlark.None, err
-	}
-	str, ok := val.(starlark.String)
-	if !ok {
-		panic("call: unexpected return type of json.encode Starlark function")
-	}
+func (e *engine) callFunc(ctx context.Context) starlarkBuiltin {
+	return func(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+		if len(args) > 0 {
+			return starlark.None, fmt.Errorf("call: unexpected positional arguments")
+		}
+		var (
+			method   starlark.String
+			argsDict *starlark.Dict
+		)
+		if err := starlark.UnpackArgs("call", args, kwargs, "method", &method, "args", &argsDict); err != nil {
+			return starlark.None, err
+		}
 
-	req, err := http.NewRequest(http.MethodPost, "https://api.telegram.org/bot"+e.tgToken+"/"+string(method), strings.NewReader(string(str)))
-	if err != nil {
-		return starlark.None, err
-	}
-	req.Header.Set("Content-Type", "application/json")
+		encode := starlarkjson.Module.Members["encode"]
+		val, err := starlark.Call(thread, encode, starlark.Tuple{argsDict}, []starlark.Tuple{})
+		if err != nil {
+			return starlark.None, err
+		}
+		str, ok := val.(starlark.String)
+		if !ok {
+			panic("call: unexpected return type of json.encode Starlark function")
+		}
 
-	res, err := e.httpc.Do(req)
-	if err != nil {
-		return starlark.None, err
-	}
-	defer res.Body.Close()
+		if _, err := httputil.MakeRequest[any](ctx, httputil.RequestParams{
+			Method:     http.MethodPost,
+			URL:        "https://api.telegram.org/bot" + e.tgToken + "/" + string(method),
+			Body:       json.RawMessage(str),
+			HTTPClient: e.httpc,
+		}); err != nil {
+			return starlark.None, err
+		}
 
-	bs, err := io.ReadAll(res.Body)
-	if err != nil {
-		return starlark.None, err
+		return starlark.None, nil
 	}
-	if res.StatusCode != http.StatusOK {
-		return starlark.None, fmt.Errorf("want 200, got %d: %s", res.StatusCode, bs)
-	}
-
-	return starlark.None, nil
 }

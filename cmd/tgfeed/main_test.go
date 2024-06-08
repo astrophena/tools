@@ -16,6 +16,7 @@ import (
 	"sync"
 	"testing"
 
+	"go.astrophena.name/tools/internal/gist"
 	"go.astrophena.name/tools/internal/httplogger"
 	"go.astrophena.name/tools/internal/testutil"
 	"go.astrophena.name/tools/internal/txtar"
@@ -120,7 +121,7 @@ func TestFailingFeed(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	updatedGist := testutil.UnmarshalJSON[*gist](t, tm.gist)
+	updatedGist := testutil.UnmarshalJSON[*gist.Gist](t, tm.gist)
 	stateJSON, ok := updatedGist.Files["state.json"]
 	if !ok {
 		t.Fatal("state.json has not found in updated gist")
@@ -150,7 +151,7 @@ func TestDisablingAndReenablingFailingFeed(t *testing.T) {
 	}
 
 	getState := func() map[string]feedState {
-		updatedGist := testutil.UnmarshalJSON[gist](t, tm.gist)
+		updatedGist := testutil.UnmarshalJSON[*gist.Gist](t, tm.gist)
 		stateJSON, ok := updatedGist.Files["state.json"]
 		if !ok {
 			t.Fatal("state.json has not found in updated gist")
@@ -208,7 +209,7 @@ func TestLoadFromGistHandleError(t *testing.T) {
 	})
 	f := testFetcher(t, tm)
 	err := f.loadFromGist(context.Background())
-	testutil.AssertEqual(t, err.Error(), fmt.Sprintf("want 200, got 404: %s", gistErrorJSON))
+	testutil.AssertEqual(t, err.Error(), fmt.Sprintf("GET \"https://api.github.com/gists/test\": want 200, got 404: %s", gistErrorJSON))
 }
 
 func readFile(t *testing.T, path string) []byte {
@@ -242,6 +243,7 @@ func testFetcher(t *testing.T, m *mux) *fetcher {
 	if os.Getenv("HTTPLOG") == "1" {
 		f.httpc.Transport = httplogger.New(f.httpc.Transport, t.Logf)
 	}
+	f.initOnce.Do(f.doInit)
 	return f
 }
 
@@ -315,12 +317,12 @@ func read(t *testing.T, r io.Reader) []byte {
 func txtarToGist(t *testing.T, b []byte) []byte {
 	ar := txtar.Parse(b)
 
-	g := &gist{
-		Files: make(map[string]*gistFile),
+	g := &gist.Gist{
+		Files: make(map[string]gist.File),
 	}
 
 	for _, f := range ar.Files {
-		g.Files[f.Name] = &gistFile{Content: string(f.Data)}
+		g.Files[f.Name] = gist.File{Content: string(f.Data)}
 	}
 
 	b, err := json.MarshalIndent(g, "", "  ")

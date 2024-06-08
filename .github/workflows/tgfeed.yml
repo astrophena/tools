@@ -21,4 +21,4 @@ jobs:
           GIST_ID: '${{ secrets.TGFEED_GIST_ID }}'
           GITHUB_TOKEN: '${{ secrets.TGFEED_GIST_TOKEN }}'
           TELEGRAM_TOKEN: '${{ secrets.TGFEED_TOKEN }}'
-        run: 'go run ./cmd/tgfeed'
+        run: 'go run -buildvcs ./cmd/tgfeed'

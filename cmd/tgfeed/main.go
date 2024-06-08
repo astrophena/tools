@@ -54,7 +54,6 @@ URLs of feeds that have encountered errors during fetching. For example:
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"flag"
@@ -74,7 +73,9 @@ import (
 	"time"
 
 	"go.astrophena.name/tools/internal/cli"
+	"go.astrophena.name/tools/internal/gist"
 	"go.astrophena.name/tools/internal/httplogger"
+	"go.astrophena.name/tools/internal/httputil"
 	"go.astrophena.name/tools/internal/syncutil"
 
 	"github.com/mmcdole/gofeed"
@@ -83,7 +84,6 @@ import (
 const (
 	defaultErrorTemplate = `❌ Something went wrong:
 <pre><code>%v</code></pre>`
-	userAgent        = "tgfeed (https://astrophena.name/bleep-bloop)"
 	ghAPI            = "https://api.github.com"
 	tgAPI            = "https://api.telegram.org"
 	errorThreshold   = 12 // failing continuously for four days will disable feed and complain loudly
@@ -147,7 +147,7 @@ func main() {
 
 	if err := f.run(ctx); err != nil {
 		if err := f.send(ctx, fmt.Sprintf(f.errorTemplate, html.EscapeString(err.Error())), disableLinkPreview); err != nil {
-			log.Printf("notifying about error failed: %v", err)
+			log.Printf("notifying about an error failed: %v", err)
 		}
 		log.Fatal(err)
 	}
@@ -239,6 +239,7 @@ type fetcher struct {
 
 	gistID  string
 	ghToken string
+	gistc   *gist.Client
 
 	feeds   []string
 	chatID  string
@@ -267,19 +268,21 @@ type feedState struct {
 
 func (f *fetcher) doInit() {
 	f.fp = gofeed.NewParser()
-	f.fp.UserAgent = userAgent
+	f.fp.UserAgent = httputil.UserAgent()
 	f.fp.Client = f.httpc
 
-	if f.errorTemplate == "" {
-		f.errorTemplate = defaultErrorTemplate
+	f.gistc = &gist.Client{
+		Token:      f.ghToken,
+		HTTPClient: f.httpc,
 	}
 }
 
 func (f *fetcher) run(ctx context.Context) error {
+	f.initOnce.Do(f.doInit)
+
 	if err := f.loadFromGist(ctx); err != nil {
 		return fmt.Errorf("fetching gist failed: %w", err)
 	}
-	f.initOnce.Do(f.doInit)
 
 	// Recreate updates channel on each fetch.
 	updates := make(chan *gofeed.Item)
@@ -375,16 +378,8 @@ func (f *fetcher) getState(url string) (state *feedState, exists bool) {
 	return
 }
 
-type gist struct {
-	Files map[string]*gistFile `json:"files"`
-}
-
-type gistFile struct {
-	Content string `json:"content"`
-}
-
 func (f *fetcher) loadFromGist(ctx context.Context) error {
-	g, err := f.makeGistRequest(ctx, http.MethodGet, nil)
+	g, err := f.gistc.Get(ctx, f.gistID)
 	if err != nil {
 		return err
 	}
@@ -392,6 +387,8 @@ func (f *fetcher) loadFromGist(ctx context.Context) error {
 	errorTemplate, ok := g.Files["error.tmpl"]
 	if ok {
 		f.errorTemplate = errorTemplate.Content
+	} else {
+		f.errorTemplate = defaultErrorTemplate
 	}
 
 	feeds, ok := g.Files["feeds.json"]
@@ -433,7 +430,7 @@ func (f *fetcher) fetch(ctx context.Context, url string, updates chan *gofeed.It
 		return
 	}
 
-	req.Header.Set("User-Agent", userAgent)
+	req.Header.Set("User-Agent", httputil.UserAgent())
 	if state.ETag != "" {
 		req.Header.Set("If-None-Match", fmt.Sprintf(`"%s"`, state.ETag))
 	}
@@ -545,92 +542,24 @@ func (f *fetcher) saveToGist(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-
-	data := &gist{
-		Files: map[string]*gistFile{
+	ng := &gist.Gist{
+		Files: map[string]gist.File{
 			"feeds.json": {Content: string(feeds)},
 			"state.json": {Content: string(state)},
 		},
 	}
-	_, err = f.makeGistRequest(ctx, http.MethodPatch, data)
+	_, err = f.gistc.Update(ctx, f.gistID, ng)
 	return err
 }
 
 func (f *fetcher) makeTelegramRequest(ctx context.Context, method string, args any) error {
-	if _, err := makeRequest[any](f, ctx, requestParams{
-		method: http.MethodPost,
-		url:    tgAPI + "/bot" + f.tgToken + "/" + method,
-		body:   args,
+	if _, err := httputil.MakeRequest[any](ctx, httputil.RequestParams{
+		Method:     http.MethodPost,
+		URL:        tgAPI + "/bot" + f.tgToken + "/" + method,
+		Body:       args,
+		HTTPClient: f.httpc,
 	}); err != nil {
 		return err
 	}
 	return nil
-}
-
-func (f *fetcher) makeGistRequest(ctx context.Context, method string, body any) (*gist, error) {
-	return makeRequest[*gist](f, ctx, requestParams{
-		method: method,
-		url:    ghAPI + "/gists/" + f.gistID,
-		headers: map[string]string{
-			"Accept":               "application/vnd.github+json",
-			"X-GitHub-Api-Version": "2022-11-28",
-			"Authorization":        "Bearer " + f.ghToken,
-		},
-		body: body,
-	})
-}
-
-type requestParams struct {
-	method  string
-	url     string
-	headers map[string]string
-	body    any
-}
-
-func makeRequest[R any](f *fetcher, ctx context.Context, params requestParams) (R, error) {
-	var resp R
-
-	var data []byte
-	if params.body != nil {
-		var err error
-		data, err = json.Marshal(params.body)
-		if err != nil {
-			return resp, err
-		}
-	}
-
-	req, err := http.NewRequestWithContext(ctx, params.method, params.url, bytes.NewReader(data))
-	if err != nil {
-		return resp, err
-	}
-
-	if params.headers != nil {
-		for k, v := range params.headers {
-			req.Header.Set(k, v)
-		}
-	}
-	req.Header.Set("User-Agent", userAgent)
-	if data != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
-
-	res, err := f.httpc.Do(req)
-	if err != nil {
-		return resp, err
-	}
-	defer res.Body.Close()
-
-	b, err := io.ReadAll(res.Body)
-	if err != nil {
-		return resp, err
-	}
-
-	if res.StatusCode != http.StatusOK {
-		return resp, fmt.Errorf("want 200, got %d: %s", res.StatusCode, b)
-	}
-
-	if err := json.Unmarshal(b, &resp); err != nil {
-		return resp, err
-	}
-	return resp, nil
 }
