@@ -11,8 +11,11 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"go.astrophena.name/tools/internal/cli"
@@ -62,7 +65,14 @@ func main() {
 	}
 	e.mux.HandleFunc("POST /telegram", e.handleTelegramWebhook)
 
-	web.ListenAndServe(&web.ListenAndServeConfig{
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+	defer cancel()
+
+	if isProd() {
+		go e.selfPing(ctx)
+	}
+
+	web.ListenAndServe(ctx, &web.ListenAndServeConfig{
 		Mux:        e.mux,
 		Addr:       *addr,
 		Debuggable: !isProd(),
@@ -107,6 +117,40 @@ func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 		}
 		web.Error(w, r, err)
 		return
+	}
+}
+
+// selfPing continusly pings Starlet every 10 minutes in production to prevent
+// it's Render app from sleeping.
+func (e *engine) selfPing(ctx context.Context) {
+	ticker := time.NewTicker(10 * time.Minute)
+	defer ticker.Stop()
+
+	log.Printf("selfPing: started")
+	defer log.Printf("selfPing: stopped")
+
+	for {
+		select {
+		case <-ticker.C:
+			url := os.Getenv("RENDER_EXTERNAL_URL")
+			if url == "" {
+				log.Printf("selfPing: RENDER_EXTERNAL_URL is not set; are you really on Render?")
+				return
+			}
+			health, err := httputil.MakeRequest[web.HealthResponse](ctx, httputil.RequestParams{
+				Method:     http.MethodGet,
+				URL:        url + "/health",
+				HTTPClient: e.httpc,
+			})
+			if err != nil {
+				log.Printf("selfPing: %v", err)
+			}
+			if !health.OK {
+				log.Printf("selfPing: unhealthy: %+v", health)
+			}
+		case <-ctx.Done():
+			return
+		}
 	}
 }
 

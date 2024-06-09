@@ -8,9 +8,7 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"os/signal"
 	"strings"
-	"syscall"
 	"time"
 
 	"go.astrophena.name/tools/internal/logger"
@@ -45,7 +43,7 @@ func (c *ListenAndServeConfig) fatalf(format string, args ...any) {
 
 // ListenAndServe starts the HTTP server based on the provided
 // ListenAndServeConfig.
-func ListenAndServe(c *ListenAndServeConfig) {
+func ListenAndServe(ctx context.Context, c *ListenAndServeConfig) {
 	if c.Logf == nil {
 		c.Logf = log.Printf
 	}
@@ -91,16 +89,13 @@ func ListenAndServe(c *ListenAndServeConfig) {
 		}
 	}()
 
-	exit := make(chan os.Signal, 1)
-	signal.Notify(exit, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+	<-ctx.Done()
+	c.Logf("Gracefully shutting down...")
 
-	sig := <-exit
-	c.Logf("Received %s, gracefully shutting down...", sig)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	s.Shutdown(ctx)
+	s.Shutdown(shutdownCtx)
 	if c.AfterShutdown != nil {
 		c.AfterShutdown()
 	}

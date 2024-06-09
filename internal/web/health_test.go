@@ -10,14 +10,14 @@ import (
 func TestHealthHandler(t *testing.T) {
 	cases := map[string]struct {
 		checks       map[string]HealthFunc
-		wantResponse *healthResponse
+		wantResponse *HealthResponse
 		wantStatus   int
 	}{
 		"no checks": {
 			checks: map[string]HealthFunc{},
-			wantResponse: &healthResponse{
+			wantResponse: &HealthResponse{
 				OK:     true,
-				Checks: map[string]checkResponse{},
+				Checks: map[string]CheckResponse{},
 			},
 			wantStatus: http.StatusOK,
 		},
@@ -27,9 +27,9 @@ func TestHealthHandler(t *testing.T) {
 					return "this check always returns ok", true
 				},
 			},
-			wantResponse: &healthResponse{
+			wantResponse: &HealthResponse{
 				OK: true,
-				Checks: map[string]checkResponse{
+				Checks: map[string]CheckResponse{
 					"always-ok": {
 						OK:     true,
 						Status: "this check always returns ok",
@@ -44,9 +44,9 @@ func TestHealthHandler(t *testing.T) {
 					return "this check always returns not ok", false
 				},
 			},
-			wantResponse: &healthResponse{
+			wantResponse: &HealthResponse{
 				OK: false,
-				Checks: map[string]checkResponse{
+				Checks: map[string]CheckResponse{
 					"always-not-ok": {
 						OK:     false,
 						Status: "this check always returns not ok",
@@ -64,9 +64,9 @@ func TestHealthHandler(t *testing.T) {
 					return "not ok", false
 				},
 			},
-			wantResponse: &healthResponse{
+			wantResponse: &HealthResponse{
 				OK: false,
-				Checks: map[string]checkResponse{
+				Checks: map[string]CheckResponse{
 					"ok": {
 						OK:     true,
 						Status: "ok",
@@ -88,7 +88,7 @@ func TestHealthHandler(t *testing.T) {
 			h.checks = tc.checks
 
 			gotStr := send(t, mux, http.MethodGet, "/health", tc.wantStatus)
-			got := new(healthResponse)
+			got := new(HealthResponse)
 			if err := json.Unmarshal([]byte(gotStr), got); err != nil {
 				t.Fatal(err)
 			}

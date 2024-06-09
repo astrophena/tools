@@ -44,12 +44,12 @@ func (h *HealthHandler) RegisterFunc(name string, f HealthFunc) {
 
 // Types used in JSON responses.
 type (
-	healthResponse struct {
+	HealthResponse struct {
 		OK     bool                     `json:"ok"`
-		Checks map[string]checkResponse `json:"checks"`
+		Checks map[string]CheckResponse `json:"checks"`
 	}
 
-	checkResponse struct {
+	CheckResponse struct {
 		Status string `json:"status"`
 		OK     bool   `json:"ok"`
 	}
@@ -60,9 +60,9 @@ func (h *HealthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	hr := &healthResponse{
+	hr := &HealthResponse{
 		OK:     true,
-		Checks: make(map[string]checkResponse),
+		Checks: make(map[string]CheckResponse),
 	}
 
 	for name, f := range h.checks {
@@ -70,7 +70,7 @@ func (h *HealthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if !ok {
 			hr.OK = false
 		}
-		hr.Checks[name] = checkResponse{Status: status, OK: ok}
+		hr.Checks[name] = CheckResponse{Status: status, OK: ok}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
