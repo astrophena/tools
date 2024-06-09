@@ -41,7 +41,7 @@ func (t *loggingTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 	t.mu.Lock()
 	index := len(t.active)
 	start := time.Now()
-	t.logf("HTTP: %s %s+ %s (UA: %s)", timeFormat(start), t.active, r.URL, r.Header.Get("User-Agent"))
+	t.logf("HTTP: %s %s+ %s (UA: %q)", timeFormat(start), t.active, r.URL, r.Header.Get("User-Agent"))
 	t.active = append(t.active, '|')
 	t.mu.Unlock()
 

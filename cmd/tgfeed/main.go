@@ -109,6 +109,7 @@ func main() {
 		chatID:  os.Getenv("CHAT_ID"),
 		tgToken: os.Getenv("TELEGRAM_TOKEN"),
 	}
+	f.initOnce.Do(f.doInit)
 
 	if os.Getenv("HTTPLOG") == "1" {
 		if f.httpc.Transport == nil {
