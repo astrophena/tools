@@ -30,4 +30,4 @@ def process_update(raw_update):
     update = json.decode(raw_update)
 
     if "message" in update:
-        process_message(update["message"]
+        process_message(update["message"])
