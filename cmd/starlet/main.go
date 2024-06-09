@@ -64,6 +64,7 @@ func main() {
 		},
 		mux: http.NewServeMux(),
 	}
+	e.mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { web.NotFound(w, r) })
 	e.mux.HandleFunc("GET /version", func(w http.ResponseWriter, r *http.Request) {
 		io.WriteString(w, version.Version().Short())
 	})
