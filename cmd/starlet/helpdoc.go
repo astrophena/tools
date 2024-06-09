@@ -6,8 +6,6 @@ import "go.astrophena.name/tools/internal/cli"
 
 const helpDoc = `
 starlet implements a Telegram bot written in Starlark language.
-
-[Starlark]: https://github.com/bazelbuild/starlark
 `
 
 func init() { cli.SetDescription(helpDoc) }
