@@ -12,11 +12,11 @@ def forward_message(to, from_chat_id, message_id):
 
 def send_message(to, text):
     call(
-            method = "sendMessage",
-            args = {
-                "chat_id": to,
-                "text": text
-            }
+        method = "sendMessage",
+        args = {
+            "chat_id": to,
+            "text": text
+        }
     )
 
 def process_message(message):
