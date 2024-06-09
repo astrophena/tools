@@ -1,8 +1,8 @@
 // Package gist provides a client for interacting with the GitHub Gist API.
 //
 // To use this package, you need to create a [Client] object with your access
-// token. Then, you can use the [Get] or [Update] methods to retrieve or modify
-// Gists.
+// token. Then, you can use the [Client.Get] or [Client.Update] methods to
+// retrieve or modify Gists.
 package gist
 
 import (

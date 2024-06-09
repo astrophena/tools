@@ -1,6 +1,4 @@
-// starlet implements a Telegram bot written in [Starlark] language.
-//
-// [Starlark]: https://github.com/bazelbuild/starlark
+// starlet implements a Telegram bot written in Starlark language.
 package main
 
 import (
