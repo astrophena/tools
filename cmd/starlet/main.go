@@ -20,6 +20,7 @@ import (
 
 	"go.astrophena.name/tools/internal/cli"
 	"go.astrophena.name/tools/internal/httputil"
+	"go.astrophena.name/tools/internal/version"
 	"go.astrophena.name/tools/internal/web"
 
 	starlarkjson "go.starlark.net/lib/json"
@@ -63,6 +64,9 @@ func main() {
 		},
 		mux: http.NewServeMux(),
 	}
+	e.mux.HandleFunc("GET /version", func(w http.ResponseWriter, r *http.Request) {
+		io.WriteString(w, version.Version().Short())
+	})
 	e.mux.HandleFunc("POST /telegram", e.handleTelegramWebhook)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
