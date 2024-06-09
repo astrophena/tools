@@ -31,3 +31,5 @@ def process_update(raw_update):
 
     if "message" in update:
         process_message(update["message"])
+
+process_update(raw_update)
