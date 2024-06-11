@@ -3,7 +3,11 @@ package main
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"crypto/subtle"
 	_ "embed"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -13,6 +17,8 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sort"
+	"strings"
 	"syscall"
 	"time"
 
@@ -66,6 +72,7 @@ func main() {
 	e.mux.HandleFunc("GET /version", func(w http.ResponseWriter, r *http.Request) {
 		io.WriteString(w, version.Version().Short())
 	})
+	e.mux.HandleFunc("GET /login", e.handleLogin)
 	e.mux.HandleFunc("POST /telegram", e.handleTelegramWebhook)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
@@ -121,6 +128,48 @@ func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 		web.Error(w, r, err)
 		return
 	}
+}
+
+func (e *engine) handleLogin(w http.ResponseWriter, r *http.Request) {
+	// See https://core.telegram.org/widgets/login#receiving-authorization-data.
+	data := r.URL.Query()
+	hash := data.Get("hash")
+	if hash == "" {
+		web.Error(w, r, fmt.Errorf("no hash present in auth data, got: %v", data))
+		return
+	}
+	data.Del("hash")
+
+	var keys []string
+	for k := range data {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	var sb strings.Builder
+	for _, k := range keys {
+		sb.WriteString(k + "=" + data.Get(k))
+	}
+	checkString := sb.String()
+
+	if subtle.ConstantTimeCompare([]byte(hmacSig(checkString, e.tgToken)), []byte(hash)) != 1 {
+		web.Error(w, r, errors.New("hash isn't valid"))
+		return
+	}
+
+	w.Write([]byte(checkString))
+}
+
+func hmacSig(message, token string) string {
+	h := hmac.New(sha256.New, toSHA256(token))
+	h.Write([]byte(message))
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+func toSHA256(s string) []byte {
+	h := sha256.New()
+	h.Write([]byte(s))
+	return h.Sum(nil)
 }
 
 // selfPing continusly pings Starlet every 10 minutes in production to prevent
