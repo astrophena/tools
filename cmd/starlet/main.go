@@ -67,7 +67,17 @@ func main() {
 		},
 		mux: http.NewServeMux(),
 	}
-	e.mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { web.NotFound(w, r) })
+	e.mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" {
+			web.NotFound(w, r)
+			return
+		}
+		if !e.loggedIn(r) {
+			http.Redirect(w, r, "https://t.me/astrophena_bot", http.StatusFound)
+			return
+		}
+		w.Write([]byte("hello, world!"))
+	})
 	e.mux.HandleFunc("GET /version", func(w http.ResponseWriter, r *http.Request) {
 		io.WriteString(w, version.Version().Short())
 	})
@@ -148,18 +158,51 @@ func (e *engine) handleLogin(w http.ResponseWriter, r *http.Request) {
 	var sb strings.Builder
 	for i, k := range keys {
 		sb.WriteString(k + "=" + data.Get(k))
-		if i+1 != len(keys) { // last key
+		// Don't append newline on last key.
+		if i+1 != len(keys) {
 			sb.WriteString("\n")
 		}
 	}
 	checkString := sb.String()
 
-	if hmacSig(checkString, e.tgToken) != hash {
-		web.Error(w, r, errors.New("hash isn't valid"))
+	if !e.validateAuthData(checkString, hash) {
+		web.Error(w, r, errors.New("hash is not valid"))
 		return
 	}
 
-	w.Write([]byte(checkString))
+	setCookie(w, "auth_data", checkString)
+	setCookie(w, "auth_data_hash", hash)
+
+	http.Redirect(w, r, "/", http.StatusFound)
+}
+
+func (e *engine) loggedIn(r *http.Request) bool {
+	if len(r.Cookies()) == 0 {
+		return false
+	}
+	var data, hash string
+	for _, cookie := range r.Cookies() {
+		switch cookie.Name {
+		case "auth_data":
+			data = cookie.Value
+		case "hash":
+			hash = cookie.Value
+		}
+	}
+	return e.validateAuthData(data, hash)
+}
+
+func setCookie(w http.ResponseWriter, key, val string) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     key,
+		Value:    val,
+		Expires:  time.Now().Add(time.Hour * 24 * 365), // approx one year
+		HttpOnly: true,
+	})
+}
+
+func (e *engine) validateAuthData(data, hash string) bool {
+	return hmacSig(data, e.tgToken) == hash
 }
 
 func hmacSig(message, token string) string {
