@@ -6,6 +6,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	_ "embed"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -170,7 +171,7 @@ func (e *engine) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	setCookie(w, "auth_data", checkString)
+	setCookie(w, "auth_data", base64.URLEncoding.EncodeToString([]byte(checkString)))
 	setCookie(w, "auth_data_hash", hash)
 
 	http.Redirect(w, r, "/", http.StatusFound)
@@ -184,7 +185,11 @@ func (e *engine) loggedIn(r *http.Request) bool {
 	for _, cookie := range r.Cookies() {
 		switch cookie.Name {
 		case "auth_data":
-			data = cookie.Value
+			bdata, err := base64.URLEncoding.DecodeString(cookie.Value)
+			if err != nil {
+				return false
+			}
+			data = string(bdata)
 		case "auth_data_hash":
 			hash = cookie.Value
 		}
@@ -196,7 +201,7 @@ func setCookie(w http.ResponseWriter, key, val string) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     key,
 		Value:    val,
-		Expires:  time.Now().Add(time.Hour * 24 * 365), // approx one year
+		Expires:  time.Now().Add(24 * time.Hour),
 		HttpOnly: true,
 	})
 }
