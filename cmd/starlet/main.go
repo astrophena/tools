@@ -148,7 +148,7 @@ func (e *engine) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	var sb strings.Builder
 	for _, k := range keys {
-		sb.WriteString(k + "=" + data.Get(k))
+		sb.WriteString(k + "=" + data.Get(k) + "\n")
 	}
 	checkString := sb.String()
 
