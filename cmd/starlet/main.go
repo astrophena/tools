@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
-	"crypto/subtle"
 	_ "embed"
 	"encoding/hex"
 	"encoding/json"
@@ -152,7 +151,7 @@ func (e *engine) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	checkString := sb.String()
 
-	if subtle.ConstantTimeCompare([]byte(hmacSig(checkString, e.tgToken)), []byte(hash)) != 1 {
+	if hmacSig(checkString, e.tgToken) != hash {
 		web.Error(w, r, errors.New("hash isn't valid"))
 		return
 	}
