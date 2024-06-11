@@ -185,7 +185,7 @@ func (e *engine) loggedIn(r *http.Request) bool {
 		switch cookie.Name {
 		case "auth_data":
 			data = cookie.Value
-		case "hash":
+		case "auth_data_hash":
 			hash = cookie.Value
 		}
 	}
