@@ -146,8 +146,11 @@ func (e *engine) handleLogin(w http.ResponseWriter, r *http.Request) {
 	sort.Strings(keys)
 
 	var sb strings.Builder
-	for _, k := range keys {
-		sb.WriteString(k + "=" + data.Get(k) + "\n")
+	for i, k := range keys {
+		sb.WriteString(k + "=" + data.Get(k))
+		if i+1 != len(keys) { // last key
+			sb.WriteString("\n")
+		}
 	}
 	checkString := sb.String()
 
