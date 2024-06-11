@@ -67,7 +67,7 @@ def hello_command(message):
 register_command("/hello", hello_command)
 
 def admin_command(message):
-    send_message(bot_owner_id, "🔐 Нажмите на кнопку внизу, чтобы попасть в админку бота.", {
+    send_message(bot_owner_id, "🔐 Нажмите на кнопку, чтобы попасть в админку бота.", {
         "inline_keyboard": [
             [
                 {
