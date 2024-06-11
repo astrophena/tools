@@ -12,8 +12,16 @@ with open("bot.star", "r") as f:
 # Mock data to simulate a Telegram update.
 raw_update = json.dumps({
     "message": {
-        "chat": {"id": 12345},
+        "chat": {"id": 853674576},
         "message_id": 54321,
+        "text": "/admin",
+        "entities": [
+            {
+                "type": "bot_command",
+                "offset": 0,
+                "length": 6
+            }
+        ]
     }
 })
 
