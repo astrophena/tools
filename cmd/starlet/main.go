@@ -95,8 +95,16 @@ func main() {
 	web.ListenAndServe(ctx, &web.ListenAndServeConfig{
 		Mux:        e.mux,
 		Addr:       *addr,
-		Debuggable: !isProd(),
+		Debuggable: true, // debug endpoints protected by Telegram auth
+		DebugAuth:  e.debugAuth,
 	})
+}
+
+func (e *engine) debugAuth(r *http.Request) bool {
+	if !isProd() || e.loggedIn(r) {
+		return true
+	}
+	return false
 }
 
 // https://docs.render.com/environment-variables

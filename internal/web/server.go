@@ -34,6 +34,10 @@ type ListenAndServeConfig struct {
 	AfterShutdown func()
 	// Debuggable specifies whether to register debug handlers at /debug/.
 	Debuggable bool
+	// DebugAuth specifies an optional function that's invoked on every request to
+	// debug handlers at /debug/ to allow or deny access to them. If not provided,
+	// all access is allowed.
+	DebugAuth func(r *http.Request) bool
 }
 
 func (c *ListenAndServeConfig) fatalf(format string, args ...any) {
@@ -80,7 +84,23 @@ func ListenAndServe(ctx context.Context, c *ListenAndServeConfig) {
 	if c.Debuggable {
 		Debugger(c.Mux)
 	}
-	s := &http.Server{Handler: c.Mux}
+
+	protectDebug := func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if !strings.HasPrefix(r.URL.Path, "/debug/") || c.DebugAuth == nil {
+				next.ServeHTTP(w, r)
+				return
+			}
+			// If access denied, pretend that debug endpoints don't exist.
+			if !c.DebugAuth(r) {
+				NotFound(w, r)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+
+	s := &http.Server{Handler: protectDebug(c.Mux)}
 	go func() {
 		if err := s.Serve(l); err != nil {
 			if err != http.ErrServerClosed {
