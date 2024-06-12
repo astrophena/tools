@@ -2,10 +2,10 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
-	_ "embed"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -20,10 +20,12 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
 	"go.astrophena.name/tools/internal/cli"
+	"go.astrophena.name/tools/internal/gist"
 	"go.astrophena.name/tools/internal/httputil"
 	"go.astrophena.name/tools/internal/version"
 	"go.astrophena.name/tools/internal/web"
@@ -32,9 +34,6 @@ import (
 	starlarktime "go.starlark.net/lib/time"
 	"go.starlark.net/starlark"
 )
-
-//go:embed bot.star
-var bot []byte
 
 func main() {
 	addr := flag.String(
@@ -53,6 +52,14 @@ func main() {
 		"tg-owner", 0,
 		"Telegram user `ID` of the bot owner. Can be overridden by TG_OWNER environment variable.",
 	)
+	ghToken := flag.String(
+		"gh-token", "",
+		"GitHub API `token`. Can be overridden by GH_TOKEN environment variable.",
+	)
+	gistID := flag.String(
+		"gist-id", "",
+		"GitHub Gist `ID` to load bot code from. Can be overriden by GIST_ID environment variable.",
+	)
 	cli.HandleStartup()
 
 	if port := os.Getenv("PORT"); port != "" {
@@ -70,16 +77,37 @@ func main() {
 			*tgOwner = newOwner
 		}
 	}
+	if tok := os.Getenv("GH_TOKEN"); tok != "" {
+		*ghToken = tok
+	}
+	if id := os.Getenv("GIST_ID"); id != "" {
+		*gistID = id
+	}
+
+	httpc := &http.Client{
+		Timeout: 10 * time.Second,
+	}
+
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+	defer cancel()
 
 	e := &engine{
 		tgToken:  *tgToken,
 		tgSecret: *tgSecret,
 		tgOwner:  *tgOwner,
-		httpc: &http.Client{
-			Timeout: 10 * time.Second,
+		gistc: &gist.Client{
+			Token:      *ghToken,
+			HTTPClient: httpc,
 		},
-		mux: http.NewServeMux(),
+		gistID: *gistID,
+		httpc:  httpc,
+		mux:    http.NewServeMux(),
 	}
+
+	if err := e.loadFromGist(ctx); err != nil {
+		log.Fatalf("loadFromGist: %v", err)
+	}
+
 	e.mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			web.NotFound(w, r)
@@ -96,9 +124,6 @@ func main() {
 	})
 	e.mux.HandleFunc("GET /login", e.handleLogin)
 	e.mux.HandleFunc("POST /telegram", e.handleTelegramWebhook)
-
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
-	defer cancel()
 
 	if isProd() {
 		go e.selfPing(ctx)
@@ -119,16 +144,40 @@ func (e *engine) debugAuth(r *http.Request) bool {
 	return false
 }
 
+func (e *engine) loadFromGist(ctx context.Context) error {
+	g, err := e.gistc.Get(ctx, e.gistID)
+	if err != nil {
+		return err
+	}
+
+	bot, exists := g.Files["bot.star"]
+	if !exists {
+		return errors.New("bot.star should contain bot code in Gist")
+	}
+
+	e.mu.Lock()
+	e.bot = []byte(bot.Content)
+	e.mu.Unlock()
+
+	return nil
+}
+
 // https://docs.render.com/environment-variables
 func isProd() bool { return os.Getenv("RENDER") == "true" }
 
 type engine struct {
-	tgToken  string
-	tgSecret string
+	// configuration, read-only
+	gistID   string
 	tgOwner  int64
+	tgSecret string
+	tgToken  string
 
+	gistc *gist.Client
 	httpc *http.Client
 	mux   *http.ServeMux
+
+	mu  sync.Mutex
+	bot []byte
 }
 
 func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
@@ -151,7 +200,11 @@ func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 		"time":         starlarktime.Module,
 	}
 
-	_, err = starlark.ExecFile(&starlark.Thread{}, "bot.star", bot, predeclared)
+	e.mu.Lock()
+	botCode := bytes.Clone(e.bot)
+	e.mu.Unlock()
+
+	_, err = starlark.ExecFile(&starlark.Thread{}, "bot.star", botCode, predeclared)
 	if err != nil {
 		if evalErr, ok := err.(*starlark.EvalError); ok {
 			web.Error(w, r, errors.New(evalErr.Backtrace()))
