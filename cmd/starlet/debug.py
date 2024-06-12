@@ -10,6 +10,7 @@ with open("bot.star", "r") as f:
     bot_script = f.read()
 
 # Mock data to simulate a Telegram update.
+bot_owner_id = 853674576
 raw_update = json.dumps({
     "message": {
         "chat": {"id": 853674576},

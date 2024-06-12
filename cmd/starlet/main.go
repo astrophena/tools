@@ -18,6 +18,7 @@ import (
 	"os"
 	"os/signal"
 	"sort"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -48,6 +49,10 @@ func main() {
 		"tg-secret", "",
 		"Secret `token` used to validate Telegram Bot API updates. Can be overridden by TG_SECRET environment variable.",
 	)
+	tgOwner := flag.Int64(
+		"tg-owner", 0,
+		"Telegram user `ID` of the bot owner. Can be overridden by TG_OWNER environment variable.",
+	)
 	cli.HandleStartup()
 
 	if port := os.Getenv("PORT"); port != "" {
@@ -59,10 +64,17 @@ func main() {
 	if secret := os.Getenv("TG_SECRET"); secret != "" {
 		*tgSecret = secret
 	}
+	if owner := os.Getenv("TG_OWNER"); owner != "" {
+		newOwner, err := strconv.ParseInt(owner, 10, 64)
+		if err == nil {
+			*tgOwner = newOwner
+		}
+	}
 
 	e := &engine{
 		tgToken:  *tgToken,
 		tgSecret: *tgSecret,
+		tgOwner:  *tgOwner,
 		httpc: &http.Client{
 			Timeout: 10 * time.Second,
 		},
@@ -113,6 +125,7 @@ func isProd() bool { return os.Getenv("RENDER") == "true" }
 type engine struct {
 	tgToken  string
 	tgSecret string
+	tgOwner  int64
 
 	httpc *http.Client
 	mux   *http.ServeMux
@@ -131,10 +144,11 @@ func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	predeclared := starlark.StringDict{
-		"raw_update": starlark.String(rawUpdate),
-		"time":       starlarktime.Module,
-		"json":       starlarkjson.Module,
-		"call":       starlark.NewBuiltin("call", e.callFunc(r.Context())),
+		"bot_owner_id": starlark.MakeInt64(e.tgOwner),
+		"call":         starlark.NewBuiltin("call", e.callFunc(r.Context())),
+		"json":         starlarkjson.Module,
+		"raw_update":   starlark.String(rawUpdate),
+		"time":         starlarktime.Module,
 	}
 
 	_, err = starlark.ExecFile(&starlark.Thread{}, "bot.star", bot, predeclared)
@@ -202,7 +216,32 @@ func (e *engine) loggedIn(r *http.Request) bool {
 			hash = cookie.Value
 		}
 	}
-	return e.validateAuthData(data, hash)
+	if !e.validateAuthData(data, hash) {
+		return false
+	}
+
+	// Check if ID of authenticated user matches the bot owner ID.
+	for _, line := range strings.Split(data, "\n") {
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) == 2 && strings.TrimSpace(parts[0]) == "id" {
+			return strings.TrimSpace(parts[1]) == strconv.FormatInt(e.tgOwner, 10)
+		}
+	}
+	return false
+}
+
+func (e *engine) validateAuthData(data, hash string) bool {
+	// Compute SHA256 hash of the token, serving as the secret key for HMAC.
+	h := sha256.New()
+	h.Write([]byte(e.tgToken))
+	tokenHash := h.Sum(nil)
+
+	// Compute HMAC signature of authentication data.
+	hm := hmac.New(sha256.New, tokenHash)
+	hm.Write([]byte(data))
+	gotHash := hex.EncodeToString(hm.Sum(nil))
+
+	return gotHash == hash
 }
 
 func setCookie(w http.ResponseWriter, key, val string) {
@@ -212,22 +251,6 @@ func setCookie(w http.ResponseWriter, key, val string) {
 		Expires:  time.Now().Add(24 * time.Hour),
 		HttpOnly: true,
 	})
-}
-
-func (e *engine) validateAuthData(data, hash string) bool {
-	return hmacSig(data, e.tgToken) == hash
-}
-
-func hmacSig(message, token string) string {
-	h := hmac.New(sha256.New, toSHA256(token))
-	h.Write([]byte(message))
-	return hex.EncodeToString(h.Sum(nil))
-}
-
-func toSHA256(s string) []byte {
-	h := sha256.New()
-	h.Write([]byte(s))
-	return h.Sum(nil)
 }
 
 // selfPing continusly pings Starlet every 10 minutes in production to prevent
