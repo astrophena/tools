@@ -1,4 +1,4 @@
-// renamer renames files sequentially.
+// Renamer renames files sequentially.
 package main
 
 import (

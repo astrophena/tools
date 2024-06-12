@@ -5,7 +5,7 @@ package main
 import "go.astrophena.name/tools/internal/cli"
 
 const helpDoc = `
-tgfeed fetches RSS feeds and sends new articles via Telegram.
+Tgfeed fetches RSS feeds and sends new articles via Telegram.
 
 # How it works?
 

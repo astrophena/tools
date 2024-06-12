@@ -1,10 +1,10 @@
 This repository holds personal tools:
 
-- cmdtop displays the top of most used commands in bash history.
-- dupfind finds duplicate files in a directory.
-- renamer renames files sequentially.
+- Cmdtop displays the top of most used commands in bash history.
+- Dupfind finds duplicate files in a directory.
+- Renamer renames files sequentially.
 - Starlet allows to create and manage a Telegram bot using the Starlark scripting language.
-- tgfeed fetches RSS feeds and sends new articles via Telegram.
+- Tgfeed fetches RSS feeds and sends new articles via Telegram.
 
 Install them:
 

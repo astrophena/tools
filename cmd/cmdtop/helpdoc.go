@@ -5,7 +5,7 @@ package main
 import "go.astrophena.name/tools/internal/cli"
 
 const helpDoc = `
-cmdtop displays the top of most used commands in bash history.
+Cmdtop displays the top of most used commands in bash history.
 `
 
 func init() { cli.SetDescription(helpDoc) }
