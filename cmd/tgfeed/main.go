@@ -78,8 +78,13 @@ import (
 	"go.astrophena.name/tools/internal/httputil"
 	"go.astrophena.name/tools/internal/syncutil"
 
+	"github.com/google/generative-ai-go/genai"
 	"github.com/mmcdole/gofeed"
+	"google.golang.org/api/option"
 )
+
+// TODO: get rid of github.com/google/generative-ai-go dependency and do
+// everything themselves. It significantly bloats dependency tree.
 
 const (
 	defaultErrorTemplate = `❌ Something went wrong:
@@ -96,6 +101,7 @@ func main() {
 		reenable    = flag.String("reenable", "", "Reenable previously failing and disabled `feed`.")
 		subscribe   = flag.String("subscribe", "", "Subscribe to a `feed`.")
 		unsubscribe = flag.String("unsubscribe", "", "Unsubscribe from a `feed`.")
+		summarize   = flag.String("summarize", "", "Summarize text from `file`. EXPERIMENTAL FLAG.")
 	)
 	cli.SetArgsUsage("[flags]")
 	cli.HandleStartup()
@@ -111,15 +117,24 @@ func main() {
 	}
 	f.initOnce.Do(f.doInit)
 
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+	defer cancel()
+
+	geminiKey := os.Getenv("GEMINI_API_KEY")
+	if geminiKey != "" {
+		var err error
+		f.genAIClient, err = genai.NewClient(ctx, option.WithAPIKey(geminiKey))
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+
 	if os.Getenv("HTTPLOG") == "1" {
 		if f.httpc.Transport == nil {
 			f.httpc.Transport = http.DefaultTransport
 		}
 		f.httpc.Transport = httplogger.New(f.httpc.Transport, nil)
 	}
-
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
-	defer cancel()
 
 	if *feeds {
 		if err := f.listFeeds(ctx, os.Stdout); err != nil {
@@ -143,6 +158,21 @@ func main() {
 		if err := f.unsubscribe(ctx, *unsubscribe); err != nil {
 			log.Fatal(err)
 		}
+		return
+	}
+	if *summarize != "" {
+		if f.genAIClient == nil {
+			log.Fatal("set GEMINI_API_KEY environment variable to use this")
+		}
+		text, err := os.ReadFile(*summarize)
+		if err != nil {
+			log.Fatal(err)
+		}
+		summary, err := f.summarize(ctx, string(text))
+		if err != nil {
+			log.Fatal(err)
+		}
+		os.Stdout.Write([]byte(summary))
 		return
 	}
 
@@ -246,6 +276,8 @@ type fetcher struct {
 	chatID  string
 	tgToken string
 
+	genAIClient *genai.Client
+
 	errorTemplate string
 
 	mu    sync.Mutex
@@ -340,6 +372,35 @@ func shuffle[S any](s []S) []S {
 	return s2
 }
 
+func (f *fetcher) summarize(ctx context.Context, text string) (string, error) {
+	model := f.genAIClient.GenerativeModel("gemini-1.5-flash")
+	model.SystemInstruction = &genai.Content{
+		Parts: []genai.Part{genai.Text(`
+You are a friendly bot that fetches articles from RSS feeds and given
+descriptions of articles, YouTube videos and sometimes full articles themselves.
+
+Your task is to make a concise summary of article or video description in one
+sentence in English.
+`)},
+	}
+	resp, err := model.GenerateContent(ctx, genai.Text(text))
+	if err != nil {
+		return "", err
+	}
+	if len(resp.Candidates) == 0 {
+		return "", nil
+	}
+	candidate := resp.Candidates[0]
+	if candidate.Content == nil || len(candidate.Content.Parts) == 0 {
+		return "", nil
+	}
+	summary, ok := candidate.Content.Parts[0].(genai.Text)
+	if !ok {
+		return "", nil
+	}
+	return string(summary), nil
+}
+
 func (f *fetcher) sendUpdate(ctx context.Context, item *gofeed.Item) {
 	title := item.Title
 	if item.Title == "" {
@@ -352,6 +413,17 @@ func (f *fetcher) sendUpdate(ctx context.Context, item *gofeed.Item) {
 		html.EscapeString(title),
 	)
 
+	// If we have access to Gemini API, try to summarize an article.
+	if f.genAIClient != nil && item.Description != "" {
+		summary, err := f.summarize(ctx, item.Description)
+		if err != nil {
+			log.Printf("sendUpdate: summarizing item %q failed: %v", item.Link, err)
+		}
+		if summary != "" {
+			msg += "\n" + html.EscapeString(summary) + "\n"
+		}
+	}
+
 	inlineKeyboardButtons := []inlineKeyboardButton{}
 
 	// hnrss.org feeds have Hacker News entry URL set as GUID. Also send it
@@ -363,7 +435,7 @@ func (f *fetcher) sendUpdate(ctx context.Context, item *gofeed.Item) {
 		})
 	}
 
-	if err := f.send(ctx, msg, func(args map[string]any) {
+	if err := f.send(ctx, strings.TrimSpace(msg), func(args map[string]any) {
 		args["reply_markup"] = map[string]any{
 			"inline_keyboard": [][]inlineKeyboardButton{inlineKeyboardButtons},
 		}

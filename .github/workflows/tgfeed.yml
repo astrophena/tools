@@ -20,5 +20,6 @@ jobs:
           CHAT_ID: '${{ secrets.TGFEED_CHAT_ID }}'
           GIST_ID: '${{ secrets.TGFEED_GIST_ID }}'
           GITHUB_TOKEN: '${{ secrets.TGFEED_GIST_TOKEN }}'
+          GEMINI_API_KEY: '${{ secrets.GEMINI_API_KEY }}'
           TELEGRAM_TOKEN: '${{ secrets.TGFEED_TOKEN }}'
         run: 'go run -buildvcs ./cmd/tgfeed'
