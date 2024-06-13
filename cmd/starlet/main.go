@@ -133,6 +133,7 @@ func main() {
 		if err := e.loadFromGist(ctx); err != nil {
 			web.Error(w, r, err)
 		}
+		http.Redirect(w, r, "/debug/", http.StatusFound)
 	}))
 
 	e.mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
