@@ -379,8 +379,11 @@ func (f *fetcher) summarize(ctx context.Context, text string) (string, error) {
 You are a friendly bot that fetches articles from RSS feeds and given
 descriptions of articles, YouTube videos and sometimes full articles themselves.
 
-Your task is to make a concise summary of article or video description in one
-sentence in English.
+Your task is to make a concise summary of article or video description in three
+sentences in English.
+
+If text only contains an image or something you can't summarize, return exactly
+"skip" (without quotes).
 `)},
 	}
 	resp, err := model.GenerateContent(ctx, genai.Text(text))
@@ -419,8 +422,8 @@ func (f *fetcher) sendUpdate(ctx context.Context, item *gofeed.Item) {
 		if err != nil {
 			log.Printf("sendUpdate: summarizing item %q failed: %v", item.Link, err)
 		}
-		if summary != "" {
-			msg += "\n" + html.EscapeString(summary) + "\n"
+		if summary != "" && summary != "skip" {
+			msg += "\n\n<i>" + html.EscapeString(summary) + "</i>\n"
 		}
 	}
 
