@@ -129,6 +129,11 @@ func main() {
 	if err := e.loadFromGist(ctx); err != nil {
 		log.Fatalf("loadFromGist: %v", err)
 	}
+	web.Debugger(e.mux).Handle("reload", "Reload from gist", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := e.loadFromGist(ctx); err != nil {
+			web.Error(w, r, err)
+		}
+	}))
 
 	e.mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
