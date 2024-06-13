@@ -135,12 +135,14 @@ func main() {
 			web.NotFound(w, r)
 			return
 		}
-		if !e.loggedIn(r) {
-			http.Redirect(w, r, "https://t.me/astrophena_bot", http.StatusFound)
-			return
-		}
-		w.Write([]byte("hello, world!"))
+		http.Redirect(w, r, "https://t.me/astrophena_bot", http.StatusFound)
 	})
+	if isProd() {
+		e.mux.HandleFunc("starlet.onrender.com/", func(w http.ResponseWriter, r *http.Request) {
+			targetURL := "https://bot.astrophena.name" + r.URL.Path
+			http.Redirect(w, r, targetURL, http.StatusMovedPermanently)
+		})
+	}
 	e.mux.HandleFunc("GET /version", func(w http.ResponseWriter, r *http.Request) {
 		io.WriteString(w, version.Version().Short())
 	})
@@ -271,7 +273,7 @@ func (e *engine) handleLogin(w http.ResponseWriter, r *http.Request) {
 	setCookie(w, "auth_data", base64.URLEncoding.EncodeToString([]byte(checkString)))
 	setCookie(w, "auth_data_hash", hash)
 
-	http.Redirect(w, r, "/", http.StatusFound)
+	http.Redirect(w, r, "/debug/", http.StatusFound)
 }
 
 func (e *engine) loggedIn(r *http.Request) bool {
