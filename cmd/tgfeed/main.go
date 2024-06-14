@@ -415,7 +415,7 @@ func (f *fetcher) sendUpdate(ctx context.Context, item *gofeed.Item) {
 			log.Printf("sendUpdate: summarizing item %q failed: %v", item.Link, err)
 		}
 		if summary != "" && !strings.Contains(summary, "TGFEED_SKIP") {
-			msg += "\n\n<blockquote>" + html.EscapeString(summary) + "</blockquote>"
+			msg += "\n<blockquote>" + html.EscapeString(summary) + "</blockquote>"
 		}
 	}
 
