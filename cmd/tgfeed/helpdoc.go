@@ -34,16 +34,13 @@ The tgfeed program relies on the following environment variables:
   - GITHUB_TOKEN: GitHub personal access token for accessing the GitHub API.
   - TELEGRAM_TOKEN: Telegram bot token for accessing the Telegram Bot API.
 
-# Summarization with Gemini API (EXPERIMENTAL)
+# Summarization with Gemini API
 
-tgfeed can summarize the text content of articles using the Gemini AI API. This
+tgfeed can summarize the text content of articles using the Gemini API. This
 feature requires setting the GEMINI_API_KEY environment variable. When provided,
 tgfeed will attempt to summarize the description field of fetched RSS items and
 include the summary in the Telegram notification along with the article title
 and link.
-
-Note that this feature is experimental and may not always produce accurate or
-meaningful summaries.
 
 # Administration
 
