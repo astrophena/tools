@@ -16,7 +16,7 @@ import (
 	"sync"
 	"testing"
 
-	"go.astrophena.name/tools/internal/gist"
+	"go.astrophena.name/tools/internal/client/gist"
 	"go.astrophena.name/tools/internal/httplogger"
 	"go.astrophena.name/tools/internal/testutil"
 	"go.astrophena.name/tools/internal/txtar"

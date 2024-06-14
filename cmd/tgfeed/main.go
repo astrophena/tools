@@ -29,16 +29,13 @@ The tgfeed program relies on the following environment variables:
   - GITHUB_TOKEN: GitHub personal access token for accessing the GitHub API.
   - TELEGRAM_TOKEN: Telegram bot token for accessing the Telegram Bot API.
 
-# Summarization with Gemini API (EXPERIMENTAL)
+# Summarization with Gemini API
 
-tgfeed can summarize the text content of articles using the Gemini AI API. This
+tgfeed can summarize the text content of articles using the Gemini API. This
 feature requires setting the GEMINI_API_KEY environment variable. When provided,
 tgfeed will attempt to summarize the description field of fetched RSS items and
 include the summary in the Telegram notification along with the article title
 and link.
-
-Note that this feature is experimental and may not always produce accurate or
-meaningful summaries.
 
 # Administration
 
@@ -84,18 +81,14 @@ import (
 	"time"
 
 	"go.astrophena.name/tools/internal/cli"
-	"go.astrophena.name/tools/internal/gist"
+	"go.astrophena.name/tools/internal/client/gemini"
+	"go.astrophena.name/tools/internal/client/gist"
 	"go.astrophena.name/tools/internal/httplogger"
 	"go.astrophena.name/tools/internal/httputil"
 	"go.astrophena.name/tools/internal/syncutil"
 
-	"github.com/google/generative-ai-go/genai"
 	"github.com/mmcdole/gofeed"
-	"google.golang.org/api/option"
 )
-
-// TODO: get rid of github.com/google/generative-ai-go dependency and do
-// everything themselves. It significantly bloats dependency tree.
 
 const (
 	defaultErrorTemplate = `❌ Something went wrong:
@@ -112,7 +105,6 @@ func main() {
 		reenable    = flag.String("reenable", "", "Reenable previously failing and disabled `feed`.")
 		subscribe   = flag.String("subscribe", "", "Subscribe to a `feed`.")
 		unsubscribe = flag.String("unsubscribe", "", "Unsubscribe from a `feed`.")
-		summarize   = flag.String("summarize", "", "Summarize text from `file`. EXPERIMENTAL FLAG.")
 	)
 	cli.SetArgsUsage("[flags]")
 	cli.HandleStartup()
@@ -133,10 +125,10 @@ func main() {
 
 	geminiKey := os.Getenv("GEMINI_API_KEY")
 	if geminiKey != "" {
-		var err error
-		f.genAIClient, err = genai.NewClient(ctx, option.WithAPIKey(geminiKey))
-		if err != nil {
-			log.Fatal(err)
+		f.geminic = &gemini.Client{
+			APIKey:     geminiKey,
+			Model:      "gemini-1.5-flash-latest",
+			HTTPClient: f.httpc,
 		}
 	}
 
@@ -169,21 +161,6 @@ func main() {
 		if err := f.unsubscribe(ctx, *unsubscribe); err != nil {
 			log.Fatal(err)
 		}
-		return
-	}
-	if *summarize != "" {
-		if f.genAIClient == nil {
-			log.Fatal("set GEMINI_API_KEY environment variable to use this")
-		}
-		text, err := os.ReadFile(*summarize)
-		if err != nil {
-			log.Fatal(err)
-		}
-		summary, err := f.summarize(ctx, string(text))
-		if err != nil {
-			log.Fatal(err)
-		}
-		os.Stdout.Write([]byte(summary))
 		return
 	}
 
@@ -282,12 +259,11 @@ type fetcher struct {
 	gistID  string
 	ghToken string
 	gistc   *gist.Client
+	geminic *gemini.Client
 
 	feeds   []string
 	chatID  string
 	tgToken string
-
-	genAIClient *genai.Client
 
 	errorTemplate string
 
@@ -384,9 +360,7 @@ func shuffle[S any](s []S) []S {
 }
 
 func (f *fetcher) summarize(ctx context.Context, text string) (string, error) {
-	model := f.genAIClient.GenerativeModel("gemini-1.5-flash")
-	model.SystemInstruction = &genai.Content{
-		Parts: []genai.Part{genai.Text(`
+	const systemInstruction = `
 You are a friendly bot that fetches articles from RSS feeds and given
 descriptions of articles, YouTube videos and sometimes full articles themselves.
 
@@ -394,10 +368,21 @@ Your task is to make a concise summary of article or video description in three
 sentences in English.
 
 If text only contains an image or something you can't summarize, return exactly
-"skip" (without quotes).
-`)},
+"TGFEED_SKIP" (without quotes).
+`
+
+	params := gemini.GenerateContentParams{
+		Contents: []*gemini.Content{
+			&gemini.Content{
+				Parts: []*gemini.Part{&gemini.Part{Text: text}},
+			},
+		},
+		SystemInstruction: &gemini.Content{
+			Parts: []*gemini.Part{&gemini.Part{Text: systemInstruction}},
+		},
 	}
-	resp, err := model.GenerateContent(ctx, genai.Text(text))
+
+	resp, err := f.geminic.GenerateContent(ctx, params)
 	if err != nil {
 		return "", err
 	}
@@ -408,11 +393,7 @@ If text only contains an image or something you can't summarize, return exactly
 	if candidate.Content == nil || len(candidate.Content.Parts) == 0 {
 		return "", nil
 	}
-	summary, ok := candidate.Content.Parts[0].(genai.Text)
-	if !ok {
-		return "", nil
-	}
-	return string(summary), nil
+	return candidate.Content.Parts[0].Text, nil
 }
 
 func (f *fetcher) sendUpdate(ctx context.Context, item *gofeed.Item) {
@@ -428,12 +409,12 @@ func (f *fetcher) sendUpdate(ctx context.Context, item *gofeed.Item) {
 	)
 
 	// If we have access to Gemini API, try to summarize an article.
-	if f.genAIClient != nil && item.Description != "" {
+	if f.geminic != nil && item.Description != "" {
 		summary, err := f.summarize(ctx, item.Description)
 		if err != nil {
 			log.Printf("sendUpdate: summarizing item %q failed: %v", item.Link, err)
 		}
-		if summary != "" && summary != "skip" {
+		if summary != "" && !strings.Contains(summary, "TGFEED_SKIP") {
 			msg += "\n\n<i>" + html.EscapeString(summary) + "</i>\n"
 		}
 	}

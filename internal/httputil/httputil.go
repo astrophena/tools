@@ -7,11 +7,19 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
+	"os"
 	"strings"
+	"time"
 
 	"go.astrophena.name/tools/internal/version"
 )
+
+// DefaultClient is a [http.Client] with nice defaults.
+var DefaultClient = &http.Client{
+	Timeout: 10 * time.Second,
+}
 
 // RequestParams defines the parameters needed for making an HTTP request.
 type RequestParams struct {
@@ -25,7 +33,7 @@ type RequestParams struct {
 	// JSON.
 	Body any
 	// HTTPClient is an optional custom HTTP client object to use for the request.
-	// If not provided, http.DefaultClient will be used.
+	// If not provided, [DefaultClient] will be used.
 	HTTPClient *http.Client
 }
 
@@ -40,6 +48,9 @@ func MakeRequest[R any](ctx context.Context, params RequestParams) (R, error) {
 		data, err = json.Marshal(params.Body)
 		if err != nil {
 			return resp, err
+		}
+		if os.Getenv("DUMP_JSON") == "1" {
+			log.Printf("httputil: %s %s: JSON: %v", params.Method, params.URL, string(data))
 		}
 	}
 
@@ -58,7 +69,7 @@ func MakeRequest[R any](ctx context.Context, params RequestParams) (R, error) {
 		req.Header.Set("Content-Type", "application/json")
 	}
 
-	httpc := http.DefaultClient
+	httpc := DefaultClient
 	if params.HTTPClient != nil {
 		httpc = params.HTTPClient
 	}

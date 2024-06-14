@@ -47,7 +47,7 @@ import (
 	"time"
 
 	"go.astrophena.name/tools/internal/cli"
-	"go.astrophena.name/tools/internal/gist"
+	"go.astrophena.name/tools/internal/client/gist"
 	"go.astrophena.name/tools/internal/httputil"
 	"go.astrophena.name/tools/internal/version"
 	"go.astrophena.name/tools/internal/web"
