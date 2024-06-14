@@ -37,6 +37,8 @@ type RequestParams struct {
 	HTTPClient *http.Client
 }
 
+func dumpJSON() bool { return os.Getenv("DUMP_JSON") == "1" }
+
 // MakeRequest makes a generic HTTP request with the provided parameters and
 // unmarshals the JSON response body into the specified type.
 func MakeRequest[R any](ctx context.Context, params RequestParams) (R, error) {
@@ -49,8 +51,8 @@ func MakeRequest[R any](ctx context.Context, params RequestParams) (R, error) {
 		if err != nil {
 			return resp, err
 		}
-		if os.Getenv("DUMP_JSON") == "1" {
-			log.Printf("httputil: %s %s: JSON: %v", params.Method, params.URL, string(data))
+		if dumpJSON() {
+			log.Printf("httputil: %s %s: sent JSON: %v", params.Method, params.URL, string(data))
 		}
 	}
 
@@ -91,6 +93,9 @@ func MakeRequest[R any](ctx context.Context, params RequestParams) (R, error) {
 
 	if err := json.Unmarshal(b, &resp); err != nil {
 		return resp, err
+	}
+	if dumpJSON() {
+		log.Printf("httputil: %s %q: received JSON: %s", params.Method, params.URL, b)
 	}
 
 	return resp, nil
