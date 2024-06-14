@@ -403,7 +403,7 @@ func (f *fetcher) sendUpdate(ctx context.Context, item *gofeed.Item) {
 	}
 
 	msg := fmt.Sprintf(
-		`<a href="%[1]s">%[2]s</a>`,
+		`🔗 <a href="%[1]s">%[2]s</a>`,
 		item.Link,
 		html.EscapeString(title),
 	)
@@ -415,7 +415,7 @@ func (f *fetcher) sendUpdate(ctx context.Context, item *gofeed.Item) {
 			log.Printf("sendUpdate: summarizing item %q failed: %v", item.Link, err)
 		}
 		if summary != "" && !strings.Contains(summary, "TGFEED_SKIP") {
-			msg += "\n\n<i>" + html.EscapeString(summary) + "</i>\n"
+			msg += "\n\n<blockquote>" + html.EscapeString(summary) + "</blockquote>"
 		}
 	}
 
