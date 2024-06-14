@@ -64,6 +64,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"html"
@@ -387,11 +388,11 @@ If text only contains an image or something you can't summarize, return exactly
 		return "", err
 	}
 	if len(resp.Candidates) == 0 {
-		return "", nil
+		return "", errors.New("Gemini API respond with no candidates")
 	}
 	candidate := resp.Candidates[0]
 	if candidate.Content == nil || len(candidate.Content.Parts) == 0 {
-		return "", nil
+		return "", errors.New("candidate.Content is nil or has no Parts")
 	}
 	return candidate.Content.Parts[0].Text, nil
 }
