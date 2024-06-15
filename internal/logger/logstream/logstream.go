@@ -1,3 +1,6 @@
+// Package logstream provides a thread-safe implementation of an io.Writer that
+// buffers log lines in a ring buffer and allows them to be streamed through an
+// HTTP endpoint or retrieved as a snapshot.
 package logstream
 
 import (
