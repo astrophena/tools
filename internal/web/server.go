@@ -77,14 +77,6 @@ func ListenAndServe(ctx context.Context, c *ListenAndServeConfig) {
 		}
 	}
 
-	c.Mux.HandleFunc("/style.css", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeContent(w, r, "style.css", time.Time{}, bytes.NewReader(style))
-	})
-	Health(c.Mux)
-	if c.Debuggable {
-		Debugger(c.Logf, c.Mux)
-	}
-
 	protectDebug := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if !strings.HasPrefix(r.URL.Path, "/debug/") || c.DebugAuth == nil {
@@ -101,6 +93,16 @@ func ListenAndServe(ctx context.Context, c *ListenAndServeConfig) {
 	}
 
 	s := &http.Server{Handler: protectDebug(c.Mux)}
+
+	c.Mux.HandleFunc("/style.css", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeContent(w, r, "style.css", time.Time{}, bytes.NewReader(style))
+	})
+	Health(c.Mux)
+	if c.Debuggable {
+		dbg := Debugger(c.Logf, c.Mux)
+		dbg.Handle("conns", "Connections", Conns(c.Logf, s))
+	}
+
 	go func() {
 		if err := s.Serve(l); err != nil {
 			if err != http.ErrServerClosed {
