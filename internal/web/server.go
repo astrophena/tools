@@ -14,7 +14,7 @@ import (
 	"go.astrophena.name/tools/internal/logger"
 )
 
-//go:generate curl -o style.css https://astrophena.name/css/main.css
+//go:generate curl --fail-with-body -s -o style.css https://astrophena.name/css/main.css
 
 //go:embed style.css
 var style []byte
