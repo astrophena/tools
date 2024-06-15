@@ -82,7 +82,7 @@ func ListenAndServe(ctx context.Context, c *ListenAndServeConfig) {
 	})
 	Health(c.Mux)
 	if c.Debuggable {
-		Debugger(c.Mux)
+		Debugger(c.Logf, c.Mux)
 	}
 
 	protectDebug := func(next http.Handler) http.Handler {

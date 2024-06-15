@@ -3,8 +3,9 @@ package web
 import (
 	_ "embed"
 	"fmt"
-	"log"
 	"net/http"
+
+	"go.astrophena.name/tools/internal/logger"
 )
 
 var (
@@ -18,8 +19,6 @@ var (
 	notFoundTmpl string
 )
 
-var logf = log.Printf // used in tests
-
 // BadRequest replies to the request with an HTTP 400 bad request error.
 func BadRequest(w http.ResponseWriter, r *http.Request, message string) {
 	w.WriteHeader(http.StatusBadRequest)
@@ -27,8 +26,8 @@ func BadRequest(w http.ResponseWriter, r *http.Request, message string) {
 }
 
 // Error replies to the request with an HTTP 500 internal server error and logs
-// the error.
-func Error(w http.ResponseWriter, r *http.Request, err error) {
+// the error using provided logf.
+func Error(logf logger.Logf, w http.ResponseWriter, r *http.Request, err error) {
 	w.WriteHeader(http.StatusInternalServerError)
 	fmt.Fprintf(w, errorTmpl, err)
 	logf("HTTP error: %v", err)

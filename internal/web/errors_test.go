@@ -19,7 +19,7 @@ func TestErrors(t *testing.T) {
 		},
 		"Error": {
 			h: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				Error(w, r, errors.New("something went wrong"))
+				Error(t.Logf, w, r, errors.New("something went wrong"))
 			}),
 			wantStatus: http.StatusInternalServerError,
 		},
@@ -31,7 +31,6 @@ func TestErrors(t *testing.T) {
 		},
 	}
 
-	logf = func(format string, args ...any) {}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			send(t, tc.h, http.MethodGet, "/", tc.wantStatus)

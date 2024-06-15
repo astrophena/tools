@@ -14,12 +14,12 @@ import (
 func TestDebugger(t *testing.T) {
 	mux := http.NewServeMux()
 
-	dbg1 := Debugger(mux)
+	dbg1 := Debugger(t.Logf, mux)
 	if dbg1 == nil {
 		t.Fatal("didn't get a debugger from mux")
 	}
 
-	dbg2 := Debugger(mux)
+	dbg2 := Debugger(t.Logf, mux)
 	if dbg2 != dbg1 {
 		t.Fatal("Debugger returned different debuggers for the same mux")
 	}
@@ -27,7 +27,7 @@ func TestDebugger(t *testing.T) {
 
 func TestDebuggerKV(t *testing.T) {
 	mux := http.NewServeMux()
-	dbg := Debugger(mux)
+	dbg := Debugger(t.Logf, mux)
 	dbg.KV("Donuts", 42)
 	dbg.KV("Secret code", "hunter2")
 	val := "red"
@@ -51,7 +51,7 @@ func TestDebuggerKV(t *testing.T) {
 
 func TestDebuggerLink(t *testing.T) {
 	mux := http.NewServeMux()
-	dbg := Debugger(mux)
+	dbg := Debugger(t.Logf, mux)
 	dbg.Link("https://www.tailscale.com", "Homepage")
 
 	body := getDebug(t, mux)
@@ -64,7 +64,7 @@ func TestDebuggerLink(t *testing.T) {
 
 func TestDebuggerHandle(t *testing.T) {
 	mux := http.NewServeMux()
-	dbg := Debugger(mux)
+	dbg := Debugger(t.Logf, mux)
 	dbg.Handle("check", "Consistency check", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "Test output")
 	}))

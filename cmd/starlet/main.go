@@ -49,6 +49,7 @@ import (
 	"go.astrophena.name/tools/internal/cli"
 	"go.astrophena.name/tools/internal/client/gist"
 	"go.astrophena.name/tools/internal/httputil"
+	"go.astrophena.name/tools/internal/logger/logstream"
 	"go.astrophena.name/tools/internal/version"
 	"go.astrophena.name/tools/internal/web"
 
@@ -106,12 +107,12 @@ func main() {
 		*gistID = id
 	}
 
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+	defer cancel()
+
 	httpc := &http.Client{
 		Timeout: 10 * time.Second,
 	}
-
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
-	defer cancel()
 
 	e := &engine{
 		tgToken:  *tgToken,
@@ -121,21 +122,32 @@ func main() {
 			Token:      *ghToken,
 			HTTPClient: httpc,
 		},
-		gistID: *gistID,
-		httpc:  httpc,
-		mux:    http.NewServeMux(),
+		gistID:    *gistID,
+		httpc:     httpc,
+		mux:       http.NewServeMux(),
+		logStream: logstream.New(300),
 	}
+	e.log = log.New(io.MultiWriter(os.Stderr, e.logStream), "", 0)
+	e.initRoutes()
 
 	if err := e.loadFromGist(ctx); err != nil {
 		log.Fatalf("loadFromGist: %v", err)
 	}
-	web.Debugger(e.mux).Handle("reload", "Reload from gist", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if err := e.loadFromGist(ctx); err != nil {
-			web.Error(w, r, err)
-		}
-		http.Redirect(w, r, "/debug/", http.StatusFound)
-	}))
 
+	if isProd() {
+		go e.selfPing(ctx)
+	}
+
+	web.ListenAndServe(ctx, &web.ListenAndServeConfig{
+		Addr:       *addr,
+		DebugAuth:  e.debugAuth,
+		Debuggable: true, // debug endpoints protected by Telegram auth
+		Logf:       e.log.Printf,
+		Mux:        e.mux,
+	})
+}
+
+func (e *engine) initRoutes() {
 	e.mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			web.NotFound(w, r)
@@ -143,12 +155,6 @@ func main() {
 		}
 		http.Redirect(w, r, "https://t.me/astrophena_bot", http.StatusFound)
 	})
-	if isProd() {
-		e.mux.HandleFunc("starlet.onrender.com/", func(w http.ResponseWriter, r *http.Request) {
-			targetURL := "https://bot.astrophena.name" + r.URL.Path
-			http.Redirect(w, r, targetURL, http.StatusMovedPermanently)
-		})
-	}
 	e.mux.HandleFunc("GET /version", func(w http.ResponseWriter, r *http.Request) {
 		io.WriteString(w, version.Version().Short())
 	})
@@ -156,16 +162,52 @@ func main() {
 	e.mux.HandleFunc("POST /telegram", e.handleTelegramWebhook)
 
 	if isProd() {
-		go e.selfPing(ctx)
+		e.mux.HandleFunc("starlet.onrender.com/", func(w http.ResponseWriter, r *http.Request) {
+			targetURL := "https://bot.astrophena.name" + r.URL.Path
+			http.Redirect(w, r, targetURL, http.StatusMovedPermanently)
+		})
 	}
 
-	web.ListenAndServe(ctx, &web.ListenAndServeConfig{
-		Mux:        e.mux,
-		Addr:       *addr,
-		Debuggable: true, // debug endpoints protected by Telegram auth
-		DebugAuth:  e.debugAuth,
-	})
+	// Debug routes.
+	dbg := web.Debugger(e.log.Printf, e.mux)
+	dbg.Handle("reload", "Reload from gist", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := e.loadFromGist(r.Context()); err != nil {
+			web.Error(e.log.Printf, w, r, err)
+		}
+		http.Redirect(w, r, "/debug/", http.StatusFound)
+	}))
+	dbg.Handle("logs", "Logs", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintf(w, logsTmpl, strings.Join(e.logStream.Lines(), "\n"))
+	}))
+	e.mux.Handle("/debug/log", e.logStream)
 }
+
+const logsTmpl = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="/style.css">
+<title>Logs</title>
+<script>
+const maxLines = 300;
+new EventSource("/debug/log", { withCredentials: true }).addEventListener("logline", function(e) {
+  // Append line to whatever is in the pre block. Then, truncate number of lines to maxLines.
+  // This is extremely inefficient, since we're splitting into component lines and joining them
+  // back each time a line is added.
+  var txt = document.getElementById("logs").innerText + e.data + "\n";
+  document.getElementById("logs").innerText = txt.split('\n').slice(-maxLines).join('\n');
+});
+</script>
+</head>
+<body>
+<main>
+<h1>Logs</h1>
+<p><i>The last 300 lines are displayed, and new ones are streamed automatically.</i></p>
+<pre><code id="logs">%[1]s</code></pre>
+</main>
+</body>
+</html>`
 
 func (e *engine) debugAuth(r *http.Request) bool {
 	if !isProd() || e.loggedIn(r) {
@@ -206,6 +248,9 @@ type engine struct {
 	httpc *http.Client
 	mux   *http.ServeMux
 
+	log       *log.Logger
+	logStream logstream.Streamer
+
 	mu  sync.Mutex
 	bot []byte
 }
@@ -218,7 +263,7 @@ func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 
 	rawUpdate, err := io.ReadAll(r.Body)
 	if err != nil {
-		web.Error(w, r, err)
+		web.Error(e.log.Printf, w, r, err)
 		return
 	}
 
@@ -237,12 +282,15 @@ func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 	_, err = starlark.ExecFile(&starlark.Thread{}, "bot.star", botCode, predeclared)
 	if err != nil {
 		if evalErr, ok := err.(*starlark.EvalError); ok {
-			web.Error(w, r, errors.New(evalErr.Backtrace()))
+			web.Error(e.log.Printf, w, r, errors.New(evalErr.Backtrace()))
 			return
 		}
-		web.Error(w, r, err)
+		web.Error(e.log.Printf, w, r, err)
 		return
 	}
+}
+
+func (e *engine) handleLogs(w http.ResponseWriter, r *http.Request) {
 }
 
 func (e *engine) handleLogin(w http.ResponseWriter, r *http.Request) {
@@ -250,7 +298,7 @@ func (e *engine) handleLogin(w http.ResponseWriter, r *http.Request) {
 	data := r.URL.Query()
 	hash := data.Get("hash")
 	if hash == "" {
-		web.Error(w, r, fmt.Errorf("no hash present in auth data, got: %v", data))
+		web.Error(e.log.Printf, w, r, fmt.Errorf("no hash present in auth data, got: %v", data))
 		return
 	}
 	data.Del("hash")
@@ -272,7 +320,7 @@ func (e *engine) handleLogin(w http.ResponseWriter, r *http.Request) {
 	checkString := sb.String()
 
 	if !e.validateAuthData(checkString, hash) {
-		web.Error(w, r, errors.New("hash is not valid"))
+		web.Error(e.log.Printf, w, r, errors.New("hash is not valid"))
 		return
 	}
 
@@ -342,15 +390,15 @@ func (e *engine) selfPing(ctx context.Context) {
 	ticker := time.NewTicker(10 * time.Minute)
 	defer ticker.Stop()
 
-	log.Printf("selfPing: started")
-	defer log.Printf("selfPing: stopped")
+	e.log.Printf("selfPing: started")
+	defer e.log.Printf("selfPing: stopped")
 
 	for {
 		select {
 		case <-ticker.C:
 			url := os.Getenv("RENDER_EXTERNAL_URL")
 			if url == "" {
-				log.Printf("selfPing: RENDER_EXTERNAL_URL is not set; are you really on Render?")
+				e.log.Printf("selfPing: RENDER_EXTERNAL_URL is not set; are you really on Render?")
 				return
 			}
 			health, err := httputil.MakeRequest[web.HealthResponse](ctx, httputil.RequestParams{
@@ -359,10 +407,10 @@ func (e *engine) selfPing(ctx context.Context) {
 				HTTPClient: e.httpc,
 			})
 			if err != nil {
-				log.Printf("selfPing: %v", err)
+				e.log.Printf("selfPing: %v", err)
 			}
 			if !health.OK {
-				log.Printf("selfPing: unhealthy: %+v", health)
+				e.log.Printf("selfPing: unhealthy: %+v", health)
 			}
 		case <-ctx.Done():
 			return

@@ -12,6 +12,7 @@ import (
 	"expvar"
 	"fmt"
 	"html/template"
+	"log"
 	"net/http"
 	"net/http/pprof"
 	"net/url"
@@ -20,6 +21,7 @@ import (
 	"sync"
 	"time"
 
+	"go.astrophena.name/tools/internal/logger"
 	"go.astrophena.name/tools/internal/version"
 )
 
@@ -45,6 +47,7 @@ type DebugHandler struct {
 	tpl     *template.Template // template that is used for rendering debug page
 	tplInit sync.Once          // guards template initialization
 	tplErr  error              // error that happened during template initialization
+	logf    logger.Logf
 }
 
 // Utility types used for rendering templates.
@@ -62,12 +65,15 @@ type (
 
 // Debugger returns the DebugHandler registered on mux at /debug/, creating it
 // if necessary.
-func Debugger(mux *http.ServeMux) *DebugHandler {
+func Debugger(logf logger.Logf, mux *http.ServeMux) *DebugHandler {
 	h, pat := mux.Handler(&http.Request{URL: &url.URL{Path: "/debug/"}})
 	if d, ok := h.(*DebugHandler); ok && pat == "/debug/" {
 		return d
 	}
-	ret := &DebugHandler{mux: mux}
+	if logf == nil {
+		logf = log.Printf
+	}
+	ret := &DebugHandler{logf: logf, mux: mux}
 	mux.Handle("/debug/", ret)
 
 	hostname, err := os.Hostname()
@@ -119,7 +125,7 @@ func (d *DebugHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		d.tpl, d.tplErr = template.New("debug").Parse(debugTmpl)
 	})
 	if d.tplErr != nil {
-		Error(w, r, fmt.Errorf("failed to initialize template: %w", d.tplErr))
+		Error(d.logf, w, r, fmt.Errorf("failed to initialize template: %w", d.tplErr))
 		return
 	}
 
@@ -142,7 +148,7 @@ func (d *DebugHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	var buf bytes.Buffer
 	if err := d.tpl.Execute(&buf, &data); err != nil {
-		Error(w, r, err)
+		Error(d.logf, w, r, err)
 		return
 	}
 	buf.WriteTo(w)
