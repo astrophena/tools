@@ -147,6 +147,7 @@ func setupLogger() (lgs Streamer, wbuf *syncBuffer, lg *log.Logger) {
 	return lgs, wbuf, log.New(mw, "", 0)
 }
 
+// syncBuffer is a synchronized version of bytes.Buffer.
 type syncBuffer struct {
 	mu  sync.RWMutex
 	buf *bytes.Buffer
