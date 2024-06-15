@@ -323,7 +323,7 @@ li {
   width: 24px;
   height: 24px;
   vertical-align: middle;
-  display: inline-block;
+  display: inline-flex;
   padding-right: 2px;
   padding-bottom: 4px;
 }
