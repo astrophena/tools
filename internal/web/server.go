@@ -100,7 +100,17 @@ func ListenAndServe(ctx context.Context, c *ListenAndServeConfig) {
 	Health(c.Mux)
 	if c.Debuggable {
 		dbg := Debugger(c.Logf, c.Mux)
-		dbg.Handle("conns", "Connections", Conns(c.Logf, s))
+		connsHandler, updateAddrFunc := Conns(c.Logf, s)
+		s.Handler = func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				realIP := getRealIP(r)
+				if realIP != "" {
+					updateAddrFunc(r.RemoteAddr, realIP)
+				}
+				next.ServeHTTP(w, r)
+			})
+		}(s.Handler)
+		dbg.Handle("conns", "Connections", connsHandler)
 	}
 
 	go func() {
@@ -121,4 +131,14 @@ func ListenAndServe(ctx context.Context, c *ListenAndServeConfig) {
 	if c.AfterShutdown != nil {
 		c.AfterShutdown()
 	}
+}
+
+func getRealIP(r *http.Request) string {
+	forwarded := r.Header.Get("X-Forwarded-For")
+	if forwarded != "" {
+		// Extract the first IP from the comma-separated list (assuming the first is
+		// the client)
+		return strings.Split(forwarded, ",")[0]
+	}
+	return ""
 }

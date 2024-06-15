@@ -17,10 +17,23 @@ import (
 
 // Conns returns an http.Handler that displays the list of active
 // HTTP connections and associates it with the provided http.Server.
-func Conns(logf logger.Logf, s *http.Server) http.Handler {
+func Conns(logf logger.Logf, s *http.Server) (http.Handler, func(proxyAddr, realAddr string)) {
 	ch := &connsHandler{logf: logf, conns: make(map[string]*conn)}
 	s.ConnState = ch.connState
-	return ch
+	return ch, func(proxyAddr, realAddr string) {
+		ch.mu.Lock()
+		defer ch.mu.Unlock()
+		conn, ok := ch.conns[proxyAddr]
+		if !ok {
+			return
+		}
+		for _, addr := range conn.SeenRealAddrs {
+			if addr == realAddr {
+				return
+			}
+		}
+		conn.SeenRealAddrs = append(conn.SeenRealAddrs, realAddr)
+	}
 }
 
 // connsHandler is an http.Handler that displays the list of active connections.
@@ -38,10 +51,11 @@ type connsHandler struct {
 
 // conn represents an active HTTP connection.
 type conn struct {
-	Net   string
-	Addr  string
-	Time  time.Time
-	State http.ConnState
+	Net           string
+	Addr          string
+	SeenRealAddrs []string
+	Time          time.Time
+	State         http.ConnState
 }
 
 // connState implements the http.Server.ConnState callback function.
