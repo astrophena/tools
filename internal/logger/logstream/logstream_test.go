@@ -30,6 +30,7 @@ func TestLogStreamerStream(t *testing.T) {
 		"test3",
 	}
 	var got []string
+	var mu sync.Mutex
 
 	var wg sync.WaitGroup
 
@@ -37,7 +38,9 @@ func TestLogStreamerStream(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		for line := range stream {
+			mu.Lock()
 			got = append(got, line)
+			mu.Unlock()
 		}
 		wg.Done()
 	}()
@@ -78,9 +81,9 @@ func TestLogStreamerHTTPHandler(t *testing.T) {
 				"test2",
 				"test3",
 			}
+			var mu sync.Mutex
 			go func() {
 				for _, line := range want {
-					line := line
 					lg.Printf(line)
 				}
 			}()
@@ -91,13 +94,16 @@ func TestLogStreamerHTTPHandler(t *testing.T) {
 			}
 
 			var got []string
+
 			r := bufio.NewReader(res.Body)
 			for i := 0; i < wantRead; i++ {
 				line, err := r.ReadString('\n')
 				if err != nil {
 					break
 				}
+				mu.Lock()
 				got = append(got, line)
+				mu.Unlock()
 			}
 			res.Body.Close()
 
