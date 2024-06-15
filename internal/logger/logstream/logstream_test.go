@@ -138,9 +138,28 @@ func TestEventStreamRequested(t *testing.T) {
 	}
 }
 
-func setupLogger() (lgs Streamer, wbuf *bytes.Buffer, lg *log.Logger) {
+func setupLogger() (lgs Streamer, wbuf *syncBuffer, lg *log.Logger) {
 	lgs = New(10)
-	wbuf = new(bytes.Buffer)
+	wbuf = &syncBuffer{
+		buf: new(bytes.Buffer),
+	}
 	mw := io.MultiWriter(lgs, wbuf)
 	return lgs, wbuf, log.New(mw, "", 0)
+}
+
+type syncBuffer struct {
+	mu  sync.RWMutex
+	buf *bytes.Buffer
+}
+
+func (sb *syncBuffer) Write(p []byte) (n int, err error) {
+	sb.mu.Lock()
+	defer sb.mu.Unlock()
+	return sb.buf.Write(p)
+}
+
+func (sb *syncBuffer) String() string {
+	sb.mu.RLock()
+	defer sb.mu.RUnlock()
+	return sb.buf.String()
 }
