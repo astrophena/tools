@@ -208,8 +208,7 @@ func (f *fetcher) listFeeds(ctx context.Context, w io.Writer) error {
 		if state.CachedTitle != "" {
 			fmt.Fprintf(&sb, "%q, ", state.CachedTitle)
 		}
-		ago := time.Now().Sub(state.LastUpdated)
-		fmt.Fprintf(&sb, "last updated %s", ago)
+		fmt.Fprintf(&sb, "last updated %s", state.LastUpdated.Format(time.DateTime))
 		if state.ErrorCount > 0 {
 			failCount := "once"
 			if state.ErrorCount > 1 {
