@@ -290,9 +290,6 @@ func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (e *engine) handleLogs(w http.ResponseWriter, r *http.Request) {
-}
-
 func (e *engine) handleLogin(w http.ResponseWriter, r *http.Request) {
 	// See https://core.telegram.org/widgets/login#receiving-authorization-data.
 	data := r.URL.Query()
