@@ -180,6 +180,18 @@ func (e *engine) initRoutes() {
 		fmt.Fprintf(w, logsTmpl, strings.Join(e.logStream.Lines(), "\n"))
 	}))
 	e.mux.Handle("/debug/log", e.logStream)
+	e.mux.Handle("/debug/dumpcookies", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var sb strings.Builder
+		for _, cookie := range r.Cookies() {
+			fmt.Fprintf(&sb, "Cookie %s: %v", cookie.Name, cookie.Value)
+			b64, err := base64.URLEncoding.DecodeString(cookie.Value)
+			if err == nil {
+				fmt.Fprintf(&sb, "\nbase64 decoded:\n\t%s", b64)
+			}
+			fmt.Fprintf(&sb, "\n")
+		}
+		io.WriteString(w, sb.String())
+	}))
 }
 
 const logsTmpl = `<!DOCTYPE html>
@@ -348,14 +360,29 @@ func (e *engine) loggedIn(r *http.Request) bool {
 		return false
 	}
 
+	dataMap := extractAuthData(data)
+
 	// Check if ID of authenticated user matches the bot owner ID.
+	if dataMap["id"] != strconv.FormatInt(e.tgOwner, 10) {
+		return false
+	}
+	// Check if auth data was not created more that 24 hours ago.
+	authDateUnix, err := strconv.ParseInt(dataMap["auth_date"], 0, 64)
+	if err != nil {
+		return false
+	}
+	return time.Now().Sub(time.Unix(authDateUnix, 0)) < 24*time.Hour
+}
+
+func extractAuthData(data string) map[string]string {
+	dataMap := make(map[string]string)
 	for _, line := range strings.Split(data, "\n") {
 		parts := strings.SplitN(line, "=", 2)
-		if len(parts) == 2 && strings.TrimSpace(parts[0]) == "id" {
-			return strings.TrimSpace(parts[1]) == strconv.FormatInt(e.tgOwner, 10)
+		if len(parts) == 2 {
+			dataMap[parts[0]] = parts[1]
 		}
 	}
-	return false
+	return dataMap
 }
 
 func (e *engine) validateAuthData(data, hash string) bool {
