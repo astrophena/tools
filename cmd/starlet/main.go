@@ -452,6 +452,8 @@ func (e *engine) reportError(ctx context.Context, err error) {
 	if evalErr, ok := err.(*starlark.EvalError); ok {
 		errMsg += "\n\n" + evalErr.Backtrace()
 	}
+	// Mask Telegram Bot API token in error messages.
+	errMsg = strings.ReplaceAll(errMsg, e.tgToken, "[EXPUNGED]")
 
 	_, sendErr := httputil.MakeRequest[any](ctx, httputil.RequestParams{
 		Method: http.MethodPost,
