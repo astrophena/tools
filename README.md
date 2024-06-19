@@ -1,4 +1,4 @@
-This repository holds personal tools:
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/astrophena/tools?quickstart=1)
 
 - Cmdtop displays the top of most used commands in bash history.
 - Dupfind finds duplicate files in a directory.
