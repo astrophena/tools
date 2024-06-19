@@ -137,7 +137,7 @@ func getRealIP(r *http.Request) string {
 	forwarded := r.Header.Get("X-Forwarded-For")
 	if forwarded != "" {
 		// Extract the first IP from the comma-separated list (assuming the first is
-		// the client)
+		// the client).
 		return strings.Split(forwarded, ",")[0]
 	}
 	return ""

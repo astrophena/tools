@@ -36,5 +36,5 @@ func Error(logf logger.Logf, w http.ResponseWriter, r *http.Request, err error) 
 // NotFound replies to the request with an HTTP 404 not found error.
 func NotFound(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotFound)
-	fmt.Fprintf(w, notFoundTmpl)
+	fmt.Fprint(w, notFoundTmpl)
 }

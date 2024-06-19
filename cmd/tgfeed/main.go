@@ -622,7 +622,7 @@ func (f *fetcher) saveToGist(ctx context.Context) error {
 }
 
 func (f *fetcher) makeTelegramRequest(ctx context.Context, method string, args any) error {
-	if _, err := httputil.MakeRequest[any](ctx, httputil.RequestParams{
+	if _, err := httputil.MakeJSONRequest[any](ctx, httputil.RequestParams{
 		Method:     http.MethodPost,
 		URL:        tgAPI + "/bot" + f.tgToken + "/" + method,
 		Body:       args,

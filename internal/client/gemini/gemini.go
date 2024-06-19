@@ -64,7 +64,7 @@ type Candidate struct {
 // GenerateContent sends a request to the generative text API to generate
 // creative text content.
 func (c *Client) GenerateContent(ctx context.Context, params GenerateContentParams) (GenerateContentResponse, error) {
-	return httputil.MakeRequest[GenerateContentResponse](ctx, httputil.RequestParams{
+	return httputil.MakeJSONRequest[GenerateContentResponse](ctx, httputil.RequestParams{
 		Method: http.MethodPost,
 		URL:    APIEndpoint + "/models/" + c.Model + ":generateContent",
 		Headers: map[string]string{

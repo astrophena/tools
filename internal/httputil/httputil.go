@@ -39,9 +39,9 @@ type RequestParams struct {
 
 func dumpJSON() bool { return os.Getenv("DUMP_JSON") == "1" }
 
-// MakeRequest makes a generic HTTP request with the provided parameters and
+// MakeJSONRequest makes a JSON HTTP request with the provided parameters and
 // unmarshals the JSON response body into the specified type.
-func MakeRequest[R any](ctx context.Context, params RequestParams) (R, error) {
+func MakeJSONRequest[R any](ctx context.Context, params RequestParams) (R, error) {
 	var resp R
 
 	var data []byte

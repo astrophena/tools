@@ -26,7 +26,7 @@ type Client struct {
 // makeRequest performs a generic HTTP request to the GitHub Gist API using the
 // provided parameters.
 func (c *Client) makeRequest(ctx context.Context, method string, id string, gist *Gist) (*Gist, error) {
-	return httputil.MakeRequest[*Gist](ctx, httputil.RequestParams{
+	return httputil.MakeJSONRequest[*Gist](ctx, httputil.RequestParams{
 		Method: method,
 		URL:    ghAPI + "/gists/" + id,
 		Headers: map[string]string{

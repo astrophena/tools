@@ -21,12 +21,12 @@
         </thead>
         <tbody>
           {{ range conns }}
-          <tr>
-            <td><code>{{ since .Time }}</code></td>
-            <td><code>{{ .State }}</code></td>
-            <td><code>{{ .Net }}</code></td>
-            <td><code>{{ .Addr }} (real IPs: {{ .SeenRealAddrs }})</code></td>
-          </tr>
+            <tr>
+              <td><code>{{ since .Time }}</code></td>
+              <td><code>{{ .State }}</code></td>
+              <td><code>{{ .Net }}</code></td>
+              <td><code>{{ .Addr }} (real IPs: {{ .SeenRealAddrs }})</code></td>
+            </tr>
           {{ end }}
         </tbody>
       </table>

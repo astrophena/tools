@@ -438,7 +438,7 @@ func (e *engine) selfPing(ctx context.Context) {
 				e.log.Printf("selfPing: RENDER_EXTERNAL_URL is not set; are you really on Render?")
 				return
 			}
-			health, err := httputil.MakeRequest[web.HealthResponse](ctx, httputil.RequestParams{
+			health, err := httputil.MakeJSONRequest[web.HealthResponse](ctx, httputil.RequestParams{
 				Method:     http.MethodGet,
 				URL:        url + "/health",
 				HTTPClient: e.httpc,
@@ -466,7 +466,7 @@ func (e *engine) reportError(ctx context.Context, err error) {
 	// Mask Telegram Bot API token in error messages.
 	errMsg = strings.ReplaceAll(errMsg, e.tgToken, "[EXPUNGED]")
 
-	_, sendErr := httputil.MakeRequest[any](ctx, httputil.RequestParams{
+	_, sendErr := httputil.MakeJSONRequest[any](ctx, httputil.RequestParams{
 		Method: http.MethodPost,
 		URL:    "https://api.telegram.org/bot" + e.tgToken + "/sendMessage",
 		Body: map[string]string{
@@ -534,7 +534,7 @@ func (e *engine) callFunc(ctx context.Context) starlarkBuiltin {
 		}
 
 		// Make Telegram Bot API request.
-		rawResp, err := httputil.MakeRequest[json.RawMessage](ctx, httputil.RequestParams{
+		rawResp, err := httputil.MakeJSONRequest[json.RawMessage](ctx, httputil.RequestParams{
 			Method:     http.MethodPost,
 			URL:        "https://api.telegram.org/bot" + e.tgToken + "/" + string(method),
 			Body:       json.RawMessage(rawReq),
