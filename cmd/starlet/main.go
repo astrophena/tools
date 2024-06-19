@@ -47,6 +47,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -166,7 +167,10 @@ type engine struct {
 
 	gistc *gist.Client
 	httpc *http.Client
-	mux   *http.ServeMux
+
+	mux *http.ServeMux
+
+	requestID atomic.Uint64
 
 	log       *log.Logger
 	logStream logstream.Streamer
@@ -289,7 +293,12 @@ func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 	botCode := bytes.Clone(e.bot)
 	e.mu.Unlock()
 
-	_, err = starlark.ExecFileOptions(&syntax.FileOptions{}, &starlark.Thread{}, "bot.star", botCode, predeclared)
+	_, err = starlark.ExecFileOptions(&syntax.FileOptions{}, &starlark.Thread{
+		Name: fmt.Sprintf("%d", e.requestID.Add(1)),
+		Print: func(thread *starlark.Thread, msg string) {
+			e.log.Printf("[Request %s] %s", thread.Name, msg)
+		},
+	}, "bot.star", botCode, predeclared)
 	if err != nil {
 		e.reportError(r.Context(), err)
 		return
