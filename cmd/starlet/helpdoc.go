@@ -23,6 +23,7 @@ Additional modules and functions available from bot code:
 
   - call: Make HTTP POST requests to the Telegram API, facilitating bot commands
     and interactions.
+  - escape_html: Escape HTML string.
   - json: The Starlark JSON module, enabling JSON parsing and encoding.
   - time: The Starlark time module, providing time-related functions.
 
