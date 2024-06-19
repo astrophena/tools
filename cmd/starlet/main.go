@@ -36,6 +36,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"html"
 	"io"
 	"log"
 	"net/http"
@@ -457,7 +458,7 @@ func (e *engine) reportError(ctx context.Context, err error) {
 		URL:    "https://api.telegram.org/bot" + e.tgToken + "/sendMessage",
 		Body: map[string]string{
 			"chat_id":    strconv.FormatInt(e.tgOwner, 10),
-			"text":       fmt.Sprintf(e.errorTemplate, errMsg),
+			"text":       fmt.Sprintf(e.errorTemplate, html.EscapeString(errMsg)),
 			"parse_mode": "HTML",
 		},
 		HTTPClient: e.httpc,
