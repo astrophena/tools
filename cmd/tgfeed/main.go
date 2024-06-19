@@ -374,12 +374,12 @@ If text only contains an image or something you can't summarize, return exactly
 
 	params := gemini.GenerateContentParams{
 		Contents: []*gemini.Content{
-			&gemini.Content{
-				Parts: []*gemini.Part{&gemini.Part{Text: text}},
+			{
+				Parts: []*gemini.Part{{Text: text}},
 			},
 		},
 		SystemInstruction: &gemini.Content{
-			Parts: []*gemini.Part{&gemini.Part{Text: systemInstruction}},
+			Parts: []*gemini.Part{{Text: systemInstruction}},
 		},
 	}
 
@@ -388,7 +388,7 @@ If text only contains an image or something you can't summarize, return exactly
 		return "", err
 	}
 	if len(resp.Candidates) == 0 {
-		return "", errors.New("Gemini API respond with no candidates")
+		return "", errors.New("no candidates provided")
 	}
 	candidate := resp.Candidates[0]
 	if candidate.Content == nil || len(candidate.Content.Parts) == 0 {

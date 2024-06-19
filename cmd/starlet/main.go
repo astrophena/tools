@@ -1,3 +1,5 @@
+// vim: foldmethod=marker
+
 /*
 Starlet allows to create and manage a Telegram bot using the Starlark scripting language.
 
@@ -50,13 +52,16 @@ import (
 	"go.astrophena.name/tools/internal/client/gist"
 	"go.astrophena.name/tools/internal/httputil"
 	"go.astrophena.name/tools/internal/logger/logstream"
-	"go.astrophena.name/tools/internal/version"
 	"go.astrophena.name/tools/internal/web"
 
 	starlarkjson "go.starlark.net/lib/json"
 	starlarktime "go.starlark.net/lib/time"
 	"go.starlark.net/starlark"
+	"go.starlark.net/syntax"
 )
+
+const defaultErrorTemplate = `❌ Something went wrong:
+<pre><code>%v</code></pre>`
 
 func main() {
 	addr := flag.String(
@@ -127,7 +132,7 @@ func main() {
 		mux:       http.NewServeMux(),
 		logStream: logstream.New(300),
 	}
-	e.log = log.New(io.MultiWriter(os.Stderr, e.logStream), "", 0)
+	e.log = log.New(io.MultiWriter(os.Stderr, e.logStream), "", log.LstdFlags|log.Llongfile)
 	e.initRoutes()
 
 	if err := e.loadFromGist(ctx); err != nil {
@@ -147,7 +152,31 @@ func main() {
 	})
 }
 
+// https://docs.render.com/environment-variables
+func isProd() bool { return os.Getenv("RENDER") == "true" }
+
+type engine struct {
+	// configuration, read-only
+	gistID   string
+	tgOwner  int64
+	tgSecret string
+	tgToken  string
+
+	gistc *gist.Client
+	httpc *http.Client
+	mux   *http.ServeMux
+
+	log       *log.Logger
+	logStream logstream.Streamer
+
+	// loaded from gist
+	mu            sync.Mutex
+	bot           []byte
+	errorTemplate string
+}
+
 func (e *engine) initRoutes() {
+	// Redirect to Telegram chat with bot.
 	e.mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			web.NotFound(w, r)
@@ -155,18 +184,19 @@ func (e *engine) initRoutes() {
 		}
 		http.Redirect(w, r, "https://t.me/astrophena_bot", http.StatusFound)
 	})
-	e.mux.HandleFunc("GET /version", func(w http.ResponseWriter, r *http.Request) {
-		io.WriteString(w, version.Version().Short())
-	})
-	e.mux.HandleFunc("GET /login", e.handleLogin)
+
 	e.mux.HandleFunc("POST /telegram", e.handleTelegramWebhook)
 
+	// Redirect from starlet.onrender.com to bot.astrophena.name.
 	if isProd() {
 		e.mux.HandleFunc("starlet.onrender.com/", func(w http.ResponseWriter, r *http.Request) {
 			targetURL := "https://bot.astrophena.name" + r.URL.Path
 			http.Redirect(w, r, targetURL, http.StatusMovedPermanently)
 		})
 	}
+
+	// Authentication.
+	e.mux.HandleFunc("GET /login", e.handleLogin)
 
 	// Debug routes.
 	dbg := web.Debugger(e.log.Printf, e.mux)
@@ -180,18 +210,6 @@ func (e *engine) initRoutes() {
 		fmt.Fprintf(w, logsTmpl, strings.Join(e.logStream.Lines(), "\n"))
 	}))
 	e.mux.Handle("/debug/log", e.logStream)
-	e.mux.Handle("/debug/dumpcookies", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var sb strings.Builder
-		for _, cookie := range r.Cookies() {
-			fmt.Fprintf(&sb, "Cookie %s: %v", cookie.Name, cookie.Value)
-			b64, err := base64.URLEncoding.DecodeString(cookie.Value)
-			if err == nil {
-				fmt.Fprintf(&sb, "\nbase64 decoded:\n\t%s", b64)
-			}
-			fmt.Fprintf(&sb, "\n")
-		}
-		io.WriteString(w, sb.String())
-	}))
 }
 
 const logsTmpl = `<!DOCTYPE html>
@@ -221,50 +239,27 @@ new EventSource("/debug/log", { withCredentials: true }).addEventListener("logli
 </body>
 </html>`
 
-func (e *engine) debugAuth(r *http.Request) bool {
-	if !isProd() || e.loggedIn(r) {
-		return true
-	}
-	return false
-}
-
 func (e *engine) loadFromGist(ctx context.Context) error {
 	g, err := e.gistc.Get(ctx, e.gistID)
 	if err != nil {
 		return err
 	}
 
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
 	bot, exists := g.Files["bot.star"]
 	if !exists {
 		return errors.New("bot.star should contain bot code in Gist")
 	}
-
-	e.mu.Lock()
 	e.bot = []byte(bot.Content)
-	e.mu.Unlock()
+	if errorTmpl, exists := g.Files["error.tmpl"]; exists {
+		e.errorTemplate = errorTmpl.Content
+	} else {
+		e.errorTemplate = defaultErrorTemplate
+	}
 
 	return nil
-}
-
-// https://docs.render.com/environment-variables
-func isProd() bool { return os.Getenv("RENDER") == "true" }
-
-type engine struct {
-	// configuration, read-only
-	gistID   string
-	tgOwner  int64
-	tgSecret string
-	tgToken  string
-
-	gistc *gist.Client
-	httpc *http.Client
-	mux   *http.ServeMux
-
-	log       *log.Logger
-	logStream logstream.Streamer
-
-	mu  sync.Mutex
-	bot []byte
 }
 
 func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
@@ -291,15 +286,20 @@ func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 	botCode := bytes.Clone(e.bot)
 	e.mu.Unlock()
 
-	_, err = starlark.ExecFile(&starlark.Thread{}, "bot.star", botCode, predeclared)
+	_, err = starlark.ExecFileOptions(&syntax.FileOptions{}, &starlark.Thread{}, "bot.star", botCode, predeclared)
 	if err != nil {
-		if evalErr, ok := err.(*starlark.EvalError); ok {
-			web.Error(e.log.Printf, w, r, errors.New(evalErr.Backtrace()))
-			return
-		}
-		web.Error(e.log.Printf, w, r, err)
+		e.reportError(r.Context(), err)
 		return
 	}
+}
+
+// Authentication {{{
+
+func (e *engine) debugAuth(r *http.Request) bool {
+	if !isProd() || e.loggedIn(r) {
+		return true
+	}
+	return false
 }
 
 func (e *engine) handleLogin(w http.ResponseWriter, r *http.Request) {
@@ -371,7 +371,7 @@ func (e *engine) loggedIn(r *http.Request) bool {
 	if err != nil {
 		return false
 	}
-	return time.Now().Sub(time.Unix(authDateUnix, 0)) < 24*time.Hour
+	return time.Since(time.Unix(authDateUnix, 0)) < 24*time.Hour
 }
 
 func extractAuthData(data string) map[string]string {
@@ -408,8 +408,9 @@ func setCookie(w http.ResponseWriter, key, val string) {
 	})
 }
 
-// selfPing continusly pings Starlet every 10 minutes in production to prevent
-// it's Render app from sleeping.
+// }}}
+
+// selfPing continusly pings Starlet every 10 minutes in production to prevent it's Render app from sleeping.
 func (e *engine) selfPing(ctx context.Context) {
 	ticker := time.NewTicker(10 * time.Minute)
 	defer ticker.Stop()
@@ -442,10 +443,52 @@ func (e *engine) selfPing(ctx context.Context) {
 	}
 }
 
+func (e *engine) reportError(ctx context.Context, err error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	errMsg := err.Error()
+	if evalErr, ok := err.(*starlark.EvalError); ok {
+		errMsg += "\n\n" + evalErr.Backtrace()
+	}
+
+	_, sendErr := httputil.MakeRequest[any](ctx, httputil.RequestParams{
+		Method: http.MethodPost,
+		URL:    "https://api.telegram.org/bot" + e.tgToken + "/sendMessage",
+		Body: map[string]any{
+			"chat_id": e.tgOwner,
+			"text":    fmt.Sprintf(e.errorTemplate, errMsg),
+		},
+		HTTPClient: e.httpc,
+	})
+	if sendErr != nil {
+		e.log.Printf("reporting an error %q to %q failed: %v", err, e.tgOwner, sendErr)
+	}
+}
+
 type starlarkBuiltin func(*starlark.Thread, *starlark.Builtin, starlark.Tuple, []starlark.Tuple) (starlark.Value, error)
 
+/*
+callFunc implements a Starlark builtin that makes request to Telegram Bot API and returns it's response.
+
+It accepts two keyword arguments: method (string, Telegram Bot API method to call) and args (dict, arguments
+for this method).
+
+For example, to send a message, you can write a function like this:
+
+	def send_message(to, text, reply_markup = {}):
+	    return call(
+	        method = "sendMessage",
+	        args = {
+	            "chat_id": to,
+	            "text": text,
+	            "reply_markup": reply_markup
+	        }
+	    )
+*/
 func (e *engine) callFunc(ctx context.Context) starlarkBuiltin {
 	return func(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+		// Unpack arguments passed from Starlark code.
 		if len(args) > 0 {
 			return starlark.None, fmt.Errorf("call: unexpected positional arguments")
 		}
@@ -457,25 +500,28 @@ func (e *engine) callFunc(ctx context.Context) starlarkBuiltin {
 			return starlark.None, err
 		}
 
-		encode := starlarkjson.Module.Members["encode"]
-		val, err := starlark.Call(thread, encode, starlark.Tuple{argsDict}, []starlark.Tuple{})
+		// Encode received args to JSON.
+		rawReqVal, err := starlark.Call(thread, starlarkjson.Module.Members["encode"], starlark.Tuple{argsDict}, []starlark.Tuple{})
 		if err != nil {
-			return starlark.None, err
+			return starlark.None, fmt.Errorf("encoding received args to JSON: %v", err)
 		}
-		str, ok := val.(starlark.String)
+		rawReq, ok := rawReqVal.(starlark.String)
 		if !ok {
 			panic("call: unexpected return type of json.encode Starlark function")
 		}
 
-		if _, err := httputil.MakeRequest[any](ctx, httputil.RequestParams{
+		// Make Telegram Bot API request.
+		rawResp, err := httputil.MakeRequest[json.RawMessage](ctx, httputil.RequestParams{
 			Method:     http.MethodPost,
 			URL:        "https://api.telegram.org/bot" + e.tgToken + "/" + string(method),
-			Body:       json.RawMessage(str),
+			Body:       json.RawMessage(rawReq),
 			HTTPClient: e.httpc,
-		}); err != nil {
-			return starlark.None, err
+		})
+		if err != nil {
+			return starlark.None, fmt.Errorf("making Bot API request: %v", err)
 		}
 
-		return starlark.None, nil
+		// Decode received JSON returned from Telegram and pass it back to Starlark code.
+		return starlark.Call(thread, starlarkjson.Module.Members["decode"], starlark.Tuple{starlark.String(rawResp)}, []starlark.Tuple{})
 	}
 }
