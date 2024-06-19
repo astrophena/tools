@@ -455,9 +455,10 @@ func (e *engine) reportError(ctx context.Context, err error) {
 	_, sendErr := httputil.MakeRequest[any](ctx, httputil.RequestParams{
 		Method: http.MethodPost,
 		URL:    "https://api.telegram.org/bot" + e.tgToken + "/sendMessage",
-		Body: map[string]any{
-			"chat_id": e.tgOwner,
-			"text":    fmt.Sprintf(e.errorTemplate, errMsg),
+		Body: map[string]string{
+			"chat_id":    strconv.FormatInt(e.tgOwner, 10),
+			"text":       fmt.Sprintf(e.errorTemplate, errMsg),
+			"parse_mode": "HTML",
 		},
 		HTTPClient: e.httpc,
 	})
