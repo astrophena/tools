@@ -18,6 +18,7 @@ Additional modules and functions available from bot code:
 
   - call: Make HTTP POST requests to the Telegram API,
     facilitating bot commands and interactions.
+  - escape_html: Escape HTML string.
   - json: The Starlark JSON module, enabling JSON parsing and encoding.
   - time: The Starlark time module, providing time-related functions.
 
@@ -278,6 +279,7 @@ func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 	predeclared := starlark.StringDict{
 		"bot_owner_id": starlark.MakeInt64(e.tgOwner),
 		"call":         starlark.NewBuiltin("call", e.callFunc(r.Context())),
+		"escape_html":  starlark.NewBuiltin("escape_html", escapeHTML),
 		"json":         starlarkjson.Module,
 		"raw_update":   starlark.String(rawUpdate),
 		"time":         starlarktime.Module,
@@ -472,6 +474,14 @@ func (e *engine) reportError(ctx context.Context, err error) {
 
 type starlarkBuiltin func(*starlark.Thread, *starlark.Builtin, starlark.Tuple, []starlark.Tuple) (starlark.Value, error)
 
+func escapeHTML(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	var s string
+	if err := starlark.UnpackArgs(b.Name(), args, kwargs, "s", &s); err != nil {
+		return nil, err
+	}
+	return starlark.String(html.EscapeString(s)), nil
+}
+
 /*
 callFunc implements a Starlark builtin that makes request to Telegram Bot API and returns it's response.
 
@@ -494,24 +504,24 @@ func (e *engine) callFunc(ctx context.Context) starlarkBuiltin {
 	return func(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 		// Unpack arguments passed from Starlark code.
 		if len(args) > 0 {
-			return starlark.None, fmt.Errorf("call: unexpected positional arguments")
+			return starlark.None, fmt.Errorf("%s: unexpected positional arguments", b.Name())
 		}
 		var (
 			method   starlark.String
 			argsDict *starlark.Dict
 		)
-		if err := starlark.UnpackArgs("call", args, kwargs, "method", &method, "args", &argsDict); err != nil {
-			return starlark.None, err
+		if err := starlark.UnpackArgs(b.Name(), args, kwargs, "method", &method, "args", &argsDict); err != nil {
+			return nil, err
 		}
 
 		// Encode received args to JSON.
 		rawReqVal, err := starlark.Call(thread, starlarkjson.Module.Members["encode"], starlark.Tuple{argsDict}, []starlark.Tuple{})
 		if err != nil {
-			return starlark.None, fmt.Errorf("encoding received args to JSON: %v", err)
+			return nil, fmt.Errorf("%s: failed to encode received args to JSON: %v", b.Name(), err)
 		}
 		rawReq, ok := rawReqVal.(starlark.String)
 		if !ok {
-			panic("call: unexpected return type of json.encode Starlark function")
+			panic(fmt.Sprintf("%s: unexpected return type of json.encode Starlark function", b.Name()))
 		}
 
 		// Make Telegram Bot API request.
@@ -522,7 +532,7 @@ func (e *engine) callFunc(ctx context.Context) starlarkBuiltin {
 			HTTPClient: e.httpc,
 		})
 		if err != nil {
-			return starlark.None, fmt.Errorf("making Bot API request: %v", err)
+			return nil, fmt.Errorf("%s: failed to make request: %v", b.Name(), err)
 		}
 
 		// Decode received JSON returned from Telegram and pass it back to Starlark code.
