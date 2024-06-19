@@ -191,7 +191,6 @@ func (e *engine) initRoutes() {
 		http.Redirect(w, r, "https://t.me/astrophena_bot", http.StatusFound)
 	})
 
-	e.mux.HandleFunc("POST /github", e.handleGitHubWebhook)
 	e.mux.HandleFunc("POST /telegram", e.handleTelegramWebhook)
 
 	// Redirect from starlet.onrender.com to bot.astrophena.name.
@@ -267,16 +266,6 @@ func (e *engine) loadFromGist(ctx context.Context) error {
 	}
 
 	return nil
-}
-
-func (e *engine) handleGitHubWebhook(w http.ResponseWriter, r *http.Request) {
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		web.Error(e.log.Printf, w, r, err)
-		return
-	}
-	r.Body.Close()
-	e.log.Printf("Got request to /github: %s", body)
 }
 
 func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
@@ -433,8 +422,7 @@ func setCookie(w http.ResponseWriter, key, val string) {
 
 // }}}
 
-// selfPing continusly pings Starlet every 10 minutes in production to prevent
-// it's Render app from sleeping. It runs in a separate goroutine.
+// selfPing continusly pings Starlet every 10 minutes in production to prevent it's Render app from sleeping.
 func (e *engine) selfPing(ctx context.Context) {
 	ticker := time.NewTicker(10 * time.Minute)
 	defer ticker.Stop()
