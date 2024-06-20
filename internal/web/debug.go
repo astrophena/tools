@@ -47,7 +47,8 @@ type DebugHandler struct {
 	tpl     *template.Template // template that is used for rendering debug page
 	tplInit sync.Once          // guards template initialization
 	tplErr  error              // error that happened during template initialization
-	logf    logger.Logf
+	logf    logger.Logf        // log.Printf if nil
+	icon    []byte             // if not nil, used as web page icon
 }
 
 // Utility types used for rendering templates.
@@ -116,7 +117,12 @@ func uptime() any { return time.Since(timeStart).Round(time.Second) }
 // ServeHTTP implements the http.Handler.
 func (d *DebugHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/debug/" {
-		// Sub-handlers are handled by the parent mux directly.
+		// Sub-handlers are handled by the parent mux directly. One exception:
+		// /debug/icon.jpg, if d.icon is not nil.
+		if r.URL.Path == "/debug/icon.jpg" && d.icon != nil {
+			http.ServeContent(w, r, "icon.jpg", time.Time{}, bytes.NewReader(d.icon))
+			return
+		}
 		NotFound(w, r)
 		return
 	}
@@ -138,10 +144,12 @@ func (d *DebugHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		CmdName string
 		Version version.Info
 		KVs     []kv
+		HasIcon bool
 		Links   []link
 	}{
 		CmdName: version.CmdName(),
 		Version: version.Version(),
+		HasIcon: d.icon != nil,
 		KVs:     kvs,
 		Links:   d.links,
 	}
@@ -179,3 +187,6 @@ func (d *DebugHandler) KVFunc(k string, v func() any) {
 func (d *DebugHandler) Link(url, desc string) {
 	d.links = append(d.links, link{url, desc})
 }
+
+// SetIcon sets the debug web page icon, should be in JPEG format.
+func (d *DebugHandler) SetIcon(b []byte) { d.icon = b }

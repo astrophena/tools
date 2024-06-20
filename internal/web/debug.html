@@ -4,6 +4,11 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
+    {{ if .HasIcon }}
+      {{ $iconURL := "/debug/icon.jpg" }}
+      <link rel="icon" href="{{ $iconURL }}" />
+      <link rel="apple-touch-icon" href="{{ $iconURL }}" />
+    {{ end }}
     <link rel="stylesheet" href="/style.css" />
     <title>{{ .CmdName }} debug</title>
   </head>

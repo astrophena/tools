@@ -31,6 +31,7 @@ import (
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
+	_ "embed"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -61,6 +62,9 @@ import (
 	"go.starlark.net/starlark"
 	"go.starlark.net/syntax"
 )
+
+//go:embed icon.jpg
+var debugIcon []byte
 
 const defaultErrorTemplate = `❌ Something went wrong:
 <pre><code>%v</code></pre>`
@@ -211,6 +215,7 @@ func (e *engine) initRoutes() {
 	// Debug routes.
 	web.Health(e.mux)
 	dbg := web.Debugger(e.log.Printf, e.mux)
+	dbg.SetIcon(debugIcon)
 	dbg.Handle("reload", "Reload from gist", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		e.loadFromGist(r.Context())
 		e.mu.Lock()
