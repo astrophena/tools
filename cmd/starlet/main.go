@@ -262,6 +262,7 @@ func (e *engine) loadFromGist(ctx context.Context) {
 	g, err := e.gistc.Get(ctx, e.gistID)
 	if err != nil {
 		e.loadGistErr = err
+		return
 	}
 
 	bot, exists := g.Files["bot.star"]
