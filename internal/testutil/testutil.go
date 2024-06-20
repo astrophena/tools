@@ -4,6 +4,8 @@ package testutil
 import (
 	"encoding/json"
 	"io/fs"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"slices"
@@ -137,4 +139,22 @@ func BuildTxtar(t *testing.T, dir string) []byte {
 	}
 
 	return txtar.Format(ar)
+}
+
+type roundTripFunc func(r *http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) {
+	return f(r)
+}
+
+// MockHTTPClient returns a [http.Client] that serves all requests made through
+// it from handler h.
+func MockHTTPClient(t *testing.T, h http.Handler) *http.Client {
+	return &http.Client{
+		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, r)
+			return w.Result(), nil
+		}),
+	}
 }

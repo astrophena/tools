@@ -47,7 +47,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -118,29 +117,18 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
-	httpc := &http.Client{
-		Timeout: 10 * time.Second,
-	}
-
 	e := &engine{
 		tgToken:  *tgToken,
 		tgSecret: *tgSecret,
 		tgOwner:  *tgOwner,
-		gistc: &gist.Client{
-			Token:      *ghToken,
-			HTTPClient: httpc,
+		ghToken:  *ghToken,
+		gistID:   *gistID,
+		httpc: &http.Client{
+			Timeout: 10 * time.Second,
 		},
-		gistID:    *gistID,
-		httpc:     httpc,
-		mux:       http.NewServeMux(),
-		logStream: logstream.New(300),
 	}
-	e.log = log.New(io.MultiWriter(os.Stderr, e.logStream), "", log.LstdFlags|log.Llongfile)
-	e.initRoutes()
 
-	if err := e.loadFromGist(ctx); err != nil {
-		log.Fatalf("loadFromGist: %v", err)
-	}
+	e.init.Do(e.doInit)
 
 	if isProd() {
 		go e.selfPing(ctx)
@@ -159,29 +147,45 @@ func main() {
 func isProd() bool { return os.Getenv("RENDER") == "true" }
 
 type engine struct {
-	// configuration, read-only
+	init     sync.Once // main initialization
+	loadGist sync.Once // lazily loads gist when first webhook request arrives
+
+	// initialized by doInit
+	gistc     *gist.Client
+	log       *log.Logger
+	logStream logstream.Streamer
+	mux       *http.ServeMux
+
+	// configuration, read-only after initialization
+	ghToken  string
 	gistID   string
+	httpc    *http.Client
 	tgOwner  int64
 	tgSecret string
 	tgToken  string
 
-	gistc *gist.Client
-	httpc *http.Client
-
-	mux *http.ServeMux
-
-	requestID atomic.Uint64
-
-	log       *log.Logger
-	logStream logstream.Streamer
-
+	mu sync.Mutex
 	// loaded from gist
-	mu            sync.Mutex
 	bot           []byte
 	errorTemplate string
+	loadGistErr   error
+}
+
+func (e *engine) doInit() {
+	const logLineLimit = 300
+	e.logStream = logstream.New(logLineLimit)
+	e.log = log.New(io.MultiWriter(os.Stderr, e.logStream), "", log.LstdFlags|log.Llongfile)
+	e.initRoutes()
+
+	e.gistc = &gist.Client{
+		Token:      e.ghToken,
+		HTTPClient: e.httpc,
+	}
 }
 
 func (e *engine) initRoutes() {
+	e.mux = http.NewServeMux()
+
 	// Redirect to Telegram chat with bot.
 	e.mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
@@ -205,10 +209,16 @@ func (e *engine) initRoutes() {
 	e.mux.HandleFunc("GET /login", e.handleLogin)
 
 	// Debug routes.
+	web.Health(e.mux)
 	dbg := web.Debugger(e.log.Printf, e.mux)
 	dbg.Handle("reload", "Reload from gist", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if err := e.loadFromGist(r.Context()); err != nil {
+		e.loadFromGist(r.Context())
+		e.mu.Lock()
+		err := e.loadGistErr
+		e.mu.Unlock()
+		if err != nil {
 			web.Error(e.log.Printf, w, r, err)
+			return
 		}
 		http.Redirect(w, r, "/debug/", http.StatusFound)
 	}))
@@ -245,18 +255,19 @@ new EventSource("/debug/log", { withCredentials: true }).addEventListener("logli
 </body>
 </html>`
 
-func (e *engine) loadFromGist(ctx context.Context) error {
-	g, err := e.gistc.Get(ctx, e.gistID)
-	if err != nil {
-		return err
-	}
-
+func (e *engine) loadFromGist(ctx context.Context) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
+	g, err := e.gistc.Get(ctx, e.gistID)
+	if err != nil {
+		e.loadGistErr = err
+	}
+
 	bot, exists := g.Files["bot.star"]
 	if !exists {
-		return errors.New("bot.star should contain bot code in Gist")
+		e.loadGistErr = errors.New("bot.star should contain bot code in Gist")
+		return
 	}
 	e.bot = []byte(bot.Content)
 	if errorTmpl, exists := g.Files["error.tmpl"]; exists {
@@ -264,8 +275,7 @@ func (e *engine) loadFromGist(ctx context.Context) error {
 	} else {
 		e.errorTemplate = defaultErrorTemplate
 	}
-
-	return nil
+	e.loadGistErr = nil
 }
 
 func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
@@ -289,15 +299,18 @@ func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 		"time":         starlarktime.Module,
 	}
 
+	e.loadGist.Do(func() { e.loadFromGist(r.Context()) })
 	e.mu.Lock()
+	if e.loadGistErr != nil {
+		web.Error(e.log.Printf, w, r, errors.New("failed to load bot code"))
+		e.log.Println(err)
+		return
+	}
 	botCode := bytes.Clone(e.bot)
 	e.mu.Unlock()
 
 	_, err = starlark.ExecFileOptions(&syntax.FileOptions{}, &starlark.Thread{
-		Name: fmt.Sprintf("%d", e.requestID.Add(1)),
-		Print: func(thread *starlark.Thread, msg string) {
-			e.log.Printf("[Request %s] %s", thread.Name, msg)
-		},
+		Print: func(thread *starlark.Thread, msg string) { e.log.Println(msg) },
 	}, "bot.star", botCode, predeclared)
 	if err != nil {
 		e.reportError(r.Context(), err)

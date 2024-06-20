@@ -10,7 +10,6 @@ import (
 	"html"
 	"io"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"strings"
 	"sync"
@@ -228,13 +227,7 @@ func (s roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) {
 
 func testFetcher(t *testing.T, m *mux) *fetcher {
 	f := &fetcher{
-		httpc: &http.Client{
-			Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
-				w := httptest.NewRecorder()
-				m.mux.ServeHTTP(w, r)
-				return w.Result(), nil
-			}),
-		},
+		httpc:   testutil.MockHTTPClient(t, m.mux),
 		ghToken: "test",
 		gistID:  "test",
 		tgToken: tgToken,
