@@ -36,7 +36,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
 	"html"
 	"io"
@@ -52,6 +51,7 @@ import (
 	"time"
 
 	"go.astrophena.name/tools/internal/cli"
+	"go.astrophena.name/tools/internal/cli/envflag"
 	"go.astrophena.name/tools/internal/client/gist"
 	"go.astrophena.name/tools/internal/httputil"
 	"go.astrophena.name/tools/internal/logger/logstream"
@@ -70,53 +70,33 @@ const defaultErrorTemplate = `❌ Something went wrong:
 <pre><code>%v</code></pre>`
 
 func main() {
-	addr := flag.String(
-		"addr", "localhost:3000",
-		"Listen on `host:port or Unix socket`. Can be overridden by PORT environment variable.",
-	)
-	tgToken := flag.String(
-		"tg-token", "",
-		"Telegram Bot API `token`. Can be overridden by TG_TOKEN environment variable.",
-	)
-	tgSecret := flag.String(
-		"tg-secret", "",
-		"Secret `token` used to validate Telegram Bot API updates. Can be overridden by TG_SECRET environment variable.",
-	)
-	tgOwner := flag.Int64(
-		"tg-owner", 0,
-		"Telegram user `ID` of the bot owner. Can be overridden by TG_OWNER environment variable.",
-	)
-	ghToken := flag.String(
-		"gh-token", "",
-		"GitHub API `token`. Can be overridden by GH_TOKEN environment variable.",
-	)
-	gistID := flag.String(
-		"gist-id", "",
-		"GitHub Gist `ID` to load bot code from. Can be overriden by GIST_ID environment variable.",
+	var (
+		addr = envflag.Value(
+			"addr", "ADDR", "localhost:3000",
+			"Listen on `host:port or Unix socket`.",
+		)
+		tgToken = envflag.Value(
+			"tg-token", "TG_TOKEN", "",
+			"Telegram Bot API `token`.",
+		)
+		tgSecret = envflag.Value(
+			"tg-secret", "TG_SECRET", "",
+			"Secret `token` used to validate Telegram Bot API updates.",
+		)
+		tgOwner = envflag.Value(
+			"tg-owner", "TG_OWNER", int64(0),
+			"Telegram user `ID` of the bot owner.",
+		)
+		ghToken = envflag.Value(
+			"gh-token", "GH_TOKEN", "",
+			"GitHub API `token`.",
+		)
+		gistID = envflag.Value(
+			"gist-id", "GIST_ID", "",
+			"GitHub Gist `ID` to load bot code from.",
+		)
 	)
 	cli.HandleStartup()
-
-	if port := os.Getenv("PORT"); port != "" {
-		*addr = "0.0.0.0:" + port
-	}
-	if tok := os.Getenv("TG_TOKEN"); tok != "" {
-		*tgToken = tok
-	}
-	if secret := os.Getenv("TG_SECRET"); secret != "" {
-		*tgSecret = secret
-	}
-	if owner := os.Getenv("TG_OWNER"); owner != "" {
-		newOwner, err := strconv.ParseInt(owner, 10, 64)
-		if err == nil {
-			*tgOwner = newOwner
-		}
-	}
-	if tok := os.Getenv("GH_TOKEN"); tok != "" {
-		*ghToken = tok
-	}
-	if id := os.Getenv("GIST_ID"); id != "" {
-		*gistID = id
-	}
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
@@ -135,6 +115,10 @@ func main() {
 	e.init.Do(e.doInit)
 
 	if isProd() {
+		// https://docs.render.com/environment-variables#all-runtimes-1
+		if port := os.Getenv("PORT"); port != "" {
+			*addr = ":" + port
+		}
 		go e.selfPing(ctx)
 	}
 
