@@ -22,4 +22,4 @@ jobs:
           GITHUB_TOKEN: '${{ secrets.TGFEED_GIST_TOKEN }}'
           GEMINI_API_KEY: '${{ secrets.GEMINI_API_KEY }}'
           TELEGRAM_TOKEN: '${{ secrets.TGFEED_TOKEN }}'
-        run: 'go run -buildvcs ./cmd/tgfeed'
+        run: 'go run -buildvcs ./cmd/tgfeed -run'

@@ -11,7 +11,7 @@ Tgfeed fetches RSS feeds and sends new articles via Telegram.
 
 tgfeed runs as a GitHub Actions workflow.
 
-It fetches RSS feeds from URLs provided in the feeds.json file.
+It fetches RSS feeds from URLs provided in the feeds.json file on GitHub Gist.
 
 New articles are sent to a Telegram chat specified by the CHAT_ID environment
 variable.

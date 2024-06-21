@@ -5,7 +5,7 @@ Tgfeed fetches RSS feeds and sends new articles via Telegram.
 
 tgfeed runs as a GitHub Actions workflow.
 
-It fetches RSS feeds from URLs provided in the feeds.json file.
+It fetches RSS feeds from URLs provided in the feeds.json file on GitHub Gist.
 
 New articles are sent to a Telegram chat specified by the CHAT_ID environment
 variable.
@@ -104,6 +104,7 @@ func main() {
 	var (
 		feeds       = flag.Bool("feeds", false, "List subscribed feeds.")
 		reenable    = flag.String("reenable", "", "Reenable previously failing and disabled `feed`.")
+		run         = flag.Bool("run", false, "Fetch feeds and send updates.")
 		subscribe   = flag.String("subscribe", "", "Subscribe to a `feed`.")
 		unsubscribe = flag.String("unsubscribe", "", "Unsubscribe from a `feed`.")
 	)
@@ -140,36 +141,33 @@ func main() {
 		f.httpc.Transport = httplogger.New(f.httpc.Transport, nil)
 	}
 
-	if *feeds {
+	switch {
+	case *feeds:
 		if err := f.listFeeds(ctx, os.Stdout); err != nil {
 			log.Fatal(err)
 		}
-		return
-	}
-	if *reenable != "" {
+	case *reenable != "":
 		if err := f.reenable(ctx, *reenable); err != nil {
 			log.Fatal(err)
 		}
-		return
-	}
-	if *subscribe != "" {
+	case *run:
+		if err := f.run(ctx); err != nil {
+			if err := f.send(ctx, fmt.Sprintf(f.errorTemplate, html.EscapeString(err.Error())), disableLinkPreview); err != nil {
+				log.Printf("notifying about an error failed: %v", err)
+			}
+			log.Fatal(err)
+		}
+	case *subscribe != "":
 		if err := f.subscribe(ctx, *subscribe); err != nil {
 			log.Fatal(err)
 		}
-		return
-	}
-	if *unsubscribe != "" {
+	case *unsubscribe != "":
 		if err := f.unsubscribe(ctx, *unsubscribe); err != nil {
 			log.Fatal(err)
 		}
-		return
-	}
-
-	if err := f.run(ctx); err != nil {
-		if err := f.send(ctx, fmt.Sprintf(f.errorTemplate, html.EscapeString(err.Error())), disableLinkPreview); err != nil {
-			log.Printf("notifying about an error failed: %v", err)
-		}
-		log.Fatal(err)
+	default:
+		flag.Usage()
+		os.Exit(1)
 	}
 }
 
