@@ -311,7 +311,8 @@ func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 	e.mu.Lock()
 	if e.loadGistErr != nil {
 		web.Error(e.log.Printf, w, r, errors.New("failed to load bot code"))
-		e.log.Println(err)
+		e.log.Println(e.loadGistErr)
+		e.mu.Unlock()
 		return
 	}
 	botCode := bytes.Clone(e.bot)
