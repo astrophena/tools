@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	_ "embed"
+	"errors"
+	"fmt"
 	"log"
 	"net"
 	"net/http"
@@ -40,22 +42,20 @@ type ListenAndServeConfig struct {
 	DebugAuth func(r *http.Request) bool
 }
 
-func (c *ListenAndServeConfig) fatalf(format string, args ...any) {
-	c.Logf(format, args...)
-	os.Exit(1)
-}
+// used in tests
+var serveReadyHook func()
 
 // ListenAndServe starts the HTTP server based on the provided
 // ListenAndServeConfig.
-func ListenAndServe(ctx context.Context, c *ListenAndServeConfig) {
+func ListenAndServe(ctx context.Context, c *ListenAndServeConfig) error {
 	if c.Logf == nil {
 		c.Logf = log.Printf
 	}
 	if c.Addr == "" {
-		c.fatalf("web.ListenAndServe(): Addr is empty")
+		return errors.New("Addr is empty")
 	}
 	if c.Mux == nil {
-		c.fatalf("web.ListenAndServe(): Mux is nil")
+		return errors.New("Mux is nil")
 	}
 
 	network := "tcp"
@@ -66,14 +66,14 @@ func ListenAndServe(ctx context.Context, c *ListenAndServeConfig) {
 
 	l, err := net.Listen(network, c.Addr)
 	if err != nil {
-		c.fatalf("Failed to listen: %v", err)
+		return fmt.Errorf("failed to listen: %v", err)
 	}
 	defer l.Close()
 	c.Logf("Listening on %s://%s...", l.Addr().Network(), l.Addr().String())
 
 	if network == "unix" {
 		if err := os.Chmod(c.Addr, 0o666); err != nil {
-			c.fatalf("Failed to change socket permissions: %v", err)
+			return fmt.Errorf("failed to change socket permissions: %v", err)
 		}
 	}
 
@@ -93,7 +93,43 @@ func ListenAndServe(ctx context.Context, c *ListenAndServeConfig) {
 	}
 
 	s := &http.Server{Handler: protectDebug(c.Mux)}
+	c.initInternalRoutes(s)
 
+	errCh := make(chan error, 1)
+
+	go func() {
+		if err := s.Serve(l); err != nil {
+			if err != http.ErrServerClosed {
+				errCh <- err
+			}
+		}
+	}()
+
+	if serveReadyHook != nil {
+		serveReadyHook()
+	}
+
+	select {
+	case err := <-errCh:
+		return err
+	case <-ctx.Done():
+		c.Logf("Gracefully shutting down...")
+
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		if err := s.Shutdown(shutdownCtx); err != nil {
+			return err
+		}
+		if c.AfterShutdown != nil {
+			c.AfterShutdown()
+		}
+	}
+
+	return nil
+}
+
+func (c ListenAndServeConfig) initInternalRoutes(s *http.Server) {
 	c.Mux.HandleFunc("/style.css", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeContent(w, r, "style.css", time.Time{}, bytes.NewReader(style))
 	})
@@ -111,25 +147,6 @@ func ListenAndServe(ctx context.Context, c *ListenAndServeConfig) {
 			})
 		}(s.Handler)
 		dbg.Handle("conns", "Connections", connsHandler)
-	}
-
-	go func() {
-		if err := s.Serve(l); err != nil {
-			if err != http.ErrServerClosed {
-				c.fatalf("HTTP server crashed: %v", err)
-			}
-		}
-	}()
-
-	<-ctx.Done()
-	c.Logf("Gracefully shutting down...")
-
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	s.Shutdown(shutdownCtx)
-	if c.AfterShutdown != nil {
-		c.AfterShutdown()
 	}
 }
 
