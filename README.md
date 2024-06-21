@@ -5,6 +5,7 @@ This repository holds personal tools:
 - Renamer renames files sequentially.
 - Starlet allows to create and manage a Telegram bot using the Starlark scripting language.
 - Tgfeed fetches RSS feeds and sends new articles via Telegram.
+- Txtar is a command-line tool for creating and extracting txtar archives.
 
 Install them:
 

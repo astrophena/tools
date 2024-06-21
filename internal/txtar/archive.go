@@ -34,7 +34,9 @@ package txtar
 import (
 	"bytes"
 	"fmt"
+	"io/fs"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -137,4 +139,48 @@ func fixNL(data []byte) []byte {
 	copy(d, data)
 	d[len(data)] = '\n'
 	return d
+}
+
+// Extract extracts an archive to dir.
+func Extract(ar *Archive, dir string) error {
+	for _, file := range ar.Files {
+		if err := os.MkdirAll(filepath.Join(dir, filepath.Dir(file.Name)), 0o755); err != nil {
+			return err
+		}
+		if err := os.WriteFile(filepath.Join(dir, file.Name), file.Data, 0o644); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// FromDir constructs an archive from contents of dir.
+func FromDir(dir string) (*Archive, error) {
+	ar := new(Archive)
+
+	if err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if d.IsDir() {
+			return nil
+		}
+
+		b, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+
+		ar.Files = append(ar.Files, File{
+			Name: d.Name(),
+			Data: b,
+		})
+
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+
+	return ar, nil
 }
