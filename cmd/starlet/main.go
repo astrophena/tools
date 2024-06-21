@@ -221,8 +221,8 @@ func (e *engine) initRoutes() {
 	dbg.Handle("reload", "Reload from gist", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		e.loadFromGist(r.Context())
 		e.mu.Lock()
+		defer e.mu.Unlock()
 		err := e.loadGistErr
-		e.mu.Unlock()
 		if err != nil {
 			web.Error(e.log.Printf, w, r, err)
 			return
