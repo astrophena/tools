@@ -138,13 +138,15 @@ func main() {
 		go e.selfPing(ctx)
 	}
 
-	web.ListenAndServe(ctx, &web.ListenAndServeConfig{
+	if err := web.ListenAndServe(ctx, &web.ListenAndServeConfig{
 		Addr:       *addr,
 		DebugAuth:  e.debugAuth,
 		Debuggable: true, // debug endpoints protected by Telegram auth
 		Logf:       e.log.Printf,
 		Mux:        e.mux,
-	})
+	}); err != nil {
+		log.Fatal(err)
+	}
 }
 
 // https://docs.render.com/environment-variables
