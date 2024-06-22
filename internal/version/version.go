@@ -33,6 +33,7 @@ func (i Info) String() string {
 		}
 		sb.WriteString("built at " + i.BuiltAt + "\n")
 	}
+	sb.WriteString("\n")
 
 	return sb.String()
 }
