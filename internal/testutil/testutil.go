@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"go.astrophena.name/tools/internal/httplogger"
 	"go.astrophena.name/tools/internal/txtar"
 
 	"github.com/google/go-cmp/cmp"
@@ -122,11 +123,15 @@ func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) {
 // MockHTTPClient returns a [http.Client] that serves all requests made through
 // it from handler h.
 func MockHTTPClient(t *testing.T, h http.Handler) *http.Client {
-	return &http.Client{
+	httpc := &http.Client{
 		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
 			w := httptest.NewRecorder()
 			h.ServeHTTP(w, r)
 			return w.Result(), nil
 		}),
 	}
+	if os.Getenv("HTTPLOG") == "1" {
+		httpc.Transport = httplogger.New(httpc.Transport, t.Logf)
+	}
+	return httpc
 }

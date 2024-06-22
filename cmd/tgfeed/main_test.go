@@ -16,7 +16,6 @@ import (
 	"testing"
 
 	"go.astrophena.name/tools/internal/client/gist"
-	"go.astrophena.name/tools/internal/httplogger"
 	"go.astrophena.name/tools/internal/testutil"
 	"go.astrophena.name/tools/internal/txtar"
 )
@@ -232,9 +231,6 @@ func testFetcher(t *testing.T, m *mux) *fetcher {
 		gistID:  "test",
 		tgToken: tgToken,
 		chatID:  "test",
-	}
-	if os.Getenv("HTTPLOG") == "1" {
-		f.httpc.Transport = httplogger.New(f.httpc.Transport, t.Logf)
 	}
 	f.initOnce.Do(f.doInit)
 	return f

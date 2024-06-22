@@ -53,6 +53,7 @@ import (
 	"go.astrophena.name/tools/internal/cli"
 	"go.astrophena.name/tools/internal/cli/envflag"
 	"go.astrophena.name/tools/internal/client/gist"
+	"go.astrophena.name/tools/internal/httplogger"
 	"go.astrophena.name/tools/internal/httputil"
 	"go.astrophena.name/tools/internal/logger/logstream"
 	"go.astrophena.name/tools/internal/web"
@@ -110,6 +111,13 @@ func main() {
 		httpc: &http.Client{
 			Timeout: 10 * time.Second,
 		},
+	}
+
+	if os.Getenv("HTTPLOG") == "1" {
+		if e.httpc.Transport == nil {
+			e.httpc.Transport = http.DefaultTransport
+		}
+		e.httpc.Transport = httplogger.New(e.httpc.Transport, nil)
 	}
 
 	e.init.Do(e.doInit)

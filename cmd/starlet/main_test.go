@@ -6,13 +6,11 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"os"
 	"strings"
 	"sync"
 	"testing"
 
 	"go.astrophena.name/tools/internal/client/gist"
-	"go.astrophena.name/tools/internal/httplogger"
 	"go.astrophena.name/tools/internal/httputil"
 	"go.astrophena.name/tools/internal/testutil"
 	"go.astrophena.name/tools/internal/txtar"
@@ -46,9 +44,6 @@ func testEngine(t *testing.T, m *mux) *engine {
 		tgOwner:  123456789,
 		tgSecret: "test",
 		tgToken:  "test",
-	}
-	if os.Getenv("HTTPLOG") == "1" {
-		e.httpc.Transport = httplogger.New(e.httpc.Transport, t.Logf)
 	}
 	e.init.Do(e.doInit)
 	return e
