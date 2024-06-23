@@ -72,6 +72,7 @@ import (
 	"log"
 	"math/rand/v2"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"slices"
@@ -115,10 +116,12 @@ func main() {
 		httpc: &http.Client{
 			Timeout: 10 * time.Second,
 		},
-		gistID:  os.Getenv("GIST_ID"),
-		ghToken: os.Getenv("GITHUB_TOKEN"),
-		chatID:  os.Getenv("CHAT_ID"),
-		tgToken: os.Getenv("TELEGRAM_TOKEN"),
+		gistID:              os.Getenv("GIST_ID"),
+		ghToken:             os.Getenv("GITHUB_TOKEN"),
+		chatID:              os.Getenv("CHAT_ID"),
+		tgToken:             os.Getenv("TELEGRAM_TOKEN"),
+		statsCollectorURL:   os.Getenv("STATS_COLLECTOR_URL"),
+		statsCollectorToken: os.Getenv("STATS_COLLECTOR_TOKEN"),
 	}
 	f.initOnce.Do(f.doInit)
 
@@ -266,6 +269,10 @@ type fetcher struct {
 
 	errorTemplate string
 
+	stats               *stats
+	statsCollectorURL   string
+	statsCollectorToken string
+
 	mu    sync.Mutex
 	state map[string]*feedState
 }
@@ -289,6 +296,49 @@ type feedState struct {
 	FilteredCategories []string `json:"filtered_categories"`
 }
 
+type stats struct {
+	mu sync.Mutex
+
+	Time                  time.Time     `json:"time"`                     // date and time of run
+	Duration              time.Duration `json:"duration"`                 // time consumed by run execution
+	FeedsCount            int           `json:"feeds_count"`              // count of fetched feeds
+	FeedsSuccessfulCount  int           `json:"feeds_successful_count"`   // count of successfully fetched feeds
+	FeedsFailedCount      int           `json:"feeds_failed_count"`       // count of unsuccessfully fetched feeds
+	FeedsNotModifiedCount int           `json:"feeds_not_modified_count"` // count of feeds that responded with Not Modified
+}
+
+func (f *fetcher) reportStats(ctx context.Context) error {
+	f.stats.mu.Lock()
+	defer f.stats.mu.Unlock()
+
+	type response struct {
+		Status  string `json:"status"`
+		Message string `json:"message,omitempty"`
+	}
+
+	u, err := url.Parse(f.statsCollectorURL)
+	if err != nil {
+		return err
+	}
+	q := u.Query()
+	q.Add("token", f.statsCollectorToken)
+	u.RawQuery = q.Encode()
+
+	resp, err := httputil.MakeJSONRequest[response](ctx, httputil.RequestParams{
+		Method: http.MethodPost,
+		URL:    u.String(),
+		Body:   []*stats{f.stats},
+	})
+	if err != nil {
+		return err
+	}
+
+	if resp.Status == "error" {
+		return fmt.Errorf("got server error: %v", resp.Message)
+	}
+	return nil
+}
+
 func (f *fetcher) doInit() {
 	f.fp = gofeed.NewParser()
 	f.fp.UserAgent = httputil.UserAgent()
@@ -302,6 +352,11 @@ func (f *fetcher) doInit() {
 
 func (f *fetcher) run(ctx context.Context) error {
 	f.initOnce.Do(f.doInit)
+
+	// Start with empty stats for every run.
+	f.stats = &stats{
+		Time: time.Now(),
+	}
 
 	if err := f.loadFromGist(ctx); err != nil {
 		return fmt.Errorf("fetching gist failed: %w", err)
@@ -351,7 +406,23 @@ func (f *fetcher) run(ctx context.Context) error {
 	}
 
 	slices.Sort(f.feeds)
-	return f.saveToGist(ctx)
+	if err := f.saveToGist(ctx); err != nil {
+		return err
+	}
+
+	// Record time consumed by run and report stats.
+	f.stats.mu.Lock()
+	defer f.stats.mu.Unlock()
+	f.stats.Duration = time.Now().Sub(f.stats.Time)
+	f.stats.FeedsCount = len(f.feeds)
+
+	if f.statsCollectorURL != "" && f.statsCollectorToken != "" {
+		if err := f.reportStats(ctx); err != nil {
+			log.Printf("failed to report stats: %v", err)
+		}
+	}
+
+	return nil
 }
 
 func shuffle[S any](s []S) []S {
@@ -518,6 +589,9 @@ func (f *fetcher) fetch(ctx context.Context, url string, updates chan *gofeed.It
 
 	// Ignore unmodified feeds and report an error otherwise.
 	if res.StatusCode == http.StatusNotModified {
+		f.stats.mu.Lock()
+		defer f.stats.mu.Unlock()
+		f.stats.FeedsNotModifiedCount += 1
 		return
 	}
 	if res.StatusCode != http.StatusOK {
@@ -561,12 +635,21 @@ func (f *fetcher) fetch(ctx context.Context, url string, updates chan *gofeed.It
 	state.LastError = ""
 	state.CachedTitle = feed.Title
 	state.FetchCount += 1
+
+	f.stats.mu.Lock()
+	f.stats.FeedsSuccessfulCount += 1
+	f.stats.mu.Unlock()
 }
 
 func (f *fetcher) handleFetchFailure(ctx context.Context, state *feedState, url string, err error) {
+	f.stats.mu.Lock()
+	f.stats.FeedsFailedCount += 1
+	f.stats.mu.Unlock()
+
 	state.FetchFailCount += 1
 	state.ErrorCount += 1
 	state.LastError = err.Error()
+
 	// Complain loudly and disable feed, if we failed previously enough.
 	if state.ErrorCount >= errorThreshold {
 		err = fmt.Errorf("fetching feed %q failed after %d previous attempts: %v; feed was disabled, to reenable it run 'tgfeed -reenable %q'", url, state.ErrorCount, err, url)
