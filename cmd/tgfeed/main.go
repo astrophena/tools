@@ -308,9 +308,6 @@ type stats struct {
 }
 
 func (f *fetcher) reportStats(ctx context.Context) error {
-	f.stats.mu.Lock()
-	defer f.stats.mu.Unlock()
-
 	type response struct {
 		Status  string `json:"status"`
 		Message string `json:"message,omitempty"`
