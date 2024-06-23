@@ -31,7 +31,7 @@ func (i Info) String() string {
 		if !strings.Contains(i.Short(), i.Commit) {
 			sb.WriteString("commit " + i.Commit + "\n")
 		}
-		sb.WriteString("built at " + i.BuiltAt + "\n")
+		sb.WriteString("built at " + i.BuiltAt)
 	}
 	sb.WriteString("\n")
 
