@@ -299,12 +299,18 @@ type feedState struct {
 type stats struct {
 	mu sync.Mutex
 
-	Time                  time.Time     `json:"time"`                     // date and time of run
-	Duration              time.Duration `json:"duration"`                 // time consumed by run execution
-	FeedsCount            int           `json:"feeds_count"`              // count of fetched feeds
-	FeedsSuccessfulCount  int           `json:"feeds_successful_count"`   // count of successfully fetched feeds
-	FeedsFailedCount      int           `json:"feeds_failed_count"`       // count of unsuccessfully fetched feeds
-	FeedsNotModifiedCount int           `json:"feeds_not_modified_count"` // count of feeds that responded with Not Modified
+	Time                  time.Time `json:"time"`                     // date and time of run
+	Duration              duration  `json:"duration"`                 // time consumed by run execution
+	FeedsCount            int       `json:"feeds_count"`              // count of fetched feeds
+	FeedsSuccessfulCount  int       `json:"feeds_successful_count"`   // count of successfully fetched feeds
+	FeedsFailedCount      int       `json:"feeds_failed_count"`       // count of unsuccessfully fetched feeds
+	FeedsNotModifiedCount int       `json:"feeds_not_modified_count"` // count of feeds that responded with Not Modified
+}
+
+type duration time.Duration
+
+func (d duration) MarshalJSON() ([]byte, error) {
+	return json.Marshal(time.Duration(d).String())
 }
 
 func (f *fetcher) reportStats(ctx context.Context) error {
@@ -410,7 +416,7 @@ func (f *fetcher) run(ctx context.Context) error {
 	// Record time consumed by run and report stats.
 	f.stats.mu.Lock()
 	defer f.stats.mu.Unlock()
-	f.stats.Duration = time.Now().Sub(f.stats.Time)
+	f.stats.Duration = duration(time.Now().Sub(f.stats.Time))
 	f.stats.FeedsCount = len(f.feeds)
 
 	if f.statsCollectorURL != "" && f.statsCollectorToken != "" {
