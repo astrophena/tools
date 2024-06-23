@@ -279,6 +279,10 @@ type feedState struct {
 	LastError    string    `json:"last_error"`
 	CachedTitle  string    `json:"cached_title"`
 
+	// Stats.
+	FetchCount     int64 `json:"fetch_count"`      // successful fetches
+	FetchFailCount int64 `json:"fetch_fail_count"` // failed fetches
+
 	// Special flags. Not covered by tests or any common sense.
 
 	// Only return updates matching this list of categories.
@@ -556,9 +560,11 @@ func (f *fetcher) fetch(ctx context.Context, url string, updates chan *gofeed.It
 	state.ErrorCount = 0
 	state.LastError = ""
 	state.CachedTitle = feed.Title
+	state.FetchCount += 1
 }
 
 func (f *fetcher) handleFetchFailure(ctx context.Context, state *feedState, url string, err error) {
+	state.FetchFailCount += 1
 	state.ErrorCount += 1
 	state.LastError = err.Error()
 	// Complain loudly and disable feed, if we failed previously enough.
