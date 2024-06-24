@@ -13,6 +13,7 @@ import (
 	"os"
 	"strings"
 	"time"
+	"unicode"
 
 	"go.astrophena.name/tools/internal/version"
 )
@@ -147,9 +148,9 @@ func RespondJSON(w http.ResponseWriter, response any) {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(fmt.Sprintf(`{
       "status": "error",
-      "error": "JSON marshal error: %v"
+      "error": "JSON marshal error: %s"
     }
-`, err)))
+`, escapeForJSON(err.Error()))))
 		return
 	}
 	w.Write(b)
@@ -176,4 +177,24 @@ func RespondJSONError(w http.ResponseWriter, err error) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}
 	RespondJSON(w, &errorResponse{Status: "error", Error: err.Error()})
+}
+
+func escapeForJSON(s string) string {
+	sb := new(strings.Builder)
+	for _, ch := range s {
+		switch ch {
+		case '\\', '"', '/', '\b', '\n', '\r', '\t':
+			// Escape these characters with a backslash.
+			sb.WriteRune('\\')
+			sb.WriteRune(ch)
+		default:
+			if unicode.IsControl(ch) {
+				// Escape control characters.
+				fmt.Fprintf(sb, "\\u%04X", ch)
+				continue
+			}
+			sb.WriteRune(ch)
+		}
+	}
+	return sb.String()
 }
