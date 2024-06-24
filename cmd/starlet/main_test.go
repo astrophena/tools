@@ -36,6 +36,42 @@ func TestHealth(t *testing.T) {
 	testutil.AssertEqual(t, health.OK, true)
 }
 
+func TestHandleTelegramWebhook(t *testing.T) {
+	tm := testMux(t, nil)
+	e := testEngine(t, tm)
+
+	testutil.Run(t, "testdata/updates/*.txt", func(t *testing.T, match string) {
+		ar, err := txtar.ParseFile(match)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if len(ar.Files) != 1 || ar.Files[0].Name != "update.json" {
+			t.Fatalf("%s txtar should contain only one file named update.json", match)
+		}
+
+		var update json.RawMessage
+		for _, f := range ar.Files {
+			if f.Name == "update.json" {
+				update = json.RawMessage(f.Data)
+			}
+		}
+
+		_, err = httputil.MakeJSONRequest[any](context.Background(), httputil.RequestParams{
+			Method: http.MethodPost,
+			URL:    "/telegram",
+			Body:   update,
+			Headers: map[string]string{
+				"X-Telegram-Bot-Api-Secret-Token": e.tgSecret,
+			},
+			HTTPClient: testutil.MockHTTPClient(t, e.mux),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	})
+}
+
 func testEngine(t *testing.T, m *mux) *engine {
 	e := &engine{
 		ghToken:  "test",
@@ -43,7 +79,7 @@ func testEngine(t *testing.T, m *mux) *engine {
 		httpc:    testutil.MockHTTPClient(t, m.mux),
 		tgOwner:  123456789,
 		tgSecret: "test",
-		tgToken:  "test",
+		tgToken:  tgToken,
 	}
 	e.init.Do(e.doInit)
 	return e
@@ -79,6 +115,7 @@ func testMux(t *testing.T, overrides map[string]http.HandlerFunc) *mux {
 		defer m.mu.Unlock()
 		sentMessage := read(t, r.Body)
 		m.sentMessages = append(m.sentMessages, testutil.UnmarshalJSON[map[string]any](t, sentMessage))
+		httputil.RespondJSON(w, struct{}{})
 	}))
 	for pat, h := range overrides {
 		if pat == getGist || pat == sendTelegram {

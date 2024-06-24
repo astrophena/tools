@@ -1,10 +1,11 @@
-// Package httputil provides utilities for making HTTP requests.
+// Package httputil provides utilities for making and serving HTTP requests.
 package httputil
 
 import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -105,4 +106,74 @@ func MakeJSONRequest[R any](ctx context.Context, params RequestParams) (R, error
 // and a special URL leading to bot information page.
 func UserAgent() string {
 	return strings.Replace(version.Version().Short(), " ", "/", 1) + " (+https://astrophena.name/bleep-bloop)"
+}
+
+// StatusErr is a sentinel error type used to represent HTTP status code errors.
+// It wraps the corresponding http.Status code.
+type StatusErr int
+
+// Error implements the error interface.
+// It returns a lowercase representation of the HTTP status text for the wrapped code.
+func (se StatusErr) Error() string {
+	return strings.ToLower(http.StatusText(int(se)))
+}
+
+const (
+	// ErrUnauthorized represents an unauthorized access error (HTTP 401).
+	ErrUnauthorized StatusErr = http.StatusUnauthorized
+	// ErrForbidden represents a forbidden access error (HTTP 403).
+	ErrForbidden StatusErr = http.StatusForbidden
+	// ErrNotFound represents a not found error (HTTP 404).
+	ErrNotFound StatusErr = http.StatusNotFound
+	// ErrMethodNotAllowed represents a method not allowed error (HTTP 405).
+	ErrMethodNotAllowed StatusErr = http.StatusMethodNotAllowed
+	// ErrBadRequest represents a bad request error (HTTP 400).
+	ErrBadRequest StatusErr = http.StatusBadRequest
+)
+
+// errorResponse is a struct used to represent an error response in JSON format.
+type errorResponse struct {
+	Status string `json:"status"`
+	Error  string `json:"error"`
+}
+
+// RespondJSON marshals the provided response object as JSON and writes it to the http.ResponseWriter.
+// It sets the Content-Type header to application/json before marshalling.
+// In case of marshalling errors, it writes an internal server error with the error message.
+func RespondJSON(w http.ResponseWriter, response any) {
+	w.Header().Set("Content-Type", "application/json")
+	b, err := json.MarshalIndent(response, "", "  ")
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(fmt.Sprintf(`{
+      "status": "error",
+      "error": "JSON marshal error: %v"
+    }
+`, err)))
+		return
+	}
+	w.Write(b)
+	w.Write([]byte("\n"))
+}
+
+// RespondJSONError writes an error response in JSON format to w.
+//
+// If the error is a StatusErr, it extracts the HTTP status code and sets the
+// response status code accordingly. Otherwise, it sets the response status code
+// to http.StatusInternalServerError.
+//
+// You can wrap any error with fmt.Errorf to create a StatusErr and set a
+// specific HTTP status code:
+//
+//	// This will set the status code to 404 (Not Found).
+//	httputil.RespondJSONError(w, fmt.Errorf("resource %w", httputil.ErrNotFound)
+func RespondJSONError(w http.ResponseWriter, err error) {
+	w.Header().Set("Content-Type", "application/json")
+	var se StatusErr
+	if errors.As(err, &se) {
+		w.WriteHeader(int(se))
+	} else {
+		w.WriteHeader(http.StatusInternalServerError)
+	}
+	RespondJSON(w, &errorResponse{Status: "error", Error: err.Error()})
 }

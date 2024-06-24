@@ -280,13 +280,13 @@ func (e *engine) loadFromGist(ctx context.Context) {
 
 func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("X-Telegram-Bot-Api-Secret-Token") != e.tgSecret {
-		web.NotFound(w, r)
+		httputil.RespondJSONError(w, httputil.ErrNotFound)
 		return
 	}
 
 	rawUpdate, err := io.ReadAll(r.Body)
 	if err != nil {
-		web.Error(e.log.Printf, w, r, err)
+		httputil.RespondJSONError(w, err)
 		return
 	}
 
@@ -301,22 +301,30 @@ func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 
 	e.loadGist.Do(func() { e.loadFromGist(r.Context()) })
 	e.mu.Lock()
+	defer e.mu.Unlock()
 	if e.loadGistErr != nil {
-		web.Error(e.log.Printf, w, r, errors.New("failed to load bot code"))
-		e.log.Println(e.loadGistErr)
-		e.mu.Unlock()
+		httputil.RespondJSONError(w, e.loadGistErr)
 		return
 	}
 	botCode := bytes.Clone(e.bot)
-	e.mu.Unlock()
 
 	_, err = starlark.ExecFileOptions(&syntax.FileOptions{}, &starlark.Thread{
 		Print: func(thread *starlark.Thread, msg string) { e.log.Println(msg) },
 	}, "bot.star", botCode, predeclared)
 	if err != nil {
-		e.reportError(r.Context(), err)
+		e.reportError(r.Context(), w, err)
 		return
 	}
+
+	jsonOK(w)
+}
+
+func jsonOK(w http.ResponseWriter) {
+	var res struct {
+		Status string `json:"success"`
+	}
+	res.Status = "success"
+	httputil.RespondJSON(w, res)
 }
 
 // Authentication {{{
@@ -469,7 +477,7 @@ func (e *engine) selfPing(ctx context.Context) {
 	}
 }
 
-func (e *engine) reportError(ctx context.Context, err error) {
+func (e *engine) reportError(ctx context.Context, w http.ResponseWriter, err error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -493,6 +501,8 @@ func (e *engine) reportError(ctx context.Context, err error) {
 	if sendErr != nil {
 		e.log.Printf("reporting an error %q to %q failed: %v", err, e.tgOwner, sendErr)
 	}
+
+	httputil.RespondJSONError(w, err)
 }
 
 type starlarkBuiltin func(*starlark.Thread, *starlark.Builtin, starlark.Tuple, []starlark.Tuple) (starlark.Value, error)

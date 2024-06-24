@@ -9,4 +9,4 @@ def send_message(to, text, reply_markup = {}):
         }
     )
 
-send_message(123456789, "Hello, world!")
+send_message(bot_owner_id, "Hello, world!")
