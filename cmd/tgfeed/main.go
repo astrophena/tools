@@ -75,6 +75,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -299,12 +300,19 @@ type feedState struct {
 type stats struct {
 	mu sync.Mutex
 
-	Time                  time.Time `json:"time"`                     // date and time of run
-	Duration              duration  `json:"duration"`                 // time consumed by run execution
-	FeedsCount            int       `json:"feeds_count"`              // count of fetched feeds
-	FeedsSuccessfulCount  int       `json:"feeds_successful_count"`   // count of successfully fetched feeds
-	FeedsFailedCount      int       `json:"feeds_failed_count"`       // count of unsuccessfully fetched feeds
-	FeedsNotModifiedCount int       `json:"feeds_not_modified_count"` // count of feeds that responded with Not Modified
+	TotalFeeds       int `json:"total_feeds"`
+	SuccessFeeds     int `json:"success_feeds"`
+	FailedFeeds      int `json:"failed_feeds"`
+	NotModifiedFeeds int `json:"not_modified_feeds"`
+
+	StartTime        time.Time `json:"start_time"`
+	Duration         duration  `json:"duration"`
+	TotalItemsParsed int       `json:"total_items_parsed"`
+
+	TotalFetchTime duration `json:"total_fetch_time"`
+	AvgFetchTime   duration `json:"avg_fetch_time"`
+
+	MemoryUsage uint64 `json:"memory_usage"`
 }
 
 type duration time.Duration
@@ -358,7 +366,7 @@ func (f *fetcher) run(ctx context.Context) error {
 
 	// Start with empty stats for every run.
 	f.stats = &stats{
-		Time: time.Now(),
+		StartTime: time.Now(),
 	}
 
 	if err := f.loadFromGist(ctx); err != nil {
@@ -413,11 +421,19 @@ func (f *fetcher) run(ctx context.Context) error {
 		return err
 	}
 
-	// Record time consumed by run and report stats.
+	// Prepare and report stats.
 	f.stats.mu.Lock()
 	defer f.stats.mu.Unlock()
-	f.stats.Duration = duration(time.Now().Sub(f.stats.Time))
-	f.stats.FeedsCount = len(f.feeds)
+
+	f.stats.Duration = duration(time.Now().Sub(f.stats.StartTime))
+	f.stats.TotalFeeds = len(f.feeds)
+	if f.stats.SuccessFeeds > 0 {
+		f.stats.AvgFetchTime = f.stats.TotalFetchTime / duration(f.stats.SuccessFeeds)
+	}
+
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	f.stats.MemoryUsage = m.Alloc
 
 	if f.statsCollectorURL != "" && f.statsCollectorToken != "" {
 		if err := f.reportStats(ctx); err != nil {
@@ -552,6 +568,8 @@ func (f *fetcher) loadFromGist(ctx context.Context) error {
 }
 
 func (f *fetcher) fetch(ctx context.Context, url string, updates chan *gofeed.Item) {
+	startTime := time.Now()
+
 	state, exists := f.getState(url)
 	// If we don't remember this feed, it's probably new. Set it's last update
 	// date to current so we don't get a lot of unread articles and trigger
@@ -594,7 +612,7 @@ func (f *fetcher) fetch(ctx context.Context, url string, updates chan *gofeed.It
 	if res.StatusCode == http.StatusNotModified {
 		f.stats.mu.Lock()
 		defer f.stats.mu.Unlock()
-		f.stats.FeedsNotModifiedCount += 1
+		f.stats.NotModifiedFeeds += 1
 		return
 	}
 	if res.StatusCode != http.StatusOK {
@@ -640,13 +658,15 @@ func (f *fetcher) fetch(ctx context.Context, url string, updates chan *gofeed.It
 	state.FetchCount += 1
 
 	f.stats.mu.Lock()
-	f.stats.FeedsSuccessfulCount += 1
+	f.stats.TotalItemsParsed += len(feed.Items)
+	f.stats.SuccessFeeds += 1
+	f.stats.TotalFetchTime += duration(time.Since(startTime))
 	f.stats.mu.Unlock()
 }
 
 func (f *fetcher) handleFetchFailure(ctx context.Context, state *feedState, url string, err error) {
 	f.stats.mu.Lock()
-	f.stats.FeedsFailedCount += 1
+	f.stats.FailedFeeds += 1
 	f.stats.mu.Unlock()
 
 	state.FetchFailCount += 1
