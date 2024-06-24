@@ -153,6 +153,7 @@ type engine struct {
 	log       *log.Logger
 	logStream logstream.Streamer
 	mux       *http.ServeMux
+	logMasker *strings.Replacer
 
 	// configuration, read-only after initialization
 	ghToken  string
@@ -179,6 +180,13 @@ func (e *engine) doInit() {
 		Token:      e.ghToken,
 		HTTPClient: e.httpc,
 	}
+
+	e.logMasker = strings.NewReplacer(
+		e.tgToken, "[EXPUNGED]",
+		e.tgSecret, "[EXPUNGED]",
+		e.ghToken, "[EXPUNGED]",
+		e.gistID, "[EXPUNGED]",
+	)
 }
 
 func (e *engine) initRoutes() {
@@ -485,8 +493,8 @@ func (e *engine) reportError(ctx context.Context, w http.ResponseWriter, err err
 	if evalErr, ok := err.(*starlark.EvalError); ok {
 		errMsg += "\n\n" + evalErr.Backtrace()
 	}
-	// Mask Telegram Bot API token in error messages.
-	errMsg = strings.ReplaceAll(errMsg, e.tgToken, "[EXPUNGED]")
+	// Mask secrets in error messages.
+	errMsg = e.logMasker.Replace(errMsg)
 
 	_, sendErr := httputil.MakeJSONRequest[any](ctx, httputil.RequestParams{
 		Method: http.MethodPost,
