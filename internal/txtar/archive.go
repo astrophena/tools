@@ -142,12 +142,12 @@ func fixNL(data []byte) []byte {
 }
 
 // Extract extracts an archive to dir.
-func Extract(ar *Archive, dir string) error {
-	for _, file := range ar.Files {
-		if err := os.MkdirAll(filepath.Join(dir, filepath.Dir(file.Name)), 0o755); err != nil {
+func Extract(a *Archive, dir string) error {
+	for _, f := range a.Files {
+		if err := os.MkdirAll(filepath.Join(dir, filepath.Dir(f.Name)), 0o755); err != nil {
 			return err
 		}
-		if err := os.WriteFile(filepath.Join(dir, file.Name), file.Data, 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, f.Name), f.Data, 0o644); err != nil {
 			return err
 		}
 	}
@@ -156,7 +156,7 @@ func Extract(ar *Archive, dir string) error {
 
 // FromDir constructs an archive from contents of dir.
 func FromDir(dir string) (*Archive, error) {
-	ar := new(Archive)
+	a := new(Archive)
 
 	if err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -172,7 +172,7 @@ func FromDir(dir string) (*Archive, error) {
 			return err
 		}
 
-		ar.Files = append(ar.Files, File{
+		a.Files = append(a.Files, File{
 			Name: d.Name(),
 			Data: b,
 		})
@@ -182,5 +182,5 @@ func FromDir(dir string) (*Archive, error) {
 		return nil, err
 	}
 
-	return ar, nil
+	return a, nil
 }
