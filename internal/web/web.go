@@ -53,10 +53,9 @@ func respondJSON(w http.ResponseWriter, response any, wroteStatus bool) {
 			w.WriteHeader(http.StatusInternalServerError)
 		}
 		w.Write([]byte(fmt.Sprintf(`{
-      "status": "error",
-      "error": "JSON marshal error: %s"
-    }
-`, escapeForJSON(err.Error()))))
+  "status": "error",
+  "error": "JSON marshal error: %s"
+}`, escapeForJSON(err.Error()))))
 		return
 	}
 	w.Write(b)
