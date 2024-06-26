@@ -27,8 +27,8 @@ import (
 
 var expvarOnce sync.Once
 
-//go:embed debug.html
-var debugTmpl string
+//go:embed templates/debug.html
+var debugTemplate string
 
 // DebugHandler is an http.Handler that serves a debugging "homepage", and
 // provides helpers to register more debug endpoints and reports.
@@ -123,15 +123,15 @@ func (d *DebugHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			http.ServeContent(w, r, "icon.jpg", time.Time{}, bytes.NewReader(d.icon))
 			return
 		}
-		NotFound(w, r)
+		RespondError(d.logf, w, ErrNotFound)
 		return
 	}
 
 	d.tplInit.Do(func() {
-		d.tpl, d.tplErr = template.New("debug").Parse(debugTmpl)
+		d.tpl, d.tplErr = template.New("debug").Parse(debugTemplate)
 	})
 	if d.tplErr != nil {
-		Error(d.logf, w, r, fmt.Errorf("failed to initialize template: %w", d.tplErr))
+		RespondError(d.logf, w, fmt.Errorf("failed to initialize template: %w", d.tplErr))
 		return
 	}
 
@@ -156,7 +156,7 @@ func (d *DebugHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	var buf bytes.Buffer
 	if err := d.tpl.Execute(&buf, &data); err != nil {
-		Error(d.logf, w, r, err)
+		RespondError(d.logf, w, err)
 		return
 	}
 	buf.WriteTo(w)
@@ -188,5 +188,5 @@ func (d *DebugHandler) Link(url, desc string) {
 	d.links = append(d.links, link{url, desc})
 }
 
-// SetIcon sets the debug web page icon, should be in JPEG format.
+// SetIcon sets the debug web page icon. It should be in JPEG format.
 func (d *DebugHandler) SetIcon(b []byte) { d.icon = b }

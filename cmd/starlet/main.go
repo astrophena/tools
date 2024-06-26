@@ -50,13 +50,11 @@ import (
 	"syscall"
 	"time"
 
+	"go.astrophena.name/tools/internal/api/gist"
 	"go.astrophena.name/tools/internal/cli"
 	"go.astrophena.name/tools/internal/cli/envflag"
-	"go.astrophena.name/tools/internal/client/gist"
-	"go.astrophena.name/tools/internal/docs"
-	"go.astrophena.name/tools/internal/httplogger"
-	"go.astrophena.name/tools/internal/httputil"
-	"go.astrophena.name/tools/internal/logger/logstream"
+	"go.astrophena.name/tools/internal/logger"
+	"go.astrophena.name/tools/internal/request"
 	"go.astrophena.name/tools/internal/web"
 
 	starlarkjson "go.starlark.net/lib/json"
@@ -114,13 +112,6 @@ func main() {
 		},
 	}
 
-	if os.Getenv("HTTPLOG") == "1" {
-		if e.httpc.Transport == nil {
-			e.httpc.Transport = http.DefaultTransport
-		}
-		e.httpc.Transport = httplogger.New(e.httpc.Transport, nil)
-	}
-
 	e.init.Do(e.doInit)
 
 	if isProd() {
@@ -135,7 +126,7 @@ func main() {
 		Addr:       *addr,
 		DebugAuth:  e.debugAuth,
 		Debuggable: true, // debug endpoints protected by Telegram auth
-		Logf:       e.log.Printf,
+		Logf:       e.logf,
 		Mux:        e.mux,
 	}); err != nil {
 		log.Fatal(err)
@@ -152,7 +143,7 @@ type engine struct {
 	// initialized by doInit
 	gistc     *gist.Client
 	log       *log.Logger
-	logStream logstream.Streamer
+	logStream logger.Streamer
 	mux       *http.ServeMux
 	logMasker *strings.Replacer
 
@@ -173,8 +164,8 @@ type engine struct {
 
 func (e *engine) doInit() {
 	const logLineLimit = 300
-	e.logStream = logstream.New(logLineLimit)
-	e.log = log.New(io.MultiWriter(os.Stderr, e.logStream), "", log.LstdFlags|log.Llongfile)
+	e.logStream = logger.NewStreamer(logLineLimit)
+	e.log = log.New(io.MultiWriter(os.Stderr, e.logStream), "", log.LstdFlags)
 	e.initRoutes()
 
 	e.gistc = &gist.Client{
@@ -190,13 +181,15 @@ func (e *engine) doInit() {
 	)
 }
 
+func (e *engine) logf(format string, args ...any) { e.log.Printf(format, args...) }
+
 func (e *engine) initRoutes() {
 	e.mux = http.NewServeMux()
 
 	// Redirect to Telegram chat with bot.
 	e.mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
-			web.NotFound(w, r)
+			web.RespondError(e.logf, w, web.ErrNotFound)
 			return
 		}
 		http.Redirect(w, r, "https://t.me/astrophena_bot", http.StatusFound)
@@ -217,7 +210,7 @@ func (e *engine) initRoutes() {
 
 	// Debug routes.
 	web.Health(e.mux)
-	dbg := web.Debugger(e.log.Printf, e.mux)
+	dbg := web.Debugger(e.logf, e.mux)
 	dbg.SetIcon(debugIcon)
 	dbg.Handle("reload", "Reload from gist", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		e.loadFromGist(r.Context())
@@ -225,7 +218,7 @@ func (e *engine) initRoutes() {
 		defer e.mu.Unlock()
 		err := e.loadGistErr
 		if err != nil {
-			web.Error(e.log.Printf, w, r, err)
+			web.RespondError(e.logf, w, err)
 			return
 		}
 		http.Redirect(w, r, "/debug/", http.StatusFound)
@@ -233,8 +226,6 @@ func (e *engine) initRoutes() {
 	dbg.Handle("logs", "Logs", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, logsTmpl, strings.Join(e.logStream.Lines(), "\n"))
 	}))
-	e.mux.Handle("/debug/docs/", http.StripPrefix("/debug/docs", docs.Handler()))
-	dbg.Link("/debug/docs/", "Docs")
 	e.mux.Handle("/debug/log", e.logStream)
 }
 
@@ -291,13 +282,13 @@ func (e *engine) loadFromGist(ctx context.Context) {
 
 func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("X-Telegram-Bot-Api-Secret-Token") != e.tgSecret {
-		httputil.RespondJSONError(w, httputil.ErrNotFound)
+		web.RespondJSONError(e.logf, w, web.ErrNotFound)
 		return
 	}
 
 	rawUpdate, err := io.ReadAll(r.Body)
 	if err != nil {
-		httputil.RespondJSONError(w, err)
+		web.RespondJSONError(e.logf, w, err)
 		return
 	}
 
@@ -314,7 +305,7 @@ func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if e.loadGistErr != nil {
-		httputil.RespondJSONError(w, e.loadGistErr)
+		web.RespondJSONError(e.logf, w, e.loadGistErr)
 		return
 	}
 	botCode := bytes.Clone(e.bot)
@@ -335,7 +326,7 @@ func jsonOK(w http.ResponseWriter) {
 		Status string `json:"success"`
 	}
 	res.Status = "success"
-	httputil.RespondJSON(w, res)
+	web.RespondJSON(w, res)
 }
 
 // Authentication {{{
@@ -352,7 +343,7 @@ func (e *engine) handleLogin(w http.ResponseWriter, r *http.Request) {
 	data := r.URL.Query()
 	hash := data.Get("hash")
 	if hash == "" {
-		web.Error(e.log.Printf, w, r, fmt.Errorf("no hash present in auth data, got: %v", data))
+		web.RespondError(e.logf, w, fmt.Errorf("%w: no hash present in auth data", web.ErrBadRequest))
 		return
 	}
 	data.Del("hash")
@@ -374,7 +365,7 @@ func (e *engine) handleLogin(w http.ResponseWriter, r *http.Request) {
 	checkString := sb.String()
 
 	if !e.validateAuthData(checkString, hash) {
-		web.Error(e.log.Printf, w, r, errors.New("hash is not valid"))
+		web.RespondError(e.logf, w, fmt.Errorf("%w: hash is not valid", web.ErrBadRequest))
 		return
 	}
 
@@ -460,27 +451,27 @@ func (e *engine) selfPing(ctx context.Context) {
 	ticker := time.NewTicker(10 * time.Minute)
 	defer ticker.Stop()
 
-	e.log.Printf("selfPing: started")
-	defer e.log.Printf("selfPing: stopped")
+	e.logf("selfPing: started")
+	defer e.logf("selfPing: stopped")
 
 	for {
 		select {
 		case <-ticker.C:
 			url := os.Getenv("RENDER_EXTERNAL_URL")
 			if url == "" {
-				e.log.Printf("selfPing: RENDER_EXTERNAL_URL is not set; are you really on Render?")
+				e.logf("selfPing: RENDER_EXTERNAL_URL is not set; are you really on Render?")
 				return
 			}
-			health, err := httputil.MakeJSONRequest[web.HealthResponse](ctx, httputil.RequestParams{
+			health, err := request.MakeJSON[web.HealthResponse](ctx, request.Params{
 				Method:     http.MethodGet,
 				URL:        url + "/health",
 				HTTPClient: e.httpc,
 			})
 			if err != nil {
-				e.log.Printf("selfPing: %v", err)
+				e.logf("selfPing: %v", err)
 			}
 			if !health.OK {
-				e.log.Printf("selfPing: unhealthy: %+v", health)
+				e.logf("selfPing: unhealthy: %+v", health)
 			}
 		case <-ctx.Done():
 			return
@@ -499,7 +490,7 @@ func (e *engine) reportError(ctx context.Context, w http.ResponseWriter, err err
 	// Mask secrets in error messages.
 	errMsg = e.logMasker.Replace(errMsg)
 
-	_, sendErr := httputil.MakeJSONRequest[any](ctx, httputil.RequestParams{
+	_, sendErr := request.MakeJSON[any](ctx, request.Params{
 		Method: http.MethodPost,
 		URL:    "https://api.telegram.org/bot" + e.tgToken + "/sendMessage",
 		Body: map[string]string{
@@ -510,10 +501,10 @@ func (e *engine) reportError(ctx context.Context, w http.ResponseWriter, err err
 		HTTPClient: e.httpc,
 	})
 	if sendErr != nil {
-		e.log.Printf("reporting an error %q to %q failed: %v", err, e.tgOwner, sendErr)
+		e.logf("reporting an error %q to %q failed: %v", err, e.tgOwner, sendErr)
 	}
 
-	httputil.RespondJSONError(w, err)
+	web.RespondJSONError(e.logf, w, err)
 }
 
 type starlarkBuiltin func(*starlark.Thread, *starlark.Builtin, starlark.Tuple, []starlark.Tuple) (starlark.Value, error)
@@ -569,7 +560,7 @@ func (e *engine) callFunc(ctx context.Context) starlarkBuiltin {
 		}
 
 		// Make Telegram Bot API request.
-		rawResp, err := httputil.MakeJSONRequest[json.RawMessage](ctx, httputil.RequestParams{
+		rawResp, err := request.MakeJSON[json.RawMessage](ctx, request.Params{
 			Method:     http.MethodPost,
 			URL:        "https://api.telegram.org/bot" + e.tgToken + "/" + string(method),
 			Body:       json.RawMessage(rawReq),

@@ -10,10 +10,10 @@ import (
 	"sync"
 	"testing"
 
-	"go.astrophena.name/tools/internal/client/gist"
-	"go.astrophena.name/tools/internal/httputil"
+	"go.astrophena.name/tools/internal/api/gist"
+	"go.astrophena.name/tools/internal/request"
 	"go.astrophena.name/tools/internal/testutil"
-	"go.astrophena.name/tools/internal/txtar"
+	"go.astrophena.name/tools/internal/testutil/txtar"
 	"go.astrophena.name/tools/internal/web"
 )
 
@@ -25,7 +25,7 @@ var gistTxtar []byte
 
 func TestHealth(t *testing.T) {
 	e := testEngine(t, testMux(t, nil))
-	health, err := httputil.MakeJSONRequest[web.HealthResponse](context.Background(), httputil.RequestParams{
+	health, err := request.MakeJSON[web.HealthResponse](context.Background(), request.Params{
 		Method:     http.MethodGet,
 		URL:        "/health",
 		HTTPClient: testutil.MockHTTPClient(t, e.mux),
@@ -57,7 +57,7 @@ func TestHandleTelegramWebhook(t *testing.T) {
 			}
 		}
 
-		_, err = httputil.MakeJSONRequest[any](context.Background(), httputil.RequestParams{
+		_, err = request.MakeJSON[any](context.Background(), request.Params{
 			Method: http.MethodPost,
 			URL:    "/telegram",
 			Body:   update,
@@ -115,7 +115,7 @@ func testMux(t *testing.T, overrides map[string]http.HandlerFunc) *mux {
 		defer m.mu.Unlock()
 		sentMessage := read(t, r.Body)
 		m.sentMessages = append(m.sentMessages, testutil.UnmarshalJSON[map[string]any](t, sentMessage))
-		httputil.RespondJSON(w, struct{}{})
+		web.RespondJSON(w, struct{}{})
 	}))
 	for pat, h := range overrides {
 		if pat == getGist || pat == sendTelegram {

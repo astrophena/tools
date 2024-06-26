@@ -83,11 +83,10 @@ import (
 	"testing"
 	"time"
 
+	"go.astrophena.name/tools/internal/api/gemini"
+	"go.astrophena.name/tools/internal/api/gist"
 	"go.astrophena.name/tools/internal/cli"
-	"go.astrophena.name/tools/internal/client/gemini"
-	"go.astrophena.name/tools/internal/client/gist"
-	"go.astrophena.name/tools/internal/httplogger"
-	"go.astrophena.name/tools/internal/httputil"
+	"go.astrophena.name/tools/internal/request"
 	"go.astrophena.name/tools/internal/syncutil"
 
 	"github.com/mmcdole/gofeed"
@@ -136,13 +135,6 @@ func main() {
 			Model:      "gemini-1.5-flash-latest",
 			HTTPClient: f.httpc,
 		}
-	}
-
-	if os.Getenv("HTTPLOG") == "1" {
-		if f.httpc.Transport == nil {
-			f.httpc.Transport = http.DefaultTransport
-		}
-		f.httpc.Transport = httplogger.New(f.httpc.Transport, nil)
 	}
 
 	switch {
@@ -335,7 +327,7 @@ func (f *fetcher) reportStats(ctx context.Context) error {
 	q.Add("token", f.statsCollectorToken)
 	u.RawQuery = q.Encode()
 
-	resp, err := httputil.MakeJSONRequest[response](ctx, httputil.RequestParams{
+	resp, err := request.MakeJSON[response](ctx, request.Params{
 		Method: http.MethodPost,
 		URL:    u.String(),
 		Body:   []*stats{f.stats},
@@ -352,7 +344,7 @@ func (f *fetcher) reportStats(ctx context.Context) error {
 
 func (f *fetcher) doInit() {
 	f.fp = gofeed.NewParser()
-	f.fp.UserAgent = httputil.UserAgent()
+	f.fp.UserAgent = request.UserAgent()
 	f.fp.Client = f.httpc
 
 	f.gistc = &gist.Client{
@@ -593,7 +585,7 @@ func (f *fetcher) fetch(ctx context.Context, url string, updates chan *gofeed.It
 		return
 	}
 
-	req.Header.Set("User-Agent", httputil.UserAgent())
+	req.Header.Set("User-Agent", request.UserAgent())
 	if state.ETag != "" {
 		req.Header.Set("If-None-Match", fmt.Sprintf(`"%s"`, state.ETag))
 	}
@@ -732,7 +724,7 @@ func (f *fetcher) saveToGist(ctx context.Context) error {
 }
 
 func (f *fetcher) makeTelegramRequest(ctx context.Context, method string, args any) error {
-	if _, err := httputil.MakeJSONRequest[any](ctx, httputil.RequestParams{
+	if _, err := request.MakeJSON[any](ctx, request.Params{
 		Method:     http.MethodPost,
 		URL:        tgAPI + "/bot" + f.tgToken + "/" + method,
 		Body:       args,

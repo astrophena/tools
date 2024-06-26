@@ -11,8 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"go.astrophena.name/tools/internal/httplogger"
-	"go.astrophena.name/tools/internal/txtar"
+	"go.astrophena.name/tools/internal/testutil/txtar"
 
 	"github.com/google/go-cmp/cmp"
 )
@@ -129,9 +128,6 @@ func MockHTTPClient(t *testing.T, h http.Handler) *http.Client {
 			h.ServeHTTP(w, r)
 			return w.Result(), nil
 		}),
-	}
-	if os.Getenv("HTTPLOG") == "1" {
-		httpc.Transport = httplogger.New(httpc.Transport, t.Logf)
 	}
 	return httpc
 }

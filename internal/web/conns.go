@@ -15,29 +15,16 @@ import (
 	"go.astrophena.name/tools/internal/version"
 )
 
-// Conns returns an http.Handler that displays the list of active
+// Conns returns an [http.Handler] that displays the list of active
 // HTTP connections and associates it with the provided http.Server.
-func Conns(logf logger.Logf, s *http.Server) (http.Handler, func(proxyAddr, realAddr string)) {
+func Conns(logf logger.Logf, s *http.Server) http.Handler {
 	ch := &connsHandler{logf: logf, conns: make(map[string]*conn)}
 	s.ConnState = ch.connState
-	return ch, func(proxyAddr, realAddr string) {
-		ch.mu.Lock()
-		defer ch.mu.Unlock()
-		conn, ok := ch.conns[proxyAddr]
-		if !ok {
-			return
-		}
-		for _, addr := range conn.SeenRealAddrs {
-			if addr == realAddr {
-				return
-			}
-		}
-		conn.SeenRealAddrs = append(conn.SeenRealAddrs, realAddr)
-	}
+	return ch
 }
 
-// connsHandler is an http.Handler that displays the list of active connections.
-// It's inspired by https://twitter.com/bradfitz/status/1349825913136017415.
+// connsHandler is a [http.Handler] that displays the list of active connections.
+// It's inspired by https://x.com/bradfitz/status/1349825913136017415.
 type connsHandler struct {
 	mu    sync.Mutex
 	conns map[string]*conn
@@ -51,11 +38,10 @@ type connsHandler struct {
 
 // conn represents an active HTTP connection.
 type conn struct {
-	Net           string
-	Addr          string
-	SeenRealAddrs []string
-	Time          time.Time
-	State         http.ConnState
+	Net   string
+	Addr  string
+	Time  time.Time
+	State http.ConnState
 }
 
 // connState implements the http.Server.ConnState callback function.
@@ -82,7 +68,6 @@ func (ch *connsHandler) connState(c net.Conn, state http.ConnState) {
 	}
 }
 
-// ServeHTTP implements the http.Handler.
 func (ch *connsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ch.mu.Lock()
 	defer ch.mu.Unlock()
@@ -90,7 +75,7 @@ func (ch *connsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.FormValue("format") == "json" {
 		j, err := json.Marshal(ch.conns)
 		if err != nil {
-			Error(ch.logf, w, r, fmt.Errorf("web.connsHandler: failed to marshal json: %v", err))
+			RespondError(ch.logf, w, fmt.Errorf("web.connsHandler: failed to marshal json: %v", err))
 			return
 		}
 		w.Write(j)
@@ -99,20 +84,20 @@ func (ch *connsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	ch.tplInit.Do(ch.doTplInit)
 	if ch.tplErr != nil {
-		Error(ch.logf, w, r, fmt.Errorf("web.connsHandler: failed to initialize template: %w", ch.tplErr))
+		RespondError(ch.logf, w, fmt.Errorf("web.connsHandler: failed to initialize template: %w", ch.tplErr))
 		return
 	}
 
 	var buf bytes.Buffer
 	if err := ch.tpl.Execute(&buf, nil); err != nil {
-		Error(ch.logf, w, r, err)
+		RespondError(ch.logf, w, err)
 		return
 	}
 	buf.WriteTo(w)
 }
 
-//go:embed conns.html
-var connsTmpl string
+//go:embed templates/conns.html
+var connsTemplate string
 
 func (ch *connsHandler) doTplInit() {
 	ch.tpl, ch.tplErr = template.New("conns").Funcs(template.FuncMap{
@@ -127,18 +112,16 @@ func (ch *connsHandler) doTplInit() {
 			if len(ch.conns) > 1 {
 				w += "s"
 			}
-
 			var idle int64
 			for _, c := range ch.conns {
 				if c.State == http.StateIdle {
 					idle++
 				}
 			}
-
 			return fmt.Sprintf("%d %s, %d idle.", len(ch.conns), w, idle)
 		},
 		"since": func(t time.Time) time.Duration {
 			return time.Since(t)
 		},
-	}).Parse(connsTmpl)
+	}).Parse(connsTemplate)
 }

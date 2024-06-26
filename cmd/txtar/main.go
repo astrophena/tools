@@ -23,7 +23,7 @@ import (
 	"os"
 
 	"go.astrophena.name/tools/internal/cli"
-	"go.astrophena.name/tools/internal/txtar"
+	"go.astrophena.name/tools/internal/testutil/txtar"
 )
 
 func main() {

@@ -16,9 +16,9 @@ import (
 	"go.astrophena.name/tools/internal/logger"
 )
 
-//go:generate curl --fail-with-body -s -o style.css https://astrophena.name/css/main.css
+//go:generate curl --fail-with-body -s -o static/style.css https://astrophena.name/css/main.css
 
-//go:embed style.css
+//go:embed static/style.css
 var style []byte
 
 // ListenAndServeConfig is used to configure the HTTP server started by
@@ -85,7 +85,7 @@ func ListenAndServe(ctx context.Context, c *ListenAndServeConfig) error {
 			}
 			// If access denied, pretend that debug endpoints don't exist.
 			if !c.DebugAuth(r) {
-				NotFound(w, r)
+				RespondError(c.Logf, w, ErrNotFound)
 				return
 			}
 			next.ServeHTTP(w, r)
@@ -136,26 +136,6 @@ func (c ListenAndServeConfig) initInternalRoutes(s *http.Server) {
 	Health(c.Mux)
 	if c.Debuggable {
 		dbg := Debugger(c.Logf, c.Mux)
-		connsHandler, updateAddrFunc := Conns(c.Logf, s)
-		s.Handler = func(next http.Handler) http.Handler {
-			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				realIP := getRealIP(r)
-				if realIP != "" {
-					updateAddrFunc(r.RemoteAddr, realIP)
-				}
-				next.ServeHTTP(w, r)
-			})
-		}(s.Handler)
-		dbg.Handle("conns", "Connections", connsHandler)
+		dbg.Handle("conns", "Connections", Conns(c.Logf, s))
 	}
-}
-
-func getRealIP(r *http.Request) string {
-	forwarded := r.Header.Get("X-Forwarded-For")
-	if forwarded != "" {
-		// Extract the first IP from the comma-separated list (assuming the first is
-		// the client).
-		return strings.Split(forwarded, ",")[0]
-	}
-	return ""
 }
