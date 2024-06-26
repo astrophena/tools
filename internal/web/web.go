@@ -37,8 +37,8 @@ const (
 
 // errorResponse is a struct used to represent an error response in JSON format.
 type errorResponse struct {
-	Status       string `json:"status"`
-	RespondError string `json:"error"`
+	Status string `json:"status"`
+	Error  string `json:"error"`
 }
 
 // RespondJSON marshals the provided response object as JSON and writes it to the http.ResponseWriter.
@@ -106,7 +106,7 @@ func respondError(json bool, logf logger.Logf, w http.ResponseWriter, err error)
 	}
 	if json {
 		w.Header().Set("Content-Type", "application/json")
-		RespondJSON(w, &errorResponse{Status: "error", RespondError: err.Error()})
+		RespondJSON(w, &errorResponse{Status: "error", Error: err.Error()})
 		return
 	}
 	fmt.Fprintf(w, errorTemplate, int(se), http.StatusText(int(se)))
