@@ -73,7 +73,7 @@ func main() {
 	var (
 		addr = envflag.Value(
 			"addr", "ADDR", "localhost:3000",
-			"Listen on `host:port or Unix socket`.",
+			"Listen on `host:port`.",
 		)
 		tgToken = envflag.Value(
 			"tg-token", "TG_TOKEN", "",
