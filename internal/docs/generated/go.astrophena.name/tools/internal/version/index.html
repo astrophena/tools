@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="doc2go">
+    <link href="../../../../_/css/main.css" rel="stylesheet" />
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../../_/icons/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../../../../_/icons/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../../../../_/icons/favicon-16x16.png">
+    <link rel="shortcut icon" href="../../../../_/icons/favicon.ico"><title>version</title>
+</head>
+  <body>
+    <nav>
+        <a href="../../..">go.astrophena.name</a>/<a href="../..">tools</a>/<a href="..">internal</a>/version<span class="navbar-right">
+          <a href="../../../..">Root</a> | <a href="#pkg-index">Index</a></span>
+      </nav>
+    <main><h2 id="pkg-overview">package version</h2>
+<pre class="chroma"><span class="kn">import</span> <span class="s">&#34;go.astrophena.name/tools/internal/version&#34;</span></pre>
+<p>Package version provides the version and build information.
+<h3 id="pkg-index">Index</h3>
+<ul>
+  <li><a href="#CmdName">func CmdName() string</a></li>
+  <li>
+      <a href="#Info">type Info</a>
+      <ul>
+          <li><a href="#Version">func Version() Info</a></li>
+          <li><a href="#Info.Short">func (i Info) Short() string</a></li>
+          <li><a href="#Info.String">func (i Info) String() string</a></li>
+          </ul>
+      </li>
+  </ul><h3 id="pkg-functions">Functions</h3>
+  <h3 id="CmdName">func CmdName</h3>
+    <pre class="chroma"><span class="kd">func</span> <span class="nf">CmdName</span><span class="p">()</span> <a href="https://pkg.go.dev/builtin#string"><span class="kt">string</span></a></pre>
+    <p>CmdName returns the base name of the current binary.
+<h3 id="pkg-types">Types</h3>
+  <h3 id="Info">type Info</h3>
+    <pre class="chroma"><span class="kd">type</span> <span class="nx">Info</span> <span class="kd">struct</span> <span class="p">{</span>
+	<span id="Info.Version"><span class="nx">Version</span></span> <a href="https://pkg.go.dev/builtin#string"><span class="kt">string</span></a> <span class="s">`json:&#34;version&#34;`</span>
+	<span id="Info.Commit"><span class="nx">Commit</span></span>  <a href="https://pkg.go.dev/builtin#string"><span class="kt">string</span></a> <span class="s">`json:&#34;commit&#34;`</span>   <span class="c1">// BuildInfo&#39;s vcs.revision
+</span><span class="c1"></span>	<span id="Info.BuiltAt"><span class="nx">BuiltAt</span></span> <a href="https://pkg.go.dev/builtin#string"><span class="kt">string</span></a> <span class="s">`json:&#34;built_at&#34;`</span> <span class="c1">// BuildInfo&#39;s vcs.date
+</span><span class="c1"></span>	<span id="Info.Go"><span class="nx">Go</span></span>      <a href="https://pkg.go.dev/builtin#string"><span class="kt">string</span></a> <span class="s">`json:&#34;go&#34;`</span>       <span class="c1">// runtime.Version()
+</span><span class="c1"></span>	<span id="Info.OS"><span class="nx">OS</span></span>      <a href="https://pkg.go.dev/builtin#string"><span class="kt">string</span></a> <span class="s">`json:&#34;os&#34;`</span>       <span class="c1">// runtime.GOOS
+</span><span class="c1"></span>	<span id="Info.Arch"><span class="nx">Arch</span></span>    <a href="https://pkg.go.dev/builtin#string"><span class="kt">string</span></a> <span class="s">`json:&#34;arch&#34;`</span>     <span class="c1">// runtime.GOARCH
+</span><span class="c1"></span><span class="p">}</span></pre>
+    <p>Info is the version and build information of the current binary.
+<h4 id="Version">func Version</h4>
+  <pre class="chroma"><span class="kd">func</span> <span class="nf">Version</span><span class="p">()</span> <a href="#Info"><span class="nx">Info</span></a></pre>
+  <p>Version returns the version and build information of the current binary.
+<h4 id="Info.Short">func (Info) Short</h4>
+  <pre class="chroma"><span class="kd">func</span> <span class="p">(</span><span class="nx">i</span> <a href="#Info"><span class="nx">Info</span></a><span class="p">)</span> <span class="nf">Short</span><span class="p">()</span> <a href="https://pkg.go.dev/builtin#string"><span class="kt">string</span></a></pre>
+  <p>Short returns the short version information.
+<h4 id="Info.String">func (Info) String</h4>
+  <pre class="chroma"><span class="kd">func</span> <span class="p">(</span><span class="nx">i</span> <a href="#Info"><span class="nx">Info</span></a><span class="p">)</span> <span class="nf">String</span><span class="p">()</span> <a href="https://pkg.go.dev/builtin#string"><span class="kt">string</span></a></pre>
+  <p>String implements the fmt.Stringer interface.
+</main>
+    <hr>
+    <footer>
+      <small id="generated-by-footer">
+        Generated with <a href="https://abhinav.github.io/doc2go/">doc2go</a>
+      </small>
+    </footer>
+    <script src="../../../../_/js/permalink.js"></script></body>
+</html>

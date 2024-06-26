@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="doc2go">
+    <link href="../../../../../_/css/main.css" rel="stylesheet" />
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../../../_/icons/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../../../../../_/icons/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../../../../../_/icons/favicon-16x16.png">
+    <link rel="shortcut icon" href="../../../../../_/icons/favicon.ico"><title>gist</title>
+</head>
+  <body>
+    <nav>
+        <a href="../../../..">go.astrophena.name</a>/<a href="../../..">tools</a>/<a href="../..">internal</a>/<a href="..">client</a>/gist<span class="navbar-right">
+          <a href="../../../../..">Root</a> | <a href="#pkg-index">Index</a></span>
+      </nav>
+    <main><h2 id="pkg-overview">package gist</h2>
+<pre class="chroma"><span class="kn">import</span> <span class="s">&#34;go.astrophena.name/tools/internal/client/gist&#34;</span></pre>
+<p>Package gist provides a client for interacting with the GitHub Gist API.
+<p>To use this package, you need to create a <a href="#Client">Client</a> object with your access
+token. Then, you can use the <a href="#Client.Get">Client.Get</a> or <a href="#Client.Update">Client.Update</a> methods to
+retrieve or modify Gists.
+<h3 id="pkg-index">Index</h3>
+<ul>
+  <li>
+      <a href="#Client">type Client</a>
+      <ul>
+          <li><a href="#Client.Get">func (c *Client) Get(ctx context.Context, id string) (*Gist, error)</a></li>
+          <li><a href="#Client.Update">func (c *Client) Update(ctx context.Context, id string, gist *Gist) (*Gist, error)</a></li>
+          </ul>
+      </li>
+  <li>
+      <a href="#File">type File</a>
+      </li>
+  <li>
+      <a href="#Gist">type Gist</a>
+      </li>
+  </ul><h3 id="pkg-types">Types</h3>
+  <h3 id="Client">type Client</h3>
+    <pre class="chroma"><span class="kd">type</span> <span class="nx">Client</span> <span class="kd">struct</span> <span class="p">{</span>
+	<span class="c1">// Token is the GitHub access token used for authentication.
+</span><span class="c1"></span>	<span id="Client.Token"><span class="nx">Token</span></span> <a href="https://pkg.go.dev/builtin#string"><span class="kt">string</span></a>
+	<span class="c1">// HTTPClient is an optional custom HTTP client object to use for requests.
+</span><span class="c1"></span>	<span class="c1">// If not provided, httputil.DefaultClient will be used.
+</span><span class="c1"></span>	<span id="Client.HTTPClient"><span class="nx">HTTPClient</span></span> <span class="o">*</span><a href="https://pkg.go.dev/net/http"><span class="nx">http</span></a><span class="p">.</span><a href="https://pkg.go.dev/net/http#Client"><span class="nx">Client</span></a>
+<span class="p">}</span></pre>
+    <p>Client represents a GitHub Gist API client.
+<h4 id="Client.Get">func (*Client) Get</h4>
+  <pre class="chroma"><span class="kd">func</span> <span class="p">(</span><span class="nx">c</span> <span class="o">*</span><a href="#Client"><span class="nx">Client</span></a><span class="p">)</span> <span class="nf">Get</span><span class="p">(</span><span class="nx">ctx</span> <a href="https://pkg.go.dev/context"><span class="nx">context</span></a><span class="p">.</span><a href="https://pkg.go.dev/context#Context"><span class="nx">Context</span></a><span class="p">,</span> <span class="nx">id</span> <a href="https://pkg.go.dev/builtin#string"><span class="kt">string</span></a><span class="p">)</span> <span class="p">(</span><span class="o">*</span><a href="#Gist"><span class="nx">Gist</span></a><span class="p">,</span> <a href="https://pkg.go.dev/builtin#error"><span class="kt">error</span></a><span class="p">)</span></pre>
+  <p>Get retrieves a Gist with the specified ID from GitHub.
+<h4 id="Client.Update">func (*Client) Update</h4>
+  <pre class="chroma"><span class="kd">func</span> <span class="p">(</span><span class="nx">c</span> <span class="o">*</span><a href="#Client"><span class="nx">Client</span></a><span class="p">)</span> <span class="nf">Update</span><span class="p">(</span><span class="nx">ctx</span> <a href="https://pkg.go.dev/context"><span class="nx">context</span></a><span class="p">.</span><a href="https://pkg.go.dev/context#Context"><span class="nx">Context</span></a><span class="p">,</span> <span class="nx">id</span> <a href="https://pkg.go.dev/builtin#string"><span class="kt">string</span></a><span class="p">,</span> <span class="nx">gist</span> <span class="o">*</span><a href="#Gist"><span class="nx">Gist</span></a><span class="p">)</span> <span class="p">(</span><span class="o">*</span><a href="#Gist"><span class="nx">Gist</span></a><span class="p">,</span> <a href="https://pkg.go.dev/builtin#error"><span class="kt">error</span></a><span class="p">)</span></pre>
+  <p>Update modifies an existing Gist with the specified ID on GitHub.
+<h3 id="File">type File</h3>
+    <pre class="chroma"><span class="kd">type</span> <span class="nx">File</span> <span class="kd">struct</span> <span class="p">{</span>
+	<span class="c1">// Content is the textual content of the file.
+</span><span class="c1"></span>	<span id="File.Content"><span class="nx">Content</span></span> <a href="https://pkg.go.dev/builtin#string"><span class="kt">string</span></a> <span class="s">`json:&#34;content&#34;`</span>
+<span class="p">}</span></pre>
+    <p>File represents a file within a Gist.
+<h3 id="Gist">type Gist</h3>
+    <pre class="chroma"><span class="kd">type</span> <span class="nx">Gist</span> <span class="kd">struct</span> <span class="p">{</span>
+	<span class="c1">// Files is a map containing file names as keys and their corresponding File
+</span><span class="c1"></span>	<span class="c1">// data as values.
+</span><span class="c1"></span>	<span id="Gist.Files"><span class="nx">Files</span></span> <span class="kd">map</span><span class="p">[</span><a href="https://pkg.go.dev/builtin#string"><span class="kt">string</span></a><span class="p">]</span><a href="#File"><span class="nx">File</span></a> <span class="s">`json:&#34;files&#34;`</span>
+<span class="p">}</span></pre>
+    <p>Gist represents a GitHub Gist data structure.
+</main>
+    <hr>
+    <footer>
+      <small id="generated-by-footer">
+        Generated with <a href="https://abhinav.github.io/doc2go/">doc2go</a>
+      </small>
+    </footer>
+    <script src="../../../../../_/js/permalink.js"></script></body>
+</html>

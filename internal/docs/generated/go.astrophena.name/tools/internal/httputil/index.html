@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="doc2go">
+    <link href="../../../../_/css/main.css" rel="stylesheet" />
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../../_/icons/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../../../../_/icons/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../../../../_/icons/favicon-16x16.png">
+    <link rel="shortcut icon" href="../../../../_/icons/favicon.ico"><title>httputil</title>
+</head>
+  <body>
+    <nav>
+        <a href="../../..">go.astrophena.name</a>/<a href="../..">tools</a>/<a href="..">internal</a>/httputil<span class="navbar-right">
+          <a href="../../../..">Root</a> | <a href="#pkg-index">Index</a></span>
+      </nav>
+    <main><h2 id="pkg-overview">package httputil</h2>
+<pre class="chroma"><span class="kn">import</span> <span class="s">&#34;go.astrophena.name/tools/internal/httputil&#34;</span></pre>
+<p>Package httputil provides utilities for making and serving HTTP requests.
+<h3 id="pkg-index">Index</h3>
+<ul>
+  <li><a href="#pkg-variables">Variables</a></li><li><a href="#MakeJSONRequest">func MakeJSONRequest(ctx context.Context, params RequestParams) (R, error)</a></li>
+  <li><a href="#RespondJSON">func RespondJSON(w http.ResponseWriter, response any)</a></li>
+  <li><a href="#RespondJSONError">func RespondJSONError(w http.ResponseWriter, err error)</a></li>
+  <li><a href="#UserAgent">func UserAgent() string</a></li>
+  <li>
+      <a href="#RequestParams">type RequestParams</a>
+      </li>
+  <li>
+      <a href="#StatusErr">type StatusErr</a>
+      <ul>
+          <li><a href="#StatusErr.Error">func (se StatusErr) Error() string</a></li>
+          </ul>
+      </li>
+  </ul><h3 id="pkg-variables">Variables</h3>
+  <pre class="chroma"><span class="kd">var</span> <span id="DefaultClient"><span class="nx">DefaultClient</span></span> <span class="p">=</span> <span class="o">&amp;</span><a href="https://pkg.go.dev/net/http"><span class="nx">http</span></a><span class="p">.</span><a href="https://pkg.go.dev/net/http#Client"><span class="nx">Client</span></a><span class="p">{</span>
+	<span class="nx">Timeout</span><span class="p">:</span> <span class="mi">10</span> <span class="o">*</span> <a href="https://pkg.go.dev/time"><span class="nx">time</span></a><span class="p">.</span><a href="https://pkg.go.dev/time#Second"><span class="nx">Second</span></a><span class="p">,</span>
+<span class="p">}</span></pre>
+  <p>DefaultClient is a <a href="https://pkg.go.dev/net/http#Client">http.Client</a> with nice defaults.
+<h3 id="pkg-functions">Functions</h3>
+  <h3 id="MakeJSONRequest">func MakeJSONRequest</h3>
+    <pre class="chroma"><span class="kd">func</span> <span class="nx">MakeJSONRequest</span><span class="p">[</span><span class="nx">R</span> <a href="https://pkg.go.dev/builtin#any"><span class="nx">any</span></a><span class="p">](</span><span class="nx">ctx</span> <a href="https://pkg.go.dev/context"><span class="nx">context</span></a><span class="p">.</span><a href="https://pkg.go.dev/context#Context"><span class="nx">Context</span></a><span class="p">,</span> <span class="nx">params</span> <a href="#RequestParams"><span class="nx">RequestParams</span></a><span class="p">)</span> <span class="p">(</span><span class="nx">R</span><span class="p">,</span> <a href="https://pkg.go.dev/builtin#error"><span class="kt">error</span></a><span class="p">)</span></pre>
+    <p>MakeJSONRequest makes a JSON HTTP request with the provided parameters and
+unmarshals the JSON response body into the specified type.
+<h3 id="RespondJSON">func RespondJSON</h3>
+    <pre class="chroma"><span class="kd">func</span> <span class="nf">RespondJSON</span><span class="p">(</span><span class="nx">w</span> <a href="https://pkg.go.dev/net/http"><span class="nx">http</span></a><span class="p">.</span><a href="https://pkg.go.dev/net/http#ResponseWriter"><span class="nx">ResponseWriter</span></a><span class="p">,</span> <span class="nx">response</span> <a href="https://pkg.go.dev/builtin#any"><span class="nx">any</span></a><span class="p">)</span></pre>
+    <p>RespondJSON marshals the provided response object as JSON and writes it to the http.ResponseWriter.
+It sets the Content-Type header to application/json before marshalling.
+In case of marshalling errors, it writes an internal server error with the error message.
+<h3 id="RespondJSONError">func RespondJSONError</h3>
+    <pre class="chroma"><span class="kd">func</span> <span class="nf">RespondJSONError</span><span class="p">(</span><span class="nx">w</span> <a href="https://pkg.go.dev/net/http"><span class="nx">http</span></a><span class="p">.</span><a href="https://pkg.go.dev/net/http#ResponseWriter"><span class="nx">ResponseWriter</span></a><span class="p">,</span> <span class="nx">err</span> <a href="https://pkg.go.dev/builtin#error"><span class="kt">error</span></a><span class="p">)</span></pre>
+    <p>RespondJSONError writes an error response in JSON format to w.
+<p>If the error is a StatusErr, it extracts the HTTP status code and sets the
+response status code accordingly. Otherwise, it sets the response status code
+to http.StatusInternalServerError.
+<p>You can wrap any error with fmt.Errorf to create a StatusErr and set a
+specific HTTP status code:
+<pre>// This will set the status code to 404 (Not Found).
+httputil.RespondJSONError(w, fmt.Errorf(&quot;resource %w&quot;, httputil.ErrNotFound)
+</pre>
+<h3 id="UserAgent">func UserAgent</h3>
+    <pre class="chroma"><span class="kd">func</span> <span class="nf">UserAgent</span><span class="p">()</span> <a href="https://pkg.go.dev/builtin#string"><span class="kt">string</span></a></pre>
+    <p>UserAgent returns a user agent string by combining the version information
+and a special URL leading to bot information page.
+<h3 id="pkg-types">Types</h3>
+  <h3 id="RequestParams">type RequestParams</h3>
+    <pre class="chroma"><span class="kd">type</span> <span class="nx">RequestParams</span> <span class="kd">struct</span> <span class="p">{</span>
+	<span class="c1">// Method is the HTTP method (GET, POST, etc.) for the request.
+</span><span class="c1"></span>	<span id="RequestParams.Method"><span class="nx">Method</span></span> <a href="https://pkg.go.dev/builtin#string"><span class="kt">string</span></a>
+	<span class="c1">// URL is the target URL of the request.
+</span><span class="c1"></span>	<span id="RequestParams.URL"><span class="nx">URL</span></span> <a href="https://pkg.go.dev/builtin#string"><span class="kt">string</span></a>
+	<span class="c1">// Headers is a map of key-value pairs for additional request headers.
+</span><span class="c1"></span>	<span id="RequestParams.Headers"><span class="nx">Headers</span></span> <span class="kd">map</span><span class="p">[</span><a href="https://pkg.go.dev/builtin#string"><span class="kt">string</span></a><span class="p">]</span><a href="https://pkg.go.dev/builtin#string"><span class="kt">string</span></a>
+	<span class="c1">// Body is any data to be sent in the request body. It will be marshaled to
+</span><span class="c1"></span>	<span class="c1">// JSON.
+</span><span class="c1"></span>	<span id="RequestParams.Body"><span class="nx">Body</span></span> <a href="https://pkg.go.dev/builtin#any"><span class="nx">any</span></a>
+	<span class="c1">// HTTPClient is an optional custom HTTP client object to use for the request.
+</span><span class="c1"></span>	<span class="c1">// If not provided, [DefaultClient] will be used.
+</span><span class="c1"></span>	<span id="RequestParams.HTTPClient"><span class="nx">HTTPClient</span></span> <span class="o">*</span><a href="https://pkg.go.dev/net/http"><span class="nx">http</span></a><span class="p">.</span><a href="https://pkg.go.dev/net/http#Client"><span class="nx">Client</span></a>
+<span class="p">}</span></pre>
+    <p>RequestParams defines the parameters needed for making an HTTP request.
+<h3 id="StatusErr">type StatusErr</h3>
+    <pre class="chroma"><span class="kd">type</span> <span class="nx">StatusErr</span> <a href="https://pkg.go.dev/builtin#int"><span class="kt">int</span></a></pre>
+    <p>StatusErr is a sentinel error type used to represent HTTP status code errors.
+It wraps the corresponding http.Status code.
+<pre class="chroma"><span class="kd">const</span> <span class="p">(</span>
+	<span class="c1">// ErrUnauthorized represents an unauthorized access error (HTTP 401).
+</span><span class="c1"></span>	<span id="ErrUnauthorized"><span class="nx">ErrUnauthorized</span></span> <a href="#StatusErr"><span class="nx">StatusErr</span></a> <span class="p">=</span> <a href="https://pkg.go.dev/net/http"><span class="nx">http</span></a><span class="p">.</span><a href="https://pkg.go.dev/net/http#StatusUnauthorized"><span class="nx">StatusUnauthorized</span></a>
+	<span class="c1">// ErrForbidden represents a forbidden access error (HTTP 403).
+</span><span class="c1"></span>	<span id="ErrForbidden"><span class="nx">ErrForbidden</span></span> <a href="#StatusErr"><span class="nx">StatusErr</span></a> <span class="p">=</span> <a href="https://pkg.go.dev/net/http"><span class="nx">http</span></a><span class="p">.</span><a href="https://pkg.go.dev/net/http#StatusForbidden"><span class="nx">StatusForbidden</span></a>
+	<span class="c1">// ErrNotFound represents a not found error (HTTP 404).
+</span><span class="c1"></span>	<span id="ErrNotFound"><span class="nx">ErrNotFound</span></span> <a href="#StatusErr"><span class="nx">StatusErr</span></a> <span class="p">=</span> <a href="https://pkg.go.dev/net/http"><span class="nx">http</span></a><span class="p">.</span><a href="https://pkg.go.dev/net/http#StatusNotFound"><span class="nx">StatusNotFound</span></a>
+	<span class="c1">// ErrMethodNotAllowed represents a method not allowed error (HTTP 405).
+</span><span class="c1"></span>	<span id="ErrMethodNotAllowed"><span class="nx">ErrMethodNotAllowed</span></span> <a href="#StatusErr"><span class="nx">StatusErr</span></a> <span class="p">=</span> <a href="https://pkg.go.dev/net/http"><span class="nx">http</span></a><span class="p">.</span><a href="https://pkg.go.dev/net/http#StatusMethodNotAllowed"><span class="nx">StatusMethodNotAllowed</span></a>
+	<span class="c1">// ErrBadRequest represents a bad request error (HTTP 400).
+</span><span class="c1"></span>	<span id="ErrBadRequest"><span class="nx">ErrBadRequest</span></span> <a href="#StatusErr"><span class="nx">StatusErr</span></a> <span class="p">=</span> <a href="https://pkg.go.dev/net/http"><span class="nx">http</span></a><span class="p">.</span><a href="https://pkg.go.dev/net/http#StatusBadRequest"><span class="nx">StatusBadRequest</span></a>
+<span class="p">)</span></pre>
+  <h4 id="StatusErr.Error">func (StatusErr) Error</h4>
+  <pre class="chroma"><span class="kd">func</span> <span class="p">(</span><span class="nx">se</span> <a href="#StatusErr"><span class="nx">StatusErr</span></a><span class="p">)</span> <span class="nf">Error</span><span class="p">()</span> <a href="https://pkg.go.dev/builtin#string"><span class="kt">string</span></a></pre>
+  <p>Error implements the error interface.
+It returns a lowercase representation of the HTTP status text for the wrapped code.
+</main>
+    <hr>
+    <footer>
+      <small id="generated-by-footer">
+        Generated with <a href="https://abhinav.github.io/doc2go/">doc2go</a>
+      </small>
+    </footer>
+    <script src="../../../../_/js/permalink.js"></script></body>
+</html>

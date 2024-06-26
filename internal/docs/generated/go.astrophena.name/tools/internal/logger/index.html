@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="doc2go">
+    <link href="../../../../_/css/main.css" rel="stylesheet" />
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../../_/icons/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../../../../_/icons/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../../../../_/icons/favicon-16x16.png">
+    <link rel="shortcut icon" href="../../../../_/icons/favicon.ico"><title>logger</title>
+</head>
+  <body>
+    <nav>
+        <a href="../../..">go.astrophena.name</a>/<a href="../..">tools</a>/<a href="..">internal</a>/logger<span class="navbar-right">
+          <a href="../../../..">Root</a> | <a href="#pkg-index">Index</a></span>
+      </nav>
+    <main><h2 id="pkg-overview">package logger</h2>
+<pre class="chroma"><span class="kn">import</span> <span class="s">&#34;go.astrophena.name/tools/internal/logger&#34;</span></pre>
+<p>Package logger defines a type for writing to logs. It&apos;s just a convenience
+type so that we don&apos;t have to pass verbose func(...) types around.
+<h3 id="pkg-index">Index</h3>
+<ul>
+  <li>
+      <a href="#Logf">type Logf</a>
+      </li>
+  </ul><h3 id="pkg-types">Types</h3>
+  <h3 id="Logf">type Logf</h3>
+    <pre class="chroma"><span class="kd">type</span> <span class="nx">Logf</span> <span class="kd">func</span><span class="p">(</span><span class="nx">format</span> <a href="https://pkg.go.dev/builtin#string"><span class="kt">string</span></a><span class="p">,</span> <span class="nx">args</span> <span class="o">...</span><a href="https://pkg.go.dev/builtin#any"><span class="nx">any</span></a><span class="p">)</span></pre>
+    <p>Logf is the basic logger type: a printf-like func. Like <a href="https://pkg.go.dev/log#Printf">log.Printf</a>, the
+format need not end in a newline. Logf functions must be safe for concurrent
+use.
+<h3 id="pkg-directories">Directories</h3>
+
+<table>
+  <tbody>
+    <tr>
+        <td><a href="logstream">logstream</a></td>
+        <td>Package logstream provides a thread-safe implementation of an io.Writer that buffers log lines in a ring buffer and allows them to be streamed through an HTTP endpoint or retrieved as a snapshot.</td>
+      </tr>
+    </tbody>
+</table>
+</main>
+    <hr>
+    <footer>
+      <small id="generated-by-footer">
+        Generated with <a href="https://abhinav.github.io/doc2go/">doc2go</a>
+      </small>
+    </footer>
+    <script src="../../../../_/js/permalink.js"></script></body>
+</html>

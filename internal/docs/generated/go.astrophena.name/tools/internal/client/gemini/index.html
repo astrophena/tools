@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="doc2go">
+    <link href="../../../../../_/css/main.css" rel="stylesheet" />
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../../../_/icons/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../../../../../_/icons/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../../../../../_/icons/favicon-16x16.png">
+    <link rel="shortcut icon" href="../../../../../_/icons/favicon.ico"><title>gemini</title>
+</head>
+  <body>
+    <nav>
+        <a href="../../../..">go.astrophena.name</a>/<a href="../../..">tools</a>/<a href="../..">internal</a>/<a href="..">client</a>/gemini<span class="navbar-right">
+          <a href="../../../../..">Root</a> | <a href="#pkg-index">Index</a></span>
+      </nav>
+    <main><h2 id="pkg-overview">package gemini</h2>
+<pre class="chroma"><span class="kn">import</span> <span class="s">&#34;go.astrophena.name/tools/internal/client/gemini&#34;</span></pre>
+<p>Package gemini provides a client for interacting with a generative text API.
+<h3 id="pkg-index">Index</h3>
+<ul>
+  <li><a href="#pkg-constants">Constants</a></li><li>
+      <a href="#Candidate">type Candidate</a>
+      </li>
+  <li>
+      <a href="#Client">type Client</a>
+      <ul>
+          <li><a href="#Client.GenerateContent">func (c *Client) GenerateContent(ctx context.Context, params GenerateContentParams) (GenerateContentResponse, error)</a></li>
+          </ul>
+      </li>
+  <li>
+      <a href="#Content">type Content</a>
+      </li>
+  <li>
+      <a href="#GenerateContentParams">type GenerateContentParams</a>
+      </li>
+  <li>
+      <a href="#GenerateContentResponse">type GenerateContentResponse</a>
+      </li>
+  <li>
+      <a href="#Part">type Part</a>
+      </li>
+  </ul><h3 id="pkg-constants">Constants</h3>
+  <pre class="chroma"><span class="kd">const</span> <span id="APIEndpoint"><span class="nx">APIEndpoint</span></span> <span class="p">=</span> <span class="s">&#34;https://generativelanguage.googleapis.com/v1beta&#34;</span></pre>
+  <p>APIEndpoint is the base URL for the generative text API.
+<h3 id="pkg-types">Types</h3>
+  <h3 id="Candidate">type Candidate</h3>
+    <pre class="chroma"><span class="kd">type</span> <span class="nx">Candidate</span> <span class="kd">struct</span> <span class="p">{</span>
+	<span class="c1">// Content is the generated text content for this candidate.
+</span><span class="c1"></span>	<span id="Candidate.Content"><span class="nx">Content</span></span> <span class="o">*</span><a href="#Content"><span class="nx">Content</span></a> <span class="s">`json:&#34;content&#34;`</span>
+<span class="p">}</span></pre>
+    <p>Candidate represents a generated text candidate with a corresponding Content
+object.
+<h3 id="Client">type Client</h3>
+    <pre class="chroma"><span class="kd">type</span> <span class="nx">Client</span> <span class="kd">struct</span> <span class="p">{</span>
+	<span class="c1">// APIKey is the API key used for authentication.
+</span><span class="c1"></span>	<span id="Client.APIKey"><span class="nx">APIKey</span></span> <a href="https://pkg.go.dev/builtin#string"><span class="kt">string</span></a>
+	<span class="c1">// Model specifies the name of the model to use for generation.
+</span><span class="c1"></span>	<span id="Client.Model"><span class="nx">Model</span></span> <a href="https://pkg.go.dev/builtin#string"><span class="kt">string</span></a>
+	<span class="c1">// HTTPClient is an optional HTTP client to use for requests. Defaults to
+</span><span class="c1"></span>	<span class="c1">// httputil.DefaultClient.
+</span><span class="c1"></span>	<span id="Client.HTTPClient"><span class="nx">HTTPClient</span></span> <span class="o">*</span><a href="https://pkg.go.dev/net/http"><span class="nx">http</span></a><span class="p">.</span><a href="https://pkg.go.dev/net/http#Client"><span class="nx">Client</span></a>
+<span class="p">}</span></pre>
+    <p>Client holds configuration for interacting with the generative text API.
+<h4 id="Client.GenerateContent">func (*Client) GenerateContent</h4>
+  <pre class="chroma"><span class="kd">func</span> <span class="p">(</span><span class="nx">c</span> <span class="o">*</span><a href="#Client"><span class="nx">Client</span></a><span class="p">)</span> <span class="nf">GenerateContent</span><span class="p">(</span><span class="nx">ctx</span> <a href="https://pkg.go.dev/context"><span class="nx">context</span></a><span class="p">.</span><a href="https://pkg.go.dev/context#Context"><span class="nx">Context</span></a><span class="p">,</span> <span class="nx">params</span> <a href="#GenerateContentParams"><span class="nx">GenerateContentParams</span></a><span class="p">)</span> <span class="p">(</span><a href="#GenerateContentResponse"><span class="nx">GenerateContentResponse</span></a><span class="p">,</span> <a href="https://pkg.go.dev/builtin#error"><span class="kt">error</span></a><span class="p">)</span></pre>
+  <p>GenerateContent sends a request to the generative text API to generate
+creative text content.
+<h3 id="Content">type Content</h3>
+    <pre class="chroma"><span class="kd">type</span> <span class="nx">Content</span> <span class="kd">struct</span> <span class="p">{</span>
+	<span class="c1">// Parts is a list of Part objects representing the textual elements within
+</span><span class="c1"></span>	<span class="c1">// the content.
+</span><span class="c1"></span>	<span id="Content.Parts"><span class="nx">Parts</span></span> <span class="p">[]</span><span class="o">*</span><a href="#Part"><span class="nx">Part</span></a> <span class="s">`json:&#34;parts&#34;`</span>
+<span class="p">}</span></pre>
+    <p>Content represents a piece of text content with a list of Part objects.
+<h3 id="GenerateContentParams">type GenerateContentParams</h3>
+    <pre class="chroma"><span class="kd">type</span> <span class="nx">GenerateContentParams</span> <span class="kd">struct</span> <span class="p">{</span>
+	<span class="c1">// Contents is a list of Content objects representing the input text for
+</span><span class="c1"></span>	<span class="c1">// generation.
+</span><span class="c1"></span>	<span id="GenerateContentParams.Contents"><span class="nx">Contents</span></span> <span class="p">[]</span><span class="o">*</span><a href="#Content"><span class="nx">Content</span></a> <span class="s">`json:&#34;contents&#34;`</span>
+	<span class="c1">// SystemInstruction is an optional Content object specifying system
+</span><span class="c1"></span>	<span class="c1">// instructions for generation.
+</span><span class="c1"></span>	<span id="GenerateContentParams.SystemInstruction"><span class="nx">SystemInstruction</span></span> <span class="o">*</span><a href="#Content"><span class="nx">Content</span></a> <span class="s">`json:&#34;systemInstruction&#34;`</span>
+<span class="p">}</span></pre>
+    <p>GenerateContentParams defines the structure for the request body sent to the
+GenerateContent API.
+<h3 id="GenerateContentResponse">type GenerateContentResponse</h3>
+    <pre class="chroma"><span class="kd">type</span> <span class="nx">GenerateContentResponse</span> <span class="kd">struct</span> <span class="p">{</span>
+	<span class="c1">// Candidates is a list of Candidate objects representing the generated text
+</span><span class="c1"></span>	<span class="c1">// alternatives.
+</span><span class="c1"></span>	<span id="GenerateContentResponse.Candidates"><span class="nx">Candidates</span></span> <span class="p">[]</span><span class="o">*</span><a href="#Candidate"><span class="nx">Candidate</span></a> <span class="s">`json:&#34;candidates&#34;`</span>
+<span class="p">}</span></pre>
+    <p>GenerateContentResponse defines the structure of the response received from
+the GenerateContent API.
+<h3 id="Part">type Part</h3>
+    <pre class="chroma"><span class="kd">type</span> <span class="nx">Part</span> <span class="kd">struct</span> <span class="p">{</span>
+	<span class="c1">// Text is the content of the textual element.
+</span><span class="c1"></span>	<span id="Part.Text"><span class="nx">Text</span></span> <a href="https://pkg.go.dev/builtin#string"><span class="kt">string</span></a> <span class="s">`json:&#34;text&#34;`</span>
+<span class="p">}</span></pre>
+    <p>Part represents a textual element within a Content object.
+</main>
+    <hr>
+    <footer>
+      <small id="generated-by-footer">
+        Generated with <a href="https://abhinav.github.io/doc2go/">doc2go</a>
+      </small>
+    </footer>
+    <script src="../../../../../_/js/permalink.js"></script></body>
+</html>

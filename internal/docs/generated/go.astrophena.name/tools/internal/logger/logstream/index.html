@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="doc2go">
+    <link href="../../../../../_/css/main.css" rel="stylesheet" />
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../../../_/icons/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../../../../../_/icons/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../../../../../_/icons/favicon-16x16.png">
+    <link rel="shortcut icon" href="../../../../../_/icons/favicon.ico"><title>logstream</title>
+</head>
+  <body>
+    <nav>
+        <a href="../../../..">go.astrophena.name</a>/<a href="../../..">tools</a>/<a href="../..">internal</a>/<a href="..">logger</a>/logstream<span class="navbar-right">
+          <a href="../../../../..">Root</a> | <a href="#pkg-index">Index</a></span>
+      </nav>
+    <main><h2 id="pkg-overview">package logstream</h2>
+<pre class="chroma"><span class="kn">import</span> <span class="s">&#34;go.astrophena.name/tools/internal/logger/logstream&#34;</span></pre>
+<p>Package logstream provides a thread-safe implementation of an io.Writer that
+buffers log lines in a ring buffer and allows them to be streamed through an
+HTTP endpoint or retrieved as a snapshot.
+<h3 id="pkg-index">Index</h3>
+<ul>
+  <li>
+      <a href="#Streamer">type Streamer</a>
+      <ul>
+          <li><a href="#New">func New(size int) Streamer</a></li>
+          </ul>
+      </li>
+  </ul><h3 id="pkg-types">Types</h3>
+  <h3 id="Streamer">type Streamer</h3>
+    <pre class="chroma"><span class="kd">type</span> <span class="nx">Streamer</span> <span class="kd">interface</span> <span class="p">{</span>
+	<a href="https://pkg.go.dev/io"><span class="nx">io</span></a><span class="p">.</span><a href="https://pkg.go.dev/io#Writer"><span class="nx">Writer</span></a>
+	<a href="https://pkg.go.dev/net/http"><span class="nx">http</span></a><span class="p">.</span><a href="https://pkg.go.dev/net/http#Handler"><span class="nx">Handler</span></a>
+
+	<span class="c1">// Lines returns all logged lines.
+</span><span class="c1"></span>	<span id="Streamer.Lines"><span class="nf">Lines</span></span><span class="p">()</span> <span class="p">[]</span><a href="https://pkg.go.dev/builtin#string"><span class="kt">string</span></a>
+
+	<span class="c1">// Stream generates a new channel which will stream any newly logged lines.
+</span><span class="c1"></span>	<span class="c1">// Deregister the stream by calling the close function.
+</span><span class="c1"></span>	<span id="Streamer.Stream"><span class="nf">Stream</span></span><span class="p">()</span> <span class="p">(</span><span class="o">&lt;-</span><span class="kd">chan</span> <a href="https://pkg.go.dev/builtin#string"><span class="kt">string</span></a><span class="p">,</span> <span class="kd">func</span><span class="p">())</span>
+<span class="p">}</span></pre>
+    <p>Streamer is an io.Writer that contains all logged lines and allows to
+stream them.
+<h4 id="New">func New</h4>
+  <pre class="chroma"><span class="kd">func</span> <span class="nf">New</span><span class="p">(</span><span class="nx">size</span> <a href="https://pkg.go.dev/builtin#int"><span class="kt">int</span></a><span class="p">)</span> <a href="#Streamer"><span class="nx">Streamer</span></a></pre>
+  <p>New returns a new Streamer backed by a ring buffer of the given size.
+</main>
+    <hr>
+    <footer>
+      <small id="generated-by-footer">
+        Generated with <a href="https://abhinav.github.io/doc2go/">doc2go</a>
+      </small>
+    </footer>
+    <script src="../../../../../_/js/permalink.js"></script></body>
+</html>
