@@ -26,17 +26,20 @@ type Client struct {
 // makeRequest performs a generic HTTP request to the GitHub Gist API using the
 // provided parameters.
 func (c *Client) makeRequest(ctx context.Context, method string, id string, gist *Gist) (*Gist, error) {
-	return request.MakeJSON[*Gist](ctx, request.Params{
+	rp := request.Params{
 		Method: method,
 		URL:    ghAPI + "/gists/" + id,
 		Headers: map[string]string{
 			"Accept":               "application/vnd.github+json",
 			"X-GitHub-Api-Version": "2022-11-28",
-			"Authorization":        "Bearer " + c.Token,
 		},
 		Body:       gist,
 		HTTPClient: c.HTTPClient,
-	})
+	}
+	if c.Token != "" {
+		rp.Headers["Authorization"] = "Bearer " + c.Token
+	}
+	return request.MakeJSON[*Gist](ctx, rp)
 }
 
 // Get retrieves a Gist with the specified ID from GitHub.
