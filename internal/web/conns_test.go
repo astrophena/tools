@@ -10,6 +10,20 @@ import (
 	"go.astrophena.name/tools/internal/request"
 )
 
+func TestConns(t *testing.T) {
+	mux := http.NewServeMux()
+	s := httptest.NewUnstartedServer(mux)
+	mux.Handle("/", Conns(t.Logf, s.Config))
+
+	s.Start()
+	defer s.Close()
+
+	_, err := http.Get(s.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestConns_JSON(t *testing.T) {
 	mux := http.NewServeMux()
 	s := httptest.NewUnstartedServer(mux)
