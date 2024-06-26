@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+
+	"go.astrophena.name/tools/internal/testutil"
 )
 
 func TestDebugger(t *testing.T) {
@@ -81,6 +83,14 @@ func TestDebuggerHandle(t *testing.T) {
 	if !strings.Contains(body, want) {
 		t.Errorf("want %q in output, not found", want)
 	}
+}
+
+func TestDebuggerGC(t *testing.T) {
+	mux := http.NewServeMux()
+	Debugger(t.Logf, mux)
+
+	body := send(t, mux, http.MethodGet, "/debug/gc", http.StatusOK)
+	testutil.AssertEqual(t, "Running GC...\nDone.\n", body)
 }
 
 func getDebug(t *testing.T, mux *http.ServeMux) string {

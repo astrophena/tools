@@ -43,7 +43,7 @@ func AssertNotContains[S ~[]V, V comparable](t *testing.T, s S, v V) {
 // prints the difference between them.
 func AssertEqual(t *testing.T, got, want any) {
 	t.Helper()
-	if diff := cmp.Diff(got, want); diff != "" {
+	if diff := cmp.Diff(want, got); diff != "" {
 		t.Fatalf("(-got +want):\n%s", diff)
 	}
 }

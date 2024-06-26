@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"unicode"
 
 	"go.astrophena.name/tools/internal/logger"
 )
@@ -44,11 +43,15 @@ type errorResponse struct {
 // RespondJSON marshals the provided response object as JSON and writes it to the http.ResponseWriter.
 // It sets the Content-Type header to application/json before marshalling.
 // In case of marshalling errors, it writes an internal server error with the error message.
-func RespondJSON(w http.ResponseWriter, response any) {
+func RespondJSON(w http.ResponseWriter, response any) { respondJSON(w, response, false) }
+
+func respondJSON(w http.ResponseWriter, response any, wroteStatus bool) {
 	w.Header().Set("Content-Type", "application/json")
 	b, err := json.MarshalIndent(response, "", "  ")
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
+		if !wroteStatus {
+			w.WriteHeader(http.StatusInternalServerError)
+		}
 		w.Write([]byte(fmt.Sprintf(`{
       "status": "error",
       "error": "JSON marshal error: %s"
@@ -105,15 +108,14 @@ func respondError(json bool, logf logger.Logf, w http.ResponseWriter, err error)
 		logf("Error %d (%s): %v", se, http.StatusText(int(se)), err)
 	}
 	if json {
-		w.Header().Set("Content-Type", "application/json")
-		RespondJSON(w, &errorResponse{Status: "error", Error: err.Error()})
+		respondJSON(w, &errorResponse{Status: "error", Error: err.Error()}, true)
 		return
 	}
 	fmt.Fprintf(w, errorTemplate, int(se), http.StatusText(int(se)))
 }
 
 func escapeForJSON(s string) string {
-	sb := new(strings.Builder)
+	var sb strings.Builder
 	for _, ch := range s {
 		switch ch {
 		case '\\', '"', '/', '\b', '\n', '\r', '\t':
@@ -121,11 +123,6 @@ func escapeForJSON(s string) string {
 			sb.WriteRune('\\')
 			sb.WriteRune(ch)
 		default:
-			if unicode.IsControl(ch) {
-				// Escape control characters.
-				fmt.Fprintf(sb, "\\u%04X", ch)
-				continue
-			}
 			sb.WriteRune(ch)
 		}
 	}

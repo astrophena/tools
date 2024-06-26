@@ -116,17 +116,3 @@ func TestHealthHandlerRegisterFuncDuplicate(t *testing.T) {
 		return "not foo", true
 	})
 }
-
-func BenchmarkHealthHandler(b *testing.B) {
-	b.ReportAllocs()
-
-	mux := http.NewServeMux()
-	h := Health(mux)
-	h.RegisterFunc("foo", func() (status string, ok bool) {
-		return "foo", true
-	})
-
-	for i := 0; i < b.N; i++ {
-		send(b, mux, http.MethodGet, "/health", http.StatusOK)
-	}
-}

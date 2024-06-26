@@ -9,7 +9,6 @@ package web
 import (
 	"bytes"
 	_ "embed"
-	"expvar"
 	"fmt"
 	"html/template"
 	"log"
@@ -24,8 +23,6 @@ import (
 	"go.astrophena.name/tools/internal/logger"
 	"go.astrophena.name/tools/internal/version"
 )
-
-var expvarOnce sync.Once
 
 //go:embed templates/debug.html
 var debugTemplate string
@@ -82,13 +79,6 @@ func Debugger(logf logger.Logf, mux *http.ServeMux) *DebugHandler {
 		ret.KV("Machine", hostname)
 	}
 	ret.KVFunc("Uptime", uptime)
-	ret.Handle("vars", "Vars", expvar.Handler())
-	expvarOnce.Do(func() {
-		expvar.Publish("process_start_time", expvar.Func(func() any { return timeStart }))
-		expvar.Publish("uptime", expvar.Func(func() any { return uptime().(time.Duration).String() }))
-		expvar.Publish("version", expvar.Func(func() any { return version.Version() }))
-		expvar.Publish("goroutines", expvar.Func(func() any { return runtime.NumGoroutine() }))
-	})
 	ret.Handle("pprof/", "pprof", http.HandlerFunc(pprof.Index))
 	ret.Link("/debug/pprof/goroutine?debug=1", "Goroutines (collapsed)")
 	ret.Link("/debug/pprof/goroutine?debug=2", "Goroutines (full)")

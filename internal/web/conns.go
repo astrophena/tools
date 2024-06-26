@@ -3,7 +3,6 @@ package web
 import (
 	"bytes"
 	_ "embed"
-	"encoding/json"
 	"fmt"
 	"html/template"
 	"net"
@@ -18,30 +17,33 @@ import (
 // Conns returns an [http.Handler] that displays the list of active
 // HTTP connections and associates it with the provided http.Server.
 func Conns(logf logger.Logf, s *http.Server) http.Handler {
-	ch := &connsHandler{logf: logf, conns: make(map[string]*conn)}
+	ch := &connsHandler{logf: logf, conns: make(ConnMap)}
 	s.ConnState = ch.connState
 	return ch
+}
+
+// ConnMap represents active connections to the HTTP server.
+type ConnMap map[string]*Conn
+
+// Conn represents an active HTTP connection.
+type Conn struct {
+	Network string
+	Addr    string
+	Time    time.Time
+	State   http.ConnState
 }
 
 // connsHandler is a [http.Handler] that displays the list of active connections.
 // It's inspired by https://x.com/bradfitz/status/1349825913136017415.
 type connsHandler struct {
 	mu    sync.Mutex
-	conns map[string]*conn
+	conns ConnMap
 
 	logf logger.Logf
 
 	tpl     *template.Template
 	tplInit sync.Once
 	tplErr  error
-}
-
-// conn represents an active HTTP connection.
-type conn struct {
-	Net   string
-	Addr  string
-	Time  time.Time
-	State http.ConnState
 }
 
 // connState implements the http.Server.ConnState callback function.
@@ -56,10 +58,10 @@ func (ch *connsHandler) connState(c net.Conn, state http.ConnState) {
 	}
 	ac, ok := ch.conns[addr]
 	if !ok {
-		ch.conns[addr] = &conn{
-			Net:  c.RemoteAddr().Network(),
-			Addr: addr,
-			Time: time.Now(),
+		ch.conns[addr] = &Conn{
+			Network: c.RemoteAddr().Network(),
+			Addr:    addr,
+			Time:    time.Now(),
 		}
 		ac = ch.conns[addr]
 	}
@@ -73,18 +75,13 @@ func (ch *connsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer ch.mu.Unlock()
 
 	if r.FormValue("format") == "json" {
-		j, err := json.Marshal(ch.conns)
-		if err != nil {
-			RespondError(ch.logf, w, fmt.Errorf("web.connsHandler: failed to marshal json: %v", err))
-			return
-		}
-		w.Write(j)
+		RespondJSON(w, ch.conns)
 		return
 	}
 
 	ch.tplInit.Do(ch.doTplInit)
 	if ch.tplErr != nil {
-		RespondError(ch.logf, w, fmt.Errorf("web.connsHandler: failed to initialize template: %w", ch.tplErr))
+		RespondError(ch.logf, w, fmt.Errorf("conns: failed to initialize template: %w", ch.tplErr))
 		return
 	}
 
@@ -104,7 +101,7 @@ func (ch *connsHandler) doTplInit() {
 		"cmdName": func() string {
 			return version.CmdName()
 		},
-		"conns": func() map[string]*conn {
+		"conns": func() ConnMap {
 			return ch.conns
 		},
 		"connCount": func() string {

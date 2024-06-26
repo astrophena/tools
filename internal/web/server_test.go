@@ -2,12 +2,49 @@ package web
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
 	"sync"
 	"testing"
 )
+
+func TestListenAndServeConfig(t *testing.T) {
+	cases := map[string]struct {
+		c       *ListenAndServeConfig
+		wantErr error
+	}{
+		"no Addr": {
+			c: &ListenAndServeConfig{
+				Addr: "",
+				Mux:  http.NewServeMux(),
+			},
+			wantErr: errNoAddr,
+		},
+		"nil Mux": {
+			c: &ListenAndServeConfig{
+				Addr: ":3000",
+				Mux:  nil,
+			},
+			wantErr: errNilMux,
+		},
+	}
+	for _, tc := range cases {
+		err := ListenAndServe(context.Background(), tc.c)
+
+		// Don't use && because we want to trap all cases where err is nil.
+		if err == nil {
+			if tc.wantErr != nil {
+				t.Fatalf("must fail with error: %v", tc.wantErr)
+			}
+		}
+
+		if err != nil && !errors.Is(err, tc.wantErr) {
+			t.Fatalf("got error: %v", err)
+		}
+	}
+}
 
 func TestListenAndServe(t *testing.T) {
 	// Find a free port for us.
@@ -30,9 +67,10 @@ func TestListenAndServe(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		if err := ListenAndServe(ctx, &ListenAndServeConfig{
-			Addr: addr,
-			Mux:  http.NewServeMux(),
-			Logf: t.Logf,
+			Addr:       addr,
+			Mux:        http.NewServeMux(),
+			Logf:       t.Logf,
+			Debuggable: true,
 		}); err != nil {
 			errCh <- err
 		}

@@ -9,7 +9,6 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
@@ -24,16 +23,12 @@ var style []byte
 // ListenAndServeConfig is used to configure the HTTP server started by
 // ListenAndServe function.
 type ListenAndServeConfig struct {
-	// Addr is a network address to listen on ('host:port' or Unix socket absolute
-	// path).
+	// Addr is a network address to listen on (in the form of 'host:port').
 	Addr string
 	// Mux is a http.ServeMux to serve.
 	Mux *http.ServeMux
 	// Logf specifies a logger to use. If nil, log.Printf is used.
 	Logf logger.Logf
-	// AfterShutdown specifies an optional callback function that is called when
-	// the server was shut down.
-	AfterShutdown func()
 	// Debuggable specifies whether to register debug handlers at /debug/.
 	Debuggable bool
 	// DebugAuth specifies an optional function that's invoked on every request to
@@ -45,6 +40,11 @@ type ListenAndServeConfig struct {
 // used in tests
 var serveReadyHook func()
 
+var (
+	errNoAddr = errors.New("Addr is empty")
+	errNilMux = errors.New("Mux is nil")
+)
+
 // ListenAndServe starts the HTTP server based on the provided
 // ListenAndServeConfig.
 func ListenAndServe(ctx context.Context, c *ListenAndServeConfig) error {
@@ -52,30 +52,18 @@ func ListenAndServe(ctx context.Context, c *ListenAndServeConfig) error {
 		c.Logf = log.Printf
 	}
 	if c.Addr == "" {
-		return errors.New("Addr is empty")
+		return errNoAddr
 	}
 	if c.Mux == nil {
-		return errors.New("Mux is nil")
+		return errNilMux
 	}
 
-	network := "tcp"
-	if strings.HasPrefix(c.Addr, "/") {
-		network = "unix"
-		os.Remove(c.Addr)
-	}
-
-	l, err := net.Listen(network, c.Addr)
+	l, err := net.Listen("tcp", c.Addr)
 	if err != nil {
 		return fmt.Errorf("failed to listen: %v", err)
 	}
 	defer l.Close()
 	c.Logf("Listening on %s://%s...", l.Addr().Network(), l.Addr().String())
-
-	if network == "unix" {
-		if err := os.Chmod(c.Addr, 0o666); err != nil {
-			return fmt.Errorf("failed to change socket permissions: %v", err)
-		}
-	}
 
 	protectDebug := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -120,9 +108,6 @@ func ListenAndServe(ctx context.Context, c *ListenAndServeConfig) error {
 
 		if err := s.Shutdown(shutdownCtx); err != nil {
 			return err
-		}
-		if c.AfterShutdown != nil {
-			c.AfterShutdown()
 		}
 	}
 
