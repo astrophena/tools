@@ -80,7 +80,6 @@ import (
 	"strings"
 	"sync"
 	"syscall"
-	"testing"
 	"time"
 
 	"go.astrophena.name/tools/internal/api/gemini"
@@ -397,16 +396,6 @@ func (f *fetcher) run(ctx context.Context) error {
 	lwg.Wait()
 	// Stop sending goroutine.
 	close(updates)
-
-	// Easter egg, for god's sake!
-	now := time.Now()
-	if !testing.Testing() && now.Month() == time.June && now.Day() == 10 && now.Hour() < 8 {
-		f.makeTelegramRequest(ctx, "sendVideo", map[string]any{
-			"chat_id": f.chatID,
-			"video":   "https://astrophena.name/lol.mp4",
-			"caption": "🎂",
-		})
-	}
 
 	slices.Sort(f.feeds)
 	if err := f.saveToGist(ctx); err != nil {
