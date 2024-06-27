@@ -54,6 +54,7 @@ func TestUpdate(t *testing.T) {
 
 	c := &Client{
 		HTTPClient: rec.Client(),
+		Token:      "example",
 	}
 
 	// See https://gist.github.com/astrophena/a91d766ec189326040f0a491243a86b1 for
