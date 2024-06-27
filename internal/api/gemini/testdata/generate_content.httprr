@@ -1,0 +1,61 @@
+httprr trace v1
+340 1937
+POST https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent HTTP/1.1
+Host: generativelanguage.googleapis.com
+User-Agent: gemini.test/ (+https://astrophena.name/bleep-bloop)
+Content-Length: 76
+Content-Type: application/json
+
+{"contents":[{"parts":[{"text":"Write a poem about broken door handle."}]}]}HTTP/2.0 200 OK
+Alt-Svc: h3=":443"; ma=2592000,h3-29=":443"; ma=2592000
+Cache-Control: private
+Content-Type: application/json; charset=UTF-8
+Date: Thu, 27 Jun 2024 08:11:38 GMT
+Server: scaffolding on HTTPServer2
+Server-Timing: gfet4t7; dur=2739
+Vary: Origin
+Vary: X-Origin
+Vary: Referer
+X-Content-Type-Options: nosniff
+X-Frame-Options: SAMEORIGIN
+X-Xss-Protection: 0
+
+{
+  "candidates": [
+    {
+      "content": {
+        "parts": [
+          {
+            "text": "The door handle, once a friend so strong,\nNow hangs askew, a mournful song.\nIts grip, once firm, a reassuring hold,\nNow slips and slides, a tale untold.\n\nA sudden jerk, a desperate plea,\nTo open wide and set us free.\nBut metal groaned and gave a sigh,\nA fractured link, a tear in the eye.\n\nThe handle swings, a useless thing,\nA broken promise, a bitter sting.\nA silent plea for help we send,\nTo mend the gap, to make amends.\n\nA carpenter's touch, a skilled repair,\nTo mend the damage, beyond compare.\nThe door handle, once again, will hold,\nA story whispered, brave and bold.\n\nFor though it broke, it didn't die,\nA lesson learned, beneath the sky.\nThe door will open, with a new embrace,\nA testament to time and grace. \n"
+          }
+        ],
+        "role": "model"
+      },
+      "finishReason": "STOP",
+      "index": 0,
+      "safetyRatings": [
+        {
+          "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+          "probability": "NEGLIGIBLE"
+        },
+        {
+          "category": "HARM_CATEGORY_HATE_SPEECH",
+          "probability": "NEGLIGIBLE"
+        },
+        {
+          "category": "HARM_CATEGORY_HARASSMENT",
+          "probability": "NEGLIGIBLE"
+        },
+        {
+          "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+          "probability": "NEGLIGIBLE"
+        }
+      ]
+    }
+  ],
+  "usageMetadata": {
+    "promptTokenCount": 8,
+    "candidatesTokenCount": 196,
+    "totalTokenCount": 204
+  }
+}

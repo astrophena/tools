@@ -30,7 +30,7 @@ type GenerateContentParams struct {
 	Contents []*Content `json:"contents"`
 	// SystemInstruction is an optional Content object specifying system
 	// instructions for generation.
-	SystemInstruction *Content `json:"systemInstruction"`
+	SystemInstruction *Content `json:"systemInstruction,omitempty"`
 }
 
 // Content represents a piece of text content with a list of Part objects.
@@ -70,6 +70,7 @@ func (c *Client) GenerateContent(ctx context.Context, params GenerateContentPara
 		Headers: map[string]string{
 			"x-goog-api-key": c.APIKey,
 		},
-		Body: params,
+		Body:       params,
+		HTTPClient: c.HTTPClient,
 	})
 }
