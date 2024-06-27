@@ -49,7 +49,12 @@ func MakeJSON[Response any](ctx context.Context, p Params) (Response, error) {
 		}
 	}
 
-	req, err := http.NewRequestWithContext(ctx, p.Method, p.URL, bytes.NewReader(data))
+	var br io.Reader
+	if data != nil {
+		br = bytes.NewReader(data)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, p.Method, p.URL, br)
 	if err != nil {
 		return resp, err
 	}
