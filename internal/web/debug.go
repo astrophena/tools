@@ -108,9 +108,9 @@ func uptime() any { return time.Since(timeStart).Round(time.Second) }
 func (d *DebugHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/debug/" {
 		// Sub-handlers are handled by the parent mux directly. One exception:
-		// /debug/icon.jpg, if d.icon is not nil.
-		if r.URL.Path == "/debug/icon.jpg" && d.icon != nil {
-			http.ServeContent(w, r, "icon.jpg", time.Time{}, bytes.NewReader(d.icon))
+		// /debug/icon.png, if d.icon is not nil.
+		if r.URL.Path == "/debug/icon.png" && d.icon != nil {
+			http.ServeContent(w, r, "icon.png", time.Time{}, bytes.NewReader(d.icon))
 			return
 		}
 		RespondError(d.logf, w, ErrNotFound)
