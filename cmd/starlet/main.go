@@ -227,6 +227,15 @@ func (e *engine) initRoutes() {
 		fmt.Fprintf(w, logsTmpl, strings.Join(e.logStream.Lines(), ""))
 	}))
 	e.mux.Handle("/debug/log", e.logStream)
+	dbg.Handle("code", "Bot code", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		e.mu.Lock()
+		defer e.mu.Unlock()
+		if e.bot == nil {
+			fmt.Fprintf(w, "(not loaded, go to /debug/reload or talk with bot on Telegram)\n")
+			return
+		}
+		w.Write(e.bot)
+	}))
 }
 
 const logsTmpl = `<!DOCTYPE html>

@@ -13,16 +13,14 @@
     <title>{{ .CmdName }} debug</title>
   </head>
   <body>
-    <header>
-      <h1>{{ .CmdName }} debug</h1>
-      <nav>
-        {{ range .Links }}
-          <a href="{{ .URL }}">{{ .Desc }}</a>
-        {{ end }}
-      </nav>
-    </header>
     <main>
-      <h1>Version</h1>
+      <h1>{{ .CmdName }} debug</h1>
+      <ul>
+        {{ range .Links }}
+          <li><a href="{{ .URL }}">{{ .Desc }}</a></li>
+        {{ end }}
+      </ul>
+      <h2>Version</h2>
       <table>
         <tbody>
           {{ if and .Version.Commit .Version.BuiltAt }}
@@ -50,7 +48,7 @@
           </tr>
         </tbody>
       </table>
-      <h1>Variables</h1>
+      <h2>Variables</h2>
       <table>
         <tbody>
           {{ range .KVs }}

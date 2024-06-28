@@ -8,6 +8,7 @@ package web
 
 import (
 	"bytes"
+	"cmp"
 	_ "embed"
 	"fmt"
 	"html/template"
@@ -17,6 +18,7 @@ import (
 	"net/url"
 	"os"
 	"runtime"
+	"slices"
 	"sync"
 	"time"
 
@@ -37,6 +39,10 @@ var debugTemplate string
 //
 // Additionally, the Handle method offers a shorthand for correctly registering
 // debug handlers and cross-linking them from /debug/.
+//
+// All methods of DebugHandler can't be called by multiple goroutines. After you
+// finish forming your debugging "homepage" when initializing and start serving
+// traffic to DebugHandler, you can't call them anymore.
 type DebugHandler struct {
 	mux     *http.ServeMux     // where this handler is registered
 	kvfuncs []kvfunc           // output one table row each, see KV()
@@ -176,6 +182,9 @@ func (d *DebugHandler) KVFunc(k string, v func() any) {
 // Link adds a URL and description list item to /debug/.
 func (d *DebugHandler) Link(url, desc string) {
 	d.links = append(d.links, link{url, desc})
+	slices.SortStableFunc(d.links, func(a, b link) int {
+		return cmp.Compare(a.Desc, b.Desc)
+	})
 }
 
 // SetIcon sets the debug web page icon. It should be in PNG format.
