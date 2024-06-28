@@ -41,8 +41,8 @@ type ListenAndServeConfig struct {
 var serveReadyHook func()
 
 var (
-	errNoAddr = errors.New("Addr is empty")
-	errNilMux = errors.New("Mux is nil")
+	errNoAddr = errors.New("c.Addr is empty")
+	errNilMux = errors.New("c.Mux is nil")
 )
 
 // ListenAndServe starts the HTTP server based on the provided
