@@ -1,7 +1,7 @@
-package tools
+package devtools
 
-//go:generate go run gendocs.go
-//go:generate ./genreadme.sh
+//go:generate go run devtools/genhelpdoc.go
+//go:generate ./devtools/genreadme.sh
 
 import (
 	"bytes"
@@ -33,6 +33,6 @@ func run(t *testing.T, buf *bytes.Buffer, cmd string, args ...string) {
 	c.Stdout = buf
 	c.Stderr = buf
 	if err := c.Run(); err != nil {
-		t.Fatalf("%s failed: %v:\n\t%v", cmd, err, buf.String())
+		t.Fatalf("%s failed: %v:\n%v", cmd, err, buf.String())
 	}
 }
