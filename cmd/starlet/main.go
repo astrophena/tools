@@ -224,7 +224,7 @@ func (e *engine) initRoutes() {
 		http.Redirect(w, r, "/debug/", http.StatusFound)
 	}))
 	dbg.Handle("logs", "Logs", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintf(w, logsTmpl, strings.Join(e.logStream.Lines(), "\n"))
+		fmt.Fprintf(w, logsTmpl, strings.Join(e.logStream.Lines(), ""))
 	}))
 	e.mux.Handle("/debug/log", e.logStream)
 }
