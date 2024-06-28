@@ -27,11 +27,10 @@ func main() {
 		log.Fatalf("'go list' failed with %v:\n%s", err, buf.String())
 	}
 
-	sb.WriteString(`
-Install them:
-
-   $ go install go.astrophena.name/tools/cmd/...@master
-`)
+	sb.WriteString("\nInstall them:\n\n")
+	sb.WriteString("```sh\n")
+	sb.WriteString("$ go install go.astrophena.name/tools/cmd/...@master\n")
+	sb.WriteString("```\n")
 
 	if err := os.WriteFile("README.md", []byte(sb.String()), 0o644); err != nil {
 		log.Fatalf("failed to write README.md: %v", err)

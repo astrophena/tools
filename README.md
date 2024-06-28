@@ -11,4 +11,6 @@ This repository holds personal tools:
 
 Install them:
 
-   $ go install go.astrophena.name/tools/cmd/...@master
+```sh
+$ go install go.astrophena.name/tools/cmd/...@master
+```
