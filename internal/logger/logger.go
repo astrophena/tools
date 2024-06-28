@@ -59,7 +59,7 @@ func (lrb *lineRingBuffer) Write(b []byte) (int, error) {
 			break
 		}
 
-		line := text[:idx]
+		line := text[:idx+1] // Include the newline character.
 		lrb.r.Value = line
 		for stream := range lrb.streams {
 			select {
