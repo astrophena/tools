@@ -63,7 +63,7 @@ import (
 	"go.starlark.net/syntax"
 )
 
-//go:embed icon.jpg
+//go:embed icon.png
 var debugIcon []byte
 
 const defaultErrorTemplate = `❌ Something went wrong:

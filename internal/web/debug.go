@@ -178,5 +178,5 @@ func (d *DebugHandler) Link(url, desc string) {
 	d.links = append(d.links, link{url, desc})
 }
 
-// SetIcon sets the debug web page icon. It should be in JPEG format.
+// SetIcon sets the debug web page icon. It should be in PNG format.
 func (d *DebugHandler) SetIcon(b []byte) { d.icon = b }
