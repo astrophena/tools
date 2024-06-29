@@ -1,8 +1,13 @@
 name: 'tgfeed'
 on:
   schedule:
-    # Every day (at 07:00, 12:00 and 17:00).
-    - cron: '0 4,9,14 * * *'
+    # Every day at:
+    #
+    #   - 07:30 (work commute)
+    #   - 12:30 (lunch break)
+    #   - 18:30 (free time before dinner)
+    #
+    - cron: '30 4,9,15 * * *'
   workflow_dispatch:
 jobs:
   run:
