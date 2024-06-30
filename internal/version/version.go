@@ -13,6 +13,7 @@ import (
 
 // Info is the version and build information of the current binary.
 type Info struct {
+	Name    string `json:"name"` // name of the program
 	Version string `json:"version"`
 	Commit  string `json:"commit"`   // BuildInfo's vcs.revision
 	BuiltAt string `json:"built_at"` // BuildInfo's vcs.date
@@ -44,19 +45,18 @@ func (i Info) Short() string {
 	if ver == "devel" && i.Commit != "" {
 		ver = i.Commit
 	}
-	return CmdName() + " " + ver
+	return i.Name + "/" + ver
 }
 
 var (
-	once    sync.Once
-	cmdName string
-	info    Info
+	once sync.Once
+	info Info
 )
 
 // CmdName returns the base name of the current binary.
 func CmdName() string {
 	once.Do(initOnce)
-	return cmdName
+	return info.Name
 }
 
 // Version returns the version and build information of the current binary.
@@ -71,7 +71,6 @@ func initOnce() {
 		OS:   runtime.GOOS,
 		Arch: runtime.GOARCH,
 	}
-	cmdName = "cmd"
 
 	bi, ok := debug.ReadBuildInfo()
 	if !ok {
@@ -84,9 +83,10 @@ func initOnce() {
 		i.Version = "devel"
 	}
 
+	i.Name = "cmd"
 	exe, err := os.Executable()
 	if err == nil {
-		cmdName = filepath.Base(exe)
+		i.Name = filepath.Base(exe)
 	}
 	for _, s := range bi.Settings {
 		switch s.Key {

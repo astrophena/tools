@@ -55,6 +55,7 @@ import (
 	"go.astrophena.name/tools/internal/cli/envflag"
 	"go.astrophena.name/tools/internal/logger"
 	"go.astrophena.name/tools/internal/request"
+	"go.astrophena.name/tools/internal/version"
 	"go.astrophena.name/tools/internal/web"
 
 	starlarkjson "go.starlark.net/lib/json"
@@ -235,6 +236,9 @@ func (e *engine) initRoutes() {
 			return
 		}
 		w.Write(e.bot)
+	}))
+	dbg.Handle("version", "Version (JSON)", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		web.RespondJSON(w, version.Version())
 	}))
 }
 
