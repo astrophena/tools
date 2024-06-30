@@ -316,12 +316,16 @@ func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 
 	e.loadGist.Do(func() { e.loadFromGist(r.Context()) })
 	e.mu.Lock()
-	defer e.mu.Unlock()
-	if e.loadGistErr != nil {
+	var (
+		gistErr = e.loadGistErr
+		botCode = bytes.Clone(e.bot)
+	)
+	e.mu.Unlock()
+
+	if gistErr != nil {
 		web.RespondJSONError(e.logf, w, e.loadGistErr)
 		return
 	}
-	botCode := bytes.Clone(e.bot)
 
 	_, err = starlark.ExecFileOptions(&syntax.FileOptions{}, &starlark.Thread{
 		Print: func(thread *starlark.Thread, msg string) { e.log.Println(msg) },
