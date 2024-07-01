@@ -10,10 +10,12 @@ import (
 	"html"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"go.astrophena.name/tools/internal/api/gist"
 	"go.astrophena.name/tools/internal/testutil"
@@ -210,18 +212,46 @@ func TestLoadFromGistHandleError(t *testing.T) {
 	testutil.AssertEqual(t, err.Error(), fmt.Sprintf("GET \"https://api.github.com/gists/test\": want 200, got 404: %s", gistErrorJSON))
 }
 
+func TestReportStats(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertEqual(t, r.Method, http.MethodPost)
+		testutil.AssertEqual(t, r.URL.Path, "/")
+
+		token := r.URL.Query().Get("token")
+		testutil.AssertEqual(t, token, "test-token")
+
+		w.Write([]byte(`{"status": "success"}`))
+	}))
+	defer server.Close()
+
+	f := &fetcher{
+		statsCollectorURL:   server.URL,
+		statsCollectorToken: "test-token",
+		stats: &stats{
+			TotalFeeds:       10,
+			SuccessFeeds:     8,
+			FailedFeeds:      2,
+			NotModifiedFeeds: 3,
+			StartTime:        time.Now(),
+			Duration:         duration(5 * time.Minute),
+			TotalItemsParsed: 100,
+			TotalFetchTime:   duration(2 * time.Minute),
+			AvgFetchTime:     duration(12 * time.Second),
+			MemoryUsage:      1024 * 1024,
+		},
+	}
+
+	if err := f.reportStats(context.Background()); err != nil {
+		t.Errorf("reportStats failed: %v", err)
+	}
+}
+
 func readFile(t *testing.T, path string) []byte {
 	b, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return b
-}
-
-type roundTripFunc func(r *http.Request) (*http.Response, error)
-
-func (s roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) {
-	return s(r)
 }
 
 func testFetcher(t *testing.T, m *mux) *fetcher {
@@ -274,7 +304,6 @@ func testMux(t *testing.T, overrides map[string]http.HandlerFunc) *mux {
 		defer m.mu.Unlock()
 		sentMessage := read(t, r.Body)
 		m.sentMessages = append(m.sentMessages, testutil.UnmarshalJSON[map[string]any](t, sentMessage))
-		// makeRequest tries to unmarshal response, which we didn't even use, so fool it.
 		w.Write([]byte("{}"))
 	}))
 	for pat, h := range overrides {

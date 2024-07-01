@@ -406,7 +406,7 @@ func (f *fetcher) run(ctx context.Context) error {
 	f.stats.mu.Lock()
 	defer f.stats.mu.Unlock()
 
-	f.stats.Duration = duration(time.Now().Sub(f.stats.StartTime))
+	f.stats.Duration = duration(time.Since(f.stats.StartTime))
 	f.stats.TotalFeeds = len(f.feeds)
 	if f.stats.SuccessFeeds > 0 {
 		f.stats.AvgFetchTime = f.stats.TotalFetchTime / duration(f.stats.SuccessFeeds)
