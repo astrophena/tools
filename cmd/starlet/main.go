@@ -190,8 +190,10 @@ func (e *engine) doInit() {
 	if isProd() {
 		web.Health(e.mux).RegisterFunc("telegram", func() (status string, ok bool) {
 			type response struct {
-				ID        int64  `json:"id"`
-				FirstName string `json:"first_name"`
+				Result struct {
+					ID        int64  `json:"id"`
+					FirstName string `json:"first_name"`
+				} `json:"result"`
 			}
 			me, err := request.MakeJSON[response](context.Background(), request.Params{
 				Method:     http.MethodPost,
@@ -202,7 +204,7 @@ func (e *engine) doInit() {
 			if err != nil {
 				return fmt.Sprintf("I am failed: %v", err), false
 			}
-			return fmt.Sprintf("I am %s (%d)", me.FirstName, me.ID), true
+			return fmt.Sprintf("I am %s (%d)", me.Result.FirstName, me.Result.ID), true
 		})
 	}
 }
