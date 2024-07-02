@@ -33,6 +33,27 @@ type Params struct {
 	// HTTPClient is an optional custom HTTP client object to use for the request.
 	// If not provided, [DefaultClient] will be used.
 	HTTPClient *http.Client
+	// Scrubber is an optional [strings.Replacer] that scrubs unwanted data from
+	// error messages and logs.
+	Scrubber *strings.Replacer
+}
+
+type scrubbedError struct {
+	err      error
+	scrubber *strings.Replacer
+}
+
+func (se *scrubbedError) Error() string {
+	if se.scrubber != nil {
+		return se.scrubber.Replace(se.err.Error())
+	}
+	return se.err.Error()
+}
+
+func (se *scrubbedError) Unwrap() error { return se.err }
+
+func scrubErr(err error, scrubber *strings.Replacer) error {
+	return &scrubbedError{err: err, scrubber: scrubber}
 }
 
 // MakeJSON makes a JSON HTTP request with the provided parameters and
@@ -45,7 +66,7 @@ func MakeJSON[Response any](ctx context.Context, p Params) (Response, error) {
 		var err error
 		data, err = json.Marshal(p.Body)
 		if err != nil {
-			return resp, err
+			return resp, scrubErr(err, p.Scrubber)
 		}
 	}
 
@@ -56,7 +77,7 @@ func MakeJSON[Response any](ctx context.Context, p Params) (Response, error) {
 
 	req, err := http.NewRequestWithContext(ctx, p.Method, p.URL, br)
 	if err != nil {
-		return resp, err
+		return resp, scrubErr(err, p.Scrubber)
 	}
 
 	if p.Headers != nil {
@@ -76,21 +97,21 @@ func MakeJSON[Response any](ctx context.Context, p Params) (Response, error) {
 
 	res, err := httpc.Do(req)
 	if err != nil {
-		return resp, err
+		return resp, scrubErr(err, p.Scrubber)
 	}
 	defer res.Body.Close()
 
 	b, err := io.ReadAll(res.Body)
 	if err != nil {
-		return resp, err
+		return resp, scrubErr(err, p.Scrubber)
 	}
 
 	if res.StatusCode != http.StatusOK {
-		return resp, fmt.Errorf("%s %q: want 200, got %d: %s", p.Method, p.URL, res.StatusCode, b)
+		return resp, scrubErr(fmt.Errorf("%s %q: want 200, got %d: %s", p.Method, p.URL, res.StatusCode, b), p.Scrubber)
 	}
 
 	if err := json.Unmarshal(b, &resp); err != nil {
-		return resp, err
+		return resp, scrubErr(err, p.Scrubber)
 	}
 
 	return resp, nil

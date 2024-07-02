@@ -483,6 +483,7 @@ func (e *engine) selfPing(ctx context.Context) {
 				Method:     http.MethodGet,
 				URL:        url + "/health",
 				HTTPClient: e.httpc,
+				Scrubber:   e.logMasker,
 			})
 			if err != nil {
 				e.logf("selfPing: %v", err)
@@ -516,6 +517,7 @@ func (e *engine) reportError(ctx context.Context, w http.ResponseWriter, err err
 			"parse_mode": "HTML",
 		},
 		HTTPClient: e.httpc,
+		Scrubber:   e.logMasker,
 	})
 	if sendErr != nil {
 		e.logf("reporting an error %q to %q failed: %v", err, e.tgOwner, sendErr)
@@ -582,9 +584,10 @@ func (e *engine) callFunc(ctx context.Context) starlarkBuiltin {
 			URL:        "https://api.telegram.org/bot" + e.tgToken + "/" + string(method),
 			Body:       json.RawMessage(rawReq),
 			HTTPClient: e.httpc,
+			Scrubber:   e.logMasker,
 		})
 		if err != nil {
-			return nil, fmt.Errorf("%s: failed to make request: %s", b.Name(), e.logMasker.Replace(err.Error()))
+			return nil, fmt.Errorf("%s: failed to make request: %s", b.Name(), err)
 		}
 
 		// Decode received JSON returned from Telegram and pass it back to Starlark code.

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"go.astrophena.name/tools/internal/request"
@@ -78,6 +79,18 @@ func TestMakeJSON(t *testing.T) {
 				Method: http.MethodPost,
 				URL:    ts.URL + "/test",
 				Body:   make(chan int),
+			},
+			wantErr: true,
+		},
+		"scrubbed token": {
+			params: request.Params{
+				Method: http.MethodPost,
+				URL:    ts.URL + "/invalid",
+				Body:   map[string]string{"key": "value"},
+				Headers: map[string]string{
+					"X-Token": "hello",
+				},
+				Scrubber: strings.NewReplacer("hello", "[EXPUNGED]"),
 			},
 			wantErr: true,
 		},
