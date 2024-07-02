@@ -186,27 +186,6 @@ func (e *engine) doInit() {
 		e.ghToken, "[EXPUNGED]",
 		e.gistID, "[EXPUNGED]",
 	)
-
-	if isProd() {
-		web.Health(e.mux).RegisterFunc("telegram", func() (status string, ok bool) {
-			type response struct {
-				Result struct {
-					ID        int64  `json:"id"`
-					FirstName string `json:"first_name"`
-				} `json:"result"`
-			}
-			me, err := request.MakeJSON[response](context.Background(), request.Params{
-				Method:     http.MethodPost,
-				URL:        "https://api.telegram.org/bot" + e.tgToken + "/getMe",
-				HTTPClient: e.httpc,
-				Scrubber:   e.logMasker,
-			})
-			if err != nil {
-				return fmt.Sprintf("I am failed: %v", err), false
-			}
-			return fmt.Sprintf("I am %s (%d)", me.Result.FirstName, me.Result.ID), true
-		})
-	}
 }
 
 func (e *engine) logf(format string, args ...any) { e.log.Printf(format, args...) }
