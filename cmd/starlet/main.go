@@ -584,7 +584,7 @@ func (e *engine) callFunc(ctx context.Context) starlarkBuiltin {
 			HTTPClient: e.httpc,
 		})
 		if err != nil {
-			return nil, fmt.Errorf("%s: failed to make request: %v", b.Name(), err)
+			return nil, fmt.Errorf("%s: failed to make request: %s", b.Name(), e.logMasker.Replace(err.Error()))
 		}
 
 		// Decode received JSON returned from Telegram and pass it back to Starlark code.
