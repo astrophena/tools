@@ -219,7 +219,7 @@ func (e *engine) initRoutes() {
 	web.Health(e.mux)
 	dbg := web.Debugger(e.logf, e.mux)
 	dbg.SetIcon(debugIcon)
-	dbg.Handle("reload", "Reload from gist", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	dbg.HandleFunc("reload", "Reload from gist", func(w http.ResponseWriter, r *http.Request) {
 		e.loadFromGist(r.Context())
 		e.mu.Lock()
 		defer e.mu.Unlock()
@@ -229,12 +229,12 @@ func (e *engine) initRoutes() {
 			return
 		}
 		http.Redirect(w, r, "/debug/", http.StatusFound)
-	}))
-	dbg.Handle("logs", "Logs", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	})
+	dbg.HandleFunc("logs", "Logs", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, logsTmpl, strings.Join(e.logStream.Lines(), ""))
-	}))
+	})
 	e.mux.Handle("/debug/log", e.logStream)
-	dbg.Handle("code", "Bot code", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	dbg.HandleFunc("code", "Bot code", func(w http.ResponseWriter, r *http.Request) {
 		e.mu.Lock()
 		defer e.mu.Unlock()
 		if e.bot == nil {
@@ -242,10 +242,10 @@ func (e *engine) initRoutes() {
 			return
 		}
 		w.Write(e.bot)
-	}))
-	dbg.Handle("version", "Version (JSON)", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	})
+	dbg.HandleFunc("version", "Version (JSON)", func(w http.ResponseWriter, r *http.Request) {
 		web.RespondJSON(w, version.Version())
-	}))
+	})
 }
 
 const logsTmpl = `<!DOCTYPE html>

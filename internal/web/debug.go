@@ -166,6 +166,12 @@ func (d *DebugHandler) Handle(slug, desc string, handler http.Handler) {
 	d.Link(href, desc)
 }
 
+// HandleFunc is like [Handle], but accepts [http.HandlerFunc] instead of
+// [http.Handler].
+func (d *DebugHandler) HandleFunc(slug, desc string, handler http.HandlerFunc) {
+	d.Handle(slug, desc, http.HandlerFunc(handler))
+}
+
 // KV adds a key/value list item to /debug/.
 func (d *DebugHandler) KV(k string, v any) {
 	d.kvfuncs = append(d.kvfuncs, kvfunc{k, func() any {
