@@ -3,13 +3,50 @@ package request_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"log"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 
 	"go.astrophena.name/tools/internal/request"
+	"go.astrophena.name/tools/internal/web"
 )
+
+func ExampleMakeJSON_Health() {
+	// Checking health of Starlet.
+	health, err := request.MakeJSON[web.HealthResponse](context.Background(), request.Params{
+		Method: http.MethodGet,
+		URL:    "https://bot.astrophena.name/health",
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if health.OK {
+		log.Println("Alive.")
+	} else {
+		log.Printf("Not alive: %+v", health)
+	}
+}
+
+func ExampleMakeJSON_Scrub() {
+	// Making request to GitHub API, scrubbing token out of error messages.
+	user, err := request.MakeJSON[map[string]any](context.Background(), request.Params{
+		Method: http.MethodGet,
+		URL:    "https://api.github.com/user",
+		Headers: map[string]string{
+			"Authorization": "Bearer " + os.Getenv("GITHUB_TOKEN"),
+		},
+		Scrubber: strings.NewReplacer(os.Getenv("GITHUB_TOKEN"), "[EXPUNGED]"),
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(user["login"])
+}
 
 func TestMakeJSON(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
