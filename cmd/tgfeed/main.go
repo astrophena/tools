@@ -115,6 +115,7 @@ func main() {
 			Timeout: 10 * time.Second,
 		},
 		gistID:              os.Getenv("GIST_ID"),
+		geminiKey:           os.Getenv("GEMINI_API_KEY"),
 		ghToken:             os.Getenv("GITHUB_TOKEN"),
 		chatID:              os.Getenv("CHAT_ID"),
 		tgToken:             os.Getenv("TELEGRAM_TOKEN"),
@@ -126,12 +127,12 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
-	geminiKey := os.Getenv("GEMINI_API_KEY")
-	if geminiKey != "" {
+	if f.geminiKey != "" {
 		f.geminic = &gemini.Client{
-			APIKey:     geminiKey,
+			APIKey:     f.geminiKey,
 			Model:      "gemini-1.5-flash-latest",
 			HTTPClient: f.httpc,
+			Scrubber:   f.scrubber,
 		}
 	}
 
@@ -246,13 +247,16 @@ func (f *fetcher) unsubscribe(ctx context.Context, url string) error {
 type fetcher struct {
 	initOnce sync.Once
 
-	httpc *http.Client
-	fp    *gofeed.Parser
+	httpc    *http.Client
+	fp       *gofeed.Parser
+	scrubber *strings.Replacer
 
 	gistID  string
 	ghToken string
 	gistc   *gist.Client
-	geminic *gemini.Client
+
+	geminiKey string
+	geminic   *gemini.Client
 
 	feeds   []string
 	chatID  string
@@ -345,9 +349,24 @@ func (f *fetcher) doInit() {
 	f.fp.UserAgent = request.UserAgent()
 	f.fp.Client = f.httpc
 
+	scrubPairs := []string{
+		f.ghToken, "[EXPUNGED]",
+		f.tgToken, "[EXPUNGED]",
+	}
+	if f.geminiKey != "" {
+		scrubPairs = append(scrubPairs, f.geminiKey, "[EXPUNGED]")
+	}
+	// Quick sanity check.
+	if len(scrubPairs)%2 != 0 {
+		panic("scrubPairs are not even; check doInit method on fetcher")
+	}
+
+	f.scrubber = strings.NewReplacer(scrubPairs...)
+
 	f.gistc = &gist.Client{
 		Token:      f.ghToken,
 		HTTPClient: f.httpc,
+		Scrubber:   f.scrubber,
 	}
 }
 

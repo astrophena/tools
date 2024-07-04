@@ -4,6 +4,7 @@ package gemini
 import (
 	"context"
 	"net/http"
+	"strings"
 
 	"go.astrophena.name/tools/internal/request"
 )
@@ -20,6 +21,9 @@ type Client struct {
 	// HTTPClient is an optional HTTP client to use for requests. Defaults to
 	// request.DefaultClient.
 	HTTPClient *http.Client
+	// Scrubber is an optional strings.Replacer that scrubs unwanted data from
+	// error messages.
+	Scrubber *strings.Replacer
 }
 
 // GenerateContentParams defines the structure for the request body sent to the
@@ -72,5 +76,6 @@ func (c *Client) GenerateContent(ctx context.Context, params GenerateContentPara
 		},
 		Body:       params,
 		HTTPClient: c.HTTPClient,
+		Scrubber:   c.Scrubber,
 	})
 }

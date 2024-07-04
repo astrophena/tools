@@ -31,10 +31,10 @@ type Params struct {
 	// JSON.
 	Body any
 	// HTTPClient is an optional custom HTTP client object to use for the request.
-	// If not provided, [DefaultClient] will be used.
+	// If not provided, DefaultClient will be used.
 	HTTPClient *http.Client
-	// Scrubber is an optional [strings.Replacer] that scrubs unwanted data from
-	// error messages and logs.
+	// Scrubber is an optional strings.Replacer that scrubs unwanted data from
+	// error messages.
 	Scrubber *strings.Replacer
 }
 

@@ -257,7 +257,7 @@ func readFile(t *testing.T, path string) []byte {
 func testFetcher(t *testing.T, m *mux) *fetcher {
 	f := &fetcher{
 		httpc:   testutil.MockHTTPClient(t, m.mux),
-		ghToken: "test",
+		ghToken: "superdupersecret",
 		gistID:  "test",
 		tgToken: tgToken,
 		chatID:  "test",
@@ -282,7 +282,7 @@ const (
 func testMux(t *testing.T, overrides map[string]http.HandlerFunc) *mux {
 	m := &mux{mux: http.NewServeMux()}
 	m.mux.HandleFunc(getGist, orHandler(overrides[getGist], func(w http.ResponseWriter, r *http.Request) {
-		testutil.AssertEqual(t, r.Header.Get("Authorization"), "Bearer test")
+		testutil.AssertEqual(t, r.Header.Get("Authorization"), "Bearer superdupersecret")
 		m.mu.Lock()
 		defer m.mu.Unlock()
 		if m.gist != nil {
@@ -292,7 +292,7 @@ func testMux(t *testing.T, overrides map[string]http.HandlerFunc) *mux {
 		w.Write(txtarToGist(t, gistTxtar))
 	}))
 	m.mux.HandleFunc(patchGist, orHandler(overrides[patchGist], func(w http.ResponseWriter, r *http.Request) {
-		testutil.AssertEqual(t, r.Header.Get("Authorization"), "Bearer test")
+		testutil.AssertEqual(t, r.Header.Get("Authorization"), "Bearer superdupersecret")
 		m.mu.Lock()
 		defer m.mu.Unlock()
 		m.gist = read(t, r.Body)

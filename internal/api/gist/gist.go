@@ -8,6 +8,7 @@ package gist
 import (
 	"context"
 	"net/http"
+	"strings"
 
 	"go.astrophena.name/tools/internal/request"
 )
@@ -21,6 +22,9 @@ type Client struct {
 	// HTTPClient is an optional custom HTTP client object to use for requests.
 	// If not provided, request.DefaultClient will be used.
 	HTTPClient *http.Client
+	// Scrubber is an optional strings.Replacer that scrubs unwanted data from
+	// error messages.
+	Scrubber *strings.Replacer
 }
 
 // makeRequest performs a generic HTTP request to the GitHub Gist API using the
@@ -35,6 +39,7 @@ func (c *Client) makeRequest(ctx context.Context, method string, id string, gist
 		},
 		Body:       gist,
 		HTTPClient: c.HTTPClient,
+		Scrubber:   c.Scrubber,
 	}
 	if c.Token != "" {
 		rp.Headers["Authorization"] = "Bearer " + c.Token
