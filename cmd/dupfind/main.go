@@ -15,7 +15,7 @@ import (
 )
 
 func main() {
-	cli.SetArgsUsage("[dir]")
+	cli.SetArgsUsage("[flags...] <dir>")
 	cli.HandleStartup()
 
 	if len(flag.Args()) != 1 {

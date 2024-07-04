@@ -51,7 +51,7 @@ func HandleStartup() {
 	log.SetFlags(0)
 
 	if opts.argsUsage == "" {
-		opts.argsUsage = "[flags]"
+		opts.argsUsage = "[flags...]"
 	}
 	flag.Usage = usage
 	showVersion := flag.Bool("version", false, "Show version.")

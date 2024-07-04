@@ -2,6 +2,7 @@
 
 This repository holds personal tools:
 
+- Audiorenamer traverses a directory and renames music tracks based on their metadata.
 - Cmdtop displays the top of most used commands in bash history.
 - Dupfind finds duplicate files in a directory.
 - Renamer renames files sequentially.

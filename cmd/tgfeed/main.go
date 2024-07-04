@@ -108,7 +108,6 @@ func main() {
 		subscribe   = flag.String("subscribe", "", "Subscribe to a `feed`.")
 		unsubscribe = flag.String("unsubscribe", "", "Unsubscribe from a `feed`.")
 	)
-	cli.SetArgsUsage("[flags]")
 	cli.HandleStartup()
 
 	f := &fetcher{

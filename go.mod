@@ -3,6 +3,7 @@ module go.astrophena.name/tools
 go 1.22
 
 require (
+	github.com/dhowden/tag v0.0.0-20240417053706-3d75831295e8
 	github.com/google/go-cmp v0.6.0
 	github.com/mmcdole/gofeed v1.3.0
 	go.starlark.net v0.0.0-20240520160348-046347dcd104

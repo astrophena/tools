@@ -18,7 +18,7 @@ import (
 )
 
 func main() {
-	cli.SetArgsUsage("[num] [flags]")
+	cli.SetArgsUsage("[flags...] [num]")
 	cli.HandleStartup()
 
 	num := int64(10)

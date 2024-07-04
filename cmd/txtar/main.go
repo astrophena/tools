@@ -30,7 +30,7 @@ func main() {
 	var (
 		createFlag = flag.Bool("c", false, "Create txtar archive instead of extracting.")
 	)
-	cli.SetArgsUsage("[flags] <archive> <directory>")
+	cli.SetArgsUsage("[flags...] <archive> <directory>")
 	cli.HandleStartup()
 
 	args := flag.Args()
