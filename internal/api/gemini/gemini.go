@@ -18,7 +18,7 @@ type Client struct {
 	// Model specifies the name of the model to use for generation.
 	Model string
 	// HTTPClient is an optional HTTP client to use for requests. Defaults to
-	// httputil.DefaultClient.
+	// request.DefaultClient.
 	HTTPClient *http.Client
 }
 

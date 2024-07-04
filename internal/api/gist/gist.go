@@ -19,7 +19,7 @@ type Client struct {
 	// Token is the GitHub access token used for authentication.
 	Token string
 	// HTTPClient is an optional custom HTTP client object to use for requests.
-	// If not provided, httputil.DefaultClient will be used.
+	// If not provided, request.DefaultClient will be used.
 	HTTPClient *http.Client
 }
 
