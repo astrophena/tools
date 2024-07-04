@@ -79,6 +79,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -245,7 +246,8 @@ func (f *fetcher) unsubscribe(ctx context.Context, url string) error {
 }
 
 type fetcher struct {
-	initOnce sync.Once
+	initOnce  sync.Once
+	lockedRun atomic.Bool
 
 	httpc    *http.Client
 	fp       *gofeed.Parser
@@ -291,6 +293,9 @@ type feedState struct {
 	FilteredCategories []string `json:"filtered_categories"`
 }
 
+// stats represents data uploaded at every run to stats collector.
+//
+// DON'T CHANGE LAYOUT OF THIS STRUCT!!!
 type stats struct {
 	mu sync.Mutex
 
@@ -372,6 +377,12 @@ func (f *fetcher) doInit() {
 
 func (f *fetcher) run(ctx context.Context) error {
 	f.initOnce.Do(f.doInit)
+
+	if f.lockedRun.Load() {
+		return errors.New("already running")
+	}
+	f.lockedRun.Store(true)
+	defer f.lockedRun.Store(false)
 
 	// Start with empty stats for every run.
 	f.stats = &stats{
