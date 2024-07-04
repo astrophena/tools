@@ -175,17 +175,18 @@ func (e *engine) doInit() {
 	e.log = log.New(io.MultiWriter(os.Stderr, e.logStream), "", log.LstdFlags)
 	e.initRoutes()
 
-	e.gistc = &gist.Client{
-		Token:      e.ghToken,
-		HTTPClient: e.httpc,
-	}
-
 	e.logMasker = strings.NewReplacer(
 		e.tgToken, "[EXPUNGED]",
 		e.tgSecret, "[EXPUNGED]",
 		e.ghToken, "[EXPUNGED]",
 		e.gistID, "[EXPUNGED]",
 	)
+
+	e.gistc = &gist.Client{
+		Token:      e.ghToken,
+		HTTPClient: e.httpc,
+		Scrubber:   e.logMasker,
+	}
 }
 
 func (e *engine) logf(format string, args ...any) { e.log.Printf(format, args...) }
