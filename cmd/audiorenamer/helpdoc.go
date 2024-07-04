@@ -11,6 +11,10 @@ If the title contains slashes, it strips them out to create a valid filename.
 The new filename format is "<track number>. <title>.<extension>".
 
 The program takes a directory path as an required argument.
+
+Running it on my music collection:
+
+    $ audiorenamer ~/media/music
 `
 
 func init() { cli.SetDescription(helpDoc) }
