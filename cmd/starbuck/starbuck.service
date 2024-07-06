@@ -5,4 +5,5 @@ Description=Starbuck
 Type=simple
 DynamicUser=yes
 ExecStart=/usr/local/bin/starbuck -addr exp.astrophena.name
+AmbientCapabilities=CAP_NET_BIND_SERVICE
 StateDirectory=starbuck
