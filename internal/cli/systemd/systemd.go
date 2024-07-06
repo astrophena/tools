@@ -72,11 +72,13 @@ func RunWatchdog(ctx context.Context, logf logger.Logf) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
-	select {
-	case <-ticker.C:
-		Notify(logf, Watchdog)
-	case <-ctx.Done():
-		return
+	for {
+		select {
+		case <-ticker.C:
+			Notify(logf, Watchdog)
+		case <-ctx.Done():
+			return
+		}
 	}
 }
 
