@@ -6,6 +6,7 @@ import (
 	"flag"
 	"log"
 	"net/http"
+	"net/http/httputil"
 	"os"
 	"os/signal"
 	"syscall"
@@ -26,6 +27,14 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		web.RespondError(log.Printf, w, web.ErrNotFound)
+	})
+	mux.HandleFunc("/reqinfo", func(w http.ResponseWriter, r *http.Request) {
+		b, err := httputil.DumpRequest(r, true)
+		if err != nil {
+			web.RespondError(log.Printf, w, err)
+			return
+		}
+		w.Write(b)
 	})
 
 	if err := web.ListenAndServe(ctx, &web.ListenAndServeConfig{
