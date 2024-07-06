@@ -55,7 +55,7 @@ type (
 	}
 )
 
-// ServeHTTP implements the http.Handler interface.
+// ServeHTTP implements the [http.Handler] interface.
 func (h *HealthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.mu.Lock()
 	defer h.mu.Unlock()

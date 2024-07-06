@@ -40,7 +40,8 @@ type errorResponse struct {
 	Error  string `json:"error"`
 }
 
-// RespondJSON marshals the provided response object as JSON and writes it to the http.ResponseWriter.
+// RespondJSON marshals the provided response object as JSON and writes it to
+// the [http.ResponseWriter].
 // It sets the Content-Type header to application/json before marshalling.
 // In case of marshalling errors, it writes an internal server error with the error message.
 func RespondJSON(w http.ResponseWriter, response any) { respondJSON(w, response, false) }
@@ -66,13 +67,13 @@ func respondJSON(w http.ResponseWriter, response any, wroteStatus bool) {
 var errorTemplate string
 
 // RespondError writes an error response in HTML format to w and logs the error
-// using logf if error is [ErrInternalServerError].
+// using provided [logger.Logf] if error is [ErrInternalServerError].
 //
-// If the error is a StatusErr or wraps it, it extracts the HTTP status code and
+// If the error is a [StatusErr] or wraps it, it extracts the HTTP status code and
 // sets the response status code accordingly. Otherwise, it sets the response
-// status code to http.StatusInternalServerError.
+// status code to [http.StatusInternalServerError].
 //
-// You can wrap any error with fmt.Errorf to create a StatusErr and set a
+// You can wrap any error with [fmt.Errorf] to create a [StatusErr] and set a
 // specific HTTP status code:
 //
 //	// This will set the status code to 404 (Not Found).
@@ -82,13 +83,13 @@ func RespondError(logf logger.Logf, w http.ResponseWriter, err error) {
 }
 
 // RespondJSONError writes an error response in JSON format to w and logs the
-// error using logf.
+// error using provided [logger.Logf].
 //
-// If the error is a StatusErr or wraps it, it extracts the HTTP status code and sets the
-// response status code accordingly. Otherwise, it sets the response status code
-// to http.StatusInternalServerError.
+// If the error is a [StatusErr] or wraps it, it extracts the HTTP status code
+// and sets the response status code accordingly. Otherwise, it sets the
+// response status code to [http.StatusInternalServerError].
 //
-// You can wrap any error with fmt.Errorf to create a StatusErr and set a
+// You can wrap any error with [fmt.Errorf] to create a [StatusErr] and set a
 // specific HTTP status code:
 //
 //	// This will set the status code to 404 (Not Found).

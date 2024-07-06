@@ -26,7 +26,7 @@ import (
 var style []byte
 
 // ListenAndServeConfig is used to configure the HTTP server started by
-// ListenAndServe function.
+// [ListenAndServe].
 type ListenAndServeConfig struct {
 	// Addr is a network address to listen on (in the form of "host:port").
 	//
@@ -56,7 +56,7 @@ var (
 )
 
 // ListenAndServe starts the HTTP server based on the provided
-// ListenAndServeConfig.
+// [ListenAndServeConfig].
 func ListenAndServe(ctx context.Context, c *ListenAndServeConfig) error {
 	if c.Logf == nil {
 		c.Logf = log.Printf
