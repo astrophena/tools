@@ -28,9 +28,11 @@ var style []byte
 // ListenAndServeConfig is used to configure the HTTP server started by
 // ListenAndServe function.
 type ListenAndServeConfig struct {
-	// Addr is a network address to listen on (in the form of "host:port").  If
-	// Addr is not localhost and doesn't contain a port (in example, "example.com"
-	// or "exp.astrophena.name"), the server accepts HTTPS connections and
+	// Addr is a network address to listen on (in the form of "host:port").
+	//
+	// If Addr is not localhost and doesn't contain a port (in example,
+	// "example.com" or "exp.astrophena.name"), the server accepts HTTPS
+	// connections on :443, redirects HTTP connections to HTTPS on :80 and
 	// automatically obtains a certificate from Let's Encrypt.
 	Addr string
 	// Mux is a http.ServeMux to serve.
@@ -66,12 +68,17 @@ func ListenAndServe(ctx context.Context, c *ListenAndServeConfig) error {
 		return errNilMux
 	}
 
-	l, err := obtainListener(c)
+	l, isTLS, err := obtainListener(c)
 	if err != nil {
 		return fmt.Errorf("failed to listen: %v", err)
 	}
 	defer l.Close()
 	c.Logf("Listening on %s://%s...", l.Addr().Network(), l.Addr().String())
+
+	// Redirect HTTP requests to HTTPS.
+	if isTLS {
+		go httpRedirect(ctx, c)
+	}
 
 	protectDebug := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -133,7 +140,7 @@ func initInternalRoutes(c *ListenAndServeConfig, s *http.Server) {
 	}
 }
 
-func obtainListener(c *ListenAndServeConfig) (net.Listener, error) {
+func obtainListener(c *ListenAndServeConfig) (l net.Listener, isTLS bool, err error) {
 	host, _, hasPort := strings.Cut(c.Addr, ":")
 
 	// Accept HTTPS connections only and obtain Let's Encrypt certificate.
@@ -143,10 +150,11 @@ func obtainListener(c *ListenAndServeConfig) (net.Listener, error) {
 			Cache:      autocert.DirCache(cacheDir()),
 			HostPolicy: autocert.HostWhitelist(c.Addr),
 		}
-		return m.Listener(), nil
+		return m.Listener(), true, nil
 	}
 
-	return net.Listen("tcp", c.Addr)
+	l, err = net.Listen("tcp", c.Addr)
+	return l, false, err
 }
 
 func cacheDir() string {
@@ -164,4 +172,23 @@ func cacheDir() string {
 		return filepath.Join(os.TempDir(), version.Version().Name, "certs")
 	}
 	return filepath.Join(dir, version.Version().Name, "certs")
+}
+
+// httpRedirect redirects HTTP requests to HTTPS and runs in a separate
+// goroutine.
+func httpRedirect(ctx context.Context, c *ListenAndServeConfig) {
+	s := &http.Server{
+		Addr: ":80",
+		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			target := "https://" + r.Host + r.URL.Path
+			http.Redirect(w, r, target, http.StatusMovedPermanently)
+		}),
+	}
+	go func() {
+		<-ctx.Done()
+		s.Shutdown(ctx)
+	}()
+	if err := s.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		c.Logf("httpRedirect crashed: %v", err)
+	}
 }
