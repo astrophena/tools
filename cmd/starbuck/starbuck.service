@@ -1,0 +1,8 @@
+[Unit]
+Description=Starbuck
+
+[Service]
+Type=simple
+DynamicUser=yes
+ExecStart=/usr/local/bin/starbuck -addr exp.astrophena.name
+StateDirectory=starbuck
