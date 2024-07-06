@@ -24,6 +24,9 @@ func main() {
 	defer cancel()
 
 	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		web.RespondError(log.Printf, w, web.ErrNotFound)
+	})
 
 	if err := web.ListenAndServe(ctx, &web.ListenAndServeConfig{
 		Addr:       *addr,
