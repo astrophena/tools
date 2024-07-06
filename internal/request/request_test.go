@@ -15,7 +15,7 @@ import (
 	"go.astrophena.name/tools/internal/web"
 )
 
-func ExampleMakeJSON_Health() {
+func ExampleMakeJSON() {
 	// Checking health of Starlet.
 	health, err := request.MakeJSON[web.HealthResponse](context.Background(), request.Params{
 		Method: http.MethodGet,
@@ -32,7 +32,7 @@ func ExampleMakeJSON_Health() {
 	}
 }
 
-func ExampleMakeJSON_Scrub() {
+func ExampleMakeJSON_scrub() {
 	// Making request to GitHub API, scrubbing token out of error messages.
 	user, err := request.MakeJSON[map[string]any](context.Background(), request.Params{
 		Method: http.MethodGet,

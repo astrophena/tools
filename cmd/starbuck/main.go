@@ -9,9 +9,11 @@ import (
 	"net/http/httputil"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 
 	"go.astrophena.name/tools/internal/cli"
+	"go.astrophena.name/tools/internal/cli/systemd"
 	"go.astrophena.name/tools/internal/web"
 )
 
@@ -37,11 +39,22 @@ func main() {
 		w.Write(b)
 	})
 
-	if err := web.ListenAndServe(ctx, &web.ListenAndServeConfig{
-		Addr:       *addr,
-		Mux:        mux,
-		Debuggable: false,
-	}); err != nil {
-		log.Fatal(err)
-	}
+	var wg sync.WaitGroup
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if err := web.ListenAndServe(ctx, &web.ListenAndServeConfig{
+			Addr:       *addr,
+			Mux:        mux,
+			Debuggable: false,
+		}); err != nil {
+			log.Fatal(err)
+		}
+	}()
+
+	systemd.Notify(log.Printf, systemd.Ready)
+	go systemd.RunWatchdog(ctx, log.Printf)
+
+	wg.Wait()
 }
