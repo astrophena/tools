@@ -7,6 +7,7 @@ require (
 	github.com/google/go-cmp v0.6.0
 	github.com/mmcdole/gofeed v1.3.0
 	go.starlark.net v0.0.0-20240520160348-046347dcd104
+	golang.org/x/crypto v0.25.0
 )
 
 require (
@@ -17,8 +18,8 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/stretchr/testify v1.9.0 // indirect
-	golang.org/x/net v0.25.0 // indirect
-	golang.org/x/sys v0.20.0 // indirect
-	golang.org/x/text v0.15.0 // indirect
+	golang.org/x/net v0.27.0 // indirect
+	golang.org/x/sys v0.22.0 // indirect
+	golang.org/x/text v0.16.0 // indirect
 	google.golang.org/protobuf v1.34.1 // indirect
 )

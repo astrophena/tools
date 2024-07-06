@@ -9,10 +9,15 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"go.astrophena.name/tools/internal/logger"
+	"go.astrophena.name/tools/internal/version"
+
+	"golang.org/x/crypto/acme/autocert"
 )
 
 //go:generate curl --fail-with-body -s -o static/style.css https://astrophena.name/css/main.css
@@ -23,7 +28,10 @@ var style []byte
 // ListenAndServeConfig is used to configure the HTTP server started by
 // ListenAndServe function.
 type ListenAndServeConfig struct {
-	// Addr is a network address to listen on (in the form of 'host:port').
+	// Addr is a network address to listen on (in the form of "host:port").  If
+	// Addr is not localhost and doesn't contain a port (in example, "example.com"
+	// or "exp.astrophena.name"), the server accepts HTTPS connections and
+	// automatically obtains a certificate from Let's Encrypt.
 	Addr string
 	// Mux is a http.ServeMux to serve.
 	Mux *http.ServeMux
@@ -58,7 +66,7 @@ func ListenAndServe(ctx context.Context, c *ListenAndServeConfig) error {
 		return errNilMux
 	}
 
-	l, err := net.Listen("tcp", c.Addr)
+	l, err := obtainListener(c)
 	if err != nil {
 		return fmt.Errorf("failed to listen: %v", err)
 	}
@@ -81,7 +89,7 @@ func ListenAndServe(ctx context.Context, c *ListenAndServeConfig) error {
 	}
 
 	s := &http.Server{Handler: protectDebug(c.Mux)}
-	c.initInternalRoutes(s)
+	initInternalRoutes(c, s)
 
 	errCh := make(chan error, 1)
 
@@ -114,7 +122,7 @@ func ListenAndServe(ctx context.Context, c *ListenAndServeConfig) error {
 	return nil
 }
 
-func (c ListenAndServeConfig) initInternalRoutes(s *http.Server) {
+func initInternalRoutes(c *ListenAndServeConfig, s *http.Server) {
 	c.Mux.HandleFunc("/style.css", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeContent(w, r, "style.css", time.Time{}, bytes.NewReader(style))
 	})
@@ -123,4 +131,37 @@ func (c ListenAndServeConfig) initInternalRoutes(s *http.Server) {
 		dbg := Debugger(c.Logf, c.Mux)
 		dbg.Handle("conns", "Connections", Conns(c.Logf, s))
 	}
+}
+
+func obtainListener(c *ListenAndServeConfig) (net.Listener, error) {
+	host, _, hasPort := strings.Cut(c.Addr, ":")
+
+	// Accept HTTPS connections only and obtain Let's Encrypt certificate.
+	if host != "localhost" && !hasPort {
+		m := &autocert.Manager{
+			Prompt:     autocert.AcceptTOS,
+			Cache:      autocert.DirCache(cacheDir()),
+			HostPolicy: autocert.HostWhitelist(c.Addr),
+		}
+		return m.Listener(), nil
+	}
+
+	return net.Listen("tcp", c.Addr)
+}
+
+func cacheDir() string {
+	// Three variants where we can keep certificate cache:
+	//
+	//  a. in cache directory (i.e. ~/.cache on Linux)
+	//  b. in systemd unit state directory (i.e. /var/lib/private/...)
+	//  c. in OS temporary directory if everything fails
+	//
+	// Case b overrides a and c used as a last resort.
+	dir, err := os.UserCacheDir()
+	if stateDir := os.Getenv("STATE_DIRECTORY"); stateDir != "" {
+		return filepath.Join(stateDir, "certs")
+	} else if err != nil {
+		return filepath.Join(os.TempDir(), version.Version().Name, "certs")
+	}
+	return filepath.Join(dir, version.Version().Name, "certs")
 }
