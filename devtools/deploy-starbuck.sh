@@ -7,7 +7,11 @@ cleanup() {
 trap cleanup INT EXIT
 
 run() {
-	ssh astrophena@exp.astrophena.name "$@"
+	ssh -p 37626 astrophena@exp.astrophena.name "$@"
+}
+
+copy() {
+	scp -P 37626 "$1" "astrophena@exp.astrophena.name:"
 }
 
 # Cross-compile Starbuck binary. Why? Because most of the time this script runs
@@ -15,8 +19,8 @@ run() {
 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -buildid=" -trimpath -o "$tmpdir/starbuck" ./cmd/starbuck
 
 # Copy built binary and systemd service to the server.
-scp "$tmpdir/starbuck" "astrophena@exp.astrophena.name:"
-scp cmd/starbuck/starbuck.service "astrophena@exp.astrophena.name:"
+copy "$tmpdir/starbuck"
+copy cmd/starbuck/starbuck.service
 run doas install -m755 -o root -g root starbuck /usr/local/bin/starbuck
 run doas install -m644 -o root -g root starbuck.service /etc/systemd/system/starbuck.service
 

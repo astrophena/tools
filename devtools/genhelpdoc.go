@@ -1,6 +1,6 @@
 //go:build ignore
 
-// genhelpdocs.go generates help documentation for all commands from their doc comments.
+// genhelpdoc.go generates help documentation for all commands from their doc comments.
 
 package main
 
