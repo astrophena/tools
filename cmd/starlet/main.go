@@ -100,15 +100,15 @@ func main() {
 		)
 		reloadToken = envflag.Value(
 			"reload-token", "RELOAD_TOKEN", "",
-			"Token that can be used to authenticate /debug/reload requests. This can be used in Git hook, for example.",
+			"A `token` that can be used to authenticate /debug/reload requests. This can be used in Git hook, for example.",
 		)
 		geminiProxyToken = envflag.Value(
 			"gemini-proxy-token", "GEMINI_PROXY_TOKEN", "",
-			"Token that can be used to authenticate /gemini requests.",
+			"A `token` that can be used to authenticate /gemini requests.",
 		)
 		geminiKey = envflag.Value(
 			"gemini-key", "GEMINI_API_KEY", "",
-			"Gemini API key. Needed for /gemini proxy endpoint.",
+			"Gemini API `key`. Needed for /gemini proxy endpoint.",
 		)
 	)
 	cli.HandleStartup()
