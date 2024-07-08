@@ -301,6 +301,17 @@ func (e *engine) loadFromGist(ctx context.Context) {
 	e.loadGistErr = nil
 }
 
+type update struct {
+	Message struct {
+		From struct {
+			ID int64 `json:"id,omitempty"`
+		} `json:"from,omitempty"`
+		Chat struct {
+			ID int64 `json:"id,omitempty"`
+		} `json:"chat,omitempty"`
+	} `json:"message,omitempty"`
+}
+
 func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("X-Telegram-Bot-Api-Secret-Token") != e.tgSecret {
 		web.RespondJSONError(e.logf, w, web.ErrNotFound)
@@ -309,6 +320,12 @@ func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 
 	rawUpdate, err := io.ReadAll(r.Body)
 	if err != nil {
+		web.RespondJSONError(e.logf, w, err)
+		return
+	}
+
+	var u update
+	if err := json.Unmarshal(rawUpdate, &u); err != nil {
 		web.RespondJSONError(e.logf, w, err)
 		return
 	}
@@ -339,7 +356,7 @@ func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 		Print: func(thread *starlark.Thread, msg string) { e.log.Println(msg) },
 	}, "bot.star", botCode, predeclared)
 	if err != nil {
-		e.reportError(r.Context(), w, err)
+		e.reportError(r.Context(), w, u, err)
 		return
 	}
 
@@ -508,9 +525,9 @@ func (e *engine) selfPing(ctx context.Context) {
 	}
 }
 
-func (e *engine) reportError(ctx context.Context, w http.ResponseWriter, err error) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
+func (e *engine) reportError(ctx context.Context, w http.ResponseWriter, u update, err error) {
+	// We send error messages only to the bot owner and when only it happens in
+	// chat with them. Otherwise, log it and carry on.
 
 	errMsg := err.Error()
 	if evalErr, ok := err.(*starlark.EvalError); ok {
@@ -519,19 +536,30 @@ func (e *engine) reportError(ctx context.Context, w http.ResponseWriter, err err
 	// Mask secrets in error messages.
 	errMsg = e.logMasker.Replace(errMsg)
 
-	_, sendErr := request.MakeJSON[any](ctx, request.Params{
-		Method: http.MethodPost,
-		URL:    "https://api.telegram.org/bot" + e.tgToken + "/sendMessage",
-		Body: map[string]string{
-			"chat_id":    strconv.FormatInt(e.tgOwner, 10),
-			"text":       fmt.Sprintf(e.errorTemplate, html.EscapeString(errMsg)),
-			"parse_mode": "HTML",
-		},
-		HTTPClient: e.httpc,
-		Scrubber:   e.logMasker,
-	})
-	if sendErr != nil {
-		e.logf("reporting an error %q to %q failed: %v", err, e.tgOwner, sendErr)
+	if u.Message.Chat.ID != e.tgOwner {
+		e.logf("Handling update from %d (in chat %d) failed:\n%v", u.Message.From.ID, u.Message.Chat.ID, errMsg)
+		jsonOK(w)
+		return
+	}
+
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	if u.Message.Chat.ID == e.tgOwner {
+		_, sendErr := request.MakeJSON[any](ctx, request.Params{
+			Method: http.MethodPost,
+			URL:    "https://api.telegram.org/bot" + e.tgToken + "/sendMessage",
+			Body: map[string]string{
+				"chat_id":    strconv.FormatInt(e.tgOwner, 10),
+				"text":       fmt.Sprintf(e.errorTemplate, html.EscapeString(errMsg)),
+				"parse_mode": "HTML",
+			},
+			HTTPClient: e.httpc,
+			Scrubber:   e.logMasker,
+		})
+		if sendErr != nil {
+			e.logf("Reporting an error %q to bot owner (%q) failed: %v", err, e.tgOwner, sendErr)
+		}
 	}
 
 	// Don't respond with an error because Telegram will go mad and start retrying
