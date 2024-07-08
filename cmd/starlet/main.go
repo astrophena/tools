@@ -534,7 +534,9 @@ func (e *engine) reportError(ctx context.Context, w http.ResponseWriter, err err
 		e.logf("reporting an error %q to %q failed: %v", err, e.tgOwner, sendErr)
 	}
 
-	web.RespondJSONError(e.logf, w, err)
+	// Don't respond with an error because Telegram will go mad and start retrying
+	// updates until my Telegram chat is fucked with lots of error messages.
+	jsonOK(w)
 }
 
 type starlarkBuiltin func(*starlark.Thread, *starlark.Builtin, starlark.Tuple, []starlark.Tuple) (starlark.Value, error)
