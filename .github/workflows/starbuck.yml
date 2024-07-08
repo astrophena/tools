@@ -1,0 +1,25 @@
+name: 'starbuck'
+on:
+  workflow_run:
+    workflows: [Test]
+    types: [completed]
+jobs:
+  deploy:
+    name: 'Deploy'
+    if: "${{ github.event.workflow_run.conclusion == 'success' }}"
+    runs-on: 'ubuntu-latest'
+    steps:
+      - name: 'Check out'
+        uses: 'actions/checkout@v4'
+      - name: 'Set up Go'
+        uses: 'actions/setup-go@v5'
+        with:
+          go-version-file: 'go.mod'
+      - name: 'Configure SSH credentials'
+        uses: './.github/actions/ssh'
+        with:
+          host: 'exp.astrophena.name'
+          port: '37626'
+          key: '${{ secrets.EXP_SSH_KEY }}'
+      - name: 'Deploy'
+        run: './devtools/deploy/starbuck.sh'
