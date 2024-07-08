@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log"
 	"net/http"
 	"net/http/httputil"
@@ -14,6 +15,7 @@ import (
 
 	"go.astrophena.name/tools/internal/cli"
 	"go.astrophena.name/tools/internal/systemd"
+	"go.astrophena.name/tools/internal/version"
 	"go.astrophena.name/tools/internal/web"
 )
 
@@ -37,6 +39,9 @@ func main() {
 			return
 		}
 		w.Write(b)
+	})
+	mux.HandleFunc("/sha", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintln(w, version.Version().Commit)
 	})
 
 	var wg sync.WaitGroup
