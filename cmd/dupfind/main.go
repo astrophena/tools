@@ -24,6 +24,10 @@ func main() {
 	}
 	dir := flag.Args()[0]
 
+	if realdir, err := filepath.EvalSymlinks(dir); err == nil {
+		dir = realdir
+	}
+
 	dups, err := lookup(dir)
 	if err != nil {
 		log.Fatal(err)

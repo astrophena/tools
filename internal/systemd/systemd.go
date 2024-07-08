@@ -55,10 +55,10 @@ func Notify(logf logger.Logf, state State) {
 	}
 }
 
-// RunWatchdog periodically updates systemd watchdog timestamp. It should run in
+// WatchdogLoop periodically updates systemd watchdog timestamp. It should run in
 // a separate goroutine and can be stopped by canceling the provided [context.Context].
 // If there are any errors, they will be logged to logf.
-func RunWatchdog(ctx context.Context, logf logger.Logf) {
+func WatchdogLoop(ctx context.Context, logf logger.Logf) {
 	if os.Getenv("WATCHDOG_USEC") == "" {
 		return
 	}

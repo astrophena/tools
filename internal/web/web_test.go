@@ -6,10 +6,68 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"go.astrophena.name/tools/internal/testutil"
 )
+
+func TestRespondError(t *testing.T) {
+	cases := map[string]struct {
+		err        error
+		wantStatus int
+		wantInBody string
+		wantToLog  bool
+	}{
+		"404": {
+			err:        ErrNotFound,
+			wantStatus: http.StatusNotFound,
+			wantInBody: "404 Not Found",
+			wantToLog:  false,
+		},
+		"500": {
+			err:        ErrInternalServerError,
+			wantStatus: http.StatusInternalServerError,
+			wantInBody: "500 Internal Server Error",
+			wantToLog:  true,
+		},
+		"404 (wrapped)": {
+			err:        fmt.Errorf("wrapped: %w", ErrNotFound),
+			wantStatus: http.StatusNotFound,
+			wantInBody: "404 Not Found",
+			wantToLog:  false,
+		},
+		"500 (wrapped)": {
+			err:        fmt.Errorf("wrapped: %w", ErrInternalServerError),
+			wantStatus: http.StatusInternalServerError,
+			wantInBody: "500 Internal Server Error",
+			wantToLog:  true,
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+
+			var logged bool
+			logf := func(format string, args ...any) {
+				logged = true
+				t.Logf(format, args...)
+			}
+
+			RespondError(logf, w, tc.err)
+
+			if tc.wantToLog && !logged {
+				t.Fatalf("wanted to log a line, but didn't")
+			}
+
+			testutil.AssertEqual(t, tc.wantStatus, w.Code)
+			if !strings.Contains(w.Body.String(), tc.wantInBody) {
+				t.Errorf("want response body to contain %q, got %q", tc.wantInBody, w.Body.String())
+			}
+		})
+	}
+}
 
 func TestRespondJSONError(t *testing.T) {
 	cases := map[string]struct {

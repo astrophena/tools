@@ -27,6 +27,14 @@ func TestDebugger(t *testing.T) {
 	}
 }
 
+func TestDebuggerNilLogf(t *testing.T) {
+	mux := http.NewServeMux()
+	dbg := Debugger(nil, mux)
+	if dbg.logf == nil {
+		t.Fatal("logf should be always set to a non-nil value")
+	}
+}
+
 func TestDebuggerKV(t *testing.T) {
 	mux := http.NewServeMux()
 	dbg := Debugger(t.Logf, mux)

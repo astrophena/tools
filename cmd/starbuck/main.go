@@ -13,7 +13,7 @@ import (
 	"syscall"
 
 	"go.astrophena.name/tools/internal/cli"
-	"go.astrophena.name/tools/internal/cli/systemd"
+	"go.astrophena.name/tools/internal/systemd"
 	"go.astrophena.name/tools/internal/web"
 )
 
@@ -54,7 +54,7 @@ func main() {
 	}()
 
 	systemd.Notify(log.Printf, systemd.Ready)
-	go systemd.RunWatchdog(ctx, log.Printf)
+	go systemd.WatchdogLoop(ctx, log.Printf)
 
 	wg.Wait()
 }

@@ -50,11 +50,9 @@ import (
 	"syscall"
 	"time"
 
-	"go.astrophena.name/tools/internal/api/gemini"
-	"go.astrophena.name/tools/internal/api/gemini/geminiproxy"
 	"go.astrophena.name/tools/internal/api/gist"
 	"go.astrophena.name/tools/internal/cli"
-	"go.astrophena.name/tools/internal/cli/envflag"
+	"go.astrophena.name/tools/internal/envflag"
 	"go.astrophena.name/tools/internal/logger"
 	"go.astrophena.name/tools/internal/request"
 	"go.astrophena.name/tools/internal/version"
@@ -102,14 +100,6 @@ func main() {
 			"reload-token", "RELOAD_TOKEN", "",
 			"A `token` that can be used to authenticate /debug/reload requests. This can be used in Git hook, for example.",
 		)
-		geminiProxyToken = envflag.Value(
-			"gemini-proxy-token", "GEMINI_PROXY_TOKEN", "",
-			"A `token` that can be used to authenticate /gemini requests.",
-		)
-		geminiKey = envflag.Value(
-			"gemini-key", "GEMINI_API_KEY", "",
-			"Gemini API `key`. Needed for /gemini proxy endpoint.",
-		)
 	)
 	cli.HandleStartup()
 
@@ -117,14 +107,12 @@ func main() {
 	defer cancel()
 
 	e := &engine{
-		tgToken:          *tgToken,
-		tgSecret:         *tgSecret,
-		tgOwner:          *tgOwner,
-		ghToken:          *ghToken,
-		gistID:           *gistID,
-		reloadToken:      *reloadToken,
-		geminiKey:        *geminiKey,
-		geminiProxyToken: *geminiProxyToken,
+		tgToken:     *tgToken,
+		tgSecret:    *tgSecret,
+		tgOwner:     *tgOwner,
+		ghToken:     *ghToken,
+		gistID:      *gistID,
+		reloadToken: *reloadToken,
 		httpc: &http.Client{
 			Timeout: 10 * time.Second,
 		},
@@ -166,15 +154,13 @@ type engine struct {
 	logMasker *strings.Replacer
 
 	// configuration, read-only after initialization
-	ghToken          string
-	gistID           string
-	httpc            *http.Client
-	tgOwner          int64
-	tgSecret         string
-	tgToken          string
-	reloadToken      string
-	geminiKey        string
-	geminiProxyToken string
+	ghToken     string
+	gistID      string
+	httpc       *http.Client
+	tgOwner     int64
+	tgSecret    string
+	tgToken     string
+	reloadToken string
 
 	mu sync.Mutex
 	// loaded from gist
@@ -190,8 +176,6 @@ func (e *engine) doInit() {
 	e.initRoutes()
 
 	e.logMasker = strings.NewReplacer(
-		e.geminiKey, "[EXPUNGED]",
-		e.geminiProxyToken, "[EXPUNGED]",
 		e.ghToken, "[EXPUNGED]",
 		e.gistID, "[EXPUNGED]",
 		e.reloadToken, "[EXPUNGED]",
@@ -232,16 +216,6 @@ func (e *engine) initRoutes() {
 
 	// Authentication.
 	e.mux.HandleFunc("GET /login", e.handleLogin)
-
-	// Gemini proxy.
-	if e.geminiKey != "" && e.geminiProxyToken != "" {
-		e.mux.Handle("POST /gemini", geminiproxy.New(&gemini.Client{
-			APIKey:     e.geminiKey,
-			Model:      "gemini-1.0-pro",
-			HTTPClient: e.httpc,
-			Scrubber:   e.logMasker,
-		}, e.geminiProxyToken, e.logf))
-	}
 
 	// Debug routes.
 	web.Health(e.mux)

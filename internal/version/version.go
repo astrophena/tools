@@ -27,11 +27,8 @@ func (i Info) String() string {
 	var sb strings.Builder
 
 	sb.WriteString(i.Short() + " (" + i.Go + ", " + i.OS + "/" + i.Arch + ")")
-	if i.Commit != "" && i.BuiltAt != "" {
+	if i.BuiltAt != "" {
 		sb.WriteString("\n")
-		if !strings.Contains(i.Short(), i.Commit) {
-			sb.WriteString("commit " + i.Commit + "\n")
-		}
 		sb.WriteString("built at " + i.BuiltAt)
 	}
 	sb.WriteString("\n")
