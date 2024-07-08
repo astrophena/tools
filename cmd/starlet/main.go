@@ -310,6 +310,9 @@ type update struct {
 			ID int64 `json:"id,omitempty"`
 		} `json:"chat,omitempty"`
 	} `json:"message,omitempty"`
+	MessageReaction struct {
+		Date int64 `json:"date"`
+	} `json:"message_reaction,omitempty"`
 }
 
 func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
@@ -327,6 +330,11 @@ func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 	var u update
 	if err := json.Unmarshal(rawUpdate, &u); err != nil {
 		web.RespondJSONError(e.logf, w, err)
+		return
+	}
+	// We've got a message reaction. Ignore it for now. I can always remove it
+	// from allowed_updates, but I'm too lazy so we drop it like that.
+	if u.MessageReaction.Date != 0 {
 		return
 	}
 
