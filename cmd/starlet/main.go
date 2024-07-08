@@ -96,10 +96,6 @@ func main() {
 			"gist-id", "GIST_ID", "",
 			"GitHub Gist `ID` to load bot code from.",
 		)
-		reloadToken = envflag.Value(
-			"reload-token", "RELOAD_TOKEN", "",
-			"A `token` that can be used to authenticate /debug/reload requests. This can be used in Git hook, for example.",
-		)
 	)
 	cli.HandleStartup()
 
@@ -107,12 +103,11 @@ func main() {
 	defer cancel()
 
 	e := &engine{
-		tgToken:     *tgToken,
-		tgSecret:    *tgSecret,
-		tgOwner:     *tgOwner,
-		ghToken:     *ghToken,
-		gistID:      *gistID,
-		reloadToken: *reloadToken,
+		tgToken:  *tgToken,
+		tgSecret: *tgSecret,
+		tgOwner:  *tgOwner,
+		ghToken:  *ghToken,
+		gistID:   *gistID,
 		httpc: &http.Client{
 			Timeout: 10 * time.Second,
 		},
@@ -154,13 +149,12 @@ type engine struct {
 	logMasker *strings.Replacer
 
 	// configuration, read-only after initialization
-	ghToken     string
-	gistID      string
-	httpc       *http.Client
-	tgOwner     int64
-	tgSecret    string
-	tgToken     string
-	reloadToken string
+	ghToken  string
+	gistID   string
+	httpc    *http.Client
+	tgOwner  int64
+	tgSecret string
+	tgToken  string
 
 	mu sync.Mutex
 	// loaded from gist
@@ -178,7 +172,6 @@ func (e *engine) doInit() {
 	e.logMasker = strings.NewReplacer(
 		e.ghToken, "[EXPUNGED]",
 		e.gistID, "[EXPUNGED]",
-		e.reloadToken, "[EXPUNGED]",
 		e.tgSecret, "[EXPUNGED]",
 		e.tgToken, "[EXPUNGED]",
 	)
@@ -384,9 +377,6 @@ func jsonOK(w http.ResponseWriter) {
 func (e *engine) debugAuth(r *http.Request) bool {
 	if !isProd() || e.loggedIn(r) {
 		return true
-	}
-	if r.URL.Path == "/debug/reload" {
-		return r.Header.Get("X-Reload-Token") == e.reloadToken
 	}
 	return false
 }
