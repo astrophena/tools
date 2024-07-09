@@ -33,10 +33,13 @@ ProtectHostname=yes
 ProtectKernelLogs=yes
 ProtectKernelModules=yes
 ProtectKernelTunables=yes
+ProtectProc=noaccess
 ProtectSystem=strict
 RestrictNamespaces=yes
 RestrictRealtime=yes
 SystemCallArchitectures=native
+SystemCallErrorNumber=EPERM
+SystemCallFilter=@system-service
 
 [Install]
 WantedBy=multi-user.target
