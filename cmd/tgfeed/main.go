@@ -1,3 +1,5 @@
+// vim: foldmethod=marker
+
 /*
 Tgfeed fetches RSS feeds and sends new articles via Telegram.
 
@@ -203,84 +205,6 @@ func (f *fetcher) main(
 	}
 }
 
-func (f *fetcher) reenable(ctx context.Context, url string) error {
-	if err := f.loadFromGist(ctx); err != nil {
-		return err
-	}
-
-	state, ok := f.getState(url)
-	if !ok {
-		return fmt.Errorf("feed %q doesn't exist in state", url)
-	}
-
-	state.Disabled = false
-	state.ErrorCount = 0
-	state.LastError = ""
-
-	return f.saveToGist(ctx)
-}
-
-func (f *fetcher) listFeeds(ctx context.Context, w io.Writer) error {
-	if err := f.loadFromGist(ctx); err != nil {
-		return err
-	}
-
-	var sb strings.Builder
-
-	for _, url := range f.feeds {
-		state, hasState := f.getState(url)
-		fmt.Fprintf(&sb, "%s", url)
-		if !hasState {
-			fmt.Fprintf(&sb, " \n")
-			continue
-		}
-		fmt.Fprintf(&sb, " (")
-		if state.CachedTitle != "" {
-			fmt.Fprintf(&sb, "%q, ", state.CachedTitle)
-		}
-		fmt.Fprintf(&sb, "last updated %s", state.LastUpdated.Format(time.DateTime))
-		if state.ErrorCount > 0 {
-			failCount := "once"
-			if state.ErrorCount > 1 {
-				failCount = fmt.Sprintf("%d times", state.ErrorCount)
-			}
-			fmt.Fprintf(&sb, ", failed %s, last error was %q", failCount, state.LastError)
-		}
-		if state.Disabled {
-			fmt.Fprintf(&sb, ", disabled")
-		}
-		fmt.Fprintf(&sb, ")\n")
-	}
-
-	io.WriteString(w, sb.String())
-	return nil
-}
-
-func (f *fetcher) subscribe(ctx context.Context, url string) error {
-	if err := f.loadFromGist(ctx); err != nil {
-		return err
-	}
-	if slices.Contains(f.feeds, url) {
-		return fmt.Errorf("%q is already in list of feeds", url)
-	}
-	f.feeds = append(f.feeds, url)
-	return f.saveToGist(ctx)
-}
-
-func (f *fetcher) unsubscribe(ctx context.Context, url string) error {
-	if err := f.loadFromGist(ctx); err != nil {
-		return err
-	}
-	if !slices.Contains(f.feeds, url) {
-		return fmt.Errorf("%q isn't in list of feeds", url)
-	}
-	f.feeds = slices.DeleteFunc(f.feeds, func(sub string) bool {
-		return sub == url
-	})
-	delete(f.state, url)
-	return f.saveToGist(ctx)
-}
-
 type fetcher struct {
 	running  atomic.Bool
 	initOnce sync.Once
@@ -309,81 +233,6 @@ type fetcher struct {
 
 	mu    sync.Mutex
 	state map[string]*feedState
-}
-
-type feedState struct {
-	LastModified time.Time `json:"last_modified"`
-	LastUpdated  time.Time `json:"last_updated"`
-	ETag         string    `json:"etag"`
-	Disabled     bool      `json:"disabled"`
-	ErrorCount   int       `json:"error_count"`
-	LastError    string    `json:"last_error"`
-	CachedTitle  string    `json:"cached_title"`
-
-	// Stats.
-	FetchCount     int64 `json:"fetch_count"`      // successful fetches
-	FetchFailCount int64 `json:"fetch_fail_count"` // failed fetches
-
-	// Special flags. Not covered by tests or any common sense.
-
-	// Only return updates matching this list of categories.
-	FilteredCategories []string `json:"filtered_categories"`
-}
-
-// stats represents data uploaded at every run to stats collector.
-//
-// DON'T CHANGE LAYOUT OF THIS STRUCT!!!
-type stats struct {
-	mu sync.Mutex
-
-	TotalFeeds       int `json:"total_feeds"`
-	SuccessFeeds     int `json:"success_feeds"`
-	FailedFeeds      int `json:"failed_feeds"`
-	NotModifiedFeeds int `json:"not_modified_feeds"`
-
-	StartTime        time.Time `json:"start_time"`
-	Duration         duration  `json:"duration"`
-	TotalItemsParsed int       `json:"total_items_parsed"`
-
-	TotalFetchTime duration `json:"total_fetch_time"`
-	AvgFetchTime   duration `json:"avg_fetch_time"`
-
-	MemoryUsage uint64 `json:"memory_usage"`
-}
-
-type duration time.Duration
-
-func (d duration) MarshalJSON() ([]byte, error) {
-	return json.Marshal(time.Duration(d).String())
-}
-
-func (f *fetcher) reportStats(ctx context.Context) error {
-	type response struct {
-		Status  string `json:"status"`
-		Message string `json:"message,omitempty"`
-	}
-
-	u, err := url.Parse(f.statsCollectorURL)
-	if err != nil {
-		return err
-	}
-	q := u.Query()
-	q.Add("token", f.statsCollectorToken)
-	u.RawQuery = q.Encode()
-
-	resp, err := request.MakeJSON[response](ctx, request.Params{
-		Method: http.MethodPost,
-		URL:    u.String(),
-		Body:   []*stats{f.stats},
-	})
-	if err != nil {
-		return err
-	}
-
-	if resp.Status == "error" {
-		return fmt.Errorf("got server error: %v", resp.Message)
-	}
-	return nil
 }
 
 func (f *fetcher) doInit() {
@@ -429,7 +278,45 @@ func (f *fetcher) doInit() {
 	}
 }
 
-func (f *fetcher) run(ctx context.Context) error {
+// Modes {{{
+
+func (f *fetcher) listFeeds(ctx context.Context, w io.Writer) error { // {{{
+	if err := f.loadFromGist(ctx); err != nil {
+		return err
+	}
+
+	var sb strings.Builder
+
+	for _, url := range f.feeds {
+		state, hasState := f.getState(url)
+		fmt.Fprintf(&sb, "%s", url)
+		if !hasState {
+			fmt.Fprintf(&sb, " \n")
+			continue
+		}
+		fmt.Fprintf(&sb, " (")
+		if state.CachedTitle != "" {
+			fmt.Fprintf(&sb, "%q, ", state.CachedTitle)
+		}
+		fmt.Fprintf(&sb, "last updated %s", state.LastUpdated.Format(time.DateTime))
+		if state.ErrorCount > 0 {
+			failCount := "once"
+			if state.ErrorCount > 1 {
+				failCount = fmt.Sprintf("%d times", state.ErrorCount)
+			}
+			fmt.Fprintf(&sb, ", failed %s, last error was %q", failCount, state.LastError)
+		}
+		if state.Disabled {
+			fmt.Fprintf(&sb, ", disabled")
+		}
+		fmt.Fprintf(&sb, ")\n")
+	}
+
+	io.WriteString(w, sb.String())
+	return nil
+} // }}}
+
+func (f *fetcher) run(ctx context.Context) error { // {{{
 	f.initOnce.Do(f.doInit)
 
 	if f.running.Load() {
@@ -514,86 +401,71 @@ func shuffle[S any](s []S) []S {
 		s2[i], s2[j] = s2[j], s2[i]
 	})
 	return s2
-}
+} // }}}
 
-func (f *fetcher) summarize(ctx context.Context, text string) (string, error) {
-	const systemInstruction = `
-You are a friendly bot that fetches articles from RSS feeds and given
-descriptions of articles, YouTube videos and sometimes full articles themselves.
+func (f *fetcher) subscribe(ctx context.Context, url string) error { // {{{
+	if err := f.loadFromGist(ctx); err != nil {
+		return err
+	}
+	if slices.Contains(f.feeds, url) {
+		return fmt.Errorf("%q is already in list of feeds", url)
+	}
+	f.feeds = append(f.feeds, url)
+	return f.saveToGist(ctx)
+} // }}}
 
-Your task is to make a concise summary of article or video description in three
-sentences in English.
-
-If text only contains an image or something you can't summarize, return exactly
-"TGFEED_SKIP" (without quotes).
-`
-
-	params := gemini.GenerateContentParams{
-		Contents: []*gemini.Content{
-			{
-				Parts: []*gemini.Part{{Text: text}},
-			},
-		},
-		SystemInstruction: &gemini.Content{
-			Parts: []*gemini.Part{{Text: systemInstruction}},
-		},
+func (f *fetcher) reenable(ctx context.Context, url string) error { // {{{
+	if err := f.loadFromGist(ctx); err != nil {
+		return err
 	}
 
-	resp, err := f.geminic.GenerateContent(ctx, params)
-	if err != nil {
-		return "", err
-	}
-	if len(resp.Candidates) == 0 {
-		return "", errors.New("no candidates provided")
-	}
-	candidate := resp.Candidates[0]
-	if candidate.Content == nil || len(candidate.Content.Parts) == 0 {
-		return "", errors.New("candidate.Content is nil or has no Parts")
-	}
-	return candidate.Content.Parts[0].Text, nil
-}
-
-func (f *fetcher) sendUpdate(ctx context.Context, item *gofeed.Item) {
-	title := item.Title
-	if item.Title == "" {
-		title = item.Link
+	state, ok := f.getState(url)
+	if !ok {
+		return fmt.Errorf("feed %q doesn't exist in state", url)
 	}
 
-	msg := fmt.Sprintf(
-		`🔗 <a href="%[1]s">%[2]s</a>`,
-		item.Link,
-		html.EscapeString(title),
-	)
+	state.Disabled = false
+	state.ErrorCount = 0
+	state.LastError = ""
 
-	// If we have access to Gemini API, try to summarize an article.
-	if f.geminic != nil && item.Description != "" {
-		summary, err := f.summarize(ctx, item.Description)
-		if err != nil {
-			f.logf("sendUpdate: summarizing item %q failed: %v", item.Link, err)
-		}
-		if summary != "" && !strings.Contains(summary, "TGFEED_SKIP") {
-			msg += "\n<blockquote>" + html.EscapeString(summary) + "</blockquote>"
-		}
+	return f.saveToGist(ctx)
+} // }}}
+
+func (f *fetcher) unsubscribe(ctx context.Context, url string) error { // {{{
+	if err := f.loadFromGist(ctx); err != nil {
+		return err
 	}
-
-	inlineKeyboardButtons := []inlineKeyboardButton{}
-
-	// hnrss.org feeds have Hacker News entry URL set as GUID. Also send it
-	// because I often read comments on Hacker News entries.
-	if strings.HasPrefix(item.GUID, "https://news.ycombinator.com/item?id=") {
-		inlineKeyboardButtons = append(inlineKeyboardButtons, inlineKeyboardButton{
-			Text: "💬 Comments",
-			URL:  item.GUID,
-		})
+	if !slices.Contains(f.feeds, url) {
+		return fmt.Errorf("%q isn't in list of feeds", url)
 	}
+	f.feeds = slices.DeleteFunc(f.feeds, func(sub string) bool {
+		return sub == url
+	})
+	delete(f.state, url)
+	return f.saveToGist(ctx)
+} // }}}
 
-	if err := f.send(ctx, strings.TrimSpace(msg), func(args map[string]any) {
-		args["reply_markup"] = map[string]any{
-			"inline_keyboard": [][]inlineKeyboardButton{inlineKeyboardButtons},
-		}
-	}); err != nil {
-		f.logf("Sending %q to %q failed: %v", msg, f.chatID, err)
-	}
+// }}}
+
+// Feed state {{{
+
+type feedState struct {
+	LastModified time.Time `json:"last_modified"`
+	LastUpdated  time.Time `json:"last_updated"`
+	ETag         string    `json:"etag"`
+	Disabled     bool      `json:"disabled"`
+	ErrorCount   int       `json:"error_count"`
+	LastError    string    `json:"last_error"`
+	CachedTitle  string    `json:"cached_title"`
+
+	// Stats.
+	FetchCount     int64 `json:"fetch_count"`      // successful fetches
+	FetchFailCount int64 `json:"fetch_fail_count"` // failed fetches
+
+	// Special flags. Not covered by tests or any common sense.
+
+	// Only return updates matching this list of categories.
+	FilteredCategories []string `json:"filtered_categories"`
 }
 
 func (f *fetcher) getState(url string) (state *feedState, exists bool) {
@@ -630,6 +502,89 @@ func (f *fetcher) loadFromGist(ctx context.Context) error {
 	}
 	return nil
 }
+
+func (f *fetcher) saveToGist(ctx context.Context) error {
+	state, err := json.MarshalIndent(f.state, "", "  ")
+	if err != nil {
+		return err
+	}
+	feeds, err := json.MarshalIndent(f.feeds, "", "  ")
+	if err != nil {
+		return err
+	}
+	ng := &gist.Gist{
+		Files: map[string]gist.File{
+			"feeds.json": {Content: string(feeds)},
+			"state.json": {Content: string(state)},
+		},
+	}
+	_, err = f.gistc.Update(ctx, f.gistID, ng)
+	return err
+}
+
+// }}}
+
+// Stats {{{
+
+// stats represents data uploaded at every run to stats collector.
+//
+// DON'T CHANGE LAYOUT OF THIS STRUCT!!!
+type stats struct {
+	mu sync.Mutex
+
+	TotalFeeds       int `json:"total_feeds"`
+	SuccessFeeds     int `json:"success_feeds"`
+	FailedFeeds      int `json:"failed_feeds"`
+	NotModifiedFeeds int `json:"not_modified_feeds"`
+
+	StartTime        time.Time `json:"start_time"`
+	Duration         duration  `json:"duration"`
+	TotalItemsParsed int       `json:"total_items_parsed"`
+
+	TotalFetchTime duration `json:"total_fetch_time"`
+	AvgFetchTime   duration `json:"avg_fetch_time"`
+
+	MemoryUsage uint64 `json:"memory_usage"`
+}
+
+type duration time.Duration
+
+func (d duration) MarshalJSON() ([]byte, error) {
+	return json.Marshal(time.Duration(d).String())
+}
+
+func (f *fetcher) reportStats(ctx context.Context) error {
+	type response struct {
+		Status  string `json:"status"`
+		Message string `json:"message,omitempty"`
+	}
+
+	u, err := url.Parse(f.statsCollectorURL)
+	if err != nil {
+		return err
+	}
+	q := u.Query()
+	q.Add("token", f.statsCollectorToken)
+	u.RawQuery = q.Encode()
+
+	resp, err := request.MakeJSON[response](ctx, request.Params{
+		Method: http.MethodPost,
+		URL:    u.String(),
+		Body:   []*stats{f.stats},
+	})
+	if err != nil {
+		return err
+	}
+
+	if resp.Status == "error" {
+		return fmt.Errorf("got server error: %v", resp.Message)
+	}
+	return nil
+}
+
+// }}}
+
+// Feed fetching {{{
 
 func (f *fetcher) fetch(ctx context.Context, url string, updates chan *gofeed.Item) {
 	startTime := time.Now()
@@ -722,10 +677,10 @@ func (f *fetcher) fetch(ctx context.Context, url string, updates chan *gofeed.It
 	state.FetchCount += 1
 
 	f.stats.mu.Lock()
+	defer f.stats.mu.Unlock()
 	f.stats.TotalItemsParsed += len(feed.Items)
 	f.stats.SuccessFeeds += 1
 	f.stats.TotalFetchTime += duration(time.Since(startTime))
-	f.stats.mu.Unlock()
 }
 
 func (f *fetcher) handleFetchFailure(ctx context.Context, state *feedState, url string, err error) {
@@ -747,9 +702,89 @@ func (f *fetcher) handleFetchFailure(ctx context.Context, state *feedState, url 
 	}
 }
 
-func (f *fetcher) errNotify(ctx context.Context, err error) error {
-	return f.send(ctx, fmt.Sprintf(f.errorTemplate, html.EscapeString(err.Error())), disableLinkPreview)
+func (f *fetcher) sendUpdate(ctx context.Context, item *gofeed.Item) {
+	title := item.Title
+	if item.Title == "" {
+		title = item.Link
+	}
+
+	msg := fmt.Sprintf(
+		`🔗 <a href="%[1]s">%[2]s</a>`,
+		item.Link,
+		html.EscapeString(title),
+	)
+
+	// If we have access to Gemini API, try to summarize an article.
+	if f.geminic != nil && item.Description != "" {
+		summary, err := f.summarize(ctx, item.Description)
+		if err != nil {
+			f.logf("sendUpdate: summarizing item %q failed: %v", item.Link, err)
+		}
+		if summary != "" && !strings.Contains(summary, "TGFEED_SKIP") {
+			msg += "\n<blockquote>" + html.EscapeString(summary) + "</blockquote>"
+		}
+	}
+
+	inlineKeyboardButtons := []inlineKeyboardButton{}
+
+	// hnrss.org feeds have Hacker News entry URL set as GUID. Also send it
+	// because I often read comments on Hacker News entries.
+	if strings.HasPrefix(item.GUID, "https://news.ycombinator.com/item?id=") {
+		inlineKeyboardButtons = append(inlineKeyboardButtons, inlineKeyboardButton{
+			Text: "💬 Comments",
+			URL:  item.GUID,
+		})
+	}
+
+	if err := f.send(ctx, strings.TrimSpace(msg), func(args map[string]any) {
+		args["reply_markup"] = map[string]any{
+			"inline_keyboard": [][]inlineKeyboardButton{inlineKeyboardButtons},
+		}
+	}); err != nil {
+		f.logf("Sending %q to %q failed: %v", msg, f.chatID, err)
+	}
 }
+
+func (f *fetcher) summarize(ctx context.Context, text string) (string, error) {
+	const systemInstruction = `
+You are a friendly bot that fetches articles from RSS feeds and given
+descriptions of articles, YouTube videos and sometimes full articles themselves.
+
+Your task is to make a concise summary of article or video description in three
+sentences in English.
+
+If text only contains an image or something you can't summarize, return exactly
+"TGFEED_SKIP" (without quotes).
+`
+
+	params := gemini.GenerateContentParams{
+		Contents: []*gemini.Content{
+			{
+				Parts: []*gemini.Part{{Text: text}},
+			},
+		},
+		SystemInstruction: &gemini.Content{
+			Parts: []*gemini.Part{{Text: systemInstruction}},
+		},
+	}
+
+	resp, err := f.geminic.GenerateContent(ctx, params)
+	if err != nil {
+		return "", err
+	}
+	if len(resp.Candidates) == 0 {
+		return "", errors.New("no candidates provided")
+	}
+	candidate := resp.Candidates[0]
+	if candidate.Content == nil || len(candidate.Content.Parts) == 0 {
+		return "", errors.New("candidate.Content is nil or has no Parts")
+	}
+	return candidate.Content.Parts[0].Text, nil
+}
+
+// }}}
+
+// Telegram message sending {{{
 
 func (f *fetcher) send(ctx context.Context, message string, modify func(args map[string]any)) error {
 	args := map[string]any{
@@ -761,6 +796,10 @@ func (f *fetcher) send(ctx context.Context, message string, modify func(args map
 		modify(args)
 	}
 	return f.makeTelegramRequest(ctx, "sendMessage", args)
+}
+
+func (f *fetcher) errNotify(ctx context.Context, err error) error {
+	return f.send(ctx, fmt.Sprintf(f.errorTemplate, html.EscapeString(err.Error())), disableLinkPreview)
 }
 
 // https://core.telegram.org/bots/api#linkpreviewoptions
@@ -780,25 +819,6 @@ type inlineKeyboardButton struct {
 	URL  string `json:"url"`
 }
 
-func (f *fetcher) saveToGist(ctx context.Context) error {
-	state, err := json.MarshalIndent(f.state, "", "  ")
-	if err != nil {
-		return err
-	}
-	feeds, err := json.MarshalIndent(f.feeds, "", "  ")
-	if err != nil {
-		return err
-	}
-	ng := &gist.Gist{
-		Files: map[string]gist.File{
-			"feeds.json": {Content: string(feeds)},
-			"state.json": {Content: string(state)},
-		},
-	}
-	_, err = f.gistc.Update(ctx, f.gistID, ng)
-	return err
-}
-
 func (f *fetcher) makeTelegramRequest(ctx context.Context, method string, args any) error {
 	if _, err := request.MakeJSON[any](ctx, request.Params{
 		Method:     http.MethodPost,
@@ -810,3 +830,5 @@ func (f *fetcher) makeTelegramRequest(ctx context.Context, method string, args a
 	}
 	return nil
 }
+
+// }}}
