@@ -52,7 +52,7 @@ import (
 
 	"go.astrophena.name/tools/internal/api/gist"
 	"go.astrophena.name/tools/internal/cli"
-	"go.astrophena.name/tools/internal/envflag"
+	"go.astrophena.name/tools/internal/cli/envflag"
 	"go.astrophena.name/tools/internal/logger"
 	"go.astrophena.name/tools/internal/request"
 	"go.astrophena.name/tools/internal/version"
