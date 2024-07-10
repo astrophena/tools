@@ -153,7 +153,7 @@ func (f *fetcher) main(
 	flags.Usage = func() {
 		fmt.Fprintf(stderr, "Usage: tgfeed <flags...>\n\n")
 		fmt.Fprintf(stderr, strings.TrimSpace(helpDoc)+"\n\n")
-		fmt.Fprintf(stderr, "Available flags:\n")
+		fmt.Fprintf(stderr, "Available flags:\n\n")
 		flags.PrintDefaults()
 	}
 	flags.SetOutput(stderr)

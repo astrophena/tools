@@ -2,8 +2,6 @@
 
 package main
 
-import "go.astrophena.name/tools/internal/cli"
-
 const helpDoc = `
 Tgfeed fetches RSS feeds and sends new articles via Telegram.
 
@@ -64,5 +62,3 @@ URLs of feeds that have encountered errors during fetching. For example:
 
     $ tgfeed -feeds
 `
-
-func init() { cli.SetDescription(helpDoc) }
