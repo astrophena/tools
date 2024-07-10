@@ -71,30 +71,38 @@ const defaultErrorTemplate = `❌ Something went wrong:
 <pre><code>%v</code></pre>`
 
 func main() {
+	fs := cli.Default.Flags
+
 	var (
 		addr = envflag.Value(
 			"addr", "ADDR", "localhost:3000",
 			"Listen on `host:port`.",
+			fs, os.Getenv,
 		)
 		tgToken = envflag.Value(
 			"tg-token", "TG_TOKEN", "",
 			"Telegram Bot API `token`.",
+			fs, os.Getenv,
 		)
 		tgSecret = envflag.Value(
 			"tg-secret", "TG_SECRET", "",
 			"Secret `token` used to validate Telegram Bot API updates.",
+			fs, os.Getenv,
 		)
 		tgOwner = envflag.Value(
 			"tg-owner", "TG_OWNER", int64(0),
 			"Telegram user `ID` of the bot owner.",
+			fs, os.Getenv,
 		)
 		ghToken = envflag.Value(
 			"gh-token", "GH_TOKEN", "",
 			"GitHub API `token`.",
+			fs, os.Getenv,
 		)
 		gistID = envflag.Value(
 			"gist-id", "GIST_ID", "",
 			"GitHub Gist `ID` to load bot code from.",
+			fs, os.Getenv,
 		)
 	)
 	cli.HandleStartup()

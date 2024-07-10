@@ -11,7 +11,6 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"io/fs"
 	"log"
@@ -25,15 +24,15 @@ import (
 )
 
 func main() {
-	verbose := flag.Bool("verbose", false, "Print all log messages.")
+	verbose := cli.Flags.Bool("verbose", false, "Print all log messages.")
 	cli.SetArgsUsage("[flags...] <dir>")
 	cli.HandleStartup()
 
-	if len(flag.Args()) != 1 {
-		flag.Usage()
+	if len(cli.Args()) != 1 {
+		cli.Flags.Usage()
 		os.Exit(1)
 	}
-	dir := flag.Args()[0]
+	dir := cli.Args()[0]
 
 	if realdir, err := filepath.EvalSymlinks(dir); err == nil {
 		dir = realdir

@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"go.astrophena.name/tools/internal/testutil/txtar"
+	"go.astrophena.name/tools/internal/txtar"
 
 	"github.com/google/go-cmp/cmp"
 )

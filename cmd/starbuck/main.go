@@ -3,7 +3,6 @@ package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"log"
 	"net/http"
@@ -21,7 +20,7 @@ import (
 
 func main() {
 	var (
-		addr = flag.String("addr", "localhost:3000", "Listen on `host:port`.")
+		addr = cli.Flags.String("addr", "localhost:3000", "Listen on `host:port`.")
 	)
 	cli.HandleStartup()
 

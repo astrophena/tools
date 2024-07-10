@@ -4,7 +4,6 @@ package main
 import (
 	"bufio"
 	"bytes"
-	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -22,7 +21,7 @@ func main() {
 	cli.HandleStartup()
 
 	num := int64(10)
-	args := flag.Args()
+	args := cli.Flags.Args()
 	if len(args) > 0 {
 		var err error
 		num, err = strconv.ParseInt(args[0], 10, 64)

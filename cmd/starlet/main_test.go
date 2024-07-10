@@ -13,7 +13,7 @@ import (
 	"go.astrophena.name/tools/internal/api/gist"
 	"go.astrophena.name/tools/internal/request"
 	"go.astrophena.name/tools/internal/testutil"
-	"go.astrophena.name/tools/internal/testutil/txtar"
+	"go.astrophena.name/tools/internal/txtar"
 	"go.astrophena.name/tools/internal/web"
 )
 

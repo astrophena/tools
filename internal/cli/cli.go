@@ -1,73 +1,93 @@
-// Package cli contains common command-line flags and configuration
-// options.
+// Package cli contains common command-line flags and configuration options.
 package cli
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"strings"
-	"sync/atomic"
 
 	"go.astrophena.name/tools/internal/version"
 )
 
-var started atomic.Bool
-
-func ensureNotStarted() {
-	if started.Load() {
-		panic("cli.HandleStartup() was called previously")
-	}
+// Default represents the default application configuration.
+var Default = &App{
+	Name:  version.CmdName(),
+	Flags: Flags,
 }
 
-var opts struct {
-	description, argsUsage string
-}
+// Flags holds the command-line flags for the default application.
+var Flags = flag.NewFlagSet(version.CmdName(), flag.ExitOnError)
 
-// SetDescription sets the command description.
-//
-// Calling SetDescription after HandleStartup will panic.
-func SetDescription(description string) {
-	ensureNotStarted()
-	opts.description = description
-}
+// Args returns the non-flag command-line arguments.
+func Args() []string { return Default.Flags.Args() }
 
-// SetArgsUsage sets the command arguments help string.
-//
-// Calling SetArgsUsage after HandleStartup will panic.
-func SetArgsUsage(argsUsage string) {
-	ensureNotStarted()
-	opts.argsUsage = argsUsage
-}
+// SetDescription sets the description of the application.
+func SetDescription(description string) { Default.Description = description }
 
-// HandleStartup handles the command startup.
-//
-// All flags should be defined before HandleStartup is called.
+// SetArgsUsage sets the usage message for the command-line arguments.
+func SetArgsUsage(argsUsage string) { Default.ArgsUsage = argsUsage }
+
+// HandleStartup initializes the application and processes command-line arguments.
 func HandleStartup() {
-	started.Store(true)
-
-	log.SetFlags(0)
-
-	if opts.argsUsage == "" {
-		opts.argsUsage = "[flags...]"
-	}
-	flag.Usage = usage
-	showVersion := flag.Bool("version", false, "Show version.")
-	flag.Parse()
-
-	if *showVersion {
-		io.WriteString(os.Stderr, version.Version().String())
+	if err := Default.HandleStartup(os.Args[1:], os.Stdout, os.Stderr); errors.Is(err, errExitVersion) {
 		os.Exit(0)
+	} else if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
 	}
 }
 
-func usage() {
-	fmt.Fprintf(os.Stderr, "Usage: %s %s\n\n", version.CmdName(), opts.argsUsage)
-	if opts.description != "" {
-		fmt.Fprintf(os.Stderr, "%s\n\n", strings.TrimSpace(opts.description))
+// App represents a command-line application.
+type App struct {
+	Name        string        // Name of the application.
+	Description string        // Description of the application.
+	ArgsUsage   string        // Usage message for the command-line arguments.
+	Flags       *flag.FlagSet // Command-line flags.
+}
+
+// errExitVersion is an error indicating the application should exit after showing version.
+var errExitVersion = errors.New("version flag exit")
+
+// HandleStartup handles the command startup. All exported fields shouldn't be
+// modified after HandleStartup is called.
+//
+// It sets up the command-line flags, parses the arguments, and handles the
+// version flag if specified.
+func (a *App) HandleStartup(args []string, stdout, stderr io.Writer) error {
+	if a.Name == "" {
+		a.Name = version.CmdName()
+	}
+	if a.ArgsUsage == "" {
+		a.ArgsUsage = "[flags...]"
+	}
+
+	var showVersion bool
+	if a.Flags.Lookup("version") == nil {
+		a.Flags.BoolVar(&showVersion, "version", false, "Show version.")
+	}
+
+	a.Flags.Usage = a.usage
+	a.Flags.SetOutput(stderr)
+	if err := a.Flags.Parse(args); err != nil {
+		return err
+	}
+	if showVersion {
+		fmt.Fprint(stderr, version.Version())
+		return errExitVersion
+	}
+
+	return nil
+}
+
+// usage prints the usage message for the application.
+func (a *App) usage() {
+	fmt.Fprintf(os.Stderr, "Usage: %s %s\n\n", a.Name, a.ArgsUsage)
+	if a.Description != "" {
+		fmt.Fprintf(os.Stderr, "%s\n\n", strings.TrimSpace(a.Description))
 	}
 	fmt.Fprint(os.Stderr, "Available flags:\n\n")
-	flag.PrintDefaults()
+	a.Flags.PrintDefaults()
 }

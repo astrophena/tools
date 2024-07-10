@@ -3,7 +3,6 @@ package main
 
 import (
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"io/fs"
@@ -17,8 +16,8 @@ import (
 
 func main() {
 	var (
-		dir   = flag.String("dir", ".", "Modify files in `path`.")
-		start = flag.Int("start", 1, "Start from `number`.")
+		dir   = cli.Flags.String("dir", ".", "Modify files in `path`.")
+		start = cli.Flags.Int("start", 1, "Start from `number`.")
 	)
 	cli.HandleStartup()
 

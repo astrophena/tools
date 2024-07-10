@@ -86,6 +86,7 @@ import (
 
 	"go.astrophena.name/tools/internal/api/gemini"
 	"go.astrophena.name/tools/internal/api/gist"
+	"go.astrophena.name/tools/internal/cli"
 	"go.astrophena.name/tools/internal/logger"
 	"go.astrophena.name/tools/internal/request"
 	"go.astrophena.name/tools/internal/syncutil"
@@ -149,23 +150,20 @@ func (f *fetcher) main(
 	f.logf = logger.Printf
 
 	// Define and parse flags.
-	flags := flag.NewFlagSet("tgfeed", flag.ContinueOnError)
-	flags.Usage = func() {
-		fmt.Fprintf(stderr, "Usage: tgfeed <flags...>\n\n")
-		fmt.Fprintf(stderr, strings.TrimSpace(helpDoc)+"\n\n")
-		fmt.Fprintf(stderr, "Available flags:\n\n")
-		flags.PrintDefaults()
+	a := &cli.App{
+		Name:        "tgfeed",
+		Description: helpDoc,
+		Flags:       flag.NewFlagSet("tgfeed", flag.ContinueOnError),
 	}
-	flags.SetOutput(stderr)
 	var (
-		feeds       = flags.Bool("feeds", false, "List available feeds.")
-		reenable    = flags.String("reenable", "", "Reenable disabled `feed`.")
-		run         = flags.Bool("run", false, "Fetch feeds and send updates.")
-		subscribe   = flags.String("subscribe", "", "Subscribe to a `feed`.")
-		unsubscribe = flags.String("unsubscribe", "", "Unsubscribe from a `feed`.")
-		showVersion = flags.Bool("version", false, "Show version.")
+		feeds       = a.Flags.Bool("feeds", false, "List available feeds.")
+		reenable    = a.Flags.String("reenable", "", "Reenable disabled `feed`.")
+		run         = a.Flags.Bool("run", false, "Fetch feeds and send updates.")
+		subscribe   = a.Flags.String("subscribe", "", "Subscribe to a `feed`.")
+		unsubscribe = a.Flags.String("unsubscribe", "", "Unsubscribe from a `feed`.")
+		showVersion = a.Flags.Bool("version", false, "Show version.")
 	)
-	if err := flags.Parse(args); err != nil {
+	if err := a.HandleStartup(args, os.Stdout, os.Stderr); err != nil {
 		return err
 	}
 
@@ -200,7 +198,7 @@ func (f *fetcher) main(
 		io.WriteString(stderr, version.Version().String())
 		return nil
 	default:
-		flags.Usage()
+		a.Flags.Usage()
 		return errUnknownMode
 	}
 }

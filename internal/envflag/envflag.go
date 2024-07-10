@@ -4,7 +4,6 @@ package envflag
 
 import (
 	"flag"
-	"os"
 	"strconv"
 )
 
@@ -18,10 +17,13 @@ type Type interface {
 //
 // If the environment variable specified by envName is set, it overrides the
 // flag's default value.
-func Value[T Type](name, envName string, value T, usage string) *T {
+func Value[T Type](
+	name, envName string, value T, usage string,
+	fs *flag.FlagSet, getenv func(string) string,
+) *T {
 	var result T
 
-	envValue := os.Getenv(envName)
+	envValue := getenv(envName)
 	if envValue != "" {
 		// Try to parse the environment variable into the appropriate type.
 		switch any(value).(type) {
@@ -60,7 +62,7 @@ func Value[T Type](name, envName string, value T, usage string) *T {
 
 	usage += " Can be overridden by " + envName + " environment variable."
 
-	flag.Var(newFlagValue(result, &result), name, usage)
+	fs.Var(newFlagValue(result, &result), name, usage)
 	return &result
 }
 

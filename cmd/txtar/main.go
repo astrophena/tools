@@ -23,12 +23,12 @@ import (
 	"os"
 
 	"go.astrophena.name/tools/internal/cli"
-	"go.astrophena.name/tools/internal/testutil/txtar"
+	"go.astrophena.name/tools/internal/txtar"
 )
 
 func main() {
 	var (
-		createFlag = flag.Bool("c", false, "Create txtar archive instead of extracting.")
+		createFlag = cli.Flags.Bool("c", false, "Create txtar archive instead of extracting.")
 	)
 	cli.SetArgsUsage("[flags...] <archive> <directory>")
 	cli.HandleStartup()

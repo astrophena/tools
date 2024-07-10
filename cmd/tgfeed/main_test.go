@@ -19,7 +19,7 @@ import (
 
 	"go.astrophena.name/tools/internal/api/gist"
 	"go.astrophena.name/tools/internal/testutil"
-	"go.astrophena.name/tools/internal/testutil/txtar"
+	"go.astrophena.name/tools/internal/txtar"
 )
 
 // Typical Telegram Bot API token, copied from docs.
