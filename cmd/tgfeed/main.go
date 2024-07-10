@@ -80,14 +80,14 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	"syscall"
 	"time"
 
 	"go.astrophena.name/tools/internal/api/gemini"
 	"go.astrophena.name/tools/internal/api/gist"
-	"go.astrophena.name/tools/internal/cli"
+	"go.astrophena.name/tools/internal/logger"
 	"go.astrophena.name/tools/internal/request"
 	"go.astrophena.name/tools/internal/syncutil"
+	"go.astrophena.name/tools/internal/version"
 
 	"github.com/mmcdole/gofeed"
 )
@@ -101,69 +101,105 @@ const (
 	concurrencyLimit = 10
 )
 
-func main() {
-	var (
-		feeds       = flag.Bool("feeds", false, "List subscribed feeds.")
-		reenable    = flag.String("reenable", "", "Reenable previously failing and disabled `feed`.")
-		run         = flag.Bool("run", false, "Fetch feeds and send updates.")
-		subscribe   = flag.String("subscribe", "", "Subscribe to a `feed`.")
-		unsubscribe = flag.String("unsubscribe", "", "Unsubscribe from a `feed`.")
-	)
-	cli.HandleStartup()
+// Some types of errors that can happen during tgfeed execution.
+var (
+	errUnknownMode    = errors.New("unknown mode")
+	errAlreadyRunning = errors.New("already running")
+)
 
-	f := &fetcher{
-		httpc: &http.Client{
-			Timeout: 10 * time.Second,
-		},
-		gistID:              os.Getenv("GIST_ID"),
-		geminiKey:           os.Getenv("GEMINI_API_KEY"),
-		ghToken:             os.Getenv("GITHUB_TOKEN"),
-		chatID:              os.Getenv("CHAT_ID"),
-		tgToken:             os.Getenv("TELEGRAM_TOKEN"),
-		statsCollectorURL:   os.Getenv("STATS_COLLECTOR_URL"),
-		statsCollectorToken: os.Getenv("STATS_COLLECTOR_TOKEN"),
+func main() {
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer cancel()
+	f := new(fetcher)
+	if err := f.main(ctx, os.Args[1:], os.Getenv, os.Stdout, os.Stderr); err != nil {
+		if isPrintableError(err) {
+			fmt.Fprintln(os.Stderr, err)
+		}
+		os.Exit(1)
 	}
+}
+
+func isPrintableError(err error) bool {
+	if errors.Is(err, flag.ErrHelp) {
+		return false
+	}
+	if errors.Is(err, errUnknownMode) {
+		return false
+	}
+	return true
+}
+
+func (f *fetcher) main(
+	ctx context.Context,
+	args []string,
+	getenv func(string) string,
+	stdout, stderr io.Writer,
+) error {
+	// Check if this fetcher is already running.
+	if f.running.Load() {
+		return errAlreadyRunning
+	}
+	f.running.Store(true)
+	defer f.running.Store(false)
+
+	// Initialize logger.
+	logger := log.New(stderr, "", 0)
+	f.logf = logger.Printf
+
+	// Define and parse flags.
+	flags := flag.NewFlagSet("tgfeed", flag.ContinueOnError)
+	flags.Usage = func() {
+		fmt.Fprintf(stderr, "Usage: tgfeed <flags...>\n\n")
+		fmt.Fprintf(stderr, strings.TrimSpace(helpDoc)+"\n\n")
+		fmt.Fprintf(stderr, "Available flags:\n")
+		flags.PrintDefaults()
+	}
+	flags.SetOutput(stderr)
+	var (
+		feeds       = flags.Bool("feeds", false, "List available feeds.")
+		reenable    = flags.String("reenable", "", "Reenable disabled `feed`.")
+		run         = flags.Bool("run", false, "Fetch feeds and send updates.")
+		subscribe   = flags.String("subscribe", "", "Subscribe to a `feed`.")
+		unsubscribe = flags.String("unsubscribe", "", "Unsubscribe from a `feed`.")
+		showVersion = flags.Bool("version", false, "Show version.")
+	)
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+
+	// Load configuration from environment variables.
+	f.chatID = getenv("CHAT_ID")
+	f.geminiKey = getenv("GEMINI_API_KEY")
+	f.ghToken = getenv("GITHUB_TOKEN")
+	f.gistID = getenv("GIST_ID")
+	f.statsCollectorToken = getenv("STATS_COLLECTOR_TOKEN")
+	f.statsCollectorURL = getenv("STATS_COLLECTOR_URL")
+	f.tgToken = getenv("TELEGRAM_TOKEN")
+
+	// Initialize internal state.
 	f.initOnce.Do(f.doInit)
 
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
-	defer cancel()
-
-	if f.geminiKey != "" {
-		f.geminic = &gemini.Client{
-			APIKey:     f.geminiKey,
-			Model:      "gemini-1.5-flash-latest",
-			HTTPClient: f.httpc,
-			Scrubber:   f.scrubber,
-		}
-	}
-
+	// Choose a mode based on passed flags and run it.
 	switch {
 	case *feeds:
-		if err := f.listFeeds(ctx, os.Stdout); err != nil {
-			log.Fatal(err)
-		}
-	case *reenable != "":
-		if err := f.reenable(ctx, *reenable); err != nil {
-			log.Fatal(err)
-		}
+		return f.listFeeds(ctx, stdout)
 	case *run:
 		if err := f.run(ctx); err != nil {
-			if err := f.send(ctx, fmt.Sprintf(f.errorTemplate, html.EscapeString(err.Error())), disableLinkPreview); err != nil {
-				log.Printf("notifying about an error failed: %v", err)
-			}
-			log.Fatal(err)
+			return f.errNotify(ctx, err)
 		}
+		return nil
 	case *subscribe != "":
-		if err := f.subscribe(ctx, *subscribe); err != nil {
-			log.Fatal(err)
-		}
+		return f.subscribe(ctx, *subscribe)
+	case *reenable != "":
+		return f.reenable(ctx, *reenable)
 	case *unsubscribe != "":
-		if err := f.unsubscribe(ctx, *unsubscribe); err != nil {
-			log.Fatal(err)
-		}
+		return f.unsubscribe(ctx, *unsubscribe)
+	case *showVersion:
+		io.WriteString(stderr, version.Version().String())
+		return nil
 	default:
-		flag.Usage()
-		os.Exit(1)
+		flags.Usage()
+		return errUnknownMode
 	}
 }
 
@@ -246,11 +282,12 @@ func (f *fetcher) unsubscribe(ctx context.Context, url string) error {
 }
 
 type fetcher struct {
-	initOnce  sync.Once
-	lockedRun atomic.Bool
+	running  atomic.Bool
+	initOnce sync.Once
 
-	httpc    *http.Client
 	fp       *gofeed.Parser
+	httpc    *http.Client
+	logf     logger.Logf
 	scrubber *strings.Replacer
 
 	gistID  string
@@ -350,6 +387,23 @@ func (f *fetcher) reportStats(ctx context.Context) error {
 }
 
 func (f *fetcher) doInit() {
+	if f.logf == nil {
+		panic("f.logf is nil")
+	}
+
+	if f.httpc == nil {
+		f.httpc = request.DefaultClient
+	}
+
+	if f.geminiKey != "" {
+		f.geminic = &gemini.Client{
+			APIKey:     f.geminiKey,
+			Model:      "gemini-1.5-flash-latest",
+			HTTPClient: f.httpc,
+			Scrubber:   f.scrubber,
+		}
+	}
+
 	f.fp = gofeed.NewParser()
 	f.fp.UserAgent = request.UserAgent()
 	f.fp.Client = f.httpc
@@ -378,11 +432,11 @@ func (f *fetcher) doInit() {
 func (f *fetcher) run(ctx context.Context) error {
 	f.initOnce.Do(f.doInit)
 
-	if f.lockedRun.Load() {
+	if f.running.Load() {
 		return errors.New("already running")
 	}
-	f.lockedRun.Store(true)
-	defer f.lockedRun.Store(false)
+	f.running.Store(true)
+	defer f.running.Store(false)
 
 	// Start with empty stats for every run.
 	f.stats = &stats{
@@ -447,7 +501,7 @@ func (f *fetcher) run(ctx context.Context) error {
 
 	if f.statsCollectorURL != "" && f.statsCollectorToken != "" {
 		if err := f.reportStats(ctx); err != nil {
-			log.Printf("failed to report stats: %v", err)
+			f.logf("Failed to report stats: %v", err)
 		}
 	}
 
@@ -515,7 +569,7 @@ func (f *fetcher) sendUpdate(ctx context.Context, item *gofeed.Item) {
 	if f.geminic != nil && item.Description != "" {
 		summary, err := f.summarize(ctx, item.Description)
 		if err != nil {
-			log.Printf("sendUpdate: summarizing item %q failed: %v", item.Link, err)
+			f.logf("sendUpdate: summarizing item %q failed: %v", item.Link, err)
 		}
 		if summary != "" && !strings.Contains(summary, "TGFEED_SKIP") {
 			msg += "\n<blockquote>" + html.EscapeString(summary) + "</blockquote>"
@@ -538,7 +592,7 @@ func (f *fetcher) sendUpdate(ctx context.Context, item *gofeed.Item) {
 			"inline_keyboard": [][]inlineKeyboardButton{inlineKeyboardButtons},
 		}
 	}); err != nil {
-		log.Printf("sending %q to %q failed: %v", msg, f.chatID, err)
+		f.logf("Sending %q to %q failed: %v", msg, f.chatID, err)
 	}
 }
 
@@ -687,10 +741,14 @@ func (f *fetcher) handleFetchFailure(ctx context.Context, state *feedState, url 
 	if state.ErrorCount >= errorThreshold {
 		err = fmt.Errorf("fetching feed %q failed after %d previous attempts: %v; feed was disabled, to reenable it run 'tgfeed -reenable %q'", url, state.ErrorCount, err, url)
 		state.Disabled = true
-		if err := f.send(ctx, fmt.Sprintf(f.errorTemplate, html.EscapeString(err.Error())), disableLinkPreview); err != nil {
-			log.Printf("notifying about a disabled feed: %v", err)
+		if err := f.errNotify(ctx, err); err != nil {
+			f.logf("Notifying about a disabled feed failed: %v", err)
 		}
 	}
+}
+
+func (f *fetcher) errNotify(ctx context.Context, err error) error {
+	return f.send(ctx, fmt.Sprintf(f.errorTemplate, html.EscapeString(err.Error())), disableLinkPreview)
 }
 
 func (f *fetcher) send(ctx context.Context, message string, modify func(args map[string]any)) error {
