@@ -19,7 +19,7 @@ var Default = &App{
 }
 
 // Flags holds the command-line flags for the default application.
-var Flags = flag.NewFlagSet(version.CmdName(), flag.ExitOnError)
+var Flags = flag.NewFlagSet(version.CmdName(), flag.ContinueOnError)
 
 // Args returns the non-flag command-line arguments.
 func Args() []string { return Default.Flags.Args() }
