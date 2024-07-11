@@ -315,14 +315,6 @@ func (f *fetcher) listFeeds(ctx context.Context, w io.Writer) error { // {{{
 } // }}}
 
 func (f *fetcher) run(ctx context.Context) error { // {{{
-	f.initOnce.Do(f.doInit)
-
-	if f.running.Load() {
-		return errors.New("already running")
-	}
-	f.running.Store(true)
-	defer f.running.Store(false)
-
 	// Start with empty stats for every run.
 	f.stats = &stats{
 		StartTime: time.Now(),
