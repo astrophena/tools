@@ -11,7 +11,10 @@
 package main
 
 import (
+	"errors"
+	"flag"
 	"fmt"
+	"io"
 	"io/fs"
 	"log"
 	"os"
@@ -24,25 +27,52 @@ import (
 )
 
 func main() {
-	verbose := cli.Flags.Bool("verbose", false, "Print all log messages.")
-	cli.SetArgsUsage("[flags...] <dir>")
-	cli.HandleStartup()
-
-	if len(cli.Args()) != 1 {
-		cli.Flags.Usage()
+	if err := run(os.Args[1:], os.Stdout, os.Stderr); err != nil {
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	dir := cli.Args()[0]
+
+}
+
+var errDirectoryRequired = errors.New("directory is required")
+
+func run(args []string, stdout, stderr io.Writer) error {
+	// Define and parse flags.
+	a := &cli.App{
+		Name:        "audiorenamer",
+		Description: helpDoc,
+		ArgsUsage:   "[flags...] <dir>",
+		Flags:       flag.NewFlagSet("audiorenamer", flag.ContinueOnError),
+	}
+	var (
+		dryRun  = a.Flags.Bool("dry", false, "Print what will be done, but don't do anything.")
+		verbose = a.Flags.Bool("verbose", false, "Print all log messages.")
+	)
+	if err := a.HandleStartup(args, stdout, stderr); err != nil {
+		if errors.Is(err, cli.ErrExitVersion) {
+			return nil
+		}
+		return err
+	}
+
+	if len(a.Flags.Args()) != 1 {
+		return errDirectoryRequired
+	}
+	dir := a.Flags.Args()[0]
 
 	if realdir, err := filepath.EvalSymlinks(dir); err == nil {
 		dir = realdir
 	}
 
+	logf := log.New(stderr, "", 0).Printf
 	vlog := func(format string, args ...any) {
-		if !*verbose {
+		if !*dryRun {
+			if !*verbose {
+				return
+			}
 			return
 		}
-		log.Printf(format, args...)
+		logf(format, args...)
 	}
 
 	var processed, existing, renamed int
@@ -83,7 +113,7 @@ func main() {
 		// Strip slashes from the title to make it a valid filename.
 		title = strings.ReplaceAll(title, "/", "")
 
-		newname := filepath.Join(dir, fmt.Sprintf("%d. %s.mp3", num, title))
+		newname := filepath.Join(dir, fmt.Sprintf("%d. %s%s", num, title, filepath.Ext(path)))
 
 		if path == newname {
 			vlog("Already exists: %q, no need to rename.", path)
@@ -92,15 +122,19 @@ func main() {
 		}
 
 		vlog("Renaming: %q -> %q.", path, newname)
-		if err := os.Rename(path, newname); err != nil {
-			return err
+		if !*dryRun {
+			if err := os.Rename(path, newname); err != nil {
+				return err
+			}
 		}
 		renamed++
 
 		return nil
 	}); err != nil {
-		log.Fatal(err)
+		return err
 	}
 
-	log.Printf("%d processed: %d renamed, %d existing.", processed, renamed, existing)
+	logf("%d processed: %d renamed, %d existing.", processed, renamed, existing)
+
+	return nil
 }

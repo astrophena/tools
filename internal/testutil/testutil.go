@@ -2,6 +2,7 @@
 package testutil
 
 import (
+	stdcmp "cmp"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -18,6 +19,7 @@ import (
 
 // UnmarshalJSON parses the JSON data into v, failing the test in case of failure.
 func UnmarshalJSON[V any](t *testing.T, b []byte) V {
+	t.Helper()
 	var v V
 	if err := json.Unmarshal(b, &v); err != nil {
 		t.Fatal(err)
@@ -27,6 +29,7 @@ func UnmarshalJSON[V any](t *testing.T, b []byte) V {
 
 // AssertContains fails the test if v is not present in s.
 func AssertContains[S ~[]V, V comparable](t *testing.T, s S, v V) {
+	t.Helper()
 	if !slices.Contains(s, v) {
 		t.Fatalf("%v is not present in %v", v, s)
 	}
@@ -34,6 +37,7 @@ func AssertContains[S ~[]V, V comparable](t *testing.T, s S, v V) {
 
 // AssertNotContains fails the test if v is present in s.
 func AssertNotContains[S ~[]V, V comparable](t *testing.T, s S, v V) {
+	t.Helper()
 	if slices.Contains(s, v) {
 		t.Fatalf("%v is present in %v", v, s)
 	}
@@ -41,10 +45,10 @@ func AssertNotContains[S ~[]V, V comparable](t *testing.T, s S, v V) {
 
 // AssertEqual compares two values and if they differ, fails the test and
 // prints the difference between them.
-func AssertEqual(t *testing.T, got, want any) {
+func AssertEqual(t *testing.T, got, want any, errorMessages ...string) {
 	t.Helper()
 	if diff := cmp.Diff(want, got); diff != "" {
-		t.Fatalf("(-got +want):\n%s", diff)
+		t.Fatalf("%s: (-got +want):\n%s", stdcmp.Or(strings.Join(errorMessages, " "), "not equal"), diff)
 	}
 }
 
@@ -99,6 +103,7 @@ func RunGolden(t *testing.T, glob string, f func(t *testing.T, match string) []b
 
 // ExtractTxtar extracts a txtar archive to dir.
 func ExtractTxtar(t *testing.T, ar *txtar.Archive, dir string) {
+	t.Helper()
 	if err := txtar.Extract(ar, dir); err != nil {
 		t.Fatal(err)
 	}
@@ -106,6 +111,7 @@ func ExtractTxtar(t *testing.T, ar *txtar.Archive, dir string) {
 
 // BuildTxtar constructs a txtar archive from contents of dir.
 func BuildTxtar(t *testing.T, dir string) []byte {
+	t.Helper()
 	ar, err := txtar.FromDir(dir)
 	if err != nil {
 		t.Fatal(err)
