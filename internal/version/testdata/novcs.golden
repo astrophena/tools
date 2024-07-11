@@ -1,1 +1,2 @@
-starlet/devel (go1.22.3, android/arm64)
+starlet devel
+built with go1.22.3, android/arm64

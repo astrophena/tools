@@ -32,7 +32,7 @@ func SetArgsUsage(argsUsage string) { Default.ArgsUsage = argsUsage }
 
 // HandleStartup initializes the application and processes command-line arguments.
 func HandleStartup() {
-	if err := Default.HandleStartup(os.Args[1:], os.Stdout, os.Stderr); errors.Is(err, errExitVersion) {
+	if err := Default.HandleStartup(os.Args[1:], os.Stdout, os.Stderr); errors.Is(err, ErrExitVersion) {
 		os.Exit(0)
 	} else if err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -48,8 +48,8 @@ type App struct {
 	Flags       *flag.FlagSet // Command-line flags.
 }
 
-// errExitVersion is an error indicating the application should exit after showing version.
-var errExitVersion = errors.New("version flag exit")
+// ErrExitVersion is an error indicating the application should exit after showing version.
+var ErrExitVersion = errors.New("version flag exit")
 
 // HandleStartup handles the command startup. All exported fields shouldn't be
 // modified after HandleStartup is called.
@@ -69,25 +69,27 @@ func (a *App) HandleStartup(args []string, stdout, stderr io.Writer) error {
 		a.Flags.BoolVar(&showVersion, "version", false, "Show version.")
 	}
 
-	a.Flags.Usage = a.usage
+	a.Flags.Usage = a.usage(stderr)
 	a.Flags.SetOutput(stderr)
 	if err := a.Flags.Parse(args); err != nil {
 		return err
 	}
 	if showVersion {
 		fmt.Fprint(stderr, version.Version())
-		return errExitVersion
+		return ErrExitVersion
 	}
 
 	return nil
 }
 
 // usage prints the usage message for the application.
-func (a *App) usage() {
-	fmt.Fprintf(os.Stderr, "Usage: %s %s\n\n", a.Name, a.ArgsUsage)
-	if a.Description != "" {
-		fmt.Fprintf(os.Stderr, "%s\n\n", strings.TrimSpace(a.Description))
+func (a *App) usage(stderr io.Writer) func() {
+	return func() {
+		fmt.Fprintf(stderr, "Usage: %s %s\n\n", a.Name, a.ArgsUsage)
+		if a.Description != "" {
+			fmt.Fprintf(stderr, "%s\n\n", strings.TrimSpace(a.Description))
+		}
+		fmt.Fprint(stderr, "Available flags:\n\n")
+		a.Flags.PrintDefaults()
 	}
-	fmt.Fprint(os.Stderr, "Available flags:\n\n")
-	a.Flags.PrintDefaults()
 }

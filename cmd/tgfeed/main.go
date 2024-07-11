@@ -64,6 +64,7 @@ URLs of feeds that have encountered errors during fetching. For example:
 package main
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -90,7 +91,6 @@ import (
 	"go.astrophena.name/tools/internal/logger"
 	"go.astrophena.name/tools/internal/request"
 	"go.astrophena.name/tools/internal/syncutil"
-	"go.astrophena.name/tools/internal/version"
 
 	"github.com/mmcdole/gofeed"
 )
@@ -108,6 +108,8 @@ const (
 var (
 	errUnknownMode    = errors.New("unknown mode")
 	errAlreadyRunning = errors.New("already running")
+	errDuplicateFeed  = errors.New("already in list of feeds")
+	errNoFeed         = errors.New("no such feed")
 )
 
 func main() {
@@ -161,20 +163,22 @@ func (f *fetcher) main(
 		run         = a.Flags.Bool("run", false, "Fetch feeds and send updates.")
 		subscribe   = a.Flags.String("subscribe", "", "Subscribe to a `feed`.")
 		unsubscribe = a.Flags.String("unsubscribe", "", "Unsubscribe from a `feed`.")
-		showVersion = a.Flags.Bool("version", false, "Show version.")
 	)
-	if err := a.HandleStartup(args, os.Stdout, os.Stderr); err != nil {
+	if err := a.HandleStartup(args, stdout, stderr); err != nil {
+		if errors.Is(err, cli.ErrExitVersion) {
+			return nil
+		}
 		return err
 	}
 
 	// Load configuration from environment variables.
-	f.chatID = getenv("CHAT_ID")
-	f.geminiKey = getenv("GEMINI_API_KEY")
-	f.ghToken = getenv("GITHUB_TOKEN")
-	f.gistID = getenv("GIST_ID")
-	f.statsCollectorToken = getenv("STATS_COLLECTOR_TOKEN")
-	f.statsCollectorURL = getenv("STATS_COLLECTOR_URL")
-	f.tgToken = getenv("TELEGRAM_TOKEN")
+	f.chatID = cmp.Or(f.chatID, getenv("CHAT_ID"))
+	f.geminiKey = cmp.Or(f.geminiKey, getenv("GEMINI_API_KEY"))
+	f.ghToken = cmp.Or(f.ghToken, getenv("GITHUB_TOKEN"))
+	f.gistID = cmp.Or(f.gistID, getenv("GIST_ID"))
+	f.statsCollectorToken = cmp.Or(f.statsCollectorToken, getenv("STATS_COLLECTOR_TOKEN"))
+	f.statsCollectorURL = cmp.Or(f.statsCollectorURL, getenv("STATS_COLLECTOR_URL"))
+	f.tgToken = cmp.Or(f.tgToken, getenv("TELEGRAM_TOKEN"))
 
 	// Initialize internal state.
 	f.initOnce.Do(f.doInit)
@@ -194,9 +198,6 @@ func (f *fetcher) main(
 		return f.reenable(ctx, *reenable)
 	case *unsubscribe != "":
 		return f.unsubscribe(ctx, *unsubscribe)
-	case *showVersion:
-		io.WriteString(stderr, version.Version().String())
-		return nil
 	default:
 		a.Flags.Usage()
 		return errUnknownMode
@@ -398,7 +399,7 @@ func (f *fetcher) subscribe(ctx context.Context, url string) error { // {{{
 		return err
 	}
 	if slices.Contains(f.feeds, url) {
-		return fmt.Errorf("%q is already in list of feeds", url)
+		return fmt.Errorf("%q: %w", url, errDuplicateFeed)
 	}
 	f.feeds = append(f.feeds, url)
 	return f.saveToGist(ctx)
@@ -411,7 +412,7 @@ func (f *fetcher) reenable(ctx context.Context, url string) error { // {{{
 
 	state, ok := f.getState(url)
 	if !ok {
-		return fmt.Errorf("feed %q doesn't exist in state", url)
+		return fmt.Errorf("%q: %w", url, errNoFeed)
 	}
 
 	state.Disabled = false
@@ -426,7 +427,7 @@ func (f *fetcher) unsubscribe(ctx context.Context, url string) error { // {{{
 		return err
 	}
 	if !slices.Contains(f.feeds, url) {
-		return fmt.Errorf("%q isn't in list of feeds", url)
+		return fmt.Errorf("%q: %w", url, errNoFeed)
 	}
 	f.feeds = slices.DeleteFunc(f.feeds, func(sub string) bool {
 		return sub == url

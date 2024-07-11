@@ -1,10 +1,15 @@
 -- feeds.json --
 [
-  "https://example.com/feed.xml"
+  "https://example.com/feed.xml",
+  "https://example.com/disabled.xml"
 ]
 -- state.json --
 {
   "https://example.com/feed.xml": {
     "last_updated": "0001-01-01T00:00:00Z"
+  },
+  "https://example.com/disabled.xml": {
+    "last_updated": "0001-01-01T00:00:00Z",
+    "disabled": true
   }
 }

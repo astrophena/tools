@@ -120,5 +120,10 @@ func MakeJSON[Response any](ctx context.Context, p Params) (Response, error) {
 // UserAgent returns a user agent string by combining the version information
 // and a special URL leading to bot information page.
 func UserAgent() string {
-	return strings.Replace(version.Version().Short(), " ", "/", 1) + " (+https://astrophena.name/bleep-bloop)"
+	i := version.Version()
+	ver := i.Version
+	if i.Version == "devel" && i.Commit != "" {
+		ver = i.Commit
+	}
+	return i.Name + "/" + ver + " (+https://astrophena.name/bleep-bloop)"
 }

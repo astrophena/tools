@@ -5,6 +5,7 @@ import (
 	"context"
 	_ "embed"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"html"
@@ -35,6 +36,120 @@ var update = flag.Bool("update", false, "update golden files in testdata")
 func TestMain(m *testing.M) {
 	flag.Parse()
 	os.Exit(m.Run())
+}
+
+func TestFetcherMain(t *testing.T) {
+	t.Parallel()
+
+	cases := map[string]struct {
+		args               []string
+		env                map[string]string
+		wantErr            error
+		wantNothingPrinted bool
+		wantInStdout       string
+		wantInStderr       string
+		checkFunc          func(t *testing.T, f *fetcher)
+	}{
+		"prints usage without flags": {
+			args:         []string{},
+			wantErr:      errUnknownMode,
+			wantInStderr: "Usage: tgfeed",
+		},
+		"run": {
+			args:               []string{"-run"},
+			wantNothingPrinted: true,
+		},
+		"subscribe": {
+			args:               []string{"-subscribe", "https://example.com/new.xml"},
+			wantNothingPrinted: true,
+			checkFunc: func(t *testing.T, f *fetcher) {
+				testutil.AssertContains(t, f.feeds, "https://example.com/new.xml")
+			},
+		},
+		"subscribe to already subscribed feed": {
+			args:    []string{"-subscribe", "https://example.com/feed.xml"},
+			wantErr: errDuplicateFeed,
+		},
+		"reenable disabled feed": {
+			args:               []string{"-reenable", "https://example.com/disabled.xml"},
+			wantNothingPrinted: true,
+			checkFunc: func(t *testing.T, f *fetcher) {
+				testutil.AssertEqual(t, f.state["https://example.com/disabled.xml"].Disabled, false)
+			},
+		},
+		"reenable non-existent feed": {
+			args:    []string{"-reenable", "https://example.com/non-existent.xml"},
+			wantErr: errNoFeed,
+		},
+		"unsubscribe": {
+			args:               []string{"-unsubscribe", "https://example.com/feed.xml"},
+			wantNothingPrinted: true,
+			checkFunc: func(t *testing.T, f *fetcher) {
+				testutil.AssertNotContains(t, f.feeds, "https://example.com/feed.xml")
+			},
+		},
+		"unsubscribe from non-existent feed": {
+			args:    []string{"-unsubscribe", "https://example.com/non-existent.xml"},
+			wantErr: errNoFeed,
+		},
+		"version": {
+			args: []string{"-version"},
+		},
+	}
+
+	getenvFunc := func(env map[string]string) func(string) string {
+		return func(name string) string {
+			if env == nil {
+				return ""
+			}
+			return env[name]
+		}
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			var (
+				f              = testFetcher(t, testMux(t, nil))
+				stdout, stderr bytes.Buffer
+			)
+
+			err := f.main(context.Background(), tc.args, getenvFunc(tc.env), &stdout, &stderr)
+
+			// Don't use && because we want to trap all cases where err is
+			// nil.
+			if err == nil {
+				if tc.wantErr != nil {
+					t.Fatalf("must fail with error: %v", tc.wantErr)
+				}
+			}
+
+			if err != nil && !errors.Is(err, tc.wantErr) {
+				t.Fatalf("got error: %v", err)
+			}
+
+			if tc.wantNothingPrinted {
+				if stdout.String() != "" {
+					t.Errorf("stdout must be empty, got: %q", stdout.String())
+				}
+				if stderr.String() != "" {
+					t.Errorf("stderr must be empty, got: %q", stderr.String())
+				}
+			}
+
+			if tc.wantInStdout != "" && !strings.Contains(stdout.String(), tc.wantInStdout) {
+				t.Errorf("stdout must contain %q, got: %q", tc.wantInStdout, stdout.String())
+			}
+			if tc.wantInStderr != "" && !strings.Contains(stderr.String(), tc.wantInStderr) {
+				t.Errorf("stderr must contain %q, got: %q", tc.wantInStderr, stderr.String())
+			}
+
+			if tc.checkFunc != nil {
+				tc.checkFunc(t, f)
+			}
+		})
+	}
 }
 
 func TestListFeeds(t *testing.T) {
