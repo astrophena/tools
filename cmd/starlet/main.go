@@ -28,6 +28,7 @@ package main
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
@@ -36,6 +37,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"html"
 	"io"
@@ -47,12 +49,10 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"go.astrophena.name/tools/internal/api/gist"
 	"go.astrophena.name/tools/internal/cli"
-	"go.astrophena.name/tools/internal/cli/envflag"
 	"go.astrophena.name/tools/internal/logger"
 	"go.astrophena.name/tools/internal/request"
 	"go.astrophena.name/tools/internal/version"
@@ -71,79 +71,72 @@ const defaultErrorTemplate = `❌ Something went wrong:
 <pre><code>%v</code></pre>`
 
 func main() {
-	fs := cli.Default.Flags
-
-	var (
-		addr = envflag.Value(
-			"addr", "ADDR", "localhost:3000",
-			"Listen on `host:port`.",
-			fs, os.Getenv,
-		)
-		tgToken = envflag.Value(
-			"tg-token", "TG_TOKEN", "",
-			"Telegram Bot API `token`.",
-			fs, os.Getenv,
-		)
-		tgSecret = envflag.Value(
-			"tg-secret", "TG_SECRET", "",
-			"Secret `token` used to validate Telegram Bot API updates.",
-			fs, os.Getenv,
-		)
-		tgOwner = envflag.Value(
-			"tg-owner", "TG_OWNER", int64(0),
-			"Telegram user `ID` of the bot owner.",
-			fs, os.Getenv,
-		)
-		ghToken = envflag.Value(
-			"gh-token", "GH_TOKEN", "",
-			"GitHub API `token`.",
-			fs, os.Getenv,
-		)
-		gistID = envflag.Value(
-			"gist-id", "GIST_ID", "",
-			"GitHub Gist `ID` to load bot code from.",
-			fs, os.Getenv,
-		)
-	)
-	cli.HandleStartup()
-
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
+	e := new(engine)
+	cli.Run(e.main(ctx, os.Args[1:], os.Getenv, os.Stdout, os.Stderr))
+}
 
-	e := &engine{
-		tgToken:  *tgToken,
-		tgSecret: *tgSecret,
-		tgOwner:  *tgOwner,
-		ghToken:  *ghToken,
-		gistID:   *gistID,
-		httpc: &http.Client{
-			Timeout: 10 * time.Second,
-		},
+func (e *engine) main(ctx context.Context, args []string, getenv func(string) string, stdout, stderr io.Writer) error {
+	// Define and parse flags.
+	a := &cli.App{
+		Name:        "starlet",
+		Description: helpDoc,
+		Flags:       flag.NewFlagSet("starlet", flag.ContinueOnError),
+	}
+	var (
+		addr     = a.Flags.String("addr", "localhost:3000", "Listen on `host:port`.")
+		tgToken  = a.Flags.String("tg-token", "", "Telegram Bot API `token`.")
+		tgSecret = a.Flags.String("tg-secret", "", "Secret `token` used to validate Telegram Bot API updates.")
+		tgOwner  = a.Flags.Int64("tg-owner", 0, "Telegram user `ID` of the bot owner.")
+		ghToken  = a.Flags.String("gh-token", "", "GitHub API `token`.")
+		gistID   = a.Flags.String("gist-id", "", "GitHub Gist `ID` to load bot code from.")
+	)
+	if err := a.HandleStartup(args, stdout, stderr); err != nil {
+		if errors.Is(err, cli.ErrExitVersion) {
+			return nil
+		}
+		return err
 	}
 
+	// Load configuration from environment variables or flags.
+	e.tgToken = cmp.Or(e.tgToken, getenv("TG_TOKEN"), *tgToken)
+	e.tgSecret = cmp.Or(e.tgSecret, getenv("TG_SECRET"), *tgSecret)
+	e.tgOwner = cmp.Or(e.tgOwner, parseInt(getenv("TG_OWNER")), *tgOwner)
+	e.ghToken = cmp.Or(e.ghToken, getenv("GH_TOKEN"), *ghToken)
+	e.gistID = cmp.Or(e.gistID, getenv("GIST_ID"), *gistID)
+	e.onRender = getenv("RENDER") == "true"
+
+	// Initialize internal state.
+	e.stderr = stderr
 	e.init.Do(e.doInit)
 
-	if isProd() {
+	// If running on Render, try to look up port to listen on and start goroutine
+	// that prevents Starlet from sleeping.
+	if e.onRender {
 		// https://docs.render.com/environment-variables#all-runtimes-1
-		if port := os.Getenv("PORT"); port != "" {
+		if port := getenv("PORT"); port != "" {
 			*addr = ":" + port
 		}
 		go e.selfPing(ctx)
 	}
 
-	if err := web.ListenAndServe(ctx, &web.ListenAndServeConfig{
+	return web.ListenAndServe(ctx, &web.ListenAndServeConfig{
 		Addr:       *addr,
 		DebugAuth:  e.debugAuth,
 		Debuggable: true, // debug endpoints protected by Telegram auth
 		Logf:       e.logf,
 		Mux:        e.mux,
-	}); err != nil {
-		log.Fatal(err)
-	}
+	})
 }
 
-// https://docs.render.com/environment-variables
-func isProd() bool { return os.Getenv("RENDER") == "true" }
+func parseInt(s string) int64 {
+	i, err := strconv.ParseInt(s, 10, 64)
+	if err == nil {
+		return i
+	}
+	return 0
+}
 
 type engine struct {
 	init     sync.Once // main initialization
@@ -151,7 +144,7 @@ type engine struct {
 
 	// initialized by doInit
 	gistc     *gist.Client
-	log       *log.Logger
+	logf      logger.Logf
 	logStream logger.Streamer
 	mux       *http.ServeMux
 	logMasker *strings.Replacer
@@ -160,6 +153,8 @@ type engine struct {
 	ghToken  string
 	gistID   string
 	httpc    *http.Client
+	onRender bool
+	stderr   io.Writer
 	tgOwner  int64
 	tgSecret string
 	tgToken  string
@@ -172,9 +167,18 @@ type engine struct {
 }
 
 func (e *engine) doInit() {
+	if e.httpc == nil {
+		e.httpc = &http.Client{
+			Timeout: 10 * time.Second,
+		}
+	}
+	if e.stderr == nil {
+		e.stderr = os.Stderr
+	}
+
 	const logLineLimit = 300
 	e.logStream = logger.NewStreamer(logLineLimit)
-	e.log = log.New(io.MultiWriter(os.Stderr, e.logStream), "", log.LstdFlags)
+	e.logf = log.New(io.MultiWriter(e.stderr, e.logStream), "", log.LstdFlags).Printf
 	e.initRoutes()
 
 	e.logMasker = strings.NewReplacer(
@@ -191,8 +195,6 @@ func (e *engine) doInit() {
 	}
 }
 
-func (e *engine) logf(format string, args ...any) { e.log.Printf(format, args...) }
-
 func (e *engine) initRoutes() {
 	e.mux = http.NewServeMux()
 
@@ -208,7 +210,7 @@ func (e *engine) initRoutes() {
 	e.mux.HandleFunc("POST /telegram", e.handleTelegramWebhook)
 
 	// Redirect from starlet.onrender.com to bot.astrophena.name.
-	if isProd() {
+	if e.onRender {
 		e.mux.HandleFunc("starlet.onrender.com/", func(w http.ResponseWriter, r *http.Request) {
 			targetURL := "https://bot.astrophena.name" + r.URL.Path
 			http.Redirect(w, r, targetURL, http.StatusMovedPermanently)
@@ -362,7 +364,7 @@ func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	_, err = starlark.ExecFileOptions(&syntax.FileOptions{}, &starlark.Thread{
-		Print: func(thread *starlark.Thread, msg string) { e.log.Println(msg) },
+		Print: func(thread *starlark.Thread, msg string) { e.logf("%v", msg) },
 	}, "bot.star", botCode, predeclared)
 	if err != nil {
 		e.reportError(r.Context(), w, u, err)
@@ -383,7 +385,7 @@ func jsonOK(w http.ResponseWriter) {
 // Authentication {{{
 
 func (e *engine) debugAuth(r *http.Request) bool {
-	if !isProd() || e.loggedIn(r) {
+	if !e.onRender || e.loggedIn(r) {
 		return true
 	}
 	return false
