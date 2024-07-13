@@ -65,9 +65,10 @@ func TestMakeJSON(t *testing.T) {
 	defer ts.Close()
 
 	cases := map[string]struct {
-		params  request.Params
-		want    string
-		wantErr bool
+		params          request.Params
+		want            string
+		wantErr         bool
+		wantInErrorText string
 	}{
 		"successful request": {
 			params: request.Params{
@@ -102,14 +103,16 @@ func TestMakeJSON(t *testing.T) {
 				Method: http.MethodGet,
 				URL:    ts.URL + "/test",
 			},
-			wantErr: true,
+			wantErr:         true,
+			wantInErrorText: "want 200, got 400: invalid request",
 		},
 		"invalid request path": {
 			params: request.Params{
 				Method: http.MethodPost,
 				URL:    ts.URL + "/invalid",
 			},
-			wantErr: true,
+			wantErr:         true,
+			wantInErrorText: "want 200, got 400: invalid request",
 		},
 		"invalid value for JSON": {
 			params: request.Params{
@@ -117,19 +120,21 @@ func TestMakeJSON(t *testing.T) {
 				URL:    ts.URL + "/test",
 				Body:   make(chan int),
 			},
-			wantErr: true,
+			wantErr:         true,
+			wantInErrorText: "json: unsupported type: chan int",
 		},
 		"scrubbed token": {
 			params: request.Params{
 				Method: http.MethodPost,
-				URL:    ts.URL + "/invalid",
+				URL:    ts.URL + "/hello",
 				Body:   map[string]string{"key": "value"},
 				Headers: map[string]string{
 					"X-Token": "hello",
 				},
 				Scrubber: strings.NewReplacer("hello", "[EXPUNGED]"),
 			},
-			wantErr: true,
+			wantErr:         true,
+			wantInErrorText: "[EXPUNGED]\": want 200, got 400: invalid request",
 		},
 	}
 
@@ -139,13 +144,20 @@ func TestMakeJSON(t *testing.T) {
 			resp, err := request.MakeJSON[json.RawMessage](context.Background(), tc.params)
 			if err != nil {
 				if !tc.wantErr {
-					t.Errorf("MakeJSON() error = %v, wantErr %v", err, tc.wantErr)
+					t.Fatalf("MakeJSON() error = %v, wantErr %v", err, tc.wantErr)
 				}
-				return
 			}
+
 			if tc.wantErr {
-				t.Errorf("MakeJSON() expected error, got none")
-			} else if string(resp) != tc.want {
+				if err == nil {
+					t.Fatalf("MakeJSON() expected error, got none")
+				}
+				if !strings.Contains(err.Error(), tc.wantInErrorText) {
+					t.Fatalf("MakeJSON(): got error %q, wanted in it %q", err.Error(), tc.wantInErrorText)
+				}
+			}
+
+			if string(resp) != tc.want {
 				t.Errorf("MakeJSON() got = %v, want %v", resp, tc.want)
 			}
 		})
