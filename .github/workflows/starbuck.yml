@@ -22,4 +22,4 @@ jobs:
           port: '37626'
           key: '${{ secrets.EXP_SSH_KEY }}'
       - name: 'Deploy'
-        run: './devtools/deploy/starbuck.sh'
+        run: './devtools/deploy/starbuck.bash'
