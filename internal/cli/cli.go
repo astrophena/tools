@@ -57,7 +57,7 @@ func isPrintableError(err error) bool {
 	if errors.Is(err, flag.ErrHelp) {
 		return false
 	}
-	if errors.Is(err, ErrFlagsNeeded) {
+	if errors.Is(err, ErrArgsNeeded) {
 		return false
 	}
 	return true
@@ -71,13 +71,13 @@ type App struct {
 	Flags       *flag.FlagSet // Command-line flags.
 }
 
-// These errors are designed to not be printable.
 var (
-	// ErrExitVersion is an error indicating the application should exit after showing version.
+	// ErrExitVersion is an error indicating the application should exit after
+	// showing version.
 	ErrExitVersion = errors.New("version flag exit")
-	// ErrFlagsNeeded is an error indicating the application needed some
-	// additional flags passed to continue.
-	ErrFlagsNeeded = errors.New("additional flags needed")
+	// ErrArgsNeeded is an error indicating the application needed some additional
+	// flags or arguments passed to continue.
+	ErrArgsNeeded = errors.New("additional flags or arguments needed")
 )
 
 // HandleStartup handles the command startup. All exported fields shouldn't be

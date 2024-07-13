@@ -62,6 +62,11 @@ func TestRun(t *testing.T) {
 			copyToDirGlob: "testdata/notaudio.mp3",
 			wantInStderr:  "0 processed: 0 renamed, 0 existing.\n",
 		},
+		"dry run": {
+			args:          []string{"-dry", "[TMPDIR]"},
+			copyToDirGlob: "testdata/mp3/*.mp3",
+			wantInStderr:  "Dry run: 4 processed: 4 renamed, 0 existing.",
+		},
 	}
 
 	for name, tc := range cases {

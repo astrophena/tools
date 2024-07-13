@@ -128,7 +128,12 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 
-	logf("%d processed: %d renamed, %d existing.", processed, renamed, existing)
+	var msg string
+	if *dryRun {
+		msg += "Dry run: "
+	}
+	msg += "%d processed: %d renamed, %d existing."
+	logf(msg, processed, renamed, existing)
 
 	return nil
 }

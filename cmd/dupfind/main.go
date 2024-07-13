@@ -3,25 +3,37 @@ package main
 
 import (
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
-	"log"
 	"os"
 	"path/filepath"
 
 	"go.astrophena.name/tools/internal/cli"
 )
 
-func main() {
-	cli.SetArgsUsage("[flags...] <dir>")
-	cli.HandleStartup()
+func main() { cli.Run(run(os.Args[1:], os.Stdout, os.Stderr)) }
 
-	if len(cli.Args()) != 1 {
-		cli.Flags.Usage()
-		os.Exit(1)
+func run(args []string, stdout, stderr io.Writer) error {
+	a := &cli.App{
+		Name:        "dupfind",
+		Description: helpDoc,
+		ArgsUsage:   "[flags...] <dir>",
 	}
-	dir := cli.Args()[0]
+	if err := a.HandleStartup(args, stdout, stderr); err != nil {
+		if errors.Is(err, cli.ErrExitVersion) {
+			return nil
+		}
+		return err
+	}
+
+	if len(a.Flags.Args()) != 1 {
+		a.Flags.Usage()
+		return cli.ErrArgsNeeded
+	}
+
+	dir := a.Flags.Args()[0]
 
 	if realdir, err := filepath.EvalSymlinks(dir); err == nil {
 		dir = realdir
@@ -29,12 +41,14 @@ func main() {
 
 	dups, err := lookup(dir)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	for _, d := range dups {
-		log.Printf("duplicate file %s of %s", d.cur, d.prev)
+		fmt.Fprintf(stderr, "Duplicate file %s of %s.\n", d.cur, d.prev)
 	}
+
+	return nil
 }
 
 type dup struct {
