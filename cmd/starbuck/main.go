@@ -3,14 +3,15 @@ package main
 
 import (
 	"context"
+	"errors"
+	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"net/http/httputil"
 	"os"
 	"os/signal"
-	"sync"
-	"syscall"
 
 	"go.astrophena.name/tools/internal/cli"
 	"go.astrophena.name/tools/internal/systemd"
@@ -19,13 +20,26 @@ import (
 )
 
 func main() {
-	var (
-		addr = cli.Flags.String("addr", "localhost:3000", "Listen on `host:port`.")
-	)
-	cli.HandleStartup()
-
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
+	cli.Run(run(ctx, os.Args[1:], os.Stdout, os.Stderr))
+}
+
+func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
+	a := &cli.App{
+		Name:        "starbuck",
+		Description: helpDoc,
+		Flags:       flag.NewFlagSet("starbuck", flag.ContinueOnError),
+	}
+	var (
+		addr = a.Flags.String("addr", "localhost:3000", "Listen on `host:port`.")
+	)
+	if err := a.HandleStartup(args, stdout, stderr); err != nil {
+		if errors.Is(err, cli.ErrExitVersion) {
+			return nil
+		}
+		return err
+	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -43,22 +57,12 @@ func main() {
 		fmt.Fprintln(w, version.Version().Commit)
 	})
 
-	var wg sync.WaitGroup
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		if err := web.ListenAndServe(ctx, &web.ListenAndServeConfig{
-			Addr:       *addr,
-			Mux:        mux,
-			Debuggable: false,
-		}); err != nil {
-			log.Fatal(err)
-		}
-	}()
-
 	systemd.Notify(log.Printf, systemd.Ready)
 	go systemd.WatchdogLoop(ctx, log.Printf)
 
-	wg.Wait()
+	return web.ListenAndServe(ctx, &web.ListenAndServeConfig{
+		Addr:       *addr,
+		Mux:        mux,
+		Debuggable: false,
+	})
 }

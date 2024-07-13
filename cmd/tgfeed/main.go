@@ -119,16 +119,6 @@ func main() {
 	cli.Run(f.main(ctx, os.Args[1:], os.Getenv, os.Stdout, os.Stderr))
 }
 
-func isPrintableError(err error) bool {
-	if errors.Is(err, flag.ErrHelp) {
-		return false
-	}
-	if errors.Is(err, errUnknownMode) {
-		return false
-	}
-	return true
-}
-
 func (f *fetcher) main(
 	ctx context.Context,
 	args []string,
@@ -143,8 +133,7 @@ func (f *fetcher) main(
 	defer f.running.Store(false)
 
 	// Initialize logger.
-	logger := log.New(stderr, "", 0)
-	f.logf = logger.Printf
+	f.logf = log.New(stderr, "", 0).Printf
 
 	// Define and parse flags.
 	a := &cli.App{
@@ -195,7 +184,7 @@ func (f *fetcher) main(
 		return f.unsubscribe(ctx, *unsubscribe)
 	default:
 		a.Flags.Usage()
-		return errUnknownMode
+		return cli.ErrArgsNeeded
 	}
 }
 

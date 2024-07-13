@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"go.astrophena.name/tools/internal/api/gist"
+	"go.astrophena.name/tools/internal/cli"
 	"go.astrophena.name/tools/internal/testutil"
 	"go.astrophena.name/tools/internal/txtar"
 )
@@ -52,7 +53,7 @@ func TestFetcherMain(t *testing.T) {
 	}{
 		"prints usage without flags": {
 			args:         []string{},
-			wantErr:      errUnknownMode,
+			wantErr:      cli.ErrArgsNeeded,
 			wantInStderr: "Usage: tgfeed",
 		},
 		"run": {
