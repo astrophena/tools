@@ -41,14 +41,16 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 
+	logf := log.New(stderr, "", 0).Printf
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		web.RespondError(log.Printf, w, web.ErrNotFound)
+		web.RespondError(logf, w, web.ErrNotFound)
 	})
 	mux.HandleFunc("/reqinfo", func(w http.ResponseWriter, r *http.Request) {
 		b, err := httputil.DumpRequest(r, true)
 		if err != nil {
-			web.RespondError(log.Printf, w, err)
+			web.RespondError(logf, w, err)
 			return
 		}
 		w.Write(b)
@@ -58,10 +60,11 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	})
 
 	systemd.Notify(log.Printf, systemd.Ready)
-	go systemd.WatchdogLoop(ctx, log.Printf)
+	go systemd.WatchdogLoop(ctx, logf)
 
 	return web.ListenAndServe(ctx, &web.ListenAndServeConfig{
 		Addr:       *addr,
+		Logf:       logf,
 		Mux:        mux,
 		Debuggable: false,
 	})
