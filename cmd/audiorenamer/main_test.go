@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"go.astrophena.name/tools/internal/testutil"
+	"go.astrophena.name/base/testutil"
 )
 
 func TestRun(t *testing.T) {

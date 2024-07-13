@@ -2,10 +2,6 @@
 
 package main
 
-import "go.astrophena.name/tools/internal/cli"
-
 const helpDoc = `
 Dupfind finds duplicate files in a directory.
 `
-
-func init() { cli.SetDescription(helpDoc) }

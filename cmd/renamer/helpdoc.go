@@ -2,10 +2,6 @@
 
 package main
 
-import "go.astrophena.name/tools/internal/cli"
-
 const helpDoc = `
 Renamer renames files sequentially.
 `
-
-func init() { cli.SetDescription(helpDoc) }

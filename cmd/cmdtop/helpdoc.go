@@ -2,10 +2,6 @@
 
 package main
 
-import "go.astrophena.name/tools/internal/cli"
-
 const helpDoc = `
 Cmdtop displays the top of most used commands in bash history.
 `
-
-func init() { cli.SetDescription(helpDoc) }

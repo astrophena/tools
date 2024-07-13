@@ -3,62 +3,50 @@ package main
 
 import (
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"io/fs"
 	"log"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"go.astrophena.name/tools/internal/cli"
+	"go.astrophena.name/tools/internal/logger"
 )
 
-func main() {
+func main() { cli.Run(run(os.Args[1:], os.Stdout, os.Stderr)) }
+
+func run(args []string, stdout, stderr io.Writer) error {
+	a := &cli.App{
+		Name:        "renamer",
+		Description: helpDoc,
+		ArgsUsage:   "[flags...] <dir>",
+		Flags:       flag.NewFlagSet("renamer", flag.ContinueOnError),
+	}
 	var (
-		dir   = cli.Flags.String("dir", ".", "Modify files in `path`.")
-		start = cli.Flags.Int("start", 1, "Start from `number`.")
+		start = a.Flags.Int("start", 1, "Start from `number`.")
 	)
-	cli.HandleStartup()
-
-	fullDir, err := filepath.Abs(*dir)
-	if err != nil {
-		log.Fatal(err)
+	if err := a.HandleStartup(args, stdout, stderr); err != nil {
+		if errors.Is(err, cli.ErrExitVersion) {
+			return nil
+		}
+		return err
 	}
 
-	log.Printf("Are you sure? This will sequentially rename all files in %s. ", fullDir)
-	if !askForConfirmation(os.Stdin) {
-		log.Printf("Canceled.")
-		return
+	if len(a.Flags.Args()) != 1 {
+		a.Flags.Usage()
+		return cli.ErrArgsNeeded
+	}
+	dir := a.Flags.Args()[0]
+	if realdir, err := filepath.EvalSymlinks(dir); err == nil {
+		dir = realdir
 	}
 
-	if err := rename(fullDir, *start); err != nil {
-		log.Fatal(err)
-	}
+	return rename(dir, *start, log.New(stderr, "", 0).Printf)
 }
 
-func askForConfirmation(r io.Reader) bool {
-	var response string
-
-	_, err := fmt.Fscanln(r, &response)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	switch strings.ToLower(response) {
-	case "y", "yes":
-		return true
-	case "n", "no":
-		return false
-	default:
-		fmt.Println("I'm sorry but I didn't get what you meant, please type (y)es or (n)o and then press Enter:")
-		return askForConfirmation(r)
-	}
-}
-
-var logf = log.Printf // changed in tests
-
-func rename(dir string, start int) error {
+func rename(dir string, start int, logf logger.Logf) error {
 	return filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if d.IsDir() {
 			return nil

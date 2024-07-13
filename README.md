@@ -9,7 +9,6 @@ This repository holds personal tools:
 - Starbuck is a HTTP server that runs on https://exp.astrophena.name.
 - Starlet allows to create and manage a Telegram bot using the Starlark scripting language.
 - Tgfeed fetches RSS feeds and sends new articles via Telegram.
-- Txtar is a command-line tool for creating and extracting txtar archives.
 
 Install them:
 

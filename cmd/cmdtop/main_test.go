@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"go.astrophena.name/tools/internal/testutil"
+	"go.astrophena.name/base/testutil"
 )
 
 var update = flag.Bool("update", false, "update golden files in testdata")

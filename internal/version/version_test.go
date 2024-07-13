@@ -5,15 +5,10 @@ import (
 	"os"
 	"testing"
 
-	"go.astrophena.name/tools/internal/testutil"
+	"go.astrophena.name/base/testutil"
 )
 
 var update = flag.Bool("update", false, "update golden files in testdata")
-
-func TestMain(m *testing.M) {
-	flag.Parse()
-	os.Exit(m.Run())
-}
 
 func TestInfo_String(t *testing.T) {
 	testutil.RunGolden(t, "testdata/*.json", func(t *testing.T, match string) []byte {

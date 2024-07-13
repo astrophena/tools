@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"go.astrophena.name/tools/internal/testutil"
+	"go.astrophena.name/base/testutil"
 )
 
 func TestDebugger(t *testing.T) {

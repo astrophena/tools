@@ -1,11 +1,11 @@
 module go.astrophena.name/tools
 
-go 1.22
+go 1.22.3
 
 require (
 	github.com/dhowden/tag v0.0.0-20240417053706-3d75831295e8
-	github.com/google/go-cmp v0.6.0
 	github.com/mmcdole/gofeed v1.3.0
+	go.astrophena.name/base v0.0.0-20240713142933-9da7f970e89e
 	go.starlark.net v0.0.0-20240520160348-046347dcd104
 	golang.org/x/crypto v0.25.0
 )
@@ -13,6 +13,7 @@ require (
 require (
 	github.com/PuerkitoBio/goquery v1.8.0 // indirect
 	github.com/andybalholm/cascadia v1.3.1 // indirect
+	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/mmcdole/goxpp v1.1.1-0.20240225020742-a0c311522b23 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect

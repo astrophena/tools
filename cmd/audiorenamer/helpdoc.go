@@ -2,8 +2,6 @@
 
 package main
 
-import "go.astrophena.name/tools/internal/cli"
-
 const helpDoc = `
 Audiorenamer traverses a directory and renames music tracks based on their
 metadata. It extracts the track number and title from the files' metadata.
@@ -16,5 +14,3 @@ Running it on my music collection:
 
     $ audiorenamer ~/media/music
 `
-
-func init() { cli.SetDescription(helpDoc) }

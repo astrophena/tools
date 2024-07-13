@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"go.astrophena.name/base/testutil"
 	"go.astrophena.name/tools/internal/request/rr"
-	"go.astrophena.name/tools/internal/testutil"
 )
 
 func TestGet(t *testing.T) {

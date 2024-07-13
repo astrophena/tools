@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"go.astrophena.name/base/testutil"
 	"go.astrophena.name/tools/internal/syncutil"
-	"go.astrophena.name/tools/internal/testutil"
 )
 
 func TestLimitedWaitGroup(t *testing.T) {

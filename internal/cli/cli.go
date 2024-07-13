@@ -12,34 +12,6 @@ import (
 	"go.astrophena.name/tools/internal/version"
 )
 
-// Default represents the default application configuration.
-var Default = &App{
-	Name:  version.CmdName(),
-	Flags: Flags,
-}
-
-// Flags holds the command-line flags for the default application.
-var Flags = flag.NewFlagSet(version.CmdName(), flag.ContinueOnError)
-
-// Args returns the non-flag command-line arguments.
-func Args() []string { return Default.Flags.Args() }
-
-// SetDescription sets the description of the application.
-func SetDescription(description string) { Default.Description = description }
-
-// SetArgsUsage sets the usage message for the command-line arguments.
-func SetArgsUsage(argsUsage string) { Default.ArgsUsage = argsUsage }
-
-// HandleStartup initializes the application and processes command-line arguments.
-func HandleStartup() {
-	if err := Default.HandleStartup(os.Args[1:], os.Stdout, os.Stderr); errors.Is(err, ErrExitVersion) {
-		os.Exit(0)
-	} else if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
-}
-
 // Run is a helper that wraps a call to function that implements main in a
 // program, and if error returned is not nil, it prints the error message (if
 // error is printable) and exits with code 1.

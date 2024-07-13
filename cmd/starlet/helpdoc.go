@@ -2,8 +2,6 @@
 
 package main
 
-import "go.astrophena.name/tools/internal/cli"
-
 const helpDoc = `
 Starlet allows to create and manage a Telegram bot using the Starlark scripting
 language.
@@ -29,5 +27,3 @@ Additional modules and functions available from bot code:
 
 [Starlark spec]: https://github.com/bazelbuild/starlark/blob/master/spec.md
 `
-
-func init() { cli.SetDescription(helpDoc) }

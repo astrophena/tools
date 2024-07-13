@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"go.astrophena.name/base/testutil"
 	"go.astrophena.name/tools/internal/request/rr"
-	"go.astrophena.name/tools/internal/testutil"
 )
 
 // Updating this test:
