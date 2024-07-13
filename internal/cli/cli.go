@@ -40,6 +40,29 @@ func HandleStartup() {
 	}
 }
 
+// Run is a helper that wraps a call to function that implements main in a
+// program, and if error returned is not nil, it prints the error message (if
+// error is printable) and exits with code 1.
+func Run(err error) {
+	if err == nil {
+		return
+	}
+	if isPrintableError(err) {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+}
+
+func isPrintableError(err error) bool {
+	if errors.Is(err, flag.ErrHelp) {
+		return false
+	}
+	if errors.Is(err, ErrFlagsNeeded) {
+		return false
+	}
+	return true
+}
+
 // App represents a command-line application.
 type App struct {
 	Name        string        // Name of the application.
@@ -48,8 +71,14 @@ type App struct {
 	Flags       *flag.FlagSet // Command-line flags.
 }
 
-// ErrExitVersion is an error indicating the application should exit after showing version.
-var ErrExitVersion = errors.New("version flag exit")
+// These errors are designed to not be printable.
+var (
+	// ErrExitVersion is an error indicating the application should exit after showing version.
+	ErrExitVersion = errors.New("version flag exit")
+	// ErrFlagsNeeded is an error indicating the application needed some
+	// additional flags passed to continue.
+	ErrFlagsNeeded = errors.New("additional flags needed")
+)
 
 // HandleStartup handles the command startup. All exported fields shouldn't be
 // modified after HandleStartup is called.
@@ -62,6 +91,9 @@ func (a *App) HandleStartup(args []string, stdout, stderr io.Writer) error {
 	}
 	if a.ArgsUsage == "" {
 		a.ArgsUsage = "[flags...]"
+	}
+	if a.Flags == nil {
+		a.Flags = flag.NewFlagSet(a.Name, flag.ContinueOnError)
 	}
 
 	var showVersion bool

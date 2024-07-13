@@ -26,13 +26,7 @@ import (
 	"go.astrophena.name/tools/internal/cli"
 )
 
-func main() {
-	if err := run(os.Args[1:], os.Stdout, os.Stderr); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
-
-}
+func main() { cli.Run(run(os.Args[1:], os.Stdout, os.Stderr)) }
 
 var errDirectoryRequired = errors.New("directory is required")
 

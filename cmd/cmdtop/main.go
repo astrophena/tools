@@ -4,9 +4,9 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -16,40 +16,53 @@ import (
 	"go.astrophena.name/tools/internal/cli"
 )
 
-func main() {
-	cli.SetArgsUsage("[flags...] [num]")
-	cli.HandleStartup()
+func main() { cli.Run(run(os.Args[1:], os.Getenv, os.Stdout, os.Stderr)) }
+
+var errInvalidNum = errors.New("invalid number of commands")
+
+func run(args []string, getenv func(string) string, stdout, stderr io.Writer) error {
+	a := &cli.App{
+		Name:        "cmdtop",
+		Description: helpDoc,
+		ArgsUsage:   "[flags...] [num]",
+	}
+	if err := a.HandleStartup(args, stdout, stderr); err != nil {
+		if errors.Is(err, cli.ErrExitVersion) {
+			return nil
+		}
+		return err
+	}
 
 	num := int64(10)
-	args := cli.Flags.Args()
-	if len(args) > 0 {
+	if len(a.Flags.Args()) > 0 {
 		var err error
-		num, err = strconv.ParseInt(args[0], 10, 64)
+		num, err = strconv.ParseInt(a.Flags.Args()[0], 10, 64)
 		if err != nil {
-			log.Fatalf("Invalid number of commands: %v", err)
+			return fmt.Errorf("%w: %v", errInvalidNum, err)
 		}
 	}
 
-	histfile, ok := os.LookupEnv("HISTFILE")
-	if !ok {
+	var histfile string
+	if histfile = getenv("HISTFILE"); histfile == "" {
 		home, err := os.UserHomeDir()
 		if err != nil {
-			log.Fatal(err)
+			return fmt.Errorf("failed to lookup home directory: %w", err)
 		}
 		histfile = filepath.Join(home, ".bash_history")
 	}
 
 	f, err := os.Open(histfile)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	defer f.Close()
 
 	top, err := count(f, num)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
-	os.Stdout.Write(top)
+	_, err = stdout.Write(top)
+	return err
 }
 
 func count(r io.Reader, num int64) (top []byte, err error) {

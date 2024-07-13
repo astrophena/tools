@@ -116,12 +116,7 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 	f := new(fetcher)
-	if err := f.main(ctx, os.Args[1:], os.Getenv, os.Stdout, os.Stderr); err != nil {
-		if isPrintableError(err) {
-			fmt.Fprintln(os.Stderr, err)
-		}
-		os.Exit(1)
-	}
+	cli.Run(f.main(ctx, os.Args[1:], os.Getenv, os.Stdout, os.Stderr))
 }
 
 func isPrintableError(err error) bool {

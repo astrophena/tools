@@ -1,9 +1,12 @@
 package main
 
 import (
+	"bytes"
+	"errors"
 	"flag"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"go.astrophena.name/tools/internal/testutil"
@@ -11,7 +14,91 @@ import (
 
 var update = flag.Bool("update", false, "update golden files in testdata")
 
+func TestRun(t *testing.T) {
+	t.Parallel()
+
+	cases := map[string]struct {
+		args               []string
+		env                map[string]string
+		wantErr            error
+		wantNothingPrinted bool
+		wantInStdout       string
+		wantInStderr       string
+	}{
+		"invalid number of commands": {
+			args:    []string{"foo"},
+			wantErr: errInvalidNum,
+		},
+		"reads from HISTFILE": {
+			env: map[string]string{
+				"HISTFILE": filepath.Join("testdata", "history"),
+			},
+			wantInStdout: read(filepath.Join("testdata", "history.golden")),
+		},
+		"version flag": {
+			args:         []string{"-version"},
+			wantInStderr: "cmdtop",
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			getenvFunc := func(env map[string]string) func(string) string {
+				return func(name string) string {
+					if env == nil {
+						return ""
+					}
+					return env[name]
+				}
+			}
+
+			var stdout, stderr bytes.Buffer
+			err := run(tc.args, getenvFunc(tc.env), &stdout, &stderr)
+
+			// Don't use && because we want to trap all cases where err is
+			// nil.
+			if err == nil {
+				if tc.wantErr != nil {
+					t.Fatalf("must fail with error: %v", tc.wantErr)
+				}
+			}
+
+			if err != nil && !errors.Is(err, tc.wantErr) {
+				t.Fatalf("got error: %v", err)
+			}
+
+			if tc.wantNothingPrinted {
+				if stdout.String() != "" {
+					t.Errorf("stdout must be empty, got: %q", stdout.String())
+				}
+				if stderr.String() != "" {
+					t.Errorf("stderr must be empty, got: %q", stderr.String())
+				}
+			}
+
+			if tc.wantInStdout != "" && !strings.Contains(stdout.String(), tc.wantInStdout) {
+				t.Errorf("stdout must contain %q, got: %q", tc.wantInStdout, stdout.String())
+			}
+			if tc.wantInStderr != "" && !strings.Contains(stderr.String(), tc.wantInStderr) {
+				t.Errorf("stderr must contain %q, got: %q", tc.wantInStderr, stderr.String())
+			}
+		})
+	}
+}
+
+func read(path string) string {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		panic(err)
+	}
+	return string(b)
+}
+
 func TestCount(t *testing.T) {
+	t.Parallel()
+
 	testutil.RunGolden(t, filepath.Join("testdata", "history"), func(t *testing.T, match string) []byte {
 		f, err := os.Open(match)
 		if err != nil {
