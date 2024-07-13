@@ -12,8 +12,11 @@ import (
 	"net/http/httputil"
 	"os"
 	"os/signal"
+	"sync"
+	"sync/atomic"
 
 	"go.astrophena.name/tools/internal/cli"
+	"go.astrophena.name/tools/internal/logger"
 	"go.astrophena.name/tools/internal/systemd"
 	"go.astrophena.name/tools/internal/version"
 	"go.astrophena.name/tools/internal/web"
@@ -22,10 +25,33 @@ import (
 func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
-	cli.Run(run(ctx, os.Args[1:], os.Stdout, os.Stderr))
+	s := new(server)
+	cli.Run(s.run(ctx, os.Args[1:], os.Stdout, os.Stderr))
 }
 
-func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
+type server struct {
+	running atomic.Bool
+	init    sync.Once
+	logf    logger.Logf
+	mux     *http.ServeMux
+	stderr  io.Writer // os.Stderr if not set
+}
+
+var errAlreadyRunning = errors.New("already running")
+
+func (s *server) run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
+	// Check if this server is already running.
+	if s.running.Load() {
+		return errAlreadyRunning
+	}
+	s.running.Store(true)
+	defer s.running.Store(false)
+
+	// Initialize internal state.
+	s.stderr = stderr
+	s.init.Do(s.doInit)
+
+	// Define and parse flags.
 	a := &cli.App{
 		Name:        "starbuck",
 		Description: helpDoc,
@@ -41,31 +67,40 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 
-	logf := log.New(stderr, "", 0).Printf
+	// Notify systemd that we are ready and start watchdog loop.
+	systemd.Notify(s.logf, systemd.Ready)
+	go systemd.WatchdogLoop(ctx, s.logf)
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		web.RespondError(logf, w, web.ErrNotFound)
+	// Start serving web requests.
+	return web.ListenAndServe(ctx, &web.ListenAndServeConfig{
+		Addr:       *addr,
+		Logf:       s.logf,
+		Mux:        s.mux,
+		Debuggable: false,
 	})
-	mux.HandleFunc("/reqinfo", func(w http.ResponseWriter, r *http.Request) {
+}
+
+func (s *server) doInit() {
+	if s.stderr == nil {
+		s.stderr = os.Stderr
+	}
+	s.logf = log.New(s.stderr, "", 0).Printf
+
+	s.mux = http.NewServeMux()
+	s.mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		web.RespondError(s.logf, w, web.ErrNotFound)
+	})
+	s.mux.HandleFunc("GET /reqinfo", func(w http.ResponseWriter, r *http.Request) {
 		b, err := httputil.DumpRequest(r, true)
 		if err != nil {
-			web.RespondError(logf, w, err)
+			web.RespondError(s.logf, w, err)
 			return
 		}
 		w.Write(b)
 	})
-	mux.HandleFunc("/sha", func(w http.ResponseWriter, r *http.Request) {
+	s.mux.HandleFunc("GET /sha", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintln(w, version.Version().Commit)
 	})
-
-	systemd.Notify(log.Printf, systemd.Ready)
-	go systemd.WatchdogLoop(ctx, logf)
-
-	return web.ListenAndServe(ctx, &web.ListenAndServeConfig{
-		Addr:       *addr,
-		Logf:       logf,
-		Mux:        mux,
-		Debuggable: false,
-	})
 }
+
+func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) { s.mux.ServeHTTP(w, r) }
