@@ -1,0 +1,60 @@
+{
+  "GoVersion": "go1.22.3",
+  "Path": "go.astrophena.name/tools/cmd/audiorenamer",
+  "Main": {
+    "Path": "go.astrophena.name/tools",
+    "Version": "(devel)",
+    "Sum": "",
+    "Replace": null
+  },
+  "Deps": [
+    {
+      "Path": "github.com/dhowden/tag",
+      "Version": "v0.0.0-20240417053706-3d75831295e8",
+      "Sum": "h1:OtSeLS5y0Uy01jaKK4mA/WVIYtpzVm63vLVAPzJXigg=",
+      "Replace": null
+    }
+  ],
+  "Settings": [
+    {
+      "Key": "-buildmode",
+      "Value": "exe"
+    },
+    {
+      "Key": "-compiler",
+      "Value": "gc"
+    },
+    {
+      "Key": "-trimpath",
+      "Value": "true"
+    },
+    {
+      "Key": "CGO_ENABLED",
+      "Value": "0"
+    },
+    {
+      "Key": "GOARCH",
+      "Value": "arm64"
+    },
+    {
+      "Key": "GOOS",
+      "Value": "android"
+    },
+    {
+      "Key": "vcs",
+      "Value": "git"
+    },
+    {
+      "Key": "vcs.revision",
+      "Value": "bfc4e5b495a5cfad1402fd9e30861daf6094ce62"
+    },
+    {
+      "Key": "vcs.time",
+      "Value": "2024-07-13T21:20:50Z"
+    },
+    {
+      "Key": "vcs.modified",
+      "Value": "true"
+    }
+  ]
+}

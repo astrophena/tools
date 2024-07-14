@@ -1,0 +1,108 @@
+{
+  "GoVersion": "go1.22.3",
+  "Path": "go.astrophena.name/tools/cmd/tgfeed",
+  "Main": {
+    "Path": "go.astrophena.name/tools",
+    "Version": "(devel)",
+    "Sum": "",
+    "Replace": null
+  },
+  "Deps": [
+    {
+      "Path": "github.com/PuerkitoBio/goquery",
+      "Version": "v1.8.0",
+      "Sum": "h1:PJTF7AmFCFKk1N6V6jmKfrNH9tV5pNE6lZMkG0gta/U=",
+      "Replace": null
+    },
+    {
+      "Path": "github.com/andybalholm/cascadia",
+      "Version": "v1.3.1",
+      "Sum": "h1:nhxRkql1kdYCc8Snf7D5/D3spOX+dBgjA6u8x004T2c=",
+      "Replace": null
+    },
+    {
+      "Path": "github.com/json-iterator/go",
+      "Version": "v1.1.12",
+      "Sum": "h1:PV8peI4a0ysnczrg+LtxykD8LfKY9ML6u2jnxaEnrnM=",
+      "Replace": null
+    },
+    {
+      "Path": "github.com/mmcdole/gofeed",
+      "Version": "v1.3.0",
+      "Sum": "h1:5yn+HeqlcvjMeAI4gu6T+crm7d0anY85+M+v6fIFNG4=",
+      "Replace": null
+    },
+    {
+      "Path": "github.com/mmcdole/goxpp",
+      "Version": "v1.1.1-0.20240225020742-a0c311522b23",
+      "Sum": "h1:Zr92CAlFhy2gL+V1F+EyIuzbQNbSgP4xhTODZtrXUtk=",
+      "Replace": null
+    },
+    {
+      "Path": "github.com/modern-go/concurrent",
+      "Version": "v0.0.0-20180306012644-bacd9c7ef1dd",
+      "Sum": "h1:TRLaZ9cD/w8PVh93nsPXa1VrQ6jlwL5oN8l14QlcNfg=",
+      "Replace": null
+    },
+    {
+      "Path": "github.com/modern-go/reflect2",
+      "Version": "v1.0.2",
+      "Sum": "h1:xBagoLtFs94CBntxluKeaWgTMpvLxC4ur3nMaC9Gz0M=",
+      "Replace": null
+    },
+    {
+      "Path": "golang.org/x/net",
+      "Version": "v0.27.0",
+      "Sum": "h1:5K3Njcw06/l2y9vpGCSdcxWOYHOUk3dVNGDXN+FvAys=",
+      "Replace": null
+    },
+    {
+      "Path": "golang.org/x/text",
+      "Version": "v0.16.0",
+      "Sum": "h1:a94ExnEXNtEwYLGJSIUxnWoxoRz/ZcCsV63ROupILh4=",
+      "Replace": null
+    }
+  ],
+  "Settings": [
+    {
+      "Key": "-buildmode",
+      "Value": "exe"
+    },
+    {
+      "Key": "-compiler",
+      "Value": "gc"
+    },
+    {
+      "Key": "-trimpath",
+      "Value": "true"
+    },
+    {
+      "Key": "CGO_ENABLED",
+      "Value": "0"
+    },
+    {
+      "Key": "GOARCH",
+      "Value": "arm64"
+    },
+    {
+      "Key": "GOOS",
+      "Value": "android"
+    },
+    {
+      "Key": "vcs",
+      "Value": "git"
+    },
+    {
+      "Key": "vcs.revision",
+      "Value": "bfc4e5b495a5cfad1402fd9e30861daf6094ce62"
+    },
+    {
+      "Key": "vcs.time",
+      "Value": "2024-07-13T21:20:50Z"
+    },
+    {
+      "Key": "vcs.modified",
+      "Value": "false"
+    }
+  ]
+}

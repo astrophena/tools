@@ -2,7 +2,6 @@
 package version
 
 import (
-	"log"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -66,17 +65,18 @@ func Version() Info {
 	return info
 }
 
-func initOnce() {
+func initOnce() { info = loadInfo(debug.ReadBuildInfo) }
+
+func loadInfo(buildinfo func() (*debug.BuildInfo, bool)) Info {
 	i := &Info{
 		Go:   runtime.Version(),
 		OS:   runtime.GOOS,
 		Arch: runtime.GOARCH,
 	}
 
-	bi, ok := debug.ReadBuildInfo()
+	bi, ok := buildinfo()
 	if !ok {
-		log.Printf("version: failed to read build information")
-		return
+		return *i
 	}
 
 	i.Version = bi.Main.Version
@@ -84,11 +84,15 @@ func initOnce() {
 		i.Version = "devel"
 	}
 
-	i.Name = "cmd"
-	exe, err := os.Executable()
-	if err == nil {
-		i.Name = filepath.Base(exe)
+	i.Name = strings.TrimPrefix(bi.Path, bi.Main.Path+"/cmd/")
+	// Corner case for tests.
+	if i.Name == "" {
+		exe, err := os.Executable()
+		if err == nil {
+			i.Name = filepath.Base(exe)
+		}
 	}
+
 	for _, s := range bi.Settings {
 		switch s.Key {
 		case "vcs.revision":
@@ -104,5 +108,6 @@ func initOnce() {
 			i.BuiltAt = s.Value
 		}
 	}
-	info = *i
+
+	return *i
 }

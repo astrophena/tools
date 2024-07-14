@@ -1,0 +1,10 @@
+{
+  "name": "starlet",
+  "version": "devel",
+  "commit": "f57b584d",
+  "dirty": true,
+  "built_at": "2024-06-29T16:46:18Z",
+  "go": "go1.22.3",
+  "os": "android",
+  "arch": "arm64"
+}
