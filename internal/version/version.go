@@ -4,7 +4,6 @@ package version
 import (
 	"os"
 	"path/filepath"
-	"runtime"
 	"runtime/debug"
 	"strings"
 	"sync"
@@ -68,16 +67,12 @@ func Version() Info {
 func initOnce() { info = loadInfo(debug.ReadBuildInfo) }
 
 func loadInfo(buildinfo func() (*debug.BuildInfo, bool)) Info {
-	i := &Info{
-		Go:   runtime.Version(),
-		OS:   runtime.GOOS,
-		Arch: runtime.GOARCH,
-	}
-
 	bi, ok := buildinfo()
 	if !ok {
-		return *i
+		panic("build info is absent from binary; make sure you build it with module support")
 	}
+
+	i := &Info{Go: bi.GoVersion}
 
 	i.Version = bi.Main.Version
 	if i.Version == "(devel)" {
@@ -95,6 +90,10 @@ func loadInfo(buildinfo func() (*debug.BuildInfo, bool)) Info {
 
 	for _, s := range bi.Settings {
 		switch s.Key {
+		case "GOOS":
+			i.OS = s.Value
+		case "GOARCH":
+			i.Arch = s.Value
 		case "vcs.revision":
 			i.Commit = s.Value
 			if len(s.Value) >= 8 {
