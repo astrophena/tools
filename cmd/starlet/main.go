@@ -26,6 +26,8 @@ Additional modules and functions available from bot code:
 */
 package main
 
+//go:generate npm run --prefix editor esbuild -- --minify --bundle main.js --outfile=editor.min.js
+
 import (
 	"bytes"
 	"cmp"
