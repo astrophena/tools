@@ -63,7 +63,7 @@ func ListenAndServe(ctx context.Context, c *ListenAndServeConfig) error {
 		return fmt.Errorf("failed to listen: %v", err)
 	}
 	defer l.Close()
-	c.Logf("Listening on %s...", l.Addr().Network(), l.Addr().String())
+	c.Logf("Listening on %s...", l.Addr().String())
 
 	protectDebug := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
