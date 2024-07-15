@@ -226,21 +226,7 @@ func (e *engine) initRoutes() {
 	web.Health(e.mux)
 	dbg := web.Debugger(e.logf, e.mux)
 	dbg.SetIcon(debugIcon)
-	dbg.HandleFunc("reload", "Reload from gist", func(w http.ResponseWriter, r *http.Request) {
-		e.loadFromGist(r.Context())
-		e.mu.Lock()
-		defer e.mu.Unlock()
-		err := e.loadGistErr
-		if err != nil {
-			web.RespondError(e.logf, w, err)
-			return
-		}
-		http.Redirect(w, r, "/debug/", http.StatusFound)
-	})
-	dbg.HandleFunc("logs", "Logs", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintf(w, logsTmpl, strings.Join(e.logStream.Lines(), ""))
-	})
-	e.mux.Handle("/debug/log", e.logStream)
+
 	dbg.HandleFunc("code", "Bot code", func(w http.ResponseWriter, r *http.Request) {
 		e.mu.Lock()
 		defer e.mu.Unlock()
@@ -250,9 +236,7 @@ func (e *engine) initRoutes() {
 		}
 		w.Write(e.bot)
 	})
-	e.mux.HandleFunc("/debug/editor.min.js", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeContent(w, r, "editor.min.js", time.Time{}, bytes.NewReader(editorJS))
-	})
+
 	dbg.HandleFunc("edit", "Edit bot code", func(w http.ResponseWriter, r *http.Request) {
 		e.mu.Lock()
 		defer e.mu.Unlock()
@@ -261,7 +245,7 @@ func (e *engine) initRoutes() {
 		case http.MethodGet:
 			fmt.Fprintf(w, editorTmpl, e.bot)
 		case http.MethodPost:
-			code := r.FormValue("code")
+			code := r.FormValue("bot")
 			if code == "" {
 				http.Error(w, "code is empty", http.StatusBadRequest)
 				return
@@ -274,6 +258,27 @@ func (e *engine) initRoutes() {
 			http.Redirect(w, r, "/debug/", http.StatusFound)
 		}
 	})
+	e.mux.HandleFunc("/debug/editor.min.js", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeContent(w, r, "editor.min.js", time.Time{}, bytes.NewReader(editorJS))
+	})
+
+	dbg.HandleFunc("logs", "Logs", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintf(w, logsTmpl, strings.Join(e.logStream.Lines(), ""))
+	})
+	e.mux.Handle("/debug/log", e.logStream)
+
+	dbg.HandleFunc("reload", "Reload from gist", func(w http.ResponseWriter, r *http.Request) {
+		e.loadFromGist(r.Context())
+		e.mu.Lock()
+		defer e.mu.Unlock()
+		err := e.loadGistErr
+		if err != nil {
+			web.RespondError(e.logf, w, err)
+			return
+		}
+		http.Redirect(w, r, "/debug/", http.StatusFound)
+	})
+
 	dbg.HandleFunc("version", "Version (JSON)", func(w http.ResponseWriter, r *http.Request) {
 		web.RespondJSON(w, version.Version())
 	})
