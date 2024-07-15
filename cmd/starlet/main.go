@@ -250,10 +250,26 @@ func (e *engine) initRoutes() {
 		}
 		w.Write(e.bot)
 	})
+	e.mux.HandleFunc("/debug/editor.min.js", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeContent(w, r, "editor.min.js", time.Time{}, bytes.NewReader(editorJS))
+	})
+	dbg.HandleFunc("edit", "Edit bot code", func(w http.ResponseWriter, r *http.Request) {
+		e.mu.Lock()
+		defer e.mu.Unlock()
+		fmt.Fprintf(w, editorTmpl, e.bot)
+	})
 	dbg.HandleFunc("version", "Version (JSON)", func(w http.ResponseWriter, r *http.Request) {
 		web.RespondJSON(w, version.Version())
 	})
 }
+
+var (
+	//go:embed editor/template.html
+	editorTmpl string
+
+	//go:embed editor/editor.min.js
+	editorJS []byte
+)
 
 const logsTmpl = `<!DOCTYPE html>
 <html lang="en">
