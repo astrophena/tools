@@ -256,7 +256,23 @@ func (e *engine) initRoutes() {
 	dbg.HandleFunc("edit", "Edit bot code", func(w http.ResponseWriter, r *http.Request) {
 		e.mu.Lock()
 		defer e.mu.Unlock()
-		fmt.Fprintf(w, editorTmpl, e.bot)
+
+		switch r.Method {
+		case http.MethodGet:
+			fmt.Fprintf(w, editorTmpl, e.bot)
+		case http.MethodPost:
+			code := r.FormValue("code")
+			if code == "" {
+				http.Error(w, "code is empty", http.StatusBadRequest)
+				return
+			}
+			e.bot = []byte(code)
+			if err := e.saveToGist(r.Context()); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			http.Redirect(w, r, "/debug/", http.StatusFound)
+		}
 	})
 	dbg.HandleFunc("version", "Version (JSON)", func(w http.ResponseWriter, r *http.Request) {
 		web.RespondJSON(w, version.Version())
@@ -320,6 +336,19 @@ func (e *engine) loadFromGist(ctx context.Context) {
 		e.errorTemplate = defaultErrorTemplate
 	}
 	e.loadGistErr = nil
+}
+
+// e.mu must be held.
+func (e *engine) saveToGist(ctx context.Context) error {
+	g, err := e.gistc.Get(ctx, e.gistID)
+	if err != nil {
+		return err
+	}
+	g.Files["bot.star"] = gist.File{
+		Content: string(e.bot),
+	}
+	_, err = e.gistc.Update(ctx, e.gistID, g)
+	return err
 }
 
 type update struct {

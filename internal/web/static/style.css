@@ -43,7 +43,7 @@
   --sans-font: apple-system, BlinkMacSystemFont, avenir next, avenir,
     'Nimbus Sans L', roboto, noto, segoe ui, arial, helvetica, helvetica neue,
     sans-serif;
-  --mono-font: "DejaVu Sans Mono", monospace;
+  --mono-font: monospace;
   --bg: #000000;
   --accent-bg: #2b2b2b;
   --text: #ababab;

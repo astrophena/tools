@@ -1,5 +1,8 @@
-import { basicSetup, EditorView } from "codemirror";
+import { basicSetup } from "codemirror";
+import { EditorView, keymap } from "@codemirror/view";
+import { indentWithTab } from "@codemirror/commands";
 import { python } from "@codemirror/lang-python";
+import { gruvboxDark } from "cm6-theme-gruvbox-dark";
 
 // Hide the existing textarea.
 let textarea = document.querySelector('textarea');
@@ -10,7 +13,9 @@ let view = new EditorView({
   doc: textarea.value,
   extensions: [
     basicSetup,
+    keymap.of([indentWithTab]),
     python({}),
+    gruvboxDark,
   ],
 });
 
