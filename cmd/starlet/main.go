@@ -237,31 +237,6 @@ func (e *engine) initRoutes() {
 		w.Write(e.bot)
 	})
 
-	dbg.HandleFunc("edit", "Edit bot code", func(w http.ResponseWriter, r *http.Request) {
-		e.mu.Lock()
-		defer e.mu.Unlock()
-
-		switch r.Method {
-		case http.MethodGet:
-			fmt.Fprintf(w, editorTmpl, e.bot)
-		case http.MethodPost:
-			code := r.FormValue("bot")
-			if code == "" {
-				http.Error(w, "code is empty", http.StatusBadRequest)
-				return
-			}
-			e.bot = []byte(code)
-			if err := e.saveToGist(r.Context()); err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			http.Redirect(w, r, "/debug/", http.StatusFound)
-		}
-	})
-	e.mux.HandleFunc("/debug/editor.min.js", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeContent(w, r, "editor.min.js", time.Time{}, bytes.NewReader(editorJS))
-	})
-
 	dbg.HandleFunc("logs", "Logs", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, logsTmpl, strings.Join(e.logStream.Lines(), ""))
 	})
@@ -283,14 +258,6 @@ func (e *engine) initRoutes() {
 		web.RespondJSON(w, version.Version())
 	})
 }
-
-var (
-	//go:embed editor/template.html
-	editorTmpl string
-
-	//go:embed editor/editor.min.js
-	editorJS []byte
-)
 
 const logsTmpl = `<!DOCTYPE html>
 <html lang="en">
@@ -341,19 +308,6 @@ func (e *engine) loadFromGist(ctx context.Context) {
 		e.errorTemplate = defaultErrorTemplate
 	}
 	e.loadGistErr = nil
-}
-
-// e.mu must be held.
-func (e *engine) saveToGist(ctx context.Context) error {
-	g, err := e.gistc.Get(ctx, e.gistID)
-	if err != nil {
-		return err
-	}
-	g.Files["bot.star"] = gist.File{
-		Content: string(e.bot),
-	}
-	_, err = e.gistc.Update(ctx, e.gistID, g)
-	return err
 }
 
 type update struct {
