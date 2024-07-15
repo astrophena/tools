@@ -9,15 +9,10 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
 	"go.astrophena.name/tools/internal/logger"
-	"go.astrophena.name/tools/internal/version"
-
-	"golang.org/x/crypto/acme/autocert"
 )
 
 //go:generate curl --fail-with-body -s -o static/style.css https://astrophena.name/css/main.css
@@ -29,11 +24,6 @@ var style []byte
 // [ListenAndServe].
 type ListenAndServeConfig struct {
 	// Addr is a network address to listen on (in the form of "host:port").
-	//
-	// If Addr is not localhost and doesn't contain a port (in example,
-	// "example.com" or "exp.astrophena.name"), the server accepts HTTPS
-	// connections on :443, redirects HTTP connections to HTTPS on :80 and
-	// automatically obtains a certificate from Let's Encrypt.
 	Addr string
 	// Mux is a http.ServeMux to serve.
 	Mux *http.ServeMux
@@ -68,17 +58,12 @@ func ListenAndServe(ctx context.Context, c *ListenAndServeConfig) error {
 		return errNilMux
 	}
 
-	l, isTLS, err := obtainListener(c)
+	l, err := net.Listen("tcp", c.Addr)
 	if err != nil {
 		return fmt.Errorf("failed to listen: %v", err)
 	}
 	defer l.Close()
-	c.Logf("Listening on %s://%s...", l.Addr().Network(), l.Addr().String())
-
-	// Redirect HTTP requests to HTTPS.
-	if isTLS {
-		go httpRedirect(ctx, c)
-	}
+	c.Logf("Listening on %s...", l.Addr().Network(), l.Addr().String())
 
 	protectDebug := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -137,58 +122,5 @@ func initInternalRoutes(c *ListenAndServeConfig, s *http.Server) {
 	if c.Debuggable {
 		dbg := Debugger(c.Logf, c.Mux)
 		dbg.Handle("conns", "Connections", Conns(c.Logf, s))
-	}
-}
-
-func obtainListener(c *ListenAndServeConfig) (l net.Listener, isTLS bool, err error) {
-	host, _, hasPort := strings.Cut(c.Addr, ":")
-
-	// Accept HTTPS connections only and obtain Let's Encrypt certificate.
-	if host != "localhost" && !hasPort {
-		m := &autocert.Manager{
-			Prompt:     autocert.AcceptTOS,
-			Cache:      autocert.DirCache(cacheDir()),
-			HostPolicy: autocert.HostWhitelist(c.Addr),
-		}
-		return m.Listener(), true, nil
-	}
-
-	l, err = net.Listen("tcp", c.Addr)
-	return l, false, err
-}
-
-func cacheDir() string {
-	// Three variants where we can keep certificate cache:
-	//
-	//  a. in cache directory (i.e. ~/.cache on Linux)
-	//  b. in systemd unit state directory (i.e. /var/lib/private/...)
-	//  c. in OS temporary directory if everything fails
-	//
-	// Case b overrides a and c used as a last resort.
-	dir, err := os.UserCacheDir()
-	if stateDir := os.Getenv("STATE_DIRECTORY"); stateDir != "" {
-		return filepath.Join(stateDir, "certs")
-	} else if err != nil {
-		return filepath.Join(os.TempDir(), version.Version().Name, "certs")
-	}
-	return filepath.Join(dir, version.Version().Name, "certs")
-}
-
-// httpRedirect redirects HTTP requests to HTTPS and runs in a separate
-// goroutine.
-func httpRedirect(ctx context.Context, c *ListenAndServeConfig) {
-	s := &http.Server{
-		Addr: ":80",
-		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			target := "https://" + r.Host + r.URL.Path
-			http.Redirect(w, r, target, http.StatusMovedPermanently)
-		}),
-	}
-	go func() {
-		<-ctx.Done()
-		s.Shutdown(ctx)
-	}()
-	if err := s.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		c.Logf("httpRedirect crashed: %v", err)
 	}
 }

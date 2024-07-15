@@ -7,7 +7,6 @@ require (
 	github.com/mmcdole/gofeed v1.3.0
 	go.astrophena.name/base v0.0.0-20240713142933-9da7f970e89e
 	go.starlark.net v0.0.0-20240520160348-046347dcd104
-	golang.org/x/crypto v0.25.0
 )
 
 require (
