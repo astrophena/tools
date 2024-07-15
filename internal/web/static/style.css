@@ -218,55 +218,6 @@ ul {
   padding-left: 3rem;
 }
 
-/* Format forms. */
-textarea,
-select,
-input {
-  font-size: inherit;
-  font-family: inherit;
-  padding: 0.5rem;
-  margin-bottom: 0.5rem;
-  color: var(--text);
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  box-shadow: none;
-  box-sizing: border-box;
-  width: 60%;
-}
-
-/* Make the textarea wider than other inputs. */
-textarea {
-  width: 80%;
-}
-
-/* Ensures the checkbox doesn't have a 50% width like other input fields. */
-#checkbox {
-  width: 0;
-}
-
-/* Makes input fields wider on smaller screens */
-@media only screen and (max-width: 720px) {
-  textarea,
-  select,
-  input {
-    width: 100%;
-  }
-}
-
-/*
- * Without this any HTML using <fieldset> shows ugly borders and has
- * additional padding/margin.
- *
- * See https://github.com/kevquirk/simple.css/issues/3.
-*/
-fieldset {
-  border: 0;
-  padding: 0;
-  margin: 0;
-}
-
-
 /* Misc body elements. */
 
 hr {
@@ -368,7 +319,6 @@ li {
   margin-top: -1rem;
 }
 
-/* Icons. */
 .icon {
   width: 24px;
   height: 24px;
