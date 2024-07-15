@@ -10,7 +10,7 @@ let view = new EditorView({
   doc: textarea.value,
   extensions: [
     basicSetup,
-    markdown({}),
+    python({}),
   ],
 });
 
@@ -19,6 +19,6 @@ textarea.insertAdjacentElement("afterend", view.dom);
 
 // When submitting the form, update the textarea with the editor's contents so
 // that they're included with the form submission.
-textarea.parentElement.onsubmit = function () {
+textarea.parentElement.onsubmit = function() {
   textarea.value = view.state.doc;
 }
