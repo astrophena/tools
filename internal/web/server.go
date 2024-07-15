@@ -120,7 +120,6 @@ func initInternalRoutes(c *ListenAndServeConfig, s *http.Server) {
 	})
 	Health(c.Mux)
 	if c.Debuggable {
-		dbg := Debugger(c.Logf, c.Mux)
-		dbg.Handle("conns", "Connections", Conns(c.Logf, s))
+		Debugger(c.Logf, c.Mux)
 	}
 }
