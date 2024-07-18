@@ -18,6 +18,12 @@ import (
 // use.
 type Logf func(format string, args ...any)
 
+// Write implements the [io.Writer] interface.
+func (f Logf) Write(p []byte) (n int, err error) {
+	f("%s", p)
+	return len(p), nil
+}
+
 // Streamer is an io.Writer that contains all logged lines and allows to
 // stream them.
 type Streamer interface {

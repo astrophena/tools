@@ -2,12 +2,29 @@ package logger
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
+
+	"go.astrophena.name/base/testutil"
 )
+
+func TestLogfWriter(t *testing.T) {
+	var (
+		logged  bool
+		message string
+	)
+	logf := func(format string, args ...any) {
+		logged = true
+		message = fmt.Sprintf(format, args...)
+	}
+	Logf(logf).Write([]byte("hello"))
+	testutil.AssertEqual(t, logged, true)
+	testutil.AssertEqual(t, message, "hello")
+}
 
 func TestStreamer(t *testing.T) {
 	s := NewStreamer(5)

@@ -80,7 +80,10 @@ func ListenAndServe(ctx context.Context, c *ListenAndServeConfig) error {
 		})
 	}
 
-	s := &http.Server{Handler: protectDebug(c.Mux)}
+	s := &http.Server{
+		ErrorLog: log.New(c.Logf, "", 0),
+		Handler:  protectDebug(c.Mux),
+	}
 	initInternalRoutes(c, s)
 
 	errCh := make(chan error, 1)
