@@ -21,8 +21,8 @@ func Run(err error) {
 	}
 	if isPrintableError(err) {
 		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
 	}
+	os.Exit(1)
 }
 
 func isPrintableError(err error) bool {
