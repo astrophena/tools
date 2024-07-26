@@ -687,7 +687,7 @@ func (f *fetcher) sendUpdate(ctx context.Context, item *gofeed.Item) {
 		`🔗 <a href="%[1]s">%[2]s</a>`,
 		item.Link,
 		// Escape HTML from title, but replace non-breaking spaces with normal ones.
-		strings.Replace(html.EscapeString(title), "&nbsp;", " ", 0),
+		strings.Replace(html.EscapeString(title), "&nbsp;", " ", -1),
 	)
 
 	// If we have access to Gemini API, try to summarize an article.
