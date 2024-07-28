@@ -628,7 +628,7 @@ func (e *engine) callFunc(ctx context.Context) starlarkBuiltin {
 		}
 		rawReq, ok := rawReqVal.(starlark.String)
 		if !ok {
-			panic(fmt.Sprintf("%s: unexpected return type of json.encode Starlark function", b.Name()))
+			return nil, fmt.Errorf("%s: unexpected return type of json.encode Starlark function", b.Name())
 		}
 
 		// Make Telegram Bot API request.
