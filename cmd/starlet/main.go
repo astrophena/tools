@@ -201,7 +201,7 @@ func (e *engine) initRoutes() {
 	// Redirect to Telegram chat with bot.
 	e.mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
-			web.RespondError(e.logf, w, web.ErrNotFound)
+			e.respondError(w, web.ErrNotFound)
 			return
 		}
 		http.Redirect(w, r, "https://t.me/astrophena_bot", http.StatusFound)
@@ -246,7 +246,7 @@ func (e *engine) initRoutes() {
 		defer e.mu.Unlock()
 		err := e.loadGistErr
 		if err != nil {
-			web.RespondError(e.logf, w, err)
+			e.respondError(w, err)
 			return
 		}
 		http.Redirect(w, r, "/debug/", http.StatusFound)
@@ -323,20 +323,22 @@ type update struct {
 }
 
 func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
+	jsonErr := func(err error) { web.RespondError(e.logf, w, err) }
+
 	if r.Header.Get("X-Telegram-Bot-Api-Secret-Token") != e.tgSecret {
-		web.RespondJSONError(e.logf, w, web.ErrNotFound)
+		jsonErr(web.ErrNotFound)
 		return
 	}
 
 	rawUpdate, err := io.ReadAll(r.Body)
 	if err != nil {
-		web.RespondJSONError(e.logf, w, err)
+		jsonErr(err)
 		return
 	}
 
 	var u update
 	if err := json.Unmarshal(rawUpdate, &u); err != nil {
-		web.RespondJSONError(e.logf, w, err)
+		jsonErr(err)
 		return
 	}
 	// We've got a message reaction. Ignore it for now. I can always remove it
@@ -363,7 +365,7 @@ func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 	e.mu.Unlock()
 
 	if gistErr != nil {
-		web.RespondJSONError(e.logf, w, e.loadGistErr)
+		jsonErr(e.loadGistErr)
 		return
 	}
 
@@ -376,6 +378,10 @@ func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	jsonOK(w)
+}
+
+func (e *engine) respondError(w http.ResponseWriter, err error) {
+	web.RespondError(e.logf, w, err)
 }
 
 func jsonOK(w http.ResponseWriter) {
@@ -400,7 +406,7 @@ func (e *engine) handleLogin(w http.ResponseWriter, r *http.Request) {
 	data := r.URL.Query()
 	hash := data.Get("hash")
 	if hash == "" {
-		web.RespondError(e.logf, w, fmt.Errorf("%w: no hash present in auth data", web.ErrBadRequest))
+		e.respondError(w, fmt.Errorf("%w: no hash present in auth data", web.ErrBadRequest))
 		return
 	}
 	data.Del("hash")
@@ -422,7 +428,7 @@ func (e *engine) handleLogin(w http.ResponseWriter, r *http.Request) {
 	checkString := sb.String()
 
 	if !e.validateAuthData(checkString, hash) {
-		web.RespondError(e.logf, w, fmt.Errorf("%w: hash is not valid", web.ErrBadRequest))
+		e.respondError(w, fmt.Errorf("%w: hash is not valid", web.ErrBadRequest))
 		return
 	}
 
