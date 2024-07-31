@@ -31,6 +31,12 @@ The tgfeed program relies on the following environment variables:
   - GIST_ID: GitHub Gist ID where the program stores its state.
   - GITHUB_TOKEN: GitHub personal access token for accessing the GitHub API.
   - TELEGRAM_TOKEN: Telegram bot token for accessing the Telegram Bot API.
+  - STATS_SPREADSHEET_ID: ID of the Google Spreadsheet to which the
+    program uploads statistics for every run. This is required if the
+    SERVICE_ACCOUNT_KEY is provided.
+  - SERVICE_ACCOUNT_KEY: JSON string representing the service account key for
+    accessing the Google API. It's not required, and stats won't be uploaded to
+    a spreadsheet if this variable is not set.
 
 # Summarization with Gemini API
 
@@ -39,6 +45,28 @@ feature requires setting the GEMINI_API_KEY environment variable. When provided,
 tgfeed will attempt to summarize the description field of fetched RSS items and
 include the summary in the Telegram notification along with the article title
 and link.
+
+# Stats collection
+
+tgfeed collects and reports stats about every run to Google Sheets. You can
+specify the ID of the spreadsheet via the STATS_SPREADSHEET_ID environment
+variable. To collect stats, you must provide the SERVICE_ACCOUNT_KEY environment
+variable with JSON string representing the service account key for accessing the
+Google API. Stats include:
+
+  - Total number of feeds fetched
+  - Number of successfully fetched feeds
+  - Number of feeds that failed to fetch
+  - Number of feeds that were not modified
+  - Start time of a run
+  - Duration of a run
+  - Number of parsed RSS items
+  - Total fetch time
+  - Average fetch time
+  - Memory usage
+
+You can use these stats to monitor performance of tgfeed and understand which
+feeds are causing problems.
 
 # Administration
 
