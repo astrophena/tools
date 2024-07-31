@@ -85,8 +85,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"go.astrophena.name/tools/internal/api/gemini"
 	"go.astrophena.name/tools/internal/api/gist"
+	"go.astrophena.name/tools/internal/api/google/gemini"
 	"go.astrophena.name/tools/internal/cli"
 	"go.astrophena.name/tools/internal/logger"
 	"go.astrophena.name/tools/internal/request"

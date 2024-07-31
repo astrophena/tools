@@ -1,4 +1,5 @@
-// Package gemini provides a client for interacting with a generative text API.
+// Package gemini provides a very minimal client for interacting with Gemini
+// API.
 package gemini
 
 import (
@@ -9,10 +10,9 @@ import (
 	"go.astrophena.name/tools/internal/request"
 )
 
-// APIEndpoint is the base URL for the generative text API.
-const APIEndpoint = "https://generativelanguage.googleapis.com/v1beta"
+const apiURL = "https://generativelanguage.googleapis.com/v1beta"
 
-// Client holds configuration for interacting with the generative text API.
+// Client holds configuration for interacting with the Gemini API.
 type Client struct {
 	// APIKey is the API key used for authentication.
 	APIKey string
@@ -65,12 +65,12 @@ type Candidate struct {
 	Content *Content `json:"content"`
 }
 
-// GenerateContent sends a request to the generative text API to generate
-// creative text content.
+// GenerateContent sends a request to the Gemini API to generate creative text
+// content.
 func (c *Client) GenerateContent(ctx context.Context, params GenerateContentParams) (GenerateContentResponse, error) {
 	return request.MakeJSON[GenerateContentResponse](ctx, request.Params{
 		Method: http.MethodPost,
-		URL:    APIEndpoint + "/models/" + c.Model + ":generateContent",
+		URL:    apiURL + "/models/" + c.Model + ":generateContent",
 		Headers: map[string]string{
 			"x-goog-api-key": c.APIKey,
 		},

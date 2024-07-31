@@ -1,4 +1,5 @@
-// Package gist provides a client for interacting with the GitHub Gist API.
+// Package gist provides a very minimal client for interacting with the GitHub
+// Gist API.
 //
 // To use this package, you need to create a [Client] object with your access
 // token. Then, you can use the [Client.Get] or [Client.Update] methods to
@@ -13,7 +14,7 @@ import (
 	"go.astrophena.name/tools/internal/request"
 )
 
-const ghAPI = "https://api.github.com"
+const apiURL = "https://api.github.com"
 
 // Client represents a GitHub Gist API client.
 type Client struct {
@@ -32,7 +33,7 @@ type Client struct {
 func (c *Client) makeRequest(ctx context.Context, method string, id string, gist *Gist) (*Gist, error) {
 	rp := request.Params{
 		Method: method,
-		URL:    ghAPI + "/gists/" + id,
+		URL:    apiURL + "/gists/" + id,
 		Headers: map[string]string{
 			"Accept":               "application/vnd.github+json",
 			"X-GitHub-Api-Version": "2022-11-28",
