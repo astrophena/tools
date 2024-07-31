@@ -538,9 +538,6 @@ func (f *fetcher) reportStats(ctx context.Context) error {
 		return err
 	}
 
-	f.stats.mu.Lock()
-	defer f.stats.mu.Unlock()
-
 	// https://developers.google.com/sheets/api/reference/rest/v4/spreadsheets.values/append
 	req := struct {
 		Range          string     `json:"range"`
