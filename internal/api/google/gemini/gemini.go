@@ -68,7 +68,7 @@ type Candidate struct {
 // GenerateContent sends a request to the Gemini API to generate creative text
 // content.
 func (c *Client) GenerateContent(ctx context.Context, params GenerateContentParams) (GenerateContentResponse, error) {
-	return request.MakeJSON[GenerateContentResponse](ctx, request.Params{
+	return request.Make[GenerateContentResponse](ctx, request.Params{
 		Method: http.MethodPost,
 		URL:    apiURL + "/models/" + c.Model + ":generateContent",
 		Headers: map[string]string{

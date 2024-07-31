@@ -58,9 +58,12 @@ func scrubErr(err error, scrubber *strings.Replacer) error {
 	return &scrubbedError{err: err, scrubber: scrubber}
 }
 
-// MakeJSON makes a JSON HTTP request with the provided parameters and
-// unmarshals the JSON response body into the specified type.
-func MakeJSON[Response any](ctx context.Context, p Params) (Response, error) {
+// Make makes a HTTP request with the provided parameters and unmarshals the
+// response body into the specified type.
+//
+// It supports JSON or URL-encoded format for request bodies and JSON for
+// request responses.
+func Make[Response any](ctx context.Context, p Params) (Response, error) {
 	var resp Response
 
 	var (

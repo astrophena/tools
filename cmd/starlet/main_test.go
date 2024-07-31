@@ -25,7 +25,7 @@ var gistTxtar []byte
 
 func TestHealth(t *testing.T) {
 	e := testEngine(t, testMux(t, nil))
-	health, err := request.MakeJSON[web.HealthResponse](context.Background(), request.Params{
+	health, err := request.Make[web.HealthResponse](context.Background(), request.Params{
 		Method:     http.MethodGet,
 		URL:        "/health",
 		HTTPClient: testutil.MockHTTPClient(t, e.mux),
@@ -57,7 +57,7 @@ func TestHandleTelegramWebhook(t *testing.T) {
 			}
 		}
 
-		_, err = request.MakeJSON[any](context.Background(), request.Params{
+		_, err = request.Make[any](context.Background(), request.Params{
 			Method: http.MethodPost,
 			URL:    "/telegram",
 			Body:   update,

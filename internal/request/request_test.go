@@ -15,9 +15,9 @@ import (
 	"go.astrophena.name/tools/internal/web"
 )
 
-func ExampleMakeJSON() {
+func ExampleMake() {
 	// Checking health of Starlet.
-	health, err := request.MakeJSON[web.HealthResponse](context.Background(), request.Params{
+	health, err := request.Make[web.HealthResponse](context.Background(), request.Params{
 		Method: http.MethodGet,
 		URL:    "https://bot.astrophena.name/health",
 	})
@@ -32,9 +32,9 @@ func ExampleMakeJSON() {
 	}
 }
 
-func ExampleMakeJSON_scrub() {
+func ExampleMake_scrub() {
 	// Making request to GitHub API, scrubbing token out of error messages.
-	user, err := request.MakeJSON[map[string]any](context.Background(), request.Params{
+	user, err := request.Make[map[string]any](context.Background(), request.Params{
 		Method: http.MethodGet,
 		URL:    "https://api.github.com/user",
 		Headers: map[string]string{
@@ -48,7 +48,7 @@ func ExampleMakeJSON_scrub() {
 	fmt.Println(user["login"])
 }
 
-func TestMakeJSON(t *testing.T) {
+func TestMake(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Check the request method and path.
 		if r.Method != http.MethodPost || r.URL.Path != "/test" {
@@ -141,24 +141,24 @@ func TestMakeJSON(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			var resp json.RawMessage
-			resp, err := request.MakeJSON[json.RawMessage](context.Background(), tc.params)
+			resp, err := request.Make[json.RawMessage](context.Background(), tc.params)
 			if err != nil {
 				if !tc.wantErr {
-					t.Fatalf("MakeJSON() error = %v, wantErr %v", err, tc.wantErr)
+					t.Fatalf("Make() error = %v, wantErr %v", err, tc.wantErr)
 				}
 			}
 
 			if tc.wantErr {
 				if err == nil {
-					t.Fatalf("MakeJSON() expected error, got none")
+					t.Fatalf("Make() expected error, got none")
 				}
 				if !strings.Contains(err.Error(), tc.wantInErrorText) {
-					t.Fatalf("MakeJSON(): got error %q, wanted in it %q", err.Error(), tc.wantInErrorText)
+					t.Fatalf("Make(): got error %q, wanted in it %q", err.Error(), tc.wantInErrorText)
 				}
 			}
 
 			if string(resp) != tc.want {
-				t.Errorf("MakeJSON() got = %v, want %v", resp, tc.want)
+				t.Errorf("Make() got = %v, want %v", resp, tc.want)
 			}
 		})
 	}

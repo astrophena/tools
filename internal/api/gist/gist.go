@@ -45,7 +45,7 @@ func (c *Client) makeRequest(ctx context.Context, method string, id string, gist
 	if c.Token != "" {
 		rp.Headers["Authorization"] = "Bearer " + c.Token
 	}
-	return request.MakeJSON[*Gist](ctx, rp)
+	return request.Make[*Gist](ctx, rp)
 }
 
 // Get retrieves a Gist with the specified ID from GitHub.

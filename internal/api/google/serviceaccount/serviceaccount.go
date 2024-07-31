@@ -65,7 +65,7 @@ func (k *Key) AccessToken(ctx context.Context, client *http.Client, scopes ...st
 		AccessToken string `json:"access_token"`
 	}
 
-	tok, err := request.MakeJSON[response](ctx, request.Params{
+	tok, err := request.Make[response](ctx, request.Params{
 		Method:     http.MethodPost,
 		URL:        k.TokenURI,
 		Body:       params,

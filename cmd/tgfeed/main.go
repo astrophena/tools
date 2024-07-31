@@ -542,7 +542,7 @@ func (f *fetcher) reportStats(ctx context.Context) error {
 	q.Add("token", f.statsCollectorToken)
 	u.RawQuery = q.Encode()
 
-	resp, err := request.MakeJSON[response](ctx, request.Params{
+	resp, err := request.Make[response](ctx, request.Params{
 		Method: http.MethodPost,
 		URL:    u.String(),
 		Body:   []*stats{f.stats},
@@ -796,7 +796,7 @@ type inlineKeyboardButton struct {
 }
 
 func (f *fetcher) makeTelegramRequest(ctx context.Context, method string, args any) error {
-	if _, err := request.MakeJSON[any](ctx, request.Params{
+	if _, err := request.Make[any](ctx, request.Params{
 		Method:     http.MethodPost,
 		URL:        tgAPI + "/bot" + f.tgToken + "/" + method,
 		Body:       args,
