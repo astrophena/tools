@@ -4,6 +4,7 @@ go 1.22.3
 
 require (
 	github.com/dhowden/tag v0.0.0-20240417053706-3d75831295e8
+	github.com/golang-jwt/jwt/v5 v5.2.1
 	github.com/mmcdole/gofeed v1.3.0
 	go.astrophena.name/base v0.0.0-20240713142933-9da7f970e89e
 	go.starlark.net v0.0.0-20240520160348-046347dcd104
