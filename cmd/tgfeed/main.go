@@ -546,7 +546,7 @@ func (f *fetcher) reportStats(ctx context.Context) error {
 	}{
 		Range: "Stats",
 		// https://developers.google.com/sheets/api/reference/rest/v4/Dimension
-		MajorDimension: "COLUMNS",
+		MajorDimension: "ROWS",
 		Values: [][]string{
 			{
 				fmt.Sprintf("%d", f.stats.TotalFeeds),
