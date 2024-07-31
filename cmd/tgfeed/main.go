@@ -593,8 +593,9 @@ func (f *fetcher) reportStats(ctx context.Context) error {
 
 	_, err = request.Make[any](ctx, request.Params{
 		Method: http.MethodPost,
-		URL:    "https://sheets.googleapis.com/v4/spreadsheets/" + f.statsSpreadsheetID + "/values/Stats:append?valueInputOption=RAW",
-		Body:   req,
+		// https://developers.google.com/sheets/api/reference/rest/v4/ValueInputOption
+		URL:  "https://sheets.googleapis.com/v4/spreadsheets/" + f.statsSpreadsheetID + "/values/Stats:append?valueInputOption=USER_ENTERED",
+		Body: req,
 		Headers: map[string]string{
 			"Authorization": "Bearer " + tok,
 		},
