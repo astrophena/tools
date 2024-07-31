@@ -75,7 +75,6 @@ import (
 	"log"
 	"math/rand/v2"
 	"net/http"
-	"net/url"
 	"os"
 	"os/signal"
 	"runtime"
@@ -87,6 +86,7 @@ import (
 
 	"go.astrophena.name/tools/internal/api/gist"
 	"go.astrophena.name/tools/internal/api/google/gemini"
+	"go.astrophena.name/tools/internal/api/google/serviceaccount"
 	"go.astrophena.name/tools/internal/cli"
 	"go.astrophena.name/tools/internal/logger"
 	"go.astrophena.name/tools/internal/request"
@@ -160,9 +160,19 @@ func (f *fetcher) main(
 	f.geminiKey = cmp.Or(f.geminiKey, getenv("GEMINI_API_KEY"))
 	f.ghToken = cmp.Or(f.ghToken, getenv("GITHUB_TOKEN"))
 	f.gistID = cmp.Or(f.gistID, getenv("GIST_ID"))
-	f.statsCollectorToken = cmp.Or(f.statsCollectorToken, getenv("STATS_COLLECTOR_TOKEN"))
-	f.statsCollectorURL = cmp.Or(f.statsCollectorURL, getenv("STATS_COLLECTOR_URL"))
+	f.statsSpreadsheetID = cmp.Or(f.statsSpreadsheetID, getenv("STATS_SPREADSHEET_ID"))
 	f.tgToken = cmp.Or(f.tgToken, getenv("TELEGRAM_TOKEN"))
+
+	// Load Google service account key from SERVICE_ACCOUNT_KEY environment
+	// variable. If it's not defined, stats won't be uploaded to a Google
+	// spreadsheet.
+	if key := getenv("SERVICE_ACCOUNT_KEY"); key != "" {
+		var err error
+		f.serviceAccountKey, err = serviceaccount.LoadKey([]byte(key))
+		if err != nil {
+			return err
+		}
+	}
 
 	// Initialize internal state.
 	f.initOnce.Do(f.doInit)
@@ -210,9 +220,9 @@ type fetcher struct {
 
 	errorTemplate string
 
-	stats               *stats
-	statsCollectorURL   string
-	statsCollectorToken string
+	stats              *stats
+	serviceAccountKey  *serviceaccount.Key
+	statsSpreadsheetID string
 
 	mu    sync.Mutex
 	state map[string]*feedState
@@ -351,17 +361,17 @@ func (f *fetcher) run(ctx context.Context) error { // {{{
 	f.stats.mu.Lock()
 	defer f.stats.mu.Unlock()
 
-	f.stats.Duration = duration(time.Since(f.stats.StartTime))
+	f.stats.Duration = time.Since(f.stats.StartTime)
 	f.stats.TotalFeeds = len(f.feeds)
 	if f.stats.SuccessFeeds > 0 {
-		f.stats.AvgFetchTime = f.stats.TotalFetchTime / duration(f.stats.SuccessFeeds)
+		f.stats.AvgFetchTime = f.stats.TotalFetchTime / time.Duration(f.stats.SuccessFeeds)
 	}
 
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
 	f.stats.MemoryUsage = m.Alloc
 
-	if f.statsCollectorURL != "" && f.statsCollectorToken != "" {
+	if f.serviceAccountKey != nil && f.statsSpreadsheetID != "" {
 		if err := f.reportStats(ctx); err != nil {
 			f.logf("Failed to report stats: %v", err)
 		}
@@ -512,49 +522,60 @@ type stats struct {
 	FailedFeeds      int `json:"failed_feeds"`
 	NotModifiedFeeds int `json:"not_modified_feeds"`
 
-	StartTime        time.Time `json:"start_time"`
-	Duration         duration  `json:"duration"`
-	TotalItemsParsed int       `json:"total_items_parsed"`
+	StartTime        time.Time     `json:"start_time"`
+	Duration         time.Duration `json:"duration"`
+	TotalItemsParsed int           `json:"total_items_parsed"`
 
-	TotalFetchTime duration `json:"total_fetch_time"`
-	AvgFetchTime   duration `json:"avg_fetch_time"`
+	TotalFetchTime time.Duration `json:"total_fetch_time"`
+	AvgFetchTime   time.Duration `json:"avg_fetch_time"`
 
 	MemoryUsage uint64 `json:"memory_usage"`
 }
 
-type duration time.Duration
-
-func (d duration) MarshalJSON() ([]byte, error) {
-	return json.Marshal(time.Duration(d).String())
-}
-
 func (f *fetcher) reportStats(ctx context.Context) error {
-	type response struct {
-		Status  string `json:"status"`
-		Message string `json:"message,omitempty"`
-	}
-
-	u, err := url.Parse(f.statsCollectorURL)
+	tok, err := f.serviceAccountKey.AccessToken(ctx, f.httpc, "https://www.googleapis.com/auth/spreadsheets")
 	if err != nil {
 		return err
 	}
-	q := u.Query()
-	q.Add("token", f.statsCollectorToken)
-	u.RawQuery = q.Encode()
 
-	resp, err := request.Make[response](ctx, request.Params{
-		Method: http.MethodPost,
-		URL:    u.String(),
-		Body:   []*stats{f.stats},
+	f.stats.mu.Lock()
+	defer f.stats.mu.Unlock()
+
+	// https://developers.google.com/sheets/api/reference/rest/v4/spreadsheets.values/append
+	req := struct {
+		Range          string     `json:"range"`
+		MajorDimension string     `json:"majorDimension"`
+		Values         [][]string `json:"values"`
+	}{
+		Range: "Stats",
+		// https://developers.google.com/sheets/api/reference/rest/v4/Dimension
+		MajorDimension: "COLUMNS",
+		Values: [][]string{
+			{
+				fmt.Sprintf("%d", f.stats.TotalFeeds),
+				fmt.Sprintf("%d", f.stats.SuccessFeeds),
+				fmt.Sprintf("%d", f.stats.FailedFeeds),
+				fmt.Sprintf("%d", f.stats.NotModifiedFeeds),
+				f.stats.StartTime.Format(time.RFC3339),
+				f.stats.Duration.String(),
+				fmt.Sprintf("%d", f.stats.TotalItemsParsed),
+				f.stats.TotalFetchTime.String(),
+				f.stats.AvgFetchTime.String(),
+				fmt.Sprintf("%d", f.stats.MemoryUsage),
+			},
+		},
+	}
+
+	_, err = request.Make[any](ctx, request.Params{
+		Method: http.MethodPut,
+		URL:    "https://sheets.googleapis.com/v4/spreadsheets/" + f.statsSpreadsheetID + "/values/Stats:append?valueInputOption=RAW",
+		Body:   req,
+		Headers: map[string]string{
+			"Authorization": "Bearer " + tok,
+		},
+		HTTPClient: f.httpc,
 	})
-	if err != nil {
-		return err
-	}
-
-	if resp.Status == "error" {
-		return fmt.Errorf("got server error: %v", resp.Message)
-	}
-	return nil
+	return err
 }
 
 // }}}
@@ -655,7 +676,7 @@ func (f *fetcher) fetch(ctx context.Context, url string, updates chan *gofeed.It
 	defer f.stats.mu.Unlock()
 	f.stats.TotalItemsParsed += len(feed.Items)
 	f.stats.SuccessFeeds += 1
-	f.stats.TotalFetchTime += duration(time.Since(startTime))
+	f.stats.TotalFetchTime += time.Since(startTime)
 }
 
 func (f *fetcher) handleFetchFailure(ctx context.Context, state *feedState, url string, err error) {

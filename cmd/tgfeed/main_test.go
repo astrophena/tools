@@ -11,12 +11,10 @@ import (
 	"html"
 	"io"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	"go.astrophena.name/base/testutil"
 	"go.astrophena.name/base/txtar"
@@ -326,40 +324,6 @@ func TestLoadFromGistHandleError(t *testing.T) {
 	f := testFetcher(t, tm)
 	err := f.loadFromGist(context.Background())
 	testutil.AssertEqual(t, err.Error(), fmt.Sprintf("GET \"https://api.github.com/gists/test\": want 200, got 404: %s", gistErrorJSON))
-}
-
-func TestReportStats(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		testutil.AssertEqual(t, r.Method, http.MethodPost)
-		testutil.AssertEqual(t, r.URL.Path, "/")
-
-		token := r.URL.Query().Get("token")
-		testutil.AssertEqual(t, token, "test-token")
-
-		w.Write([]byte(`{"status": "success"}`))
-	}))
-	defer server.Close()
-
-	f := &fetcher{
-		statsCollectorURL:   server.URL,
-		statsCollectorToken: "test-token",
-		stats: &stats{
-			TotalFeeds:       10,
-			SuccessFeeds:     8,
-			FailedFeeds:      2,
-			NotModifiedFeeds: 3,
-			StartTime:        time.Now(),
-			Duration:         duration(5 * time.Minute),
-			TotalItemsParsed: 100,
-			TotalFetchTime:   duration(2 * time.Minute),
-			AvgFetchTime:     duration(12 * time.Second),
-			MemoryUsage:      1024 * 1024,
-		},
-	}
-
-	if err := f.reportStats(context.Background()); err != nil {
-		t.Errorf("reportStats failed: %v", err)
-	}
 }
 
 func readFile(t *testing.T, path string) []byte {
