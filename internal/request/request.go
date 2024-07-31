@@ -72,7 +72,7 @@ func Make[Response any](ctx context.Context, p Params) (Response, error) {
 	)
 	if p.Body != nil {
 		switch v := p.Body.(type) {
-		case url.Values:
+		case *url.Values:
 			data = []byte(v.Encode())
 			contentType = "application/x-www-form-urlencoded"
 		default:
