@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -28,7 +29,8 @@ type Params struct {
 	// Headers is a map of key-value pairs for additional request headers.
 	Headers map[string]string
 	// Body is any data to be sent in the request body. It will be marshaled to
-	// JSON.
+	// JSON or, if it's type is url.Values, as query string with Content-Type
+	// header set to "application/x-www-form-urlencoded".
 	Body any
 	// HTTPClient is an optional custom HTTP client object to use for the request.
 	// If not provided, DefaultClient will be used.
@@ -61,12 +63,22 @@ func scrubErr(err error, scrubber *strings.Replacer) error {
 func MakeJSON[Response any](ctx context.Context, p Params) (Response, error) {
 	var resp Response
 
-	var data []byte
+	var (
+		data        []byte
+		contentType string
+	)
 	if p.Body != nil {
-		var err error
-		data, err = json.Marshal(p.Body)
-		if err != nil {
-			return resp, scrubErr(err, p.Scrubber)
+		switch v := p.Body.(type) {
+		case url.Values:
+			data = []byte(v.Encode())
+			contentType = "application/x-www-form-urlencoded"
+		default:
+			var err error
+			data, err = json.Marshal(v)
+			if err != nil {
+				return resp, scrubErr(err, p.Scrubber)
+			}
+			contentType = "application/json"
 		}
 	}
 
@@ -86,8 +98,8 @@ func MakeJSON[Response any](ctx context.Context, p Params) (Response, error) {
 		}
 	}
 	req.Header.Set("User-Agent", UserAgent())
-	if data != nil {
-		req.Header.Set("Content-Type", "application/json")
+	if data != nil && contentType != "" {
+		req.Header.Set("Content-Type", contentType)
 	}
 
 	httpc := DefaultClient

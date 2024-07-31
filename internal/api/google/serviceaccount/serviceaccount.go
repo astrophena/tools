@@ -4,13 +4,14 @@
 package serviceaccount
 
 import (
+	"context"
 	"encoding/json"
-	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
+
+	"go.astrophena.name/tools/internal/request"
 
 	"github.com/golang-jwt/jwt/v5"
 )
@@ -37,7 +38,7 @@ type Key struct {
 }
 
 // AccessToken obtains an access token for service account identified by this key that is valid for one hour.
-func (k *Key) AccessToken(client *http.Client, scopes ...string) (string, error) {
+func (k *Key) AccessToken(ctx context.Context, client *http.Client, scopes ...string) (string, error) {
 	key, err := jwt.ParseRSAPrivateKeyFromPEM([]byte(k.PrivateKey))
 	if err != nil {
 		return "", err
@@ -60,31 +61,19 @@ func (k *Key) AccessToken(client *http.Client, scopes ...string) (string, error)
 	params.Add("grant_type", "urn:ietf:params:oauth:grant-type:jwt-bearer")
 	params.Add("assertion", sig)
 
-	if client == nil {
-		client = http.DefaultClient
-	}
-
-	resp, err := client.Post(k.TokenURI, "application/x-www-form-urlencoded", strings.NewReader(params.Encode()))
-	if err != nil {
-		return "", err
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("got status code %d instead of 200: %s", resp.StatusCode, body)
-	}
-
-	var tokenResponse struct {
+	type response struct {
 		AccessToken string `json:"access_token"`
 	}
-	if err := json.Unmarshal(body, &tokenResponse); err != nil {
+
+	tok, err := request.MakeJSON[response](ctx, request.Params{
+		Method:     http.MethodPost,
+		URL:        k.TokenURI,
+		Body:       params,
+		HTTPClient: client,
+	})
+	if err != nil {
 		return "", err
 	}
 
-	return tokenResponse.AccessToken, nil
+	return tok.AccessToken, nil
 }
