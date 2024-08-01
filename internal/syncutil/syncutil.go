@@ -22,7 +22,7 @@ func NewLimitedWaitGroup(limit int) *LimitedWaitGroup {
 // Add increments the counter of the LimitedWaitGroup by the specified delta.
 // It blocks if the number of active goroutines reaches the concurrency limit.
 func (lwg *LimitedWaitGroup) Add(delta int) {
-	for i := 0; i < delta; i++ {
+	for range delta {
 		lwg.workers <- struct{}{}
 		lwg.wg.Add(1)
 	}
