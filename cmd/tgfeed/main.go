@@ -326,11 +326,14 @@ func (f *fetcher) listFeeds(ctx context.Context, w io.Writer) error { // {{{
 		}
 		fmt.Fprintf(&sb, "last updated %s", state.LastUpdated.Format(time.DateTime))
 		if state.ErrorCount > 0 {
-			failCount := "once"
-			if state.ErrorCount > 1 {
-				failCount = fmt.Sprintf("%d times", state.ErrorCount)
+			fmt.Fprintf(&sb, ", failed %s, last error was %q", pluralize(int64(state.ErrorCount)), state.LastError)
+		}
+		if state.FetchCount > 0 {
+			fmt.Fprintf(&sb, ", fetched %s", pluralize(state.FetchCount))
+			if state.FetchFailCount > 0 {
+				failRate := (float32(state.FetchFailCount) / float32(state.FetchCount)) * 100
+				fmt.Fprintf(&sb, ", failure rate %.2f%%", failRate)
 			}
-			fmt.Fprintf(&sb, ", failed %s, last error was %q", failCount, state.LastError)
 		}
 		if state.Disabled {
 			fmt.Fprintf(&sb, ", disabled")
@@ -340,7 +343,17 @@ func (f *fetcher) listFeeds(ctx context.Context, w io.Writer) error { // {{{
 
 	io.WriteString(w, sb.String())
 	return nil
-} // }}}
+}
+
+func pluralize(n int64) string {
+	plural := "once"
+	if n > 1 {
+		plural = fmt.Sprintf("%d times", n)
+	}
+	return plural
+}
+
+// }}}
 
 func (f *fetcher) run(ctx context.Context) error { // {{{
 	// Start with empty stats for every run.
