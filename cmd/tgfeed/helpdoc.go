@@ -9,7 +9,12 @@ Tgfeed fetches RSS feeds and sends new articles via Telegram.
 
 tgfeed runs as a GitHub Actions workflow.
 
-It fetches RSS feeds from URLs provided in the feeds.json file on GitHub Gist.
+It fetches RSS feeds from URLs provided in the feeds.json file on GitHub Gist
+that is a simple array of feed URLs:
+
+    [
+      "https://astrophena.name/feed.xml"
+    ]
 
 New articles are sent to a Telegram chat specified by the CHAT_ID environment
 variable.
@@ -22,6 +27,7 @@ It maintains a state for each feed, including last modified time, last updated
 time, ETag, error count, and last error message. It keeps track of failing
 feeds and disables them after a certain threshold of consecutive failures.
 State information is stored and updated in the state.json file on GitHub Gist.
+You won't need to touch this file at all, except from very rare cases.
 
 # Environment variables
 
