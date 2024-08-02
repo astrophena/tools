@@ -52,6 +52,7 @@ import (
 	"time"
 
 	"go.astrophena.name/tools/internal/api/gist"
+	"go.astrophena.name/tools/internal/api/google/gemini"
 	"go.astrophena.name/tools/internal/cli"
 	"go.astrophena.name/tools/internal/logger"
 	"go.astrophena.name/tools/internal/request"
@@ -85,12 +86,13 @@ func (e *engine) main(ctx context.Context, args []string, getenv func(string) st
 		Flags:       flag.NewFlagSet("starlet", flag.ContinueOnError),
 	}
 	var (
-		addr     = a.Flags.String("addr", "localhost:3000", "Listen on `host:port`.")
-		tgToken  = a.Flags.String("tg-token", "", "Telegram Bot API `token`.")
-		tgSecret = a.Flags.String("tg-secret", "", "Secret `token` used to validate Telegram Bot API updates.")
-		tgOwner  = a.Flags.Int64("tg-owner", 0, "Telegram user `ID` of the bot owner.")
-		ghToken  = a.Flags.String("gh-token", "", "GitHub API `token`.")
-		gistID   = a.Flags.String("gist-id", "", "GitHub Gist `ID` to load bot code from.")
+		addr      = a.Flags.String("addr", "localhost:3000", "Listen on `host:port`.")
+		tgToken   = a.Flags.String("tg-token", "", "Telegram Bot API `token`.")
+		tgSecret  = a.Flags.String("tg-secret", "", "Secret `token` used to validate Telegram Bot API updates.")
+		tgOwner   = a.Flags.Int64("tg-owner", 0, "Telegram user `ID` of the bot owner.")
+		ghToken   = a.Flags.String("gh-token", "", "GitHub API `token`.")
+		geminiKey = a.Flags.String("gemini-key", "", "Gemini API `key`.")
+		gistID    = a.Flags.String("gist-id", "", "GitHub Gist `ID` to load bot code from.")
 	)
 	if err := a.HandleStartup(args, stdout, stderr); err != nil {
 		if errors.Is(err, cli.ErrExitVersion) {
@@ -104,6 +106,7 @@ func (e *engine) main(ctx context.Context, args []string, getenv func(string) st
 	e.tgSecret = cmp.Or(e.tgSecret, getenv("TG_SECRET"), *tgSecret)
 	e.tgOwner = cmp.Or(e.tgOwner, parseInt(getenv("TG_OWNER")), *tgOwner)
 	e.ghToken = cmp.Or(e.ghToken, getenv("GH_TOKEN"), *ghToken)
+	e.geminiKey = cmp.Or(e.geminiKey, getenv("GEMINI_KEY"), *geminiKey)
 	e.gistID = cmp.Or(e.gistID, getenv("GIST_ID"), *gistID)
 	e.onRender = getenv("RENDER") == "true"
 
@@ -144,20 +147,22 @@ type engine struct {
 
 	// initialized by doInit
 	gistc     *gist.Client
+	geminic   *gemini.Client
 	logf      logger.Logf
 	logStream logger.Streamer
 	mux       *http.ServeMux
 	logMasker *strings.Replacer
 
 	// configuration, read-only after initialization
-	ghToken  string
-	gistID   string
-	httpc    *http.Client
-	onRender bool
-	stderr   io.Writer
-	tgOwner  int64
-	tgSecret string
-	tgToken  string
+	ghToken   string
+	gistID    string
+	httpc     *http.Client
+	onRender  bool
+	stderr    io.Writer
+	geminiKey string
+	tgOwner   int64
+	tgSecret  string
+	tgToken   string
 
 	mu sync.Mutex
 	// loaded from gist
@@ -186,12 +191,21 @@ func (e *engine) doInit() {
 		e.gistID, "[EXPUNGED]",
 		e.tgSecret, "[EXPUNGED]",
 		e.tgToken, "[EXPUNGED]",
+		e.geminiKey, "[EXPUNGED]",
 	)
 
 	e.gistc = &gist.Client{
 		Token:      e.ghToken,
 		HTTPClient: e.httpc,
 		Scrubber:   e.logMasker,
+	}
+	if e.geminiKey != "" {
+		e.geminic = &gemini.Client{
+			APIKey:     e.geminiKey,
+			Model:      "gemini-1.5-flash-latest",
+			HTTPClient: e.httpc,
+			Scrubber:   e.logMasker,
+		}
 	}
 }
 
@@ -350,6 +364,7 @@ func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 	predeclared := starlark.StringDict{
 		"bot_owner_id": starlark.MakeInt64(e.tgOwner),
 		"call":         starlark.NewBuiltin("call", e.callFunc(r.Context())),
+		"gemini":       starlark.NewBuiltin("gemini", e.geminiFunc(r.Context())),
 		"escape_html":  starlark.NewBuiltin("escape_html", escapeHTML),
 		"json":         starlarkjson.Module,
 		"raw_update":   starlark.String(rawUpdate),
@@ -593,6 +608,105 @@ func escapeHTML(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tupl
 		return nil, err
 	}
 	return starlark.String(html.EscapeString(s)), nil
+}
+
+/*
+geminiFunc implements a Starlark builtin that generates text using the Gemini API.
+
+It accepts two keyword arguments: contents (list of strings, text to be provided to Gemini for generation) and system (dict, optional system instructions to guide Gemini's response).
+
+The system dictionary has a single key, "text", which should contain a string representing the system instructions.
+
+For example, to generate a creative story:
+
+	result = gemini(
+	    contents = ["Once upon a time,"],
+	    system = {
+	        "text": "You are a creative story writer. Write a short story based on the provided prompt."
+	    }
+	)
+
+The result will be a list of candidates, where each candidate is a list of generated text parts (strings).
+
+Here's how to access the generated text:
+
+	for candidate in result:
+	    for part in candidate:
+	        print(part)
+*/
+func (e *engine) geminiFunc(ctx context.Context) starlarkBuiltin {
+	return func(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+		if e.geminic == nil {
+			return starlark.None, fmt.Errorf("%s: Gemini API is not available", b.Name())
+		}
+		if len(args) > 0 {
+			return starlark.None, fmt.Errorf("%s: unexpected positional arguments", b.Name())
+		}
+		var (
+			contents *starlark.List
+			system   *starlark.Dict
+		)
+		if err := starlark.UnpackArgs(b.Name(), args, kwargs, "contents", &contents, "system", &system); err != nil {
+			return nil, err
+		}
+
+		var (
+			parts      []*gemini.Part
+			systemPart *gemini.Part
+		)
+
+		for i := range contents.Len() {
+			partVal, ok := contents.Index(i).(starlark.String)
+			if !ok {
+				return starlark.None, fmt.Errorf("%s: contents[%d] is not a string", b.Name(), i)
+			}
+			parts = append(parts, &gemini.Part{
+				Text: string(partVal),
+			})
+		}
+
+		if system != nil {
+			systemTextVal, ok, err := system.Get(starlark.String("text"))
+			if err != nil {
+				return starlark.None, err
+			}
+			if !ok {
+				return starlark.None, fmt.Errorf("%s: system.text is not a string", b.Name())
+			}
+			systemText, ok := systemTextVal.(starlark.String)
+			if !ok {
+				return starlark.None, fmt.Errorf("%s: system.text is not a string", b.Name())
+			}
+			systemPart = &gemini.Part{
+				Text: string(systemText),
+			}
+		}
+
+		resp, err := e.geminic.GenerateContent(ctx, gemini.GenerateContentParams{
+			Contents: []*gemini.Content{
+				{
+					Parts: parts,
+				},
+			},
+			SystemInstruction: &gemini.Content{
+				Parts: []*gemini.Part{systemPart},
+			},
+		})
+		if err != nil {
+			return starlark.None, fmt.Errorf("%s: failed to generate text: %w", b.Name(), err)
+		}
+
+		var candidates []starlark.Value
+		for _, candidate := range resp.Candidates {
+			var textParts []starlark.Value
+			for _, part := range candidate.Content.Parts {
+				textParts = append(textParts, starlark.String(part.Text))
+			}
+			candidates = append(candidates, starlark.NewList(textParts))
+		}
+
+		return starlark.NewList(candidates), nil
+	}
 }
 
 /*
