@@ -251,10 +251,6 @@ func (e *engine) initRoutes() {
 	e.mux.HandleFunc("GET /login", e.handleLogin)
 
 	// Debug routes.
-	e.mux.HandleFunc("GET /sha", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintln(w, version.Version().Commit)
-	})
-
 	web.Health(e.mux)
 	dbg := web.Debugger(e.logf, e.mux)
 	dbg.SetIcon(debugIcon)
@@ -284,10 +280,6 @@ func (e *engine) initRoutes() {
 			return
 		}
 		http.Redirect(w, r, "/debug/", http.StatusFound)
-	})
-
-	dbg.HandleFunc("version", "Version (JSON)", func(w http.ResponseWriter, r *http.Request) {
-		web.RespondJSON(w, version.Version())
 	})
 }
 
