@@ -67,6 +67,7 @@ import (
 	starlarkjson "go.starlark.net/lib/json"
 	starlarktime "go.starlark.net/lib/time"
 	"go.starlark.net/starlark"
+	"go.starlark.net/starlarkstruct"
 	"go.starlark.net/syntax"
 )
 
@@ -346,12 +347,22 @@ func (e *engine) loadFromGist(ctx context.Context) {
 	}
 
 	predeclared := starlark.StringDict{
-		"bot_owner_id": starlark.MakeInt64(e.tgOwner),
-		"escape_html":  starlark.NewBuiltin("escape_html", escapeHTML),
-		"gemini":       starlarkgemini.Module(e.geminic),
-		"json":         starlarkjson.Module,
-		"telegram":     telegram.Module(e.tgToken, e.httpc),
-		"time":         starlarktime.Module,
+		"config": starlarkstruct.FromStringDict(
+			starlarkstruct.Default,
+			starlark.StringDict{
+				"owner_id": starlark.MakeInt64(e.tgOwner),
+			},
+		),
+		"gemini": starlarkgemini.Module(e.geminic),
+		"html": &starlarkstruct.Module{
+			Name: "html",
+			Members: starlark.StringDict{
+				"escape": starlark.NewBuiltin("html.escape", escapeHTML),
+			},
+		},
+		"json":     starlarkjson.Module,
+		"telegram": telegram.Module(e.tgToken, e.httpc),
+		"time":     starlarktime.Module,
 	}
 	e.botProg, err = starlark.ExecFileOptions(
 		&syntax.FileOptions{},

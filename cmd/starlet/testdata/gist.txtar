@@ -11,4 +11,4 @@ def send_message(to, text, reply_markup = {}):
 
 def handle(update):
     print(repr(update))
-    send_message(bot_owner_id, "Hello, world!")
+    send_message(config.owner_id, "Hello, world!")
