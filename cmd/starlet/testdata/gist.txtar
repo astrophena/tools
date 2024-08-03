@@ -1,6 +1,6 @@
 -- bot.star --
 def send_message(to, text, reply_markup = {}):
-    return call(
+    return telegram.call(
         method = "sendMessage",
         args = {
             "chat_id": to,

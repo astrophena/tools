@@ -6,9 +6,10 @@ Starlet allows to create and manage a Telegram bot using the Starlark scripting 
 Starlet serves an HTTP server to handle Telegram webhook updates and bot
 maintenance. The bot's code is sourced from a specified GitHub Gist. Also
 Starlet includes features such as user authentication via the Telegram login
-widget, ensuring that only the designated bot owner can manage the bot. In
-production environments, Starlet periodically pings itself to prevent the
-hosting service from putting it to sleep, ensuring continuous operation.
+widget, ensuring that only the designated bot owner can manage the bot.
+
+When running on [Render], Starlet periodically pings itself to prevent [Render]
+from putting it to sleep, ensuring continuous operation.
 
 # Starlark language
 
@@ -23,6 +24,7 @@ Additional modules and functions available from bot code:
   - json: The Starlark JSON module, enabling JSON parsing and encoding.
   - time: The Starlark time module, providing time-related functions.
 
+[Render]: https://render.com
 [Starlark spec]: https://github.com/bazelbuild/starlark/blob/master/spec.md
 */
 package main
@@ -52,6 +54,7 @@ import (
 	"sync"
 	"time"
 
+	"go.astrophena.name/tools/cmd/starlet/lib/telegram"
 	"go.astrophena.name/tools/internal/api/gist"
 	"go.astrophena.name/tools/internal/api/google/gemini"
 	"go.astrophena.name/tools/internal/cli"
@@ -362,14 +365,15 @@ func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// TODO: cache it.
 	predeclared := starlark.StringDict{
 		"bot_owner_id": starlark.MakeInt64(e.tgOwner),
-		"call":         starlark.NewBuiltin("call", e.callFunc(r.Context())),
 		"gemini":       starlark.NewBuiltin("gemini", e.geminiFunc(r.Context())),
 		"escape_html":  starlark.NewBuiltin("escape_html", escapeHTML),
 		"json":         starlarkjson.Module,
 		"raw_update":   starlark.String(rawUpdate),
 		"time":         starlarktime.Module,
+		"telegram":     telegram.Module(e.tgToken, e.httpc),
 	}
 
 	e.loadGist.Do(func() { e.loadFromGist(r.Context()) })
@@ -707,64 +711,5 @@ func (e *engine) geminiFunc(ctx context.Context) starlarkBuiltin {
 		}
 
 		return starlark.NewList(candidates), nil
-	}
-}
-
-/*
-callFunc implements a Starlark builtin that makes request to Telegram Bot API and returns it's response.
-
-It accepts two keyword arguments: method (string, Telegram Bot API method to call) and args (dict, arguments
-for this method).
-
-For example, to send a message, you can write a function like this:
-
-	def send_message(to, text, reply_markup = {}):
-	    return call(
-	        method = "sendMessage",
-	        args = {
-	            "chat_id": to,
-	            "text": text,
-	            "reply_markup": reply_markup
-	        }
-	    )
-*/
-func (e *engine) callFunc(ctx context.Context) starlarkBuiltin {
-	return func(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-		// Unpack arguments passed from Starlark code.
-		if len(args) > 0 {
-			return starlark.None, fmt.Errorf("%s: unexpected positional arguments", b.Name())
-		}
-		var (
-			method   starlark.String
-			argsDict *starlark.Dict
-		)
-		if err := starlark.UnpackArgs(b.Name(), args, kwargs, "method", &method, "args", &argsDict); err != nil {
-			return nil, err
-		}
-
-		// Encode received args to JSON.
-		rawReqVal, err := starlark.Call(thread, starlarkjson.Module.Members["encode"], starlark.Tuple{argsDict}, []starlark.Tuple{})
-		if err != nil {
-			return nil, fmt.Errorf("%s: failed to encode received args to JSON: %v", b.Name(), err)
-		}
-		rawReq, ok := rawReqVal.(starlark.String)
-		if !ok {
-			return nil, fmt.Errorf("%s: unexpected return type of json.encode Starlark function", b.Name())
-		}
-
-		// Make Telegram Bot API request.
-		rawResp, err := request.Make[json.RawMessage](ctx, request.Params{
-			Method:     http.MethodPost,
-			URL:        "https://api.telegram.org/bot" + e.tgToken + "/" + string(method),
-			Body:       json.RawMessage(rawReq),
-			HTTPClient: e.httpc,
-			Scrubber:   e.logMasker,
-		})
-		if err != nil {
-			return nil, fmt.Errorf("%s: failed to make request: %s", b.Name(), err)
-		}
-
-		// Decode received JSON returned from Telegram and pass it back to Starlark code.
-		return starlark.Call(thread, starlarkjson.Module.Members["decode"], starlark.Tuple{starlark.String(rawResp)}, []starlark.Tuple{})
 	}
 }
