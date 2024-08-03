@@ -425,6 +425,8 @@ func toStarlarkValue(value any) (starlark.Value, error) {
 	switch v := value.(type) {
 	case nil:
 		return starlark.None, nil
+	case bool:
+		return starlark.Bool(v), nil
 	case string:
 		return starlark.String(v), nil
 	case int:
