@@ -1,6 +1,4 @@
 // Package starconv implements Starlark value conversion.
-//
-// BUG: ToValue does not support arbitrary structs.
 package starconv
 
 import (
