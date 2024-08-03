@@ -10,7 +10,7 @@ enabling the creation of Telegram bots using the Starlark scripting language.
 It provides a simple way to define bot commands, handle incoming messages,
 and interact with the Telegram API.
 
-Starlet periodically pings itself to prevent Render from putting it to sleep,
+Starlet periodically pings itself to prevent [Render] from putting it to sleep,
 ensuring continuous operation.
 
 # Starlark environment
@@ -19,26 +19,26 @@ In addition to the standard Starlark modules, the following modules are
 available to the bot code:
 
     config: Contains bot configuration.
-      - owner_id (int): Telegram user ID of the bot owner.
-      - version (str): Bot version string.
+    	- owner_id (int): Telegram user ID of the bot owner.
+    	- version (str): Bot version string.
 
     gemini: Allows interaction with Gemini API.
-      - generate_content(contents, *, system=None): Generates text using Gemini.
-        - contents (list of strings): The text to be provided to Gemini for generation.
-        - system (dict, optional): System instructions to guide Gemini's response, containing a
-          single key "text" with string value.
+    	- generate_content(contents, *, system=None): Generates text using Gemini.
+    	- contents (list of strings): The text to be provided to Gemini for generation.
+    	- system (dict, optional): System instructions to guide Gemini's response, containing a
+    		single key "text" with string value.
 
     html: Helper functions for working with HTML.
-      - escape(s): Escapes HTML string.
+    	- escape(s): Escapes HTML string.
 
     telegram: Allows sending requests to the Telegram Bot API.
-      - call(method, args): Calls a Telegram Bot API method.
-        - method (string): The Telegram Bot API method to call.
-        - args (dict): The arguments to pass to the method.
+    	- call(method, args): Calls a Telegram Bot API method.
+    	- method (string): The Telegram Bot API method to call.
+    	- args (dict): The arguments to pass to the method.
 
     time: Provides time-related functions.
 
-See https://pkg.go.dev/go.starlark.net/lib/time#Module for documentation of the
+See https:pkg.go.dev/go.starlark.net/lib/time#Module for documentation of the
 time module.
 
 # GitHub Gist structure
@@ -55,26 +55,6 @@ The GitHub Gist containing the bot code must have the following structure:
 The bot code must define a function called handle that takes a single argument
 — a dictionary representing the Telegram update. This function is called by
 Starlet for each incoming update.
-
-Example "bot.star":
-
-    def handle(update):
-        message = update.get("message")
-        if message is None:
-            return
-
-        chat_id = message["chat"]["id"]
-        text = message.get("text")
-        if text == "/start":
-            telegram.call(
-                method="sendMessage",
-                args={
-                    "chat_id": chat_id,
-                    "text": "Hello, world!",
-                }
-            )
-
-This bot will respond to the "/start" command with the message "Hello, world!".
 
 # Environment variables
 
@@ -98,8 +78,8 @@ Starlet provides a debug interface at /debug with the following endpoints:
 Authentication through Telegram is required to access the debug interface when
 running on Render. The user must be the bot owner to successfully authenticate.
 
-See https://core.telegram.org/widgets/login for guidance. Use "https://<bot
+See https:core.telegram.org/widgets/login for guidance. Use "https:<bot
 URL>/login" as login URL.
 
-[Render]: https://render.com
+[Render]: https:render.com
 `
