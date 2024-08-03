@@ -1,3 +1,5 @@
+// Package telegram contains a Starlark module that exposes the Telegram Bot
+// API.
 package telegram
 
 import (
@@ -14,6 +16,26 @@ import (
 	"go.starlark.net/starlarkstruct"
 )
 
+// Module returns a Starlark module that exposes the Telegram Bot API.
+//
+// This module provides a single function, call, which makes requests to the Telegram Bot API.
+//
+// The call function takes two arguments:
+//
+//   - method (string): The Telegram Bot API method to call.
+//   - args (dict): The arguments to pass to the method.
+//
+// For example, to send a message to a chat:
+//
+//	result = telegram.call(
+//	    method = "sendMessage",
+//	    args = {
+//	        "chat_id": 123456789,
+//	        "text": "Hello, world!"
+//	    }
+//	)
+//
+// The result variable will contain the response from the Telegram Bot API.
 func Module(token string, client *http.Client) *starlarkstruct.Module {
 	m := &module{
 		httpc:    client,
@@ -35,7 +57,11 @@ type module struct {
 }
 
 func (m *module) call(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	// Unpack arguments passed from Starlark code.
+	ctx, ok := thread.Local("context").(context.Context)
+	if !ok {
+		ctx = context.Background()
+	}
+
 	if len(args) > 0 {
 		return starlark.None, fmt.Errorf("%s: unexpected positional arguments", b.Name())
 	}
@@ -47,7 +73,6 @@ func (m *module) call(thread *starlark.Thread, b *starlark.Builtin, args starlar
 		return nil, err
 	}
 
-	// Encode received args to JSON.
 	rawReqVal, err := starlark.Call(thread, starlarkjson.Module.Members["encode"], starlark.Tuple{argsDict}, []starlark.Tuple{})
 	if err != nil {
 		return nil, fmt.Errorf("%s: failed to encode received args to JSON: %v", b.Name(), err)
@@ -57,9 +82,7 @@ func (m *module) call(thread *starlark.Thread, b *starlark.Builtin, args starlar
 		return nil, fmt.Errorf("%s: unexpected return type of json.encode Starlark function", b.Name())
 	}
 
-	// Make Telegram Bot API request.
-	// TODO: plumb the context from caller.
-	rawResp, err := request.Make[json.RawMessage](context.Background(), request.Params{
+	rawResp, err := request.Make[json.RawMessage](ctx, request.Params{
 		Method:     http.MethodPost,
 		URL:        "https://api.telegram.org/bot" + m.token + "/" + string(method),
 		Body:       json.RawMessage(rawReq),
@@ -70,6 +93,5 @@ func (m *module) call(thread *starlark.Thread, b *starlark.Builtin, args starlar
 		return nil, fmt.Errorf("%s: failed to make request: %s", b.Name(), err)
 	}
 
-	// Decode received JSON returned from Telegram and pass it back to Starlark code.
 	return starlark.Call(thread, starlarkjson.Module.Members["decode"], starlark.Tuple{starlark.String(rawResp)}, []starlark.Tuple{})
 }

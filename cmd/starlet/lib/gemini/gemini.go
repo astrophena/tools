@@ -1,3 +1,5 @@
+// Package gemini contains a Starlark module that exposes Gemini API
+// functionality.
 package gemini
 
 import (
@@ -10,6 +12,43 @@ import (
 	"go.starlark.net/starlarkstruct"
 )
 
+// Module returns a Starlark module that exposes Gemini API functionality.
+//
+// This module provides a single function, generate_content, which uses the
+// Gemini API to generate text.
+//
+// It accepts two keyword arguments:
+//
+//   - contents (list of strings): The text to be provided to Gemini for generation.
+//   - system (dict, optional): System instructions to guide Gemini's response.
+//
+// The system dictionary has a single key, text, which should contain a string
+// representing the system instructions.
+//
+// For example:
+//
+//	result = gemini.generate_content(
+//	    contents = ["Once upon a time,"],
+//	    system = {
+//	        "text": "You are a creative story writer. Write a short story based on the provided prompt."
+//	    }
+//	)
+//
+// The result variable will contain a list of candidates, where each candidate
+// is a list of generated text parts.
+//
+// The system dictionary is optional and can be used to provide system
+// instructions to guide Gemini's response.
+//
+// The system dictionary has a single key, text, which should contain a
+// string representing the system instructions.
+//
+// For example, the following system instructions will tell Gemini to write a
+// short story based on the provided prompt:
+//
+//	system = {
+//	    "text": "You are a creative story writer. Write a short story based on the provided prompt."
+//	}
 func Module(client *gemini.Client) *starlarkstruct.Module {
 	m := &module{c: client}
 	return &starlarkstruct.Module{
@@ -24,31 +63,12 @@ type module struct {
 	c *gemini.Client
 }
 
-/*
-generateContent implements a Starlark function that generates text using the Gemini API.
-
-It accepts two keyword arguments: contents (list of strings, text to be provided to Gemini for generation) and system (dict, optional system instructions to guide Gemini's response).
-
-The system dictionary has a single key, "text", which should contain a string representing the system instructions.
-
-For example, to generate a creative story:
-
-	result = gemini.generate_content(
-	    contents = ["Once upon a time,"],
-	    system = {
-	        "text": "You are a creative story writer. Write a short story based on the provided prompt."
-	    }
-	)
-
-The result will be a list of candidates, where each candidate is a list of generated text parts (strings).
-
-Here's how to access the generated text:
-
-	for candidate in result:
-	    for part in candidate:
-	        print(part)
-*/
 func (m *module) generateContent(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	ctx, ok := thread.Local("context").(context.Context)
+	if !ok {
+		ctx = context.Background()
+	}
+
 	if m.c == nil {
 		return starlark.None, fmt.Errorf("%s: Gemini API is not available", b.Name())
 	}
@@ -95,8 +115,7 @@ func (m *module) generateContent(thread *starlark.Thread, b *starlark.Builtin, a
 		}
 	}
 
-	// TODO: plumb the context from caller.
-	resp, err := m.c.GenerateContent(context.Background(), gemini.GenerateContentParams{
+	resp, err := m.c.GenerateContent(ctx, gemini.GenerateContentParams{
 		Contents: []*gemini.Content{
 			{
 				Parts: parts,

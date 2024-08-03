@@ -390,9 +390,12 @@ func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = starlark.ExecFileOptions(&syntax.FileOptions{}, &starlark.Thread{
+	thread := &starlark.Thread{
 		Print: func(thread *starlark.Thread, msg string) { e.logf("%v", msg) },
-	}, "bot.star", botCode, predeclared)
+	}
+	thread.SetLocal("context", r.Context())
+
+	_, err = starlark.ExecFileOptions(&syntax.FileOptions{}, thread, "bot.star", botCode, predeclared)
 	if err != nil {
 		e.reportError(r.Context(), w, u, err)
 		return
