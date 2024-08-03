@@ -169,6 +169,11 @@ func (e *engine) main(ctx context.Context, args []string, getenv func(string) st
 	e.stderr = stderr
 	e.init.Do(e.doInit)
 
+	// Used in tests.
+	if e.noServerStart {
+		return nil
+	}
+
 	// If running on Render, try to look up port to listen on and start goroutine
 	// that prevents Starlet from sleeping.
 	if e.onRender {
@@ -207,6 +212,9 @@ type engine struct {
 	logStream logger.Streamer
 	mux       *http.ServeMux
 	logMasker *strings.Replacer
+
+	// test flags
+	noServerStart bool
 
 	// configuration, read-only after initialization
 	ghToken   string
@@ -429,6 +437,8 @@ func (e *engine) newStarlarkThread(ctx context.Context) *starlark.Thread {
 	return thread
 }
 
+var errNoHandleFunc = errors.New("handle function not found in bot code")
+
 func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 	jsonErr := func(err error) { web.RespondError(e.logf, w, err) }
 
@@ -464,7 +474,7 @@ func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 
 	f, ok := e.botProg["handle"]
 	if !ok {
-		e.reportError(r.Context(), w, errors.New("handle function not found in bot code"))
+		e.reportError(r.Context(), w, errNoHandleFunc)
 		return
 	}
 

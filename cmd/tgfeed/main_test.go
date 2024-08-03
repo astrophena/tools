@@ -32,11 +32,6 @@ var (
 
 var update = flag.Bool("update", false, "update golden files in testdata")
 
-func TestMain(m *testing.M) {
-	flag.Parse()
-	os.Exit(m.Run())
-}
-
 func TestFetcherMain(t *testing.T) {
 	t.Parallel()
 
