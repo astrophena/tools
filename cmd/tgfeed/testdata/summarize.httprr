@@ -1,0 +1,61 @@
+httprr trace v1
+3454 1694
+POST https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent HTTP/1.1
+Host: generativelanguage.googleapis.com
+User-Agent: tgfeed/devel (+https://astrophena.name/bleep-bloop)
+Content-Length: 3181
+Content-Type: application/json
+
+{"contents":[{"parts":[{"text":"##  Ancient Mayan Calendar Found in Grandma's Attic Predicts World to End...Again\n\n**DES MOINES, IOWA** - A seemingly ordinary attic clean-up in suburban Des Moines has sent shockwaves through the archeological and, frankly, the entire scientific community.  Local woman, Agnes Mildew (87), unearthed what experts are cautiously calling \"the find of the century, maybe even the millennium.\"  Tucked away in a dusty hatbox, nestled amongst moth-eaten scarves and faded family photos, lay a pristine Mayan calendar. And this was no souvenir shop trinket. \n\n\"It was eerie,\" recounted Ms. Mildew, adjusting her cat-eye glasses. \"I opened that box, haven't touched it since I don't know when, and there it was, gleaming like a new penny.\"  \n\nThe gleaming, according to Dr. Bartholomew Quill, esteemed Professor of Mesoamerican History at the University of Des Moines (and the first expert Ms. Mildew could reach on such short notice), is due to the calendar being crafted from an as-yet unidentified metal alloy. \"The craftsmanship is simply remarkable,\" he gushed, gingerly tracing the intricate glyphs etched across its surface. \"And the implications...well, they're staggering.\" \n\nWhat has Dr. Quill and his team in a tizzy is not just the calendar's pristine condition or the mysterious metal, but its contents.  This newly discovered calendar doesn't end in 2012, as previously believed. Oh no, this calendar, according to preliminary interpretations, throws humanity a bone, giving us another good 50 years. However, the calendar then depicts a series of increasingly frantic stick figures, seemingly engaged in a losing battle against a giant, flaming...something. \n\n\"We're not sure what to make of the giant flaming something yet,\" admitted Dr. Quill, \"but it doesn't look good.\" \n\nThe scientific community is abuzz with theories. Some speculate the flaming something is a metaphor, perhaps representing global warming or a particularly nasty strain of the flu. Others, however, whisper of ancient prophecies, of forgotten deities, and yes, even alien invasions. \n\nMs. Mildew, meanwhile, remains unfazed. \"End of the world, you say?\" she scoffed, pouring another cup of chamomile tea. \"I've lived through the Great Depression, two husbands, and the Macarena. I think I can handle a giant flaming something.\" \n\nThe Des Moines Mayan Calendar, as it's quickly becoming known, is set to undergo rigorous analysis and carbon dating (though Dr. Quill admits he's not entirely sure how carbon dating works on unidentified metal alloys). The world waits with bated breath, wondering if Ms. Mildew's attic discovery is the key to unlocking our future… or the harbinger of our fiery doom. \n"}]}],"systemInstruction":{"parts":[{"text":"\nYou are a friendly bot that fetches articles from RSS feeds and given\ndescriptions of articles, YouTube videos and sometimes full articles themselves.\n\nYour task is to make a concise summary of article or video description in three\nsentences in English.\n\nIf text only contains an image or something you can't summarize, return exactly\n\"TGFEED_SKIP\" (without quotes).\n"}]}}HTTP/2.0 200 OK
+Alt-Svc: h3=":443"; ma=2592000,h3-29=":443"; ma=2592000
+Cache-Control: private
+Content-Type: application/json; charset=UTF-8
+Date: Sat, 03 Aug 2024 21:00:02 GMT
+Server: scaffolding on HTTPServer2
+Server-Timing: gfet4t7; dur=1564
+Vary: Origin
+Vary: X-Origin
+Vary: Referer
+X-Content-Type-Options: nosniff
+X-Frame-Options: SAMEORIGIN
+X-Xss-Protection: 0
+
+{
+  "candidates": [
+    {
+      "content": {
+        "parts": [
+          {
+            "text": "An 87-year-old woman in Des Moines, Iowa, found a pristine Mayan calendar in her attic, which experts are calling a major discovery. This calendar, unlike previously known ones, doesn't end in 2012 but predicts the world's end in 50 years, with the final image showing humanity battling a giant, flaming entity. While experts are baffled by the calendar's content and the unknown metal it's made from, Ms. Mildew, who found it, remains unfazed, confident in her ability to weather any apocalypse. \n"
+          }
+        ],
+        "role": "model"
+      },
+      "finishReason": "STOP",
+      "index": 0,
+      "safetyRatings": [
+        {
+          "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+          "probability": "NEGLIGIBLE"
+        },
+        {
+          "category": "HARM_CATEGORY_HATE_SPEECH",
+          "probability": "NEGLIGIBLE"
+        },
+        {
+          "category": "HARM_CATEGORY_HARASSMENT",
+          "probability": "NEGLIGIBLE"
+        },
+        {
+          "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+          "probability": "NEGLIGIBLE"
+        }
+      ]
+    }
+  ],
+  "usageMetadata": {
+    "promptTokenCount": 673,
+    "candidatesTokenCount": 119,
+    "totalTokenCount": 792
+  }
+}

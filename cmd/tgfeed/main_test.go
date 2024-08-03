@@ -12,6 +12,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -19,7 +20,9 @@ import (
 	"go.astrophena.name/base/testutil"
 	"go.astrophena.name/base/txtar"
 	"go.astrophena.name/tools/internal/api/gist"
+	"go.astrophena.name/tools/internal/api/google/gemini"
 	"go.astrophena.name/tools/internal/cli"
+	"go.astrophena.name/tools/internal/request/rr"
 )
 
 // Typical Telegram Bot API token, copied from docs.
@@ -319,6 +322,45 @@ func TestLoadFromGistHandleError(t *testing.T) {
 	f := testFetcher(t, tm)
 	err := f.loadFromGist(context.Background())
 	testutil.AssertEqual(t, err.Error(), fmt.Sprintf("GET \"https://api.github.com/gists/test\": want 200, got 404: %s", gistErrorJSON))
+}
+
+// Updating this test:
+//
+//	$  GEMINI_API_KEY=... go test -httprecord testdata/summarize.httprr
+//
+// (notice an extra space before command to prevent recording it in shell
+// history)
+
+func TestSummarize(t *testing.T) {
+	t.Parallel()
+
+	rec, err := rr.Open(filepath.Join("testdata", "summarize.httprr"), http.DefaultTransport)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec.Scrub(func(r *http.Request) error {
+		r.Header.Del("x-goog-api-key")
+		return nil
+	})
+
+	f := testFetcher(t, testMux(t, nil))
+	f.geminic = &gemini.Client{
+		Model:      "gemini-1.5-flash-latest",
+		HTTPClient: rec.Client(),
+	}
+	if rec.Recording() {
+		f.geminic.APIKey = os.Getenv("GEMINI_API_KEY")
+	}
+
+	article, err := os.ReadFile(filepath.Join("testdata", "summarize.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = f.summarize(context.Background(), string(article))
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 func readFile(t *testing.T, path string) []byte {
