@@ -45,6 +45,7 @@ import (
 	"html"
 	"io"
 	"log"
+	"math"
 	"net/http"
 	"os"
 	"os/signal"
@@ -422,16 +423,42 @@ func mapToDict(goMap map[string]any) (starlark.Value, error) {
 
 func toStarlarkValue(value any) (starlark.Value, error) {
 	switch v := value.(type) {
+	case nil:
+		return starlark.None, nil
 	case string:
 		return starlark.String(v), nil
 	case int:
 		return starlark.MakeInt(v), nil
+	case int8:
+		return starlark.MakeInt(int(v)), nil
+	case int16:
+		return starlark.MakeInt(int(v)), nil
+	case int32:
+		return starlark.MakeInt(int(v)), nil
 	case int64:
 		return starlark.MakeInt64(v), nil
-	case bool:
-		return starlark.Bool(v), nil
-	case float64:
+	case uint:
+		return starlark.MakeUint(v), nil
+	case uint8:
+		return starlark.MakeUint(uint(v)), nil
+	case uint16:
+		return starlark.MakeUint(uint(v)), nil
+	case uint32:
+		return starlark.MakeUint(uint(v)), nil
+	case uint64:
+		return starlark.MakeUint64(v), nil
+	case float32:
+		if canBeInt(float64(v)) {
+			return starlark.MakeInt64(int64(v)), nil
+		}
 		return starlark.Float(v), nil
+	case float64:
+		if canBeInt(v) {
+			return starlark.MakeInt64(int64(v)), nil
+		}
+		return starlark.Float(v), nil
+	case time.Time:
+		return starlarktime.Time(v), nil
 	case []any:
 		// Handle Go slice conversion (recursive).
 		var list []starlark.Value
@@ -449,6 +476,18 @@ func toStarlarkValue(value any) (starlark.Value, error) {
 	default:
 		return nil, fmt.Errorf("unsupported Go type: %T", value)
 	}
+}
+
+func canBeInt(f float64) bool {
+	// Check if the float is within the representable range of int.
+	if f < math.MinInt || f > math.MaxInt {
+		return false
+	}
+	// Check if the float has a fractional part (i.e., it's not a whole number).
+	if f != math.Trunc(f) {
+		return false
+	}
+	return true
 }
 
 func (e *engine) respondError(w http.ResponseWriter, err error) {
