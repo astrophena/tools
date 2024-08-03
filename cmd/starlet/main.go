@@ -22,21 +22,21 @@ available to the bot code:
 
 	gemini: Allows interaction with Gemini API.
 		- generate_content(contents, *, system=None): Generates text using Gemini.
-		- contents (list of strings): The text to be provided to Gemini for generation.
-		- system (dict, optional): System instructions to guide Gemini's response, containing a
-			single key "text" with string value.
+		  - contents (list of strings): The text to be provided to Gemini for generation.
+		  - system (dict, optional): System instructions to guide Gemini's response, containing a
+			  single key "text" with string value.
 
 	html: Helper functions for working with HTML.
 		- escape(s): Escapes HTML string.
 
 	telegram: Allows sending requests to the Telegram Bot API.
 		- call(method, args): Calls a Telegram Bot API method.
-		- method (string): The Telegram Bot API method to call.
-		- args (dict): The arguments to pass to the method.
+		  - method (string): The Telegram Bot API method to call.
+		  - args (dict): The arguments to pass to the method.
 
 	time: Provides time-related functions.
 
-See https:pkg.go.dev/go.starlark.net/lib/time#Module for documentation of
+See https://pkg.go.dev/go.starlark.net/lib/time#Module for documentation of
 the time module.
 
 # GitHub Gist structure
@@ -494,20 +494,21 @@ func (e *engine) respondError(w http.ResponseWriter, err error) {
 func (e *engine) reportError(ctx context.Context, w http.ResponseWriter, err error) {
 	errMsg := err.Error()
 	if evalErr, ok := err.(*starlark.EvalError); ok {
-		errMsg += "\n\n" + evalErr.Backtrace()
+		errMsg = evalErr.Backtrace()
 	}
 	// Mask secrets in error messages.
 	errMsg = e.logMasker.Replace(errMsg)
 
 	e.mu.Lock()
-	defer e.mu.Unlock()
+	errTmpl := e.errorTemplate
+	e.mu.Unlock()
 
 	_, sendErr := request.Make[any](ctx, request.Params{
 		Method: http.MethodPost,
 		URL:    "https://api.telegram.org/bot" + e.tgToken + "/sendMessage",
 		Body: map[string]string{
 			"chat_id":    strconv.FormatInt(e.tgOwner, 10),
-			"text":       fmt.Sprintf(e.errorTemplate, html.EscapeString(errMsg)),
+			"text":       fmt.Sprintf(errTmpl, html.EscapeString(errMsg)),
 			"parse_mode": "HTML",
 		},
 		HTTPClient: e.httpc,
