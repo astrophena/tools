@@ -191,13 +191,22 @@ func (e *engine) doInit() {
 	e.logf = log.New(io.MultiWriter(e.stderr, e.logStream), "", log.LstdFlags).Printf
 	e.initRoutes()
 
-	e.logMasker = strings.NewReplacer(
+	scrubPairs := []string{
 		e.ghToken, "[EXPUNGED]",
 		e.gistID, "[EXPUNGED]",
 		e.tgSecret, "[EXPUNGED]",
 		e.tgToken, "[EXPUNGED]",
-		e.geminiKey, "[EXPUNGED]",
-	)
+	}
+	if e.geminiKey != "" {
+		scrubPairs = append(scrubPairs, e.geminiKey, "[EXPUNGED]")
+	}
+
+	// Quick sanity check.
+	if len(scrubPairs)%2 != 0 {
+		panic("scrubPairs are not even; check doInit method on engine")
+	}
+
+	e.logMasker = strings.NewReplacer(scrubPairs...)
 
 	e.gistc = &gist.Client{
 		Token:      e.ghToken,
