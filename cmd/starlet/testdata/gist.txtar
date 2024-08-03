@@ -9,5 +9,6 @@ def send_message(to, text, reply_markup = {}):
         }
     )
 
-print(repr(update))
-send_message(bot_owner_id, "Hello, world!")
+def handle(update):
+    print(repr(update))
+    send_message(bot_owner_id, "Hello, world!")

@@ -30,7 +30,6 @@ Additional modules and functions available from bot code:
 package main
 
 import (
-	"bytes"
 	"cmp"
 	"context"
 	"crypto/hmac"
@@ -45,7 +44,6 @@ import (
 	"html"
 	"io"
 	"log"
-	"math"
 	"net/http"
 	"os"
 	"os/signal"
@@ -55,13 +53,14 @@ import (
 	"sync"
 	"time"
 
-	starlarkgemini "go.astrophena.name/tools/cmd/starlet/lib/gemini"
-	"go.astrophena.name/tools/cmd/starlet/lib/telegram"
 	"go.astrophena.name/tools/internal/api/gist"
 	"go.astrophena.name/tools/internal/api/google/gemini"
 	"go.astrophena.name/tools/internal/cli"
 	"go.astrophena.name/tools/internal/logger"
 	"go.astrophena.name/tools/internal/request"
+	starlarkgemini "go.astrophena.name/tools/internal/starlark/modules/gemini"
+	"go.astrophena.name/tools/internal/starlark/modules/telegram"
+	"go.astrophena.name/tools/internal/starlark/starconv"
 	"go.astrophena.name/tools/internal/version"
 	"go.astrophena.name/tools/internal/web"
 
@@ -173,6 +172,7 @@ type engine struct {
 	mu sync.Mutex
 	// loaded from gist
 	bot           []byte
+	botProg       starlark.StringDict
 	errorTemplate string
 	loadGistErr   error
 }
@@ -274,9 +274,9 @@ func (e *engine) initRoutes() {
 	e.mux.Handle("/debug/log", e.logStream)
 
 	dbg.HandleFunc("reload", "Reload from gist", func(w http.ResponseWriter, r *http.Request) {
-		e.loadFromGist(r.Context())
 		e.mu.Lock()
 		defer e.mu.Unlock()
+		e.loadFromGist(r.Context())
 		err := e.loadGistErr
 		if err != nil {
 			e.respondError(w, err)
@@ -288,6 +288,14 @@ func (e *engine) initRoutes() {
 	dbg.HandleFunc("version", "Version (JSON)", func(w http.ResponseWriter, r *http.Request) {
 		web.RespondJSON(w, version.Version())
 	})
+}
+
+func jsonOK(w http.ResponseWriter) {
+	var res struct {
+		Status string `json:"success"`
+	}
+	res.Status = "success"
+	web.RespondJSON(w, res)
 }
 
 const logsTmpl = `<!DOCTYPE html>
@@ -317,10 +325,8 @@ new EventSource("/debug/log", { withCredentials: true }).addEventListener("logli
 </body>
 </html>`
 
+// e.mu must be held.
 func (e *engine) loadFromGist(ctx context.Context) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
 	g, err := e.gistc.Get(ctx, e.gistID)
 	if err != nil {
 		e.loadGistErr = err
@@ -338,65 +344,80 @@ func (e *engine) loadFromGist(ctx context.Context) {
 	} else {
 		e.errorTemplate = defaultErrorTemplate
 	}
+
+	predeclared := starlark.StringDict{
+		"bot_owner_id": starlark.MakeInt64(e.tgOwner),
+		"escape_html":  starlark.NewBuiltin("escape_html", escapeHTML),
+		"gemini":       starlarkgemini.Module(e.geminic),
+		"json":         starlarkjson.Module,
+		"telegram":     telegram.Module(e.tgToken, e.httpc),
+		"time":         starlarktime.Module,
+	}
+	e.botProg, err = starlark.ExecFileOptions(
+		&syntax.FileOptions{},
+		e.newStarlarkThread(nil),
+		"bot.star",
+		e.bot,
+		predeclared,
+	)
+	if err != nil {
+		e.loadGistErr = err
+		return
+	}
+
 	e.loadGistErr = nil
+}
+
+func (e *engine) newStarlarkThread(ctx context.Context) *starlark.Thread {
+	thread := &starlark.Thread{
+		Print: func(thread *starlark.Thread, msg string) { e.logf("%v", msg) },
+	}
+	if ctx != nil {
+		thread.SetLocal("context", ctx)
+	}
+	return thread
 }
 
 func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 	jsonErr := func(err error) { web.RespondError(e.logf, w, err) }
+
+	e.mu.Lock()
+	defer e.mu.Unlock()
 
 	if r.Header.Get("X-Telegram-Bot-Api-Secret-Token") != e.tgSecret {
 		jsonErr(web.ErrNotFound)
 		return
 	}
 
-	rawUpdate, err := io.ReadAll(r.Body)
+	b, err := io.ReadAll(r.Body)
 	if err != nil {
 		jsonErr(err)
 		return
 	}
-
-	var ju map[string]any
-	if err := json.Unmarshal(rawUpdate, &ju); err != nil {
+	var gu map[string]any
+	if err := json.Unmarshal(b, &gu); err != nil {
 		jsonErr(err)
 		return
 	}
-
-	u, err := toStarlarkValue(ju)
+	u, err := starconv.ToValue(gu)
 	if err != nil {
 		jsonErr(err)
 		return
-	}
-
-	// TODO: cache it.
-	predeclared := starlark.StringDict{
-		"bot_owner_id": starlark.MakeInt64(e.tgOwner),
-		"escape_html":  starlark.NewBuiltin("escape_html", escapeHTML),
-		"gemini":       starlarkgemini.Module(e.geminic),
-		"json":         starlarkjson.Module,
-		"update":       u,
-		"telegram":     telegram.Module(e.tgToken, e.httpc),
-		"time":         starlarktime.Module,
 	}
 
 	e.loadGist.Do(func() { e.loadFromGist(r.Context()) })
-	e.mu.Lock()
-	var (
-		gistErr = e.loadGistErr
-		botCode = bytes.Clone(e.bot)
-	)
-	e.mu.Unlock()
-
-	if gistErr != nil {
+	if e.loadGistErr != nil {
 		jsonErr(e.loadGistErr)
 		return
 	}
 
-	thread := &starlark.Thread{
-		Print: func(thread *starlark.Thread, msg string) { e.logf("%v", msg) },
+	f, ok := e.botProg["handle"]
+	if !ok {
+		e.reportError(r.Context(), w, errors.New("handle function not found in bot code"))
+		return
 	}
-	thread.SetLocal("context", r.Context())
 
-	_, err = starlark.ExecFileOptions(&syntax.FileOptions{}, thread, "bot.star", botCode, predeclared)
+	_, err = starlark.Call(e.newStarlarkThread(r.Context()), f, starlark.Tuple{u}, nil)
 	if err != nil {
 		e.reportError(r.Context(), w, err)
 		return
@@ -405,104 +426,52 @@ func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w)
 }
 
-func mapToDict(goMap map[string]any) (starlark.Value, error) {
-	dict := starlark.NewDict(len(goMap))
-
-	for key, value := range goMap {
-		val, err := toStarlarkValue(value)
-		if err != nil {
-			return nil, fmt.Errorf("error converting Go value to Starlark: %w", err)
-		}
-		if err := dict.SetKey(starlark.String(key), val); err != nil {
-			return nil, fmt.Errorf("error setting key-value in Starlark dict: %w", err)
-		}
+func escapeHTML(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	var s string
+	if err := starlark.UnpackArgs(b.Name(), args, kwargs, "s", &s); err != nil {
+		return nil, err
 	}
-
-	return dict, nil
+	return starlark.String(html.EscapeString(s)), nil
 }
 
-func toStarlarkValue(value any) (starlark.Value, error) {
-	switch v := value.(type) {
-	case nil:
-		return starlark.None, nil
-	case bool:
-		return starlark.Bool(v), nil
-	case string:
-		return starlark.String(v), nil
-	case int:
-		return starlark.MakeInt(v), nil
-	case int8:
-		return starlark.MakeInt(int(v)), nil
-	case int16:
-		return starlark.MakeInt(int(v)), nil
-	case int32:
-		return starlark.MakeInt(int(v)), nil
-	case int64:
-		return starlark.MakeInt64(v), nil
-	case uint:
-		return starlark.MakeUint(v), nil
-	case uint8:
-		return starlark.MakeUint(uint(v)), nil
-	case uint16:
-		return starlark.MakeUint(uint(v)), nil
-	case uint32:
-		return starlark.MakeUint(uint(v)), nil
-	case uint64:
-		return starlark.MakeUint64(v), nil
-	case float32:
-		if canBeInt(float64(v)) {
-			return starlark.MakeInt64(int64(v)), nil
-		}
-		return starlark.Float(v), nil
-	case float64:
-		if canBeInt(v) {
-			return starlark.MakeInt64(int64(v)), nil
-		}
-		return starlark.Float(v), nil
-	case time.Time:
-		return starlarktime.Time(v), nil
-	case []any:
-		// Handle Go slice conversion (recursive).
-		var list []starlark.Value
-		for _, item := range v {
-			conv, err := toStarlarkValue(item)
-			if err != nil {
-				return nil, err
-			}
-			list = append(list, conv)
-		}
-		return starlark.NewList(list), nil
-	case map[string]any:
-		// Handle nested Go map conversion (recursive).
-		return mapToDict(v)
-	default:
-		return nil, fmt.Errorf("unsupported Go type: %T", value)
-	}
-}
-
-func canBeInt(f float64) bool {
-	// Check if the float is within the representable range of int.
-	if f < math.MinInt || f > math.MaxInt {
-		return false
-	}
-	// Check if the float has a fractional part (i.e., it's not a whole number).
-	if f != math.Trunc(f) {
-		return false
-	}
-	return true
-}
+// Error handling {{{
 
 func (e *engine) respondError(w http.ResponseWriter, err error) {
 	web.RespondError(e.logf, w, err)
 }
 
-func jsonOK(w http.ResponseWriter) {
-	var res struct {
-		Status string `json:"success"`
+func (e *engine) reportError(ctx context.Context, w http.ResponseWriter, err error) {
+	errMsg := err.Error()
+	if evalErr, ok := err.(*starlark.EvalError); ok {
+		errMsg += "\n\n" + evalErr.Backtrace()
 	}
-	res.Status = "success"
-	web.RespondJSON(w, res)
+	// Mask secrets in error messages.
+	errMsg = e.logMasker.Replace(errMsg)
+
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	_, sendErr := request.Make[any](ctx, request.Params{
+		Method: http.MethodPost,
+		URL:    "https://api.telegram.org/bot" + e.tgToken + "/sendMessage",
+		Body: map[string]string{
+			"chat_id":    strconv.FormatInt(e.tgOwner, 10),
+			"text":       fmt.Sprintf(e.errorTemplate, html.EscapeString(errMsg)),
+			"parse_mode": "HTML",
+		},
+		HTTPClient: e.httpc,
+		Scrubber:   e.logMasker,
+	})
+	if sendErr != nil {
+		e.logf("Reporting an error %q to bot owner (%q) failed: %v", err, e.tgOwner, sendErr)
+	}
+
+	// Don't respond with an error because Telegram will go mad and start retrying
+	// updates until my Telegram chat is fucked with lots of error messages.
+	jsonOK(w)
 }
+
+// }}}
 
 // Authentication {{{
 
@@ -653,43 +622,4 @@ func (e *engine) selfPing(ctx context.Context) {
 			return
 		}
 	}
-}
-
-func (e *engine) reportError(ctx context.Context, w http.ResponseWriter, err error) {
-	errMsg := err.Error()
-	if evalErr, ok := err.(*starlark.EvalError); ok {
-		errMsg += "\n\n" + evalErr.Backtrace()
-	}
-	// Mask secrets in error messages.
-	errMsg = e.logMasker.Replace(errMsg)
-
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
-	_, sendErr := request.Make[any](ctx, request.Params{
-		Method: http.MethodPost,
-		URL:    "https://api.telegram.org/bot" + e.tgToken + "/sendMessage",
-		Body: map[string]string{
-			"chat_id":    strconv.FormatInt(e.tgOwner, 10),
-			"text":       fmt.Sprintf(e.errorTemplate, html.EscapeString(errMsg)),
-			"parse_mode": "HTML",
-		},
-		HTTPClient: e.httpc,
-		Scrubber:   e.logMasker,
-	})
-	if sendErr != nil {
-		e.logf("Reporting an error %q to bot owner (%q) failed: %v", err, e.tgOwner, sendErr)
-	}
-
-	// Don't respond with an error because Telegram will go mad and start retrying
-	// updates until my Telegram chat is fucked with lots of error messages.
-	jsonOK(w)
-}
-
-func escapeHTML(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	var s string
-	if err := starlark.UnpackArgs(b.Name(), args, kwargs, "s", &s); err != nil {
-		return nil, err
-	}
-	return starlark.String(html.EscapeString(s)), nil
 }
