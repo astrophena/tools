@@ -327,20 +327,6 @@ func (e *engine) loadFromGist(ctx context.Context) {
 	e.loadGistErr = nil
 }
 
-type update struct {
-	Message struct {
-		From struct {
-			ID int64 `json:"id,omitempty"`
-		} `json:"from,omitempty"`
-		Chat struct {
-			ID int64 `json:"id,omitempty"`
-		} `json:"chat,omitempty"`
-	} `json:"message,omitempty"`
-	MessageReaction struct {
-		Date int64 `json:"date"`
-	} `json:"message_reaction,omitempty"`
-}
-
 func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 	jsonErr := func(err error) { web.RespondError(e.logf, w, err) }
 
@@ -355,14 +341,15 @@ func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var u update
-	if err := json.Unmarshal(rawUpdate, &u); err != nil {
+	var ju map[string]any
+	if err := json.Unmarshal(rawUpdate, &ju); err != nil {
 		jsonErr(err)
 		return
 	}
-	// We've got a message reaction. Ignore it for now. I can always remove it
-	// from allowed_updates, but I'm too lazy so we drop it like that.
-	if u.MessageReaction.Date != 0 {
+
+	u, err := toStarlarkValue(ju)
+	if err != nil {
+		jsonErr(err)
 		return
 	}
 
@@ -372,7 +359,7 @@ func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 		"escape_html":  starlark.NewBuiltin("escape_html", escapeHTML),
 		"gemini":       starlarkgemini.Module(e.geminic),
 		"json":         starlarkjson.Module,
-		"raw_update":   starlark.String(rawUpdate),
+		"update":       u,
 		"telegram":     telegram.Module(e.tgToken, e.httpc),
 		"time":         starlarktime.Module,
 	}
@@ -397,11 +384,56 @@ func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 
 	_, err = starlark.ExecFileOptions(&syntax.FileOptions{}, thread, "bot.star", botCode, predeclared)
 	if err != nil {
-		e.reportError(r.Context(), w, u, err)
+		e.reportError(r.Context(), w, err)
 		return
 	}
 
 	jsonOK(w)
+}
+
+func mapToDict(goMap map[string]any) (starlark.Value, error) {
+	dict := starlark.NewDict(len(goMap))
+
+	for key, value := range goMap {
+		val, err := toStarlarkValue(value)
+		if err != nil {
+			return nil, fmt.Errorf("error converting Go value to Starlark: %w", err)
+		}
+		if err := dict.SetKey(starlark.String(key), val); err != nil {
+			return nil, fmt.Errorf("error setting key-value in Starlark dict: %w", err)
+		}
+	}
+
+	return dict, nil
+}
+
+func toStarlarkValue(value any) (starlark.Value, error) {
+	switch v := value.(type) {
+	case string:
+		return starlark.String(v), nil
+	case int:
+		return starlark.MakeInt(v), nil
+	case bool:
+		return starlark.Bool(v), nil
+	case float64:
+		return starlark.Float(v), nil
+	case []any:
+		// Handle Go slice conversion (recursive).
+		var list []starlark.Value
+		for _, item := range v {
+			conv, err := toStarlarkValue(item)
+			if err != nil {
+				return nil, err
+			}
+			list = append(list, conv)
+		}
+		return starlark.NewList(list), nil
+	case map[string]any:
+		// Handle nested Go map conversion (recursive).
+		return mapToDict(v)
+	default:
+		return nil, fmt.Errorf("unsupported Go type: %T", value)
+	}
 }
 
 func (e *engine) respondError(w http.ResponseWriter, err error) {
@@ -567,10 +599,7 @@ func (e *engine) selfPing(ctx context.Context) {
 	}
 }
 
-func (e *engine) reportError(ctx context.Context, w http.ResponseWriter, u update, err error) {
-	// We send error messages only to the bot owner and when only it happens in
-	// chat with them. Otherwise, log it and carry on.
-
+func (e *engine) reportError(ctx context.Context, w http.ResponseWriter, err error) {
 	errMsg := err.Error()
 	if evalErr, ok := err.(*starlark.EvalError); ok {
 		errMsg += "\n\n" + evalErr.Backtrace()
@@ -578,38 +607,28 @@ func (e *engine) reportError(ctx context.Context, w http.ResponseWriter, u updat
 	// Mask secrets in error messages.
 	errMsg = e.logMasker.Replace(errMsg)
 
-	if u.Message.Chat.ID != e.tgOwner {
-		e.logf("Handling update from %d (in chat %d) failed:\n%v", u.Message.From.ID, u.Message.Chat.ID, errMsg)
-		jsonOK(w)
-		return
-	}
-
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	if u.Message.Chat.ID == e.tgOwner {
-		_, sendErr := request.Make[any](ctx, request.Params{
-			Method: http.MethodPost,
-			URL:    "https://api.telegram.org/bot" + e.tgToken + "/sendMessage",
-			Body: map[string]string{
-				"chat_id":    strconv.FormatInt(e.tgOwner, 10),
-				"text":       fmt.Sprintf(e.errorTemplate, html.EscapeString(errMsg)),
-				"parse_mode": "HTML",
-			},
-			HTTPClient: e.httpc,
-			Scrubber:   e.logMasker,
-		})
-		if sendErr != nil {
-			e.logf("Reporting an error %q to bot owner (%q) failed: %v", err, e.tgOwner, sendErr)
-		}
+	_, sendErr := request.Make[any](ctx, request.Params{
+		Method: http.MethodPost,
+		URL:    "https://api.telegram.org/bot" + e.tgToken + "/sendMessage",
+		Body: map[string]string{
+			"chat_id":    strconv.FormatInt(e.tgOwner, 10),
+			"text":       fmt.Sprintf(e.errorTemplate, html.EscapeString(errMsg)),
+			"parse_mode": "HTML",
+		},
+		HTTPClient: e.httpc,
+		Scrubber:   e.logMasker,
+	})
+	if sendErr != nil {
+		e.logf("Reporting an error %q to bot owner (%q) failed: %v", err, e.tgOwner, sendErr)
 	}
 
 	// Don't respond with an error because Telegram will go mad and start retrying
 	// updates until my Telegram chat is fucked with lots of error messages.
 	jsonOK(w)
 }
-
-type starlarkBuiltin func(*starlark.Thread, *starlark.Builtin, starlark.Tuple, []starlark.Tuple) (starlark.Value, error)
 
 func escapeHTML(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	var s string

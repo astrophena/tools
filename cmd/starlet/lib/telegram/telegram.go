@@ -1,5 +1,4 @@
-// Package telegram contains a Starlark module that exposes the Telegram Bot
-// API.
+// Package telegram contains a Starlark module that exposes the Telegram Bot API.
 package telegram
 
 import (

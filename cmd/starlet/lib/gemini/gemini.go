@@ -1,5 +1,4 @@
-// Package gemini contains a Starlark module that exposes Gemini API
-// functionality.
+// Package gemini contains a Starlark module that exposes Gemini API.
 package gemini
 
 import (
@@ -12,7 +11,7 @@ import (
 	"go.starlark.net/starlarkstruct"
 )
 
-// Module returns a Starlark module that exposes Gemini API functionality.
+// Module returns a Starlark module that exposes Gemini API.
 //
 // This module provides a single function, generate_content, which uses the
 // Gemini API to generate text.
