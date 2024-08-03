@@ -13,7 +13,7 @@ import (
 func Module(client *gemini.Client) *starlarkstruct.Module {
 	m := &module{c: client}
 	return &starlarkstruct.Module{
-		Name: "telegram",
+		Name: "gemini",
 		Members: starlark.StringDict{
 			"generate_content": starlark.NewBuiltin("gemini.generate_content", m.generateContent),
 		},
