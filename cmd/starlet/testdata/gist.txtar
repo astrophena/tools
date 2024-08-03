@@ -11,4 +11,5 @@ def send_message(to, text, reply_markup = {}):
 
 def handle(update):
     print(repr(update))
+    print(repr(config.version))
     send_message(config.owner_id, "Hello, world!")

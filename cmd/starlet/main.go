@@ -351,6 +351,7 @@ func (e *engine) loadFromGist(ctx context.Context) {
 			starlarkstruct.Default,
 			starlark.StringDict{
 				"owner_id": starlark.MakeInt64(e.tgOwner),
+				"version":  starlark.String(version.Version().String()),
 			},
 		),
 		"gemini": starlarkgemini.Module(e.geminic),
