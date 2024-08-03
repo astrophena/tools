@@ -426,6 +426,8 @@ func toStarlarkValue(value any) (starlark.Value, error) {
 		return starlark.String(v), nil
 	case int:
 		return starlark.MakeInt(v), nil
+	case int64:
+		return starlark.MakeInt64(v), nil
 	case bool:
 		return starlark.Bool(v), nil
 	case float64:
