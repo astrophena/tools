@@ -26,7 +26,7 @@ func main() {
 		}
 
 		pkg, err := build.ImportDir(path, build.IgnoreVendor)
-		if err != nil || len(pkg.GoFiles) == 0 {
+		if err != nil || len(pkg.GoFiles) == 0 || pkg.Name != "main" {
 			return nil
 		}
 

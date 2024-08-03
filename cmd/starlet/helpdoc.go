@@ -7,11 +7,12 @@ Starlet allows to create and manage a Telegram bot using the Starlark scripting
 language.
 
 Starlet serves an HTTP server to handle Telegram webhook updates and bot
-maintenance. The bot's code is sourced from a specified GitHub Gist.
-Also Starlet includes features such as user authentication via the Telegram
-login widget, ensuring that only the designated bot owner can manage the bot.
-In production environments, Starlet periodically pings itself to prevent the
-hosting service from putting it to sleep, ensuring continuous operation.
+maintenance. The bot's code is sourced from a specified GitHub Gist. Also
+Starlet includes features such as user authentication via the Telegram login
+widget, ensuring that only the designated bot owner can manage the bot.
+
+When running on Render, Starlet periodically pings itself to prevent Render from
+putting it to sleep, ensuring continuous operation.
 
 # Starlark language
 
@@ -26,5 +27,6 @@ Additional modules and functions available from bot code:
   - json: The Starlark JSON module, enabling JSON parsing and encoding.
   - time: The Starlark time module, providing time-related functions.
 
+[Render]: https://render.com
 [Starlark spec]: https://github.com/bazelbuild/starlark/blob/master/spec.md
 `
