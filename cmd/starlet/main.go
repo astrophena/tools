@@ -440,10 +440,7 @@ func (e *engine) newStarlarkThread(ctx context.Context) *starlark.Thread {
 var errNoHandleFunc = errors.New("handle function not found in bot code")
 
 func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
-	jsonErr := func(err error) { web.RespondError(e.logf, w, err) }
-
-	e.mu.Lock()
-	defer e.mu.Unlock()
+	jsonErr := func(err error) { web.RespondJSONError(e.logf, w, err) }
 
 	if r.Header.Get("X-Telegram-Bot-Api-Secret-Token") != e.tgSecret {
 		jsonErr(web.ErrNotFound)
@@ -465,6 +462,9 @@ func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 		jsonErr(err)
 		return
 	}
+
+	e.mu.Lock()
+	defer e.mu.Unlock()
 
 	e.loadGist.Do(func() { e.loadFromGist(r.Context()) })
 	if e.loadGistErr != nil {
