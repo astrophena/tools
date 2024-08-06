@@ -501,6 +501,7 @@ func (e *engine) respondError(w http.ResponseWriter, err error) {
 	web.RespondError(e.logf, w, err)
 }
 
+// e.mu must be held.
 func (e *engine) reportError(ctx context.Context, w http.ResponseWriter, err error) {
 	errMsg := err.Error()
 	if evalErr, ok := err.(*starlark.EvalError); ok {
@@ -509,16 +510,12 @@ func (e *engine) reportError(ctx context.Context, w http.ResponseWriter, err err
 	// Mask secrets in error messages.
 	errMsg = e.logMasker.Replace(errMsg)
 
-	e.mu.Lock()
-	errTmpl := e.errorTemplate
-	e.mu.Unlock()
-
 	_, sendErr := request.Make[any](ctx, request.Params{
 		Method: http.MethodPost,
 		URL:    "https://api.telegram.org/bot" + e.tgToken + "/sendMessage",
 		Body: map[string]string{
 			"chat_id":    strconv.FormatInt(e.tgOwner, 10),
-			"text":       fmt.Sprintf(errTmpl, html.EscapeString(errMsg)),
+			"text":       fmt.Sprintf(e.errorTemplate, html.EscapeString(errMsg)),
 			"parse_mode": "HTML",
 		},
 		HTTPClient: e.httpc,
