@@ -111,6 +111,7 @@ import (
 	"go.astrophena.name/tools/internal/cli"
 	"go.astrophena.name/tools/internal/logger"
 	"go.astrophena.name/tools/internal/request"
+	"go.astrophena.name/tools/internal/starlark/modules/convcache"
 	starlarkgemini "go.astrophena.name/tools/internal/starlark/modules/gemini"
 	"go.astrophena.name/tools/internal/starlark/modules/telegram"
 	"go.astrophena.name/tools/internal/starlark/starconv"
@@ -206,12 +207,13 @@ type engine struct {
 	loadGist sync.Once // lazily loads gist when first webhook request arrives
 
 	// initialized by doInit
-	gistc     *gist.Client
+	convCache *starlarkstruct.Module
 	geminic   *gemini.Client
-	logf      logger.Logf
-	logStream logger.Streamer
-	mux       *http.ServeMux
+	gistc     *gist.Client
 	logMasker *strings.Replacer
+	logStream logger.Streamer
+	logf      logger.Logf
+	mux       *http.ServeMux
 
 	// test flags
 	noServerStart bool
@@ -264,6 +266,9 @@ func (e *engine) doInit() {
 	if len(scrubPairs)%2 != 0 {
 		panic("scrubPairs are not even; check doInit method on engine")
 	}
+
+	// TODO: think about persistence of conversation cache.
+	e.convCache = convcache.Module()
 
 	e.logMasker = strings.NewReplacer(scrubPairs...)
 
@@ -402,7 +407,8 @@ func (e *engine) loadFromGist(ctx context.Context) {
 				"version":  starlark.String(version.Version().String()),
 			},
 		),
-		"gemini": starlarkgemini.Module(e.geminic),
+		"convcache": e.convCache,
+		"gemini":    starlarkgemini.Module(e.geminic),
 		"html": &starlarkstruct.Module{
 			Name: "html",
 			Members: starlark.StringDict{
