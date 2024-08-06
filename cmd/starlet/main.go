@@ -20,6 +20,11 @@ available to the bot code:
 		- owner_id (int): Telegram user ID of the bot owner.
 		- version (str): Bot version string.
 
+	convcache: Allows to cache bot conversations.
+		- get(chat_id: int) -> list: Retrieves the conversation history for the given chat ID.
+		- append(chat_id: int, message: str): Appends a new message to the conversation history.
+		- reset(chat_id: int): Clears the conversation history for the given chat ID.
+
 	gemini: Allows interaction with Gemini API.
 		- generate_content(contents, *, system=None): Generates text using Gemini.
 		  - contents (list of strings): The text to be provided to Gemini for generation.
