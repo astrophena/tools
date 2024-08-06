@@ -17,7 +17,7 @@ func TestLimitedWaitGroup(t *testing.T) {
 
 	t.Run("add and wait", func(t *testing.T) {
 		lwg := syncutil.NewLimitedWaitGroup(concurrency)
-		for i := 0; i < 10; i++ {
+		for range 10 {
 			lwg.Add(1)
 			go func() {
 				defer lwg.Done()
@@ -31,7 +31,7 @@ func TestLimitedWaitGroup(t *testing.T) {
 	t.Run("done", func(t *testing.T) {
 		lwg := syncutil.NewLimitedWaitGroup(concurrency)
 		var wg sync.WaitGroup
-		for i := 0; i < 10; i++ {
+		for range 10 {
 			lwg.Add(1)
 			wg.Add(1)
 			go func() {
@@ -50,7 +50,7 @@ func TestLimitedWaitGroup(t *testing.T) {
 		var running int32
 		var maxConcurrent int32
 
-		for i := 0; i < 20; i++ {
+		for range 20 {
 			lwg.Add(1)
 			go func() {
 				defer lwg.Done()
