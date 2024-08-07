@@ -42,6 +42,8 @@ type Content struct {
 	// Parts is a list of Part objects representing the textual elements within
 	// the content.
 	Parts []*Part `json:"parts"`
+	// Role is the producer of the content. Must be either 'user' or 'model'.
+	Role string `json:"role,omitempty"`
 }
 
 // Part represents a textual element within a Content object.
