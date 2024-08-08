@@ -3,7 +3,6 @@ package gemini
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"go.astrophena.name/tools/internal/api/google/gemini"
@@ -21,7 +20,9 @@ import (
 //
 //   - contents (list of strings): The text to be provided to Gemini for generation.
 //   - system (dict, optional): System instructions to guide Gemini's response.
-//   - dump_request (bool, False by default): Whether to log request body for inspection.
+//
+// If you pass multiple strings in contents, each odd part will be marked as
+// sent by user, and each even part as sent by bot.
 //
 // The system dictionary has a single key, text, which should contain a string
 // representing the system instructions.
@@ -79,13 +80,11 @@ func (m *module) generateContent(thread *starlark.Thread, b *starlark.Builtin, a
 	var (
 		contentsList *starlark.List
 		system       *starlark.Dict
-		dumpRequest  starlark.Bool
 	)
 	if err := starlark.UnpackArgs(
 		b.Name(), args, kwargs,
 		"contents", &contentsList,
 		"system?", &system,
-		"dump_request?", &dumpRequest,
 	); err != nil {
 		return nil, err
 	}
@@ -139,14 +138,6 @@ func (m *module) generateContent(thread *starlark.Thread, b *starlark.Builtin, a
 		SystemInstruction: &gemini.Content{
 			Parts: []*gemini.Part{systemPart},
 		},
-	}
-
-	if bool(dumpRequest) && thread.Print != nil {
-		j, err := json.MarshalIndent(params, "", "  ")
-		if err != nil {
-			return starlark.None, err
-		}
-		thread.Print(thread, fmt.Sprintf("Gemini request body: %s", j))
 	}
 
 	resp, err := m.c.GenerateContent(ctx, params)

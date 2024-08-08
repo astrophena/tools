@@ -31,7 +31,6 @@ available to the bot code:
     	- generate_content(contents, *, system=None): Generates text using Gemini:
     	  - contents (list of strings): The text to be provided to Gemini for generation.
     	  - system (dict, optional): System instructions to guide Gemini's response, containing a single key "text" with string value.
-    		- dump_request (bool, False by default): Whether to log request body for inspection.
 
     html: Helper functions for working with HTML.
     	- escape(s): Escapes HTML string.
