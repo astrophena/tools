@@ -490,7 +490,8 @@ func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 
 	e.loadGist.Do(func() { e.loadFromGist(r.Context()) })
 	if e.loadGistErr != nil {
-		jsonErr(e.loadGistErr)
+		e.reportError(r.Context(), w, e.loadGistErr)
+		jsonOK(w)
 		return
 	}
 
