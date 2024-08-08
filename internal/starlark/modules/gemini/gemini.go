@@ -110,7 +110,7 @@ func (m *module) generateContent(thread *starlark.Thread, b *starlark.Builtin, a
 			Role: "user",
 		}
 		// If chat_mode is set to True, mark each even message as sent by model.
-		if bool(chatMode) && i%2 == 0 {
+		if bool(chatMode) && i+1%2 == 0 {
 			content.Role = "model"
 		}
 		contents = append(contents, content)
@@ -137,7 +137,6 @@ func (m *module) generateContent(thread *starlark.Thread, b *starlark.Builtin, a
 		Contents: contents,
 		SystemInstruction: &gemini.Content{
 			Parts: []*gemini.Part{systemPart},
-			Role:  "user",
 		},
 	}
 

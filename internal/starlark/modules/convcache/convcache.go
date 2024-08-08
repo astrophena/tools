@@ -2,12 +2,17 @@
 package convcache
 
 import (
+	"maps"
 	"sync"
 
 	"go.astrophena.name/tools/internal/starlark/starconv"
 	"go.starlark.net/starlark"
 	"go.starlark.net/starlarkstruct"
 )
+
+// ExportFunc represents a function that can be used to export contents of
+// conversation cache.
+type ExportFunc func() map[int64][]string
 
 // Module returns a Starlark module that exposes conversation caching functionality.
 //
@@ -18,9 +23,12 @@ import (
 //   - reset(chat_id: int): Clears the conversation history for the given chat ID.
 //
 // The chat ID is an integer representing a unique conversation identifier.
-func Module() *starlarkstruct.Module {
+func Module(initial map[int64][]string) (mod *starlarkstruct.Module, export ExportFunc) {
 	m := &module{
 		cache: make(map[int64][]string),
+	}
+	if initial != nil {
+		maps.Copy(m.cache, initial)
 	}
 	return &starlarkstruct.Module{
 		Name: "convcache",
@@ -29,7 +37,7 @@ func Module() *starlarkstruct.Module {
 			"append": starlark.NewBuiltin("convcache.append", m.append),
 			"reset":  starlark.NewBuiltin("convcache.reset", m.reset),
 		},
-	}
+	}, m.export
 }
 
 type module struct {
@@ -84,4 +92,10 @@ func (m *module) reset(thread *starlark.Thread, b *starlark.Builtin, args starla
 	delete(m.cache, chatID)
 
 	return starlark.None, nil
+}
+
+func (m *module) export() map[int64][]string {
+	m.mu.Lock()
+	defer m.mu.Lock()
+	return maps.Clone(m.cache)
 }

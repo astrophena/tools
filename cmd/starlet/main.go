@@ -274,7 +274,7 @@ func (e *engine) doInit() {
 	}
 
 	// TODO: think about persistence of conversation cache.
-	e.convCache = convcache.Module()
+	e.convCache, _ = convcache.Module(nil)
 
 	e.logMasker = strings.NewReplacer(scrubPairs...)
 
