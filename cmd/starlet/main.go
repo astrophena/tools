@@ -25,6 +25,9 @@ available to the bot code:
 		- append(chat_id: int, message: str): Appends a new message to the conversation history.
 		- reset(chat_id: int): Clears the conversation history for the given chat ID.
 
+	files: Allows to retrieve files from GitHub Gist with bot code.
+		- load(name: str) -> str: Retrieves a file from GitHub Gist.
+
 	gemini: Allows interaction with Gemini API.
 		- generate_content(contents, *, system=None): Generates text using Gemini:
 		  - contents (list of strings): The text to be provided to Gemini for generation.
@@ -223,12 +226,12 @@ type engine struct {
 	noServerStart bool
 
 	// configuration, read-only after initialization
+	geminiKey string
 	ghToken   string
 	gistID    string
 	httpc     *http.Client
 	onRender  bool
 	stderr    io.Writer
-	geminiKey string
 	tgOwner   int64
 	tgSecret  string
 	tgToken   string
@@ -237,6 +240,7 @@ type engine struct {
 	// loaded from gist
 	bot           []byte
 	botProg       starlark.StringDict
+	files         map[string]gist.File
 	errorTemplate string
 	loadGistErr   error
 }
@@ -391,13 +395,15 @@ func (e *engine) loadFromGist(ctx context.Context) {
 		return
 	}
 
-	bot, exists := g.Files["bot.star"]
+	e.files = g.Files
+
+	bot, exists := e.files["bot.star"]
 	if !exists {
 		e.loadGistErr = errors.New("bot.star should contain bot code in Gist")
 		return
 	}
 	e.bot = []byte(bot.Content)
-	if errorTmpl, exists := g.Files["error.tmpl"]; exists {
+	if errorTmpl, exists := e.files["error.tmpl"]; exists {
 		e.errorTemplate = errorTmpl.Content
 	} else {
 		e.errorTemplate = defaultErrorTemplate
@@ -411,6 +417,12 @@ func (e *engine) loadFromGist(ctx context.Context) {
 				"version":  starlark.String(version.Version().String()),
 			},
 		),
+		"files": &starlarkstruct.Module{
+			Name: "files",
+			Members: starlark.StringDict{
+				"load": starlark.NewBuiltin("files.load", e.loadFile),
+			},
+		},
 		"convcache": e.convCache,
 		"gemini":    starlarkgemini.Module(e.geminic),
 		"html": &starlarkstruct.Module{
@@ -500,9 +512,22 @@ func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 func escapeHTML(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	var s string
 	if err := starlark.UnpackArgs(b.Name(), args, kwargs, "s", &s); err != nil {
-		return nil, err
+		return starlark.None, err
 	}
 	return starlark.String(html.EscapeString(s)), nil
+}
+
+// e.mu must be held.
+func (e *engine) loadFile(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	var name string
+	if err := starlark.UnpackArgs(b.Name(), args, kwargs, "name", &name); err != nil {
+		return starlark.None, err
+	}
+	file, exists := e.files[name]
+	if !exists {
+		return starlark.None, fmt.Errorf("file %s not found in Gist", name)
+	}
+	return starlark.String(file.Content), nil
 }
 
 // Error handling {{{

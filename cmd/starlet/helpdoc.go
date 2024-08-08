@@ -27,6 +27,9 @@ available to the bot code:
     	- append(chat_id: int, message: str): Appends a new message to the conversation history.
     	- reset(chat_id: int): Clears the conversation history for the given chat ID.
 
+    files: Allows to retrieve files from GitHub Gist with bot code.
+    	- load(name: str) -> str: Retrieves a file from GitHub Gist.
+
     gemini: Allows interaction with Gemini API.
     	- generate_content(contents, *, system=None): Generates text using Gemini:
     	  - contents (list of strings): The text to be provided to Gemini for generation.
