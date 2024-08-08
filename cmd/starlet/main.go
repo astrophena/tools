@@ -441,7 +441,7 @@ func (e *engine) loadFromGist(ctx context.Context) {
 
 func (e *engine) newStarlarkThread(ctx context.Context) *starlark.Thread {
 	thread := &starlark.Thread{
-		Print: func(thread *starlark.Thread, msg string) { e.logf("%v", msg) },
+		Print: func(thread *starlark.Thread, msg string) { e.logf("%s", msg) },
 	}
 	if ctx != nil {
 		thread.SetLocal("context", ctx)

@@ -3,6 +3,7 @@ package gemini
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"go.astrophena.name/tools/internal/api/google/gemini"
@@ -136,11 +137,16 @@ func (m *module) generateContent(thread *starlark.Thread, b *starlark.Builtin, a
 		Contents: contents,
 		SystemInstruction: &gemini.Content{
 			Parts: []*gemini.Part{systemPart},
+			Role:  "user",
 		},
 	}
 
 	if bool(dumpRequest) && thread.Print != nil {
-		thread.Print(thread, fmt.Sprintf("Gemini request body: %+v", params))
+		j, err := json.MarshalIndent(params, "", "  ")
+		if err != nil {
+			return starlark.None, err
+		}
+		thread.Print(thread, fmt.Sprintf("Gemini request body: %s", j))
 	}
 
 	resp, err := m.c.GenerateContent(ctx, params)
