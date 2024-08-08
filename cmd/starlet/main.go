@@ -26,7 +26,7 @@ available to the bot code:
 		- reset(chat_id: int): Clears the conversation history for the given chat ID.
 
 	files: Allows to retrieve files from GitHub Gist with bot code.
-		- load(name: str) -> str: Retrieves a file from GitHub Gist.
+		- raad(name: str) -> str: Retrieves a file from GitHub Gist.
 
 	gemini: Allows interaction with Gemini API.
 		- generate_content(contents, *, system=None): Generates text using Gemini:
@@ -420,7 +420,7 @@ func (e *engine) loadFromGist(ctx context.Context) {
 		"files": &starlarkstruct.Module{
 			Name: "files",
 			Members: starlark.StringDict{
-				"load": starlark.NewBuiltin("files.load", e.loadFile),
+				"read": starlark.NewBuiltin("files.read", e.readFile),
 			},
 		},
 		"convcache": e.convCache,
@@ -519,7 +519,7 @@ func escapeHTML(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tupl
 }
 
 // e.mu must be held.
-func (e *engine) loadFile(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+func (e *engine) readFile(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	var name string
 	if err := starlark.UnpackArgs(b.Name(), args, kwargs, "name", &name); err != nil {
 		return starlark.None, err

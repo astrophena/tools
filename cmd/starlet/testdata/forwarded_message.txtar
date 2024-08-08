@@ -10,6 +10,7 @@ def send_message(to, text, reply_markup = {}):
     )
 
 def handle(update):
+    files.read("update.json")
     send_message(config.owner_id, "Hello, world!")
 -- update.json --
 {
