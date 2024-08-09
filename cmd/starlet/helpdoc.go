@@ -10,7 +10,7 @@ enabling the creation of Telegram bots using the Starlark scripting language.
 It provides a simple way to define bot commands, handle incoming messages,
 and interact with the Telegram API.
 
-Starlet periodically pings itself to prevent [Render] from putting it to sleep,
+Starlet periodically pings itself to prevent Render from putting it to sleep,
 ensuring continuous operation.
 
 # Starlark environment
@@ -85,8 +85,8 @@ Starlet provides a debug interface at /debug with the following endpoints:
 Authentication through Telegram is required to access the debug interface when
 running on Render. The user must be the bot owner to successfully authenticate.
 
-See https:core.telegram.org/widgets/login for guidance. Use "https:<bot
+See https://core.telegram.org/widgets/login for guidance. Use "https://<bot
 URL>/login" as login URL.
 
-[Render]: https:render.com
+[Render]: https://render.com
 `

@@ -83,10 +83,10 @@ Authentication through Telegram is required to access the debug interface
 when running on Render. The user must be the bot owner to successfully
 authenticate.
 
-See https:core.telegram.org/widgets/login for guidance. Use "https:<bot
+See https://core.telegram.org/widgets/login for guidance. Use "https://<bot
 URL>/login" as login URL.
 
-[Render]: https:render.com
+[Render]: https://render.com
 */
 package main
 
