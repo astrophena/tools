@@ -28,7 +28,7 @@ available to the bot code:
     	- reset(chat_id: int): Clears the conversation history for the given chat ID.
 
     files: Allows to retrieve files from GitHub Gist with bot code.
-    	- raad(name: str) -> str: Retrieves a file from GitHub Gist.
+    	- read(name: str) -> str: Retrieves a file from GitHub Gist.
 
     gemini: Allows interaction with Gemini API.
     	- generate_content(contents, *, system=None): Generates text using Gemini:
