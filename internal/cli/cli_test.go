@@ -106,6 +106,14 @@ func TestHandleStartup(t *testing.T) {
 			wantOutput: "",
 			wantErr:    nil,
 		},
+		"usage": {
+			app: &cli.App{
+				Name:        "testapp",
+				Description: "This is a test app.",
+			},
+			args:    []string{"-h"},
+			wantErr: flag.ErrHelp,
+		},
 	}
 
 	for name, tc := range cases {
@@ -115,6 +123,10 @@ func TestHandleStartup(t *testing.T) {
 			err := tc.app.HandleStartup(tc.args, &stdout, &stderr)
 			if !errors.Is(err, tc.wantErr) {
 				t.Errorf("got error %q, want %q", err, tc.wantErr)
+			}
+
+			if tc.wantOutput == "" {
+				return
 			}
 
 			gotOutput := stderr.String()
