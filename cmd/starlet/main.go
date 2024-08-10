@@ -546,13 +546,21 @@ func (e *engine) reportError(ctx context.Context, w http.ResponseWriter, err err
 	// Mask secrets in error messages.
 	errMsg = e.logMasker.Replace(errMsg)
 
+	// https://core.telegram.org/bots/api#linkpreviewoptions
+	type linkPreviewOptions struct {
+		IsDisabled bool `json:"is_disabled"`
+	}
+
 	_, sendErr := request.Make[any](ctx, request.Params{
 		Method: http.MethodPost,
 		URL:    "https://api.telegram.org/bot" + e.tgToken + "/sendMessage",
-		Body: map[string]string{
+		Body: map[string]any{
 			"chat_id":    strconv.FormatInt(e.tgOwner, 10),
 			"text":       fmt.Sprintf(e.errorTemplate, html.EscapeString(errMsg)),
 			"parse_mode": "HTML",
+			"link_preview_options": linkPreviewOptions{
+				IsDisabled: true,
+			},
 		},
 		HTTPClient: e.httpc,
 		Scrubber:   e.logMasker,
