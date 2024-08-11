@@ -163,7 +163,7 @@ func TestHandleTelegramWebhook(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		calls, err := json.MarshalIndent(tm.telegramCalls, "", " ")
+		calls, err := json.MarshalIndent(tm.telegramCalls, "", "  ")
 		if err != nil {
 			t.Fatal(err)
 		}
