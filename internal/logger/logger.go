@@ -86,7 +86,7 @@ func (lrb *lineRingBuffer) Lines() []string {
 	lrb.RLock()
 	defer lrb.RUnlock()
 	lines := make([]string, 0, lrb.r.Len())
-	lrb.r.Do(func(x interface{}) {
+	lrb.r.Do(func(x any) {
 		if x != nil {
 			lines = append(lines, x.(string))
 		}

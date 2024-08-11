@@ -85,7 +85,7 @@ func TestAccessToken(t *testing.T) {
 		}
 
 		// Validate the JWT assertion.
-		token, err := jwt.Parse(assertion, func(token *jwt.Token) (interface{}, error) {
+		token, err := jwt.Parse(assertion, func(token *jwt.Token) (any, error) {
 			// In a real scenario, you would verify the token's signature
 			// using the public key corresponding to the service account.
 			return privateKey.Public(), nil // Use the correct public key for testing
