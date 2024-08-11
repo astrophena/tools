@@ -96,6 +96,6 @@ func (m *module) reset(thread *starlark.Thread, b *starlark.Builtin, args starla
 
 func (m *module) export() map[int64][]string {
 	m.mu.Lock()
-	defer m.mu.Lock()
+	defer m.mu.Unlock()
 	return maps.Clone(m.cache)
 }
