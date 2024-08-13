@@ -115,7 +115,11 @@ func run(args []string, stdout, stderr io.Writer) error {
 			return nil
 		}
 
-		vlog("Renaming: %q -> %q.", path, newname)
+		logMsg := "Renaming"
+		if *dryRun {
+			logMsg = "Will rename"
+		}
+		vlog("%s: %q -> %q.", logMsg, path, newname)
 		if !*dryRun {
 			if err := os.Rename(path, newname); err != nil {
 				return err
