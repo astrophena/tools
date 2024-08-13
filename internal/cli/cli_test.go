@@ -1,4 +1,4 @@
-package cli_test
+package cli
 
 import (
 	"bytes"
@@ -10,7 +10,6 @@ import (
 	"strings"
 	"testing"
 
-	"go.astrophena.name/tools/internal/cli"
 	"go.astrophena.name/tools/internal/version"
 )
 
@@ -26,7 +25,7 @@ func TestRun(t *testing.T) {
 			wantErrorPrinted: false,
 		},
 		"ErrArgsNeeded": {
-			err:              cli.ErrArgsNeeded,
+			err:              ErrArgsNeeded,
 			wantCode:         1,
 			wantErrorPrinted: false,
 		},
@@ -34,6 +33,11 @@ func TestRun(t *testing.T) {
 			err:              io.EOF,
 			wantCode:         1,
 			wantErrorPrinted: true,
+		},
+		"unprintable io.EOF": {
+			err:              &unprintableError{io.EOF},
+			wantCode:         1,
+			wantErrorPrinted: false,
 		},
 		"nil": {
 			err:              nil,
@@ -43,7 +47,7 @@ func TestRun(t *testing.T) {
 	}
 
 	if tcName := os.Getenv("CLI_TEST_RUN"); tcName != "" {
-		cli.Run(cases[tcName].err)
+		Run(cases[tcName].err)
 		return
 	}
 
@@ -86,19 +90,19 @@ func TestRun(t *testing.T) {
 
 func TestHandleStartup(t *testing.T) {
 	cases := map[string]struct {
-		app        *cli.App
+		app        *App
 		args       []string
 		wantOutput string
 		wantErr    error
 	}{
 		"show version": {
-			app:        &cli.App{},
+			app:        &App{},
 			args:       []string{"-version"},
 			wantOutput: version.Version().String(),
-			wantErr:    cli.ErrExitVersion,
+			wantErr:    ErrExitVersion,
 		},
 		"no args": {
-			app: &cli.App{
+			app: &App{
 				Name:        "testapp",
 				Description: "This is a test app.",
 			},
@@ -107,7 +111,7 @@ func TestHandleStartup(t *testing.T) {
 			wantErr:    nil,
 		},
 		"usage": {
-			app: &cli.App{
+			app: &App{
 				Name:        "testapp",
 				Description: "This is a test app.",
 			},

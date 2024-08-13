@@ -26,6 +26,10 @@ func Run(err error) {
 }
 
 func isPrintableError(err error) bool {
+	var ue *unprintableError
+	if ok := errors.As(err, &ue); ok {
+		return false
+	}
 	if errors.Is(err, flag.ErrHelp) {
 		return false
 	}
@@ -34,6 +38,11 @@ func isPrintableError(err error) bool {
 	}
 	return true
 }
+
+type unprintableError struct{ err error }
+
+func (e *unprintableError) Error() string { return e.err.Error() }
+func (e *unprintableError) Unwrap() error { return e.err }
 
 // App represents a command-line application.
 type App struct {
@@ -76,7 +85,8 @@ func (a *App) HandleStartup(args []string, stdout, stderr io.Writer) error {
 	a.Flags.Usage = a.usage(stderr)
 	a.Flags.SetOutput(stderr)
 	if err := a.Flags.Parse(args); err != nil {
-		return err
+		// Already printed to stderr by flag package, so mark as an unprintable error.
+		return &unprintableError{err}
 	}
 	if showVersion {
 		fmt.Fprint(stderr, version.Version())
