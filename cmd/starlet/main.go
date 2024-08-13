@@ -64,12 +64,13 @@ called by Starlet for each incoming update.
 
 The following environment variables can be used to configure Starlet:
 
-  - TG_TOKEN: Telegram Bot API token.
-  - TG_SECRET: Secret token used to validate Telegram Bot API updates.
-  - TG_OWNER: Telegram user ID of the bot owner.
-  - GH_TOKEN: GitHub API token.
   - GEMINI_KEY: Gemini API key.
+  - GH_TOKEN: GitHub API token.
   - GIST_ID: GitHub Gist ID to load bot code from.
+  - HOST: Bot domain used for setting up webhook.
+  - TG_OWNER: Telegram user ID of the bot owner.
+  - TG_SECRET: Secret token used to validate Telegram Bot API updates.
+  - TG_TOKEN: Telegram Bot API token.
 
 # Debug interface
 
@@ -105,6 +106,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"sort"
@@ -150,12 +152,13 @@ func (e *engine) main(ctx context.Context, args []string, getenv func(string) st
 	}
 	var (
 		addr      = a.Flags.String("addr", "localhost:3000", "Listen on `host:port`.")
-		tgToken   = a.Flags.String("tg-token", "", "Telegram Bot API `token`.")
-		tgSecret  = a.Flags.String("tg-secret", "", "Secret `token` used to validate Telegram Bot API updates.")
-		tgOwner   = a.Flags.Int64("tg-owner", 0, "Telegram user `ID` of the bot owner.")
-		ghToken   = a.Flags.String("gh-token", "", "GitHub API `token`.")
 		geminiKey = a.Flags.String("gemini-key", "", "Gemini API `key`.")
+		ghToken   = a.Flags.String("gh-token", "", "GitHub API `token`.")
 		gistID    = a.Flags.String("gist-id", "", "GitHub Gist `ID` to load bot code from.")
+		host      = a.Flags.String("host", "", "Bot `domain` used for setting up webhook.")
+		tgOwner   = a.Flags.Int64("tg-owner", 0, "Telegram user `ID` of the bot owner.")
+		tgSecret  = a.Flags.String("tg-secret", "", "Secret `token` used to validate Telegram Bot API updates.")
+		tgToken   = a.Flags.String("tg-token", "", "Telegram Bot API `token`.")
 	)
 	if err := a.HandleStartup(args, stdout, stderr); err != nil {
 		if errors.Is(err, cli.ErrExitVersion) {
@@ -165,12 +168,13 @@ func (e *engine) main(ctx context.Context, args []string, getenv func(string) st
 	}
 
 	// Load configuration from environment variables or flags.
-	e.tgToken = cmp.Or(e.tgToken, getenv("TG_TOKEN"), *tgToken)
-	e.tgSecret = cmp.Or(e.tgSecret, getenv("TG_SECRET"), *tgSecret)
-	e.tgOwner = cmp.Or(e.tgOwner, parseInt(getenv("TG_OWNER")), *tgOwner)
-	e.ghToken = cmp.Or(e.ghToken, getenv("GH_TOKEN"), *ghToken)
 	e.geminiKey = cmp.Or(e.geminiKey, getenv("GEMINI_KEY"), *geminiKey)
+	e.ghToken = cmp.Or(e.ghToken, getenv("GH_TOKEN"), *ghToken)
 	e.gistID = cmp.Or(e.gistID, getenv("GIST_ID"), *gistID)
+	e.host = cmp.Or(e.host, getenv("HOST"), *host)
+	e.tgOwner = cmp.Or(e.tgOwner, parseInt(getenv("TG_OWNER")), *tgOwner)
+	e.tgSecret = cmp.Or(e.tgSecret, getenv("TG_SECRET"), *tgSecret)
+	e.tgToken = cmp.Or(e.tgToken, getenv("TG_TOKEN"), *tgToken)
 	e.onRender = getenv("RENDER") == "true"
 
 	// Initialize internal state.
@@ -182,12 +186,15 @@ func (e *engine) main(ctx context.Context, args []string, getenv func(string) st
 		return nil
 	}
 
-	// If running on Render, try to look up port to listen on and start goroutine
-	// that prevents Starlet from sleeping.
+	// If running on Render, try to look up port to listen on, activate webhook
+	// and start goroutine that prevents Starlet from sleeping.
 	if e.onRender {
 		// https://docs.render.com/environment-variables#all-runtimes-1
 		if port := getenv("PORT"); port != "" {
 			*addr = ":" + port
+		}
+		if err := e.setWebhook(ctx); err != nil {
+			return err
 		}
 		go e.selfPing(ctx)
 	}
@@ -229,6 +236,7 @@ type engine struct {
 	geminiKey string
 	ghToken   string
 	gistID    string
+	host      string
 	httpc     *http.Client
 	onRender  bool
 	stderr    io.Writer
@@ -529,6 +537,28 @@ func (e *engine) readFile(thread *starlark.Thread, b *starlark.Builtin, args sta
 		return starlark.None, fmt.Errorf("file %s not found in Gist", name)
 	}
 	return starlark.String(file.Content), nil
+}
+
+func (e *engine) setWebhook(ctx context.Context) error {
+	if e.host == "" {
+		return errors.New("host hasn't set; pass it with -host flag or HOST environment variable")
+	}
+	u := &url.URL{
+		Scheme: "https",
+		Host:   e.host,
+		Path:   "/telegram",
+	}
+	_, err := request.Make[any](ctx, request.Params{
+		Method: http.MethodPost,
+		URL:    "https://api.telegram.org/bot" + e.tgToken + "/setWebhook",
+		Body: map[string]string{
+			"url":          u.String(),
+			"secret_token": e.tgSecret,
+		},
+		HTTPClient: e.httpc,
+		Scrubber:   e.logMasker,
+	})
+	return err
 }
 
 // Error handling {{{

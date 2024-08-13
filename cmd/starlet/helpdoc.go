@@ -67,12 +67,13 @@ Starlet for each incoming update.
 
 The following environment variables can be used to configure Starlet:
 
-  - TG_TOKEN: Telegram Bot API token.
-  - TG_SECRET: Secret token used to validate Telegram Bot API updates.
-  - TG_OWNER: Telegram user ID of the bot owner.
-  - GH_TOKEN: GitHub API token.
   - GEMINI_KEY: Gemini API key.
+  - GH_TOKEN: GitHub API token.
   - GIST_ID: GitHub Gist ID to load bot code from.
+  - HOST: Bot domain used for setting up webhook.
+  - TG_OWNER: Telegram user ID of the bot owner.
+  - TG_SECRET: Secret token used to validate Telegram Bot API updates.
+  - TG_TOKEN: Telegram Bot API token.
 
 # Debug interface
 
