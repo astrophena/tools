@@ -23,7 +23,7 @@ jobs:
           go-version-file: 'go.mod'
       - name: 'Run tgfeed'
         env:
-          CHAT_ID: '${{ secrets.TGFEED_CHAT_ID }}'
+          CHAT_ID: '${{ secrets.CHAT_ID }}'
           GEMINI_API_KEY: '${{ secrets.GEMINI_API_KEY }}'
           GIST_ID: '${{ secrets.TGFEED_GIST_ID }}'
           GITHUB_TOKEN: '${{ secrets.TGFEED_GIST_TOKEN }}'
