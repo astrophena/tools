@@ -2,10 +2,11 @@
 package convcache
 
 import (
-	"maps"
 	"sync"
+	"time"
 
 	"go.astrophena.name/tools/internal/starlark/starconv"
+
 	"go.starlark.net/starlark"
 	"go.starlark.net/starlarkstruct"
 )
@@ -23,12 +24,20 @@ type ExportFunc func() map[int64][]string
 //   - reset(chat_id: int): Clears the conversation history for the given chat ID.
 //
 // The chat ID is an integer representing a unique conversation identifier.
-func Module(initial map[int64][]string) (mod *starlarkstruct.Module, export ExportFunc) {
+//
+// The ttl argument specifies the time-to-live duration after which a cache entry will expire.
+func Module(initial map[int64][]string, ttl time.Duration) (mod *starlarkstruct.Module, export ExportFunc) {
 	m := &module{
-		cache: make(map[int64][]string),
+		cache: make(map[int64]cacheEntry),
+		ttl:   ttl,
 	}
 	if initial != nil {
-		maps.Copy(m.cache, initial)
+		for k, v := range initial {
+			m.cache[k] = cacheEntry{
+				value:        v,
+				lastAccessed: time.Now(),
+			}
+		}
 	}
 	return &starlarkstruct.Module{
 		Name: "convcache",
@@ -42,7 +51,13 @@ func Module(initial map[int64][]string) (mod *starlarkstruct.Module, export Expo
 
 type module struct {
 	mu    sync.Mutex
-	cache map[int64][]string
+	cache map[int64]cacheEntry
+	ttl   time.Duration
+}
+
+type cacheEntry struct {
+	value        []string
+	lastAccessed time.Time
 }
 
 func (m *module) get(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
@@ -54,11 +69,21 @@ func (m *module) get(thread *starlark.Thread, b *starlark.Builtin, args starlark
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if history, ok := m.cache[chatID]; ok {
-		return starconv.ToValue(history)
+	entry, ok := m.cache[chatID]
+	if !ok {
+		return starlark.NewList([]starlark.Value{}), nil
 	}
 
-	return starlark.NewList([]starlark.Value{}), nil
+	// Check if the entry has expired.
+	if time.Since(entry.lastAccessed) > m.ttl {
+		delete(m.cache, chatID)
+		return starlark.NewList([]starlark.Value{}), nil
+	}
+
+	entry.lastAccessed = time.Now()
+	m.cache[chatID] = entry
+
+	return starconv.ToValue(entry.value)
 }
 
 func (m *module) append(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
@@ -71,11 +96,17 @@ func (m *module) append(thread *starlark.Thread, b *starlark.Builtin, args starl
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, ok := m.cache[chatID]; ok {
-		m.cache[chatID] = append(m.cache[chatID], message)
+	entry, ok := m.cache[chatID]
+	if ok {
+		entry.value = append(entry.value, message)
 	} else {
-		m.cache[chatID] = []string{message}
+		entry = cacheEntry{
+			value:        []string{message},
+			lastAccessed: time.Now(),
+		}
 	}
+
+	m.cache[chatID] = entry
 
 	return starlark.None, nil
 }
@@ -97,5 +128,9 @@ func (m *module) reset(thread *starlark.Thread, b *starlark.Builtin, args starla
 func (m *module) export() map[int64][]string {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return maps.Clone(m.cache)
+	result := make(map[int64][]string)
+	for k, v := range m.cache {
+		result[k] = v.value
+	}
+	return result
 }
