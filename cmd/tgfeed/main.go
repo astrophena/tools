@@ -108,6 +108,7 @@ import (
 	"log"
 	"math/rand/v2"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"runtime"
@@ -742,10 +743,30 @@ func (f *fetcher) handleFetchFailure(ctx context.Context, state *feedState, url 
 	}
 }
 
+var bannedDomains = []string{
+	// Twitter/X. Not available without login.
+	"twitter.com",
+	"x.com",
+	// Reddit. Shithole.
+	"old.reddit.com",
+	"reddit.com",
+}
+
 func (f *fetcher) sendUpdate(ctx context.Context, item *gofeed.Item) {
 	title := item.Title
 	if item.Title == "" {
 		title = item.Link
+	}
+
+	// Filter links from banned domains.
+	u, err := url.Parse(item.Link)
+	if err != nil {
+		f.logf("sendUpdate: item %q has an invalid URL, skipping", item.Link)
+		return
+	}
+	if slices.Contains(bannedDomains, u.Host) {
+		f.logf("sendUpdate: skipping item %q from banned domain", item.Link)
+		return
 	}
 
 	msg := fmt.Sprintf(
