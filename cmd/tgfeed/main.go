@@ -793,7 +793,7 @@ func (f *fetcher) sendUpdate(ctx context.Context, item *gofeed.Item) {
 	// because I often read comments on Hacker News entries.
 	if strings.HasPrefix(item.GUID, "https://news.ycombinator.com/item?id=") {
 		inlineKeyboardButtons = append(inlineKeyboardButtons, inlineKeyboardButton{
-			Text: "💬 Comments",
+			Text: "↪ Hacker News",
 			URL:  item.GUID,
 		})
 	}
