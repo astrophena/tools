@@ -35,7 +35,40 @@ type GenerateContentParams struct {
 	// SystemInstruction is an optional Content object specifying system
 	// instructions for generation.
 	SystemInstruction *Content `json:"systemInstruction,omitempty"`
+	// SafetySettings is a list of unique SafetySetting instances for blocking
+	// unsafe content.
+	SafetySettings []*SafetySetting `json:"safetySettings,omitempty"`
 }
+
+// SafetySetting represents a safety setting, affecting the safety-blocking
+// behavior.
+type SafetySetting struct {
+	Category  HarmCategory       `json:"category"`
+	Threshold HarmBlockThreshold `json:"threshold"`
+}
+
+// HarmCategory covers various kinds of harms that can be filtered from model
+// responses.
+type HarmCategory string
+
+// See https://ai.google.dev/api/generate-content#v1beta.HarmCategory for all
+// categories.
+const (
+	DangerousContent HarmCategory = "HARM_CATEGORY_DANGEROUS_CONTENT"
+	Harassment       HarmCategory = "HARM_CATEGORY_HARASSMENT"
+	HateSpeech       HarmCategory = "HARM_CATEGORY_HATE_SPEECH"
+	SexuallyExplicit HarmCategory = "HARM_CATEGORY_SEXUALLY_EXPLICIT"
+)
+
+// HarmBlockThreshold represents a threshold to block at and beyond a specified
+// harm probability.
+type HarmBlockThreshold string
+
+// See https://ai.google.dev/api/generate-content#harmblockthreshold for all
+// thresholds.
+const (
+	BlockNone HarmBlockThreshold = "BLOCK_NONE"
+)
 
 // Content represents a piece of text content with a list of Part objects.
 type Content struct {

@@ -20,6 +20,7 @@ import (
 //
 //   - contents (list of strings): The text to be provided to Gemini for generation.
 //   - system (dict, optional): System instructions to guide Gemini's response.
+//   - unsafe (bool, optional): Disables all model safety measures.
 //
 // If you pass multiple strings in contents, each odd part will be marked as
 // sent by user, and each even part as sent by bot.
@@ -80,11 +81,13 @@ func (m *module) generateContent(thread *starlark.Thread, b *starlark.Builtin, a
 	var (
 		contentsList *starlark.List
 		system       *starlark.Dict
+		unsafe       starlark.Bool
 	)
 	if err := starlark.UnpackArgs(
 		b.Name(), args, kwargs,
 		"contents", &contentsList,
 		"system?", &system,
+		"unsafe?", &unsafe,
 	); err != nil {
 		return nil, err
 	}
@@ -140,15 +143,35 @@ func (m *module) generateContent(thread *starlark.Thread, b *starlark.Builtin, a
 		},
 	}
 
+	if bool(unsafe) {
+		params.SafetySettings = []*gemini.SafetySetting{
+			{Category: gemini.DangerousContent, Threshold: gemini.BlockNone},
+			{Category: gemini.Harassment, Threshold: gemini.BlockNone},
+			{Category: gemini.HateSpeech, Threshold: gemini.BlockNone},
+			{Category: gemini.SexuallyExplicit, Threshold: gemini.BlockNone},
+		}
+	}
+
 	resp, err := m.c.GenerateContent(ctx, params)
 	if err != nil {
 		return starlark.None, fmt.Errorf("%s: failed to generate text: %w", b.Name(), err)
 	}
 
 	var candidates []starlark.Value
+
+	if resp.Candidates == nil {
+		return starlark.NewList([]starlark.Value{}), nil
+	}
+
 	for _, candidate := range resp.Candidates {
 		var textParts []starlark.Value
+		if candidate == nil || candidate.Content == nil {
+			continue
+		}
 		for _, part := range candidate.Content.Parts {
+			if part == nil {
+				continue
+			}
 			textParts = append(textParts, starlark.String(part.Text))
 		}
 		candidates = append(candidates, starlark.NewList(textParts))

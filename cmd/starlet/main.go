@@ -29,17 +29,18 @@ available to the bot code:
 		- read(name: str) -> str: Retrieves a file from GitHub Gist.
 
 	gemini: Allows interaction with Gemini API.
-		- generate_content(contents, *, system=None): Generates text using Gemini:
-		  - contents (list of strings): The text to be provided to Gemini for generation.
-		  - system (dict, optional): System instructions to guide Gemini's response, containing a single key "text" with string value.
+		- generate_content(contents, system, unsafe): Generates text using Gemini:
+			- contents (list of strings): The text to be provided to Gemini for generation.
+			- system (dict, optional): System instructions to guide Gemini's response, containing a single key "text" with string value.
+			- unsafe (bool, optional): Disables all model safety measures.
 
 	html: Helper functions for working with HTML.
 		- escape(s): Escapes HTML string.
 
 	telegram: Allows sending requests to the Telegram Bot API.
 		- call(method, args): Calls a Telegram Bot API method:
-		  - method (string): The Telegram Bot API method to call.
-		  - args (dict): The arguments to pass to the method.
+			- method (string): The Telegram Bot API method to call.
+			- args (dict): The arguments to pass to the method.
 
 	time: Provides time-related functions.
 
