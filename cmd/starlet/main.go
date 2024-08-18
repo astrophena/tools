@@ -61,6 +61,10 @@ The bot code must define a function called handle that takes a single
 argument — a dictionary representing the Telegram update. This function is
 called by Starlet for each incoming update.
 
+If you define a function on_load, it will be called by Starlet each time it
+loads bot code from GitHub Gist. This can be used, for example, to update
+command list in Telegram.
+
 # Environment variables
 
 The following environment variables can be used to configure Starlet:
@@ -443,7 +447,8 @@ func (e *engine) loadFromGist(ctx context.Context) {
 		"telegram": telegram.Module(e.tgToken, e.httpc),
 		"time":     starlarktime.Module,
 	}
-	e.botProg, err = starlark.ExecFileOptions(
+
+	botProg, err := starlark.ExecFileOptions(
 		&syntax.FileOptions{},
 		e.newStarlarkThread(nil),
 		"bot.star",
@@ -455,6 +460,15 @@ func (e *engine) loadFromGist(ctx context.Context) {
 		return
 	}
 
+	if hook, ok := botProg["on_load"]; ok {
+		_, err = starlark.Call(e.newStarlarkThread(ctx), hook, starlark.Tuple{}, nil)
+		if err != nil {
+			e.loadGistErr = err
+			return
+		}
+	}
+
+	e.botProg = botProg
 	e.loadGistErr = nil
 }
 
