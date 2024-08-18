@@ -14,6 +14,8 @@ import (
 )
 
 func TestRun(t *testing.T) {
+	t.Parallel()
+
 	cases := map[string]struct {
 		err              error
 		wantCode         int
@@ -89,6 +91,8 @@ func TestRun(t *testing.T) {
 }
 
 func TestHandleStartup(t *testing.T) {
+	t.Parallel()
+
 	cases := map[string]struct {
 		app        *App
 		args       []string
@@ -122,6 +126,8 @@ func TestHandleStartup(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
 			var stdout, stderr bytes.Buffer
 
 			err := tc.app.HandleStartup(tc.args, &stdout, &stderr)

@@ -24,6 +24,8 @@ func (f Logf) Write(p []byte) (n int, err error) {
 	return len(p), nil
 }
 
+var _ io.Writer = (Logf)(nil)
+
 // Streamer is an io.Writer that contains all logged lines and allows to
 // stream them.
 type Streamer interface {

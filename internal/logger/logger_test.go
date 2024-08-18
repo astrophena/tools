@@ -13,6 +13,8 @@ import (
 )
 
 func TestLogfWriter(t *testing.T) {
+	t.Parallel()
+
 	var (
 		logged  bool
 		message string
@@ -27,6 +29,8 @@ func TestLogfWriter(t *testing.T) {
 }
 
 func TestStreamer(t *testing.T) {
+	t.Parallel()
+
 	s := NewStreamer(5)
 
 	testLines := []string{

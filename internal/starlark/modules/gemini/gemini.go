@@ -138,9 +138,12 @@ func (m *module) generateContent(thread *starlark.Thread, b *starlark.Builtin, a
 
 	params := gemini.GenerateContentParams{
 		Contents: contents,
-		SystemInstruction: &gemini.Content{
+	}
+
+	if systemPart != nil {
+		params.SystemInstruction = &gemini.Content{
 			Parts: []*gemini.Part{systemPart},
-		},
+		}
 	}
 
 	if bool(unsafe) {
