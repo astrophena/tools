@@ -29,10 +29,6 @@ github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+
 github.com/stretchr/testify v1.3.0/go.mod h1:M5WIy9Dh21IEIfnGCwXGc5bZfKNJtfHm1UVUgZn+9EI=
 github.com/stretchr/testify v1.9.0 h1:HtqpIVDClZ4nwg75+f6Lvsy/wHu+3BoSGCbBAcpTsTg=
 github.com/stretchr/testify v1.9.0/go.mod h1:r2ic/lqez/lEtzL7wO/rwa5dbSLXVDPFyf8C91i36aY=
-go.astrophena.name/base v0.0.0-20240713142933-9da7f970e89e h1:3TEhfA4WGijmuwFZ5hYwcw+2LGUsoaawBTkzAmR+fn8=
-go.astrophena.name/base v0.0.0-20240713142933-9da7f970e89e/go.mod h1:RiyB7kjsq+5av/oQ92lc96IWbl9Byl+CG4tEaKP1v7w=
-go.astrophena.name/base v0.0.0-20240822172301-ec1046543e80 h1:zuhy37l59SCGEJHtXSeEN2WEH/0dMM7UIwxDfy2Y2MM=
-go.astrophena.name/base v0.0.0-20240822172301-ec1046543e80/go.mod h1:RiyB7kjsq+5av/oQ92lc96IWbl9Byl+CG4tEaKP1v7w=
 go.astrophena.name/base v0.1.0 h1:F5fAV4qLyLfJwn/JBePO+CTDcHI5GAaEbqt9+gG60xY=
 go.astrophena.name/base v0.1.0/go.mod h1:RiyB7kjsq+5av/oQ92lc96IWbl9Byl+CG4tEaKP1v7w=
 go.starlark.net v0.0.0-20240520160348-046347dcd104 h1:3qhteRISupnJvaWshOmeqEUs2y9oc/+/ePPvDh3Eygg=
