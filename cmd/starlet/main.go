@@ -120,15 +120,16 @@ import (
 	"sync"
 	"time"
 
+	"go.astrophena.name/base/logger"
+	"go.astrophena.name/base/request"
 	"go.astrophena.name/tools/internal/api/gist"
 	"go.astrophena.name/tools/internal/api/google/gemini"
 	"go.astrophena.name/tools/internal/cli"
-	"go.astrophena.name/tools/internal/logger"
-	"go.astrophena.name/tools/internal/request"
-	"go.astrophena.name/tools/internal/starlark/modules/convcache"
-	starlarkgemini "go.astrophena.name/tools/internal/starlark/modules/gemini"
-	"go.astrophena.name/tools/internal/starlark/modules/telegram"
+	"go.astrophena.name/tools/internal/logstream"
+	"go.astrophena.name/tools/internal/starlark/convcache"
+	starlarkgemini "go.astrophena.name/tools/internal/starlark/gemini"
 	"go.astrophena.name/tools/internal/starlark/starconv"
+	"go.astrophena.name/tools/internal/starlark/telegram"
 	"go.astrophena.name/tools/internal/version"
 	"go.astrophena.name/tools/internal/web"
 
@@ -230,7 +231,7 @@ type engine struct {
 	geminic   *gemini.Client
 	gistc     *gist.Client
 	logMasker *strings.Replacer
-	logStream logger.Streamer
+	logStream logstream.Streamer
 	logf      logger.Logf
 	mux       *http.ServeMux
 
@@ -269,7 +270,7 @@ func (e *engine) doInit() {
 	}
 
 	const logLineLimit = 300
-	e.logStream = logger.NewStreamer(logLineLimit)
+	e.logStream = logstream.New(logLineLimit)
 	e.logf = log.New(io.MultiWriter(e.stderr, e.logStream), "", log.LstdFlags).Printf
 	e.initRoutes()
 
@@ -570,6 +571,9 @@ func (e *engine) setWebhook(ctx context.Context) error {
 			"url":          u.String(),
 			"secret_token": e.tgSecret,
 		},
+		Headers: map[string]string{
+			"User-Agent": version.UserAgent(),
+		},
 		HTTPClient: e.httpc,
 		Scrubber:   e.logMasker,
 	})
@@ -608,7 +612,10 @@ func (e *engine) reportError(ctx context.Context, w http.ResponseWriter, err err
 			},
 		},
 		HTTPClient: e.httpc,
-		Scrubber:   e.logMasker,
+		Headers: map[string]string{
+			"User-Agent": version.UserAgent(),
+		},
+		Scrubber: e.logMasker,
 	})
 	if sendErr != nil {
 		e.logf("Reporting an error %q to bot owner (%q) failed: %v", err, e.tgOwner, sendErr)
@@ -755,8 +762,11 @@ func (e *engine) selfPing(ctx context.Context) {
 				return
 			}
 			health, err := request.Make[web.HealthResponse](ctx, request.Params{
-				Method:     http.MethodGet,
-				URL:        url + "/health",
+				Method: http.MethodGet,
+				URL:    url + "/health",
+				Headers: map[string]string{
+					"User-Agent": version.UserAgent(),
+				},
 				HTTPClient: e.httpc,
 				Scrubber:   e.logMasker,
 			})

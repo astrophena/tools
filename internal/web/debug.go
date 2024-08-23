@@ -22,7 +22,7 @@ import (
 	"sync"
 	"time"
 
-	"go.astrophena.name/tools/internal/logger"
+	"go.astrophena.name/base/logger"
 	"go.astrophena.name/tools/internal/version"
 )
 

@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"strings"
 
-	"go.astrophena.name/tools/internal/logger"
+	"go.astrophena.name/base/logger"
 )
 
 // StatusErr is a sentinel error type used to represent HTTP status code errors.

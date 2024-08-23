@@ -1,8 +1,7 @@
-// Package logger defines a type for writing to logs and a thread-safe
-// implementation of an io.Writer that buffers log lines in a ring buffer and
-// allows them to be streamed through an HTTP endpoint or retrieved as a
-// snapshot.
-package logger
+// Package logstream implements a thread-safe implementation of an io.Writer
+// that buffers log lines in a ring buffer and allows them to be streamed
+// through an HTTP endpoint or retrieved as a snapshot.
+package logstream
 
 import (
 	"container/ring"
@@ -12,19 +11,6 @@ import (
 	"strings"
 	"sync"
 )
-
-// Logf is the basic logger type: a printf-like func. Like [log.Printf], the
-// format need not end in a newline. Logf functions must be safe for concurrent
-// use.
-type Logf func(format string, args ...any)
-
-// Write implements the [io.Writer] interface.
-func (f Logf) Write(p []byte) (n int, err error) {
-	f("%s", p)
-	return len(p), nil
-}
-
-var _ io.Writer = (Logf)(nil)
 
 // Streamer is an io.Writer that contains all logged lines and allows to
 // stream them.
@@ -40,8 +26,8 @@ type Streamer interface {
 	Stream() (<-chan string, func())
 }
 
-// NewStreamer returns a new Streamer backed by a ring buffer of the given size.
-func NewStreamer(size int) Streamer {
+// New returns a new Streamer backed by a ring buffer of the given size.
+func New(size int) Streamer {
 	return &lineRingBuffer{
 		size:    size,
 		r:       ring.New(size),

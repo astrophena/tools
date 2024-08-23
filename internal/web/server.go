@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"go.astrophena.name/tools/internal/logger"
+	"go.astrophena.name/base/logger"
 )
 
 //go:generate curl --fail-with-body -s -o static/style.css https://astrophena.name/css/main.css

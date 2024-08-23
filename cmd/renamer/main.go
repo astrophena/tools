@@ -11,8 +11,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"go.astrophena.name/base/logger"
 	"go.astrophena.name/tools/internal/cli"
-	"go.astrophena.name/tools/internal/logger"
 )
 
 func main() { cli.Run(run(os.Args[1:], os.Stdout, os.Stderr)) }

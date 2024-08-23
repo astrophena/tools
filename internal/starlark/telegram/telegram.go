@@ -8,7 +8,8 @@ import (
 	"net/http"
 	"strings"
 
-	"go.astrophena.name/tools/internal/request"
+	"go.astrophena.name/base/request"
+	"go.astrophena.name/tools/internal/version"
 
 	"go.starlark.net/starlark"
 	"go.starlark.net/starlarkjson"
@@ -82,9 +83,12 @@ func (m *module) call(thread *starlark.Thread, b *starlark.Builtin, args starlar
 	}
 
 	rawResp, err := request.Make[json.RawMessage](ctx, request.Params{
-		Method:     http.MethodPost,
-		URL:        "https://api.telegram.org/bot" + m.token + "/" + string(method),
-		Body:       json.RawMessage(rawReq),
+		Method: http.MethodPost,
+		URL:    "https://api.telegram.org/bot" + m.token + "/" + string(method),
+		Body:   json.RawMessage(rawReq),
+		Headers: map[string]string{
+			"User-Agent": version.UserAgent(),
+		},
 		HTTPClient: m.httpc,
 		Scrubber:   m.scrubber,
 	})

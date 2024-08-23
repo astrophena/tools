@@ -118,13 +118,14 @@ import (
 	"sync/atomic"
 	"time"
 
+	"go.astrophena.name/base/logger"
+	"go.astrophena.name/base/request"
 	"go.astrophena.name/tools/internal/api/gist"
 	"go.astrophena.name/tools/internal/api/google/gemini"
 	"go.astrophena.name/tools/internal/api/google/serviceaccount"
 	"go.astrophena.name/tools/internal/cli"
-	"go.astrophena.name/tools/internal/logger"
-	"go.astrophena.name/tools/internal/request"
 	"go.astrophena.name/tools/internal/syncutil"
+	"go.astrophena.name/tools/internal/version"
 
 	"github.com/mmcdole/gofeed"
 )
@@ -281,8 +282,6 @@ func (f *fetcher) doInit() {
 	}
 
 	f.fp = gofeed.NewParser()
-	f.fp.UserAgent = request.UserAgent()
-	f.fp.Client = f.httpc
 
 	scrubPairs := []string{
 		f.ghToken, "[EXPUNGED]",
@@ -617,6 +616,7 @@ func (f *fetcher) reportStats(ctx context.Context) error {
 		Body: req,
 		Headers: map[string]string{
 			"Authorization": "Bearer " + tok,
+			"User-Agent":    version.UserAgent(),
 		},
 		HTTPClient: f.httpc,
 	})
@@ -653,7 +653,7 @@ func (f *fetcher) fetch(ctx context.Context, url string, updates chan *gofeed.It
 		return
 	}
 
-	req.Header.Set("User-Agent", request.UserAgent())
+	req.Header.Set("User-Agent", version.UserAgent())
 	if state.ETag != "" {
 		req.Header.Set("If-None-Match", fmt.Sprintf(`"%s"`, state.ETag))
 	}
@@ -883,9 +883,12 @@ type inlineKeyboardButton struct {
 
 func (f *fetcher) makeTelegramRequest(ctx context.Context, method string, args any) error {
 	if _, err := request.Make[any](ctx, request.Params{
-		Method:     http.MethodPost,
-		URL:        tgAPI + "/bot" + f.tgToken + "/" + method,
-		Body:       args,
+		Method: http.MethodPost,
+		URL:    tgAPI + "/bot" + f.tgToken + "/" + method,
+		Body:   args,
+		Headers: map[string]string{
+			"User-Agent": version.UserAgent(),
+		},
 		HTTPClient: f.httpc,
 	}); err != nil {
 		return err

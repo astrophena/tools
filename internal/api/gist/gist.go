@@ -11,7 +11,8 @@ import (
 	"net/http"
 	"strings"
 
-	"go.astrophena.name/tools/internal/request"
+	"go.astrophena.name/base/request"
+	"go.astrophena.name/tools/internal/version"
 )
 
 const apiURL = "https://api.github.com"
@@ -37,6 +38,7 @@ func (c *Client) makeRequest(ctx context.Context, method string, id string, gist
 		Headers: map[string]string{
 			"Accept":               "application/vnd.github+json",
 			"X-GitHub-Api-Version": "2022-11-28",
+			"User-Agent":           version.UserAgent(),
 		},
 		Body:       gist,
 		HTTPClient: c.HTTPClient,

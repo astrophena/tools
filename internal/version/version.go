@@ -110,3 +110,14 @@ func loadInfo(buildinfo func() (*debug.BuildInfo, bool)) Info {
 
 	return *i
 }
+
+// UserAgent returns a user agent string by combining the version information
+// and a special URL leading to bot information page.
+func UserAgent() string {
+	i := Version()
+	ver := i.Version
+	if i.Version == "devel" && i.Commit != "" {
+		ver = i.Commit
+	}
+	return i.Name + "/" + ver + " (+https://astrophena.name/bleep-bloop)"
+}

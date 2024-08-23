@@ -11,7 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"go.astrophena.name/tools/internal/request"
+	"go.astrophena.name/base/request"
+	"go.astrophena.name/tools/internal/version"
 
 	"github.com/golang-jwt/jwt/v5"
 )
@@ -57,7 +58,7 @@ func (k *Key) AccessToken(ctx context.Context, client *http.Client, scopes ...st
 		return "", err
 	}
 
-	params := &url.Values{}
+	params := url.Values{}
 	params.Add("grant_type", "urn:ietf:params:oauth:grant-type:jwt-bearer")
 	params.Add("assertion", sig)
 
@@ -66,9 +67,12 @@ func (k *Key) AccessToken(ctx context.Context, client *http.Client, scopes ...st
 	}
 
 	tok, err := request.Make[response](ctx, request.Params{
-		Method:     http.MethodPost,
-		URL:        k.TokenURI,
-		Body:       params,
+		Method: http.MethodPost,
+		URL:    k.TokenURI,
+		Body:   params,
+		Headers: map[string]string{
+			"User-Agent": version.UserAgent(),
+		},
 		HTTPClient: client,
 	})
 	if err != nil {

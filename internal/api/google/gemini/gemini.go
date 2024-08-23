@@ -7,7 +7,8 @@ import (
 	"net/http"
 	"strings"
 
-	"go.astrophena.name/tools/internal/request"
+	"go.astrophena.name/base/request"
+	"go.astrophena.name/tools/internal/version"
 )
 
 const apiURL = "https://generativelanguage.googleapis.com/v1beta"
@@ -108,6 +109,7 @@ func (c *Client) GenerateContent(ctx context.Context, params GenerateContentPara
 		URL:    apiURL + "/models/" + c.Model + ":generateContent",
 		Headers: map[string]string{
 			"x-goog-api-key": c.APIKey,
+			"User-Agent":     version.UserAgent(),
 		},
 		Body:       params,
 		HTTPClient: c.HTTPClient,
