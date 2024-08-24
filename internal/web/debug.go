@@ -40,11 +40,10 @@ var debugTemplate string
 // Additionally, the Handle method offers a shorthand for correctly registering
 // debug handlers and cross-linking them from /debug/.
 //
-// All methods of DebugHandler can't be called by multiple goroutines. After you
-// finish forming your debugging "homepage" when initializing and start serving
-// traffic to DebugHandler, you can't call them anymore.
+// Methods of DebugHandler can be safely called by multiple goroutines.
 type DebugHandler struct {
 	mux     *http.ServeMux     // where this handler is registered
+	mu      sync.RWMutex       // covers all fields below, mux is protected by it's own mutex
 	kvfuncs []kvfunc           // output one table row each, see KV()
 	links   []link             // one link in header
 	tpl     *template.Template // template that is used for rendering debug page
@@ -117,6 +116,9 @@ func (d *DebugHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+
 	d.tplInit.Do(func() {
 		d.tpl, d.tplErr = template.New("debug").Parse(debugTemplate)
 	})
@@ -167,6 +169,8 @@ func (d *DebugHandler) HandleFunc(slug, desc string, handler http.HandlerFunc) {
 
 // KV adds a key/value list item to /debug/.
 func (d *DebugHandler) KV(k string, v any) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
 	d.kvfuncs = append(d.kvfuncs, kvfunc{k, func() any {
 		return v
 	}})
@@ -175,11 +179,15 @@ func (d *DebugHandler) KV(k string, v any) {
 // KVFunc adds a key/value list item to /debug/. v is called on every
 // render of /debug/.
 func (d *DebugHandler) KVFunc(k string, v func() any) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
 	d.kvfuncs = append(d.kvfuncs, kvfunc{k, v})
 }
 
 // Link adds a URL and description list item to /debug/.
 func (d *DebugHandler) Link(url, desc string) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
 	d.links = append(d.links, link{url, desc})
 	slices.SortStableFunc(d.links, func(a, b link) int {
 		return cmp.Compare(a.Desc, b.Desc)

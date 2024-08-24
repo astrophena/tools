@@ -14,6 +14,8 @@ import (
 )
 
 func TestDebugger(t *testing.T) {
+	t.Parallel()
+
 	mux := http.NewServeMux()
 
 	dbg1 := Debugger(t.Logf, mux)
@@ -28,6 +30,8 @@ func TestDebugger(t *testing.T) {
 }
 
 func TestDebuggerNilLogf(t *testing.T) {
+	t.Parallel()
+
 	mux := http.NewServeMux()
 	dbg := Debugger(nil, mux)
 	if dbg.logf == nil {
@@ -36,6 +40,8 @@ func TestDebuggerNilLogf(t *testing.T) {
 }
 
 func TestDebuggerKV(t *testing.T) {
+	t.Parallel()
+
 	mux := http.NewServeMux()
 	dbg := Debugger(t.Logf, mux)
 	dbg.KV("Donuts", 42)
@@ -60,6 +66,8 @@ func TestDebuggerKV(t *testing.T) {
 }
 
 func TestDebuggerLink(t *testing.T) {
+	t.Parallel()
+
 	mux := http.NewServeMux()
 	dbg := Debugger(t.Logf, mux)
 	dbg.Link("https://www.tailscale.com", "Homepage")
@@ -73,6 +81,8 @@ func TestDebuggerLink(t *testing.T) {
 }
 
 func TestDebuggerHandle(t *testing.T) {
+	t.Parallel()
+
 	mux := http.NewServeMux()
 	dbg := Debugger(t.Logf, mux)
 	dbg.Handle("check", "Consistency check", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -94,6 +104,8 @@ func TestDebuggerHandle(t *testing.T) {
 }
 
 func TestDebuggerGC(t *testing.T) {
+	t.Parallel()
+
 	mux := http.NewServeMux()
 	Debugger(t.Logf, mux)
 
