@@ -168,9 +168,16 @@ func TestListFeeds(t *testing.T) {
 	}, *update)
 }
 
+//go:embed testdata/feed.xml
+var atomFeed []byte
+
 func TestRun(t *testing.T) {
 	t.Parallel()
-	f := testFetcher(t, testMux(t, nil))
+	f := testFetcher(t, testMux(t, map[string]http.HandlerFunc{
+		"GET example.com/feed.xml": func(w http.ResponseWriter, r *http.Request) {
+			w.Write(atomFeed)
+		},
+	}))
 	if err := f.run(context.Background()); err != nil {
 		t.Fatal(err)
 	}
