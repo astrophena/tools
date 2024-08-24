@@ -29,15 +29,16 @@ import (
 //go:embed templates/debug.html
 var debugTemplate string
 
-// DebugHandler is an http.Handler that serves a debugging "homepage", and
+// DebugHandler is an [http.Handler] that serves a debugging "homepage", and
 // provides helpers to register more debug endpoints and reports.
 //
 // The rendered page consists of two sections: informational key/value pairs and
 // links to other pages.
 //
-// Callers can add to these sections using the KV and URL helpers respectively.
+// Callers can add to these sections using the [KV] and [Link] helpers
+// respectively.
 //
-// Additionally, the Handle method offers a shorthand for correctly registering
+// Additionally, the [Handle] method offers a shorthand for correctly registering
 // debug handlers and cross-linking them from /debug/.
 //
 // Methods of DebugHandler can be safely called by multiple goroutines.
