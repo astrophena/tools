@@ -35,10 +35,9 @@ var debugTemplate string
 // The rendered page consists of two sections: informational key/value pairs and
 // links to other pages.
 //
-// Callers can add to these sections using the [KV] and [Link] helpers
-// respectively.
+// Callers can add to these sections using the KV and Link helpers respectively.
 //
-// Additionally, the [Handle] method offers a shorthand for correctly registering
+// Additionally, the Handle method offers a shorthand for correctly registering
 // debug handlers and cross-linking them from /debug/.
 //
 // Methods of DebugHandler can be safely called by multiple goroutines.
@@ -66,7 +65,7 @@ type (
 	link struct{ URL, Desc string }
 )
 
-// Debugger returns the DebugHandler registered on mux at /debug/, creating it
+// Debugger returns the [DebugHandler] registered on mux at /debug/, creating it
 // if necessary.
 func Debugger(logf logger.Logf, mux *http.ServeMux) *DebugHandler {
 	h, pat := mux.Handler(&http.Request{URL: &url.URL{Path: "/debug/"}})
@@ -109,7 +108,7 @@ var timeStart = time.Now()
 
 func uptime() any { return time.Since(timeStart).Round(time.Second) }
 
-// ServeHTTP implements the http.Handler.
+// ServeHTTP implements the [http.Handler] interface.
 func (d *DebugHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/debug/" {
 		// Sub-handlers are handled by the parent mux directly.
@@ -154,15 +153,15 @@ func (d *DebugHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	buf.WriteTo(w)
 }
 
-// Handle registers handler at /debug/<slug> and creates a descriptive
-// entry in /debug/ for it.
+// Handle registers handler at /debug/<slug> and creates a descriptive entry in
+// /debug/ for it.
 func (d *DebugHandler) Handle(slug, desc string, handler http.Handler) {
 	href := "/debug/" + slug
 	d.mux.Handle(href, handler)
 	d.Link(href, desc)
 }
 
-// HandleFunc is like [Handle], but accepts [http.HandlerFunc] instead of
+// HandleFunc is like Handle, but accepts [http.HandlerFunc] instead of
 // [http.Handler].
 func (d *DebugHandler) HandleFunc(slug, desc string, handler http.HandlerFunc) {
 	d.Handle(slug, desc, http.HandlerFunc(handler))
@@ -177,8 +176,8 @@ func (d *DebugHandler) KV(k string, v any) {
 	}})
 }
 
-// KVFunc adds a key/value list item to /debug/. v is called on every
-// render of /debug/.
+// KVFunc adds a key/value list item to /debug/. v is called on every render of
+// /debug/.
 func (d *DebugHandler) KVFunc(k string, v func() any) {
 	d.mu.Lock()
 	defer d.mu.Unlock()

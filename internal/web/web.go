@@ -20,6 +20,8 @@ type StatusErr int
 func (se StatusErr) Error() string { return strings.ToLower(http.StatusText(int(se))) }
 
 const (
+	// ErrBadRequest represents a bad request error (HTTP 400).
+	ErrBadRequest StatusErr = http.StatusBadRequest
 	// ErrUnauthorized represents an unauthorized access error (HTTP 401).
 	ErrUnauthorized StatusErr = http.StatusUnauthorized
 	// ErrForbidden represents a forbidden access error (HTTP 403).
@@ -28,8 +30,6 @@ const (
 	ErrNotFound StatusErr = http.StatusNotFound
 	// ErrMethodNotAllowed represents a method not allowed error (HTTP 405).
 	ErrMethodNotAllowed StatusErr = http.StatusMethodNotAllowed
-	// ErrBadRequest represents a bad request error (HTTP 400).
-	ErrBadRequest StatusErr = http.StatusBadRequest
 	// ErrInternalServerError represents an internal server error (HTTP 500).
 	ErrInternalServerError StatusErr = http.StatusInternalServerError
 )

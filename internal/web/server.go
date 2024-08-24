@@ -23,8 +23,8 @@ var style []byte
 // ListenAndServeConfig is used to configure the HTTP server started by
 // [ListenAndServe].
 //
-// All fields of ListenAndServeConfig can't be modified after ListenAndServe is
-// called.
+// All fields of ListenAndServeConfig can't be modified after [ListenAndServe]
+// is called.
 type ListenAndServeConfig struct {
 	// Addr is a network address to listen on (in the form of "host:port").
 	Addr string
