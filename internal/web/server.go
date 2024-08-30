@@ -87,7 +87,7 @@ func ListenAndServe(ctx context.Context, c *ListenAndServeConfig) error {
 		ErrorLog: log.New(c.Logf, "", 0),
 		Handler:  protectDebug(c.Mux),
 	}
-	initInternalRoutes(c, s)
+	initInternalRoutes(c)
 
 	errCh := make(chan error, 1)
 
@@ -120,7 +120,7 @@ func ListenAndServe(ctx context.Context, c *ListenAndServeConfig) error {
 	return nil
 }
 
-func initInternalRoutes(c *ListenAndServeConfig, s *http.Server) {
+func initInternalRoutes(c *ListenAndServeConfig) {
 	c.Mux.HandleFunc("/style.css", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeContent(w, r, "style.css", time.Time{}, bytes.NewReader(style))
 	})
