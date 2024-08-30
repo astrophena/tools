@@ -230,7 +230,7 @@ type engine struct {
 	convCache *starlarkstruct.Module
 	geminic   *gemini.Client
 	gistc     *gist.Client
-	logMasker *strings.Replacer
+	scrubber  *strings.Replacer
 	logStream logstream.Streamer
 	logf      logger.Logf
 	mux       *http.ServeMux
@@ -291,19 +291,19 @@ func (e *engine) doInit() {
 
 	e.convCache = convcache.Module(24 * time.Hour)
 
-	e.logMasker = strings.NewReplacer(scrubPairs...)
+	e.scrubber = strings.NewReplacer(scrubPairs...)
 
 	e.gistc = &gist.Client{
 		Token:      e.ghToken,
 		HTTPClient: e.httpc,
-		Scrubber:   e.logMasker,
+		Scrubber:   e.scrubber,
 	}
 	if e.geminiKey != "" {
 		e.geminic = &gemini.Client{
 			APIKey:     e.geminiKey,
 			Model:      "gemini-1.5-flash-latest",
 			HTTPClient: e.httpc,
-			Scrubber:   e.logMasker,
+			Scrubber:   e.scrubber,
 		}
 	}
 }
@@ -574,7 +574,7 @@ func (e *engine) setWebhook(ctx context.Context) error {
 			"User-Agent": version.UserAgent(),
 		},
 		HTTPClient: e.httpc,
-		Scrubber:   e.logMasker,
+		Scrubber:   e.scrubber,
 	})
 	return err
 }
@@ -592,7 +592,7 @@ func (e *engine) reportError(ctx context.Context, w http.ResponseWriter, err err
 		errMsg = evalErr.Backtrace()
 	}
 	// Mask secrets in error messages.
-	errMsg = e.logMasker.Replace(errMsg)
+	errMsg = e.scrubber.Replace(errMsg)
 
 	// https://core.telegram.org/bots/api#linkpreviewoptions
 	type linkPreviewOptions struct {
@@ -614,7 +614,7 @@ func (e *engine) reportError(ctx context.Context, w http.ResponseWriter, err err
 		Headers: map[string]string{
 			"User-Agent": version.UserAgent(),
 		},
-		Scrubber: e.logMasker,
+		Scrubber: e.scrubber,
 	})
 	if sendErr != nil {
 		e.logf("Reporting an error %q to bot owner (%q) failed: %v", err, e.tgOwner, sendErr)
@@ -767,7 +767,7 @@ func (e *engine) selfPing(ctx context.Context) {
 					"User-Agent": version.UserAgent(),
 				},
 				HTTPClient: e.httpc,
-				Scrubber:   e.logMasker,
+				Scrubber:   e.scrubber,
 			})
 			if err != nil {
 				e.logf("selfPing: %v", err)
