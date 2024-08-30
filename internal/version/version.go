@@ -64,7 +64,9 @@ func Version() Info {
 	return info
 }
 
-func initOnce() { info = loadInfo(debug.ReadBuildInfo) }
+var loadFunc = debug.ReadBuildInfo // used in tests
+
+func initOnce() { info = loadInfo(loadFunc) }
 
 func loadInfo(buildinfo func() (*debug.BuildInfo, bool)) Info {
 	bi, ok := buildinfo()

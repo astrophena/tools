@@ -11,6 +11,22 @@ import (
 
 var update = flag.Bool("update", false, "update golden files in testdata")
 
+func TestUserAgent(t *testing.T) {
+	t.Parallel()
+
+	testutil.RunGolden(t, "testdata/useragent/*.json", func(t *testing.T, match string) []byte {
+		b, err := os.ReadFile(match)
+		if err != nil {
+			t.Fatal(err)
+		}
+		bi := testutil.UnmarshalJSON[debug.BuildInfo](t, b)
+		loadFunc = func() (*debug.BuildInfo, bool) {
+			return &bi, true
+		}
+		return []byte(UserAgent())
+	}, *update)
+}
+
 func TestLoadInfo(t *testing.T) {
 	t.Parallel()
 
