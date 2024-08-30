@@ -124,7 +124,7 @@ import (
 	"go.astrophena.name/tools/internal/api/google/gemini"
 	"go.astrophena.name/tools/internal/api/google/serviceaccount"
 	"go.astrophena.name/tools/internal/cli"
-	"go.astrophena.name/tools/internal/syncutil"
+	"go.astrophena.name/tools/internal/util/syncx"
 	"go.astrophena.name/tools/internal/version"
 
 	"github.com/mmcdole/gofeed"
@@ -384,7 +384,7 @@ func (f *fetcher) run(ctx context.Context) error { // {{{
 	}()
 
 	// Enqueue fetches.
-	lwg := syncutil.NewLimitedWaitGroup(concurrencyLimit)
+	lwg := syncx.NewLimitedWaitGroup(concurrencyLimit)
 	for _, url := range shuffle(f.feeds) {
 		lwg.Add(1)
 		go func(url string) {

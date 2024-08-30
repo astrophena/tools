@@ -122,14 +122,14 @@ import (
 
 	"go.astrophena.name/base/logger"
 	"go.astrophena.name/base/request"
+	"go.astrophena.name/tools/cmd/starlet/internal/convcache"
+	"go.astrophena.name/tools/cmd/starlet/internal/starlarkconv"
+	"go.astrophena.name/tools/cmd/starlet/internal/starlarkgemini"
+	"go.astrophena.name/tools/cmd/starlet/internal/telegram"
 	"go.astrophena.name/tools/internal/api/gist"
 	"go.astrophena.name/tools/internal/api/google/gemini"
 	"go.astrophena.name/tools/internal/cli"
-	"go.astrophena.name/tools/internal/logstream"
-	"go.astrophena.name/tools/internal/starlark/convcache"
-	starlarkgemini "go.astrophena.name/tools/internal/starlark/gemini"
-	"go.astrophena.name/tools/internal/starlark/starconv"
-	"go.astrophena.name/tools/internal/starlark/telegram"
+	"go.astrophena.name/tools/internal/util/logstream"
 	"go.astrophena.name/tools/internal/version"
 	"go.astrophena.name/tools/internal/web"
 
@@ -289,8 +289,7 @@ func (e *engine) doInit() {
 		panic("scrubPairs are not even; check doInit method on engine")
 	}
 
-	// TODO: think about persistence of conversation cache.
-	e.convCache, _ = convcache.Module(nil, 24*time.Hour)
+	e.convCache = convcache.Module(24 * time.Hour)
 
 	e.logMasker = strings.NewReplacer(scrubPairs...)
 
@@ -451,7 +450,7 @@ func (e *engine) loadFromGist(ctx context.Context) {
 
 	botProg, err := starlark.ExecFileOptions(
 		&syntax.FileOptions{},
-		e.newStarlarkThread(nil),
+		e.newStarlarkThread(context.Background()),
 		"bot.star",
 		e.bot,
 		predeclared,
@@ -503,7 +502,7 @@ func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 		jsonErr(err)
 		return
 	}
-	u, err := starconv.ToValue(gu)
+	u, err := starlarkconv.ToValue(gu)
 	if err != nil {
 		jsonErr(err)
 		return

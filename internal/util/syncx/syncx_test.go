@@ -1,4 +1,4 @@
-package syncutil_test
+package syncx
 
 import (
 	"sync"
@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"go.astrophena.name/base/testutil"
-	"go.astrophena.name/tools/internal/syncutil"
 )
 
 func TestLimitedWaitGroup(t *testing.T) {
@@ -16,7 +15,7 @@ func TestLimitedWaitGroup(t *testing.T) {
 	const concurrency = 5
 
 	t.Run("add and wait", func(t *testing.T) {
-		lwg := syncutil.NewLimitedWaitGroup(concurrency)
+		lwg := NewLimitedWaitGroup(concurrency)
 		for range 10 {
 			lwg.Add(1)
 			go func() {
@@ -29,7 +28,7 @@ func TestLimitedWaitGroup(t *testing.T) {
 	})
 
 	t.Run("done", func(t *testing.T) {
-		lwg := syncutil.NewLimitedWaitGroup(concurrency)
+		lwg := NewLimitedWaitGroup(concurrency)
 		var wg sync.WaitGroup
 		for range 10 {
 			lwg.Add(1)
@@ -46,7 +45,7 @@ func TestLimitedWaitGroup(t *testing.T) {
 	})
 
 	t.Run("limits concurrency", func(t *testing.T) {
-		lwg := syncutil.NewLimitedWaitGroup(concurrency)
+		lwg := NewLimitedWaitGroup(concurrency)
 		var running int32
 		var maxConcurrent int32
 

@@ -1,5 +1,5 @@
-// Package gemini contains a Starlark module that exposes Gemini API.
-package gemini
+// Package starlarkgemini contains a Starlark module that exposes Gemini API.
+package starlarkgemini
 
 import (
 	"context"

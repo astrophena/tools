@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"go.astrophena.name/tools/internal/rr"
+	"go.astrophena.name/tools/internal/util/rr"
 
 	"go.astrophena.name/base/testutil"
 )

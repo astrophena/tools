@@ -1,5 +1,5 @@
-// Package syncutil contains useful synchronization primitives.
-package syncutil
+// Package syncx contains useful synchronization primitives.
+package syncx
 
 import "sync"
 

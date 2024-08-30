@@ -1,5 +1,5 @@
-// Package starconv implements Starlark value conversion.
-package starconv
+// Package starlarkconv implements Starlark value conversion.
+package starlarkconv
 
 import (
 	"fmt"

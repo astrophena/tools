@@ -1,4 +1,4 @@
-package starconv
+package starlarkconv
 
 import (
 	"fmt"

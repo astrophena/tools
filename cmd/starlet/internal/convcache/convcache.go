@@ -5,15 +5,10 @@ import (
 	"sync"
 	"time"
 
-	"go.astrophena.name/tools/internal/starlark/starconv"
-
+	"go.astrophena.name/tools/cmd/starlet/internal/starlarkconv"
 	"go.starlark.net/starlark"
 	"go.starlark.net/starlarkstruct"
 )
-
-// ExportFunc represents a function that can be used to export contents of
-// conversation cache.
-type ExportFunc func() map[int64][]string
 
 // Module returns a Starlark module that exposes conversation caching functionality.
 //
@@ -26,18 +21,10 @@ type ExportFunc func() map[int64][]string
 // The chat ID is an integer representing a unique conversation identifier.
 //
 // The ttl argument specifies the time-to-live duration after which a cache entry will expire.
-func Module(initial map[int64][]string, ttl time.Duration) (mod *starlarkstruct.Module, export ExportFunc) {
+func Module(ttl time.Duration) *starlarkstruct.Module {
 	m := &module{
 		cache: make(map[int64]cacheEntry),
 		ttl:   ttl,
-	}
-	if initial != nil {
-		for k, v := range initial {
-			m.cache[k] = cacheEntry{
-				value:        v,
-				lastAccessed: time.Now(),
-			}
-		}
 	}
 	return &starlarkstruct.Module{
 		Name: "convcache",
@@ -46,7 +33,7 @@ func Module(initial map[int64][]string, ttl time.Duration) (mod *starlarkstruct.
 			"append": starlark.NewBuiltin("convcache.append", m.append),
 			"reset":  starlark.NewBuiltin("convcache.reset", m.reset),
 		},
-	}, m.export
+	}
 }
 
 type module struct {
@@ -83,7 +70,7 @@ func (m *module) get(thread *starlark.Thread, b *starlark.Builtin, args starlark
 	entry.lastAccessed = time.Now()
 	m.cache[chatID] = entry
 
-	return starconv.ToValue(entry.value)
+	return starlarkconv.ToValue(entry.value)
 }
 
 func (m *module) append(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
@@ -123,14 +110,4 @@ func (m *module) reset(thread *starlark.Thread, b *starlark.Builtin, args starla
 	delete(m.cache, chatID)
 
 	return starlark.None, nil
-}
-
-func (m *module) export() map[int64][]string {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	result := make(map[int64][]string)
-	for k, v := range m.cache {
-		result[k] = v.value
-	}
-	return result
 }
