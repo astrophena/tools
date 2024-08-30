@@ -1,6 +1,6 @@
-// Package logstream implements a thread-safe implementation of an io.Writer
-// that buffers log lines in a ring buffer and allows them to be streamed
-// through an HTTP endpoint or retrieved as a snapshot.
+// Package logstream implements an [io.Writer] that buffers lines written to it
+// in a ring buffer and allows them to be streamed through an HTTP endpoint or
+// retrieved as a snapshot.
 package logstream
 
 import (
@@ -12,7 +12,7 @@ import (
 	"sync"
 )
 
-// Streamer is an io.Writer that contains all logged lines and allows to
+// Streamer is an [io.Writer] that contains all logged lines and allows to
 // stream them.
 type Streamer interface {
 	io.Writer
@@ -22,7 +22,7 @@ type Streamer interface {
 	Lines() []string
 
 	// Stream generates a new channel which will stream any newly logged lines.
-	// Deregister the stream by calling the close function.
+	// Deregister the stream by calling the returned function.
 	Stream() (<-chan string, func())
 }
 
