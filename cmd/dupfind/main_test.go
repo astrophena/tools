@@ -22,6 +22,7 @@ func TestRun(t *testing.T) {
 		args               []string
 		wantErr            error
 		wantNothingPrinted bool
+		extractTxtar       string
 		wantInStdout       string
 		wantInStderr       string
 	}{
@@ -34,11 +35,35 @@ func TestRun(t *testing.T) {
 			args:         []string{"-version"},
 			wantInStderr: "dupfind",
 		},
+		"lookup nondup": {
+			args:               []string{"[TMPDIR]"},
+			extractTxtar:       "testdata/nondup.txtar",
+			wantNothingPrinted: true,
+		},
+		"lookup dup": {
+			args:         []string{"[TMPDIR]"},
+			extractTxtar: "testdata/dup.txtar",
+			wantInStderr: "Duplicate file b.txt of a.txt.\nDuplicate file d.txt of c.txt.",
+		},
 	}
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
+
+			if tc.extractTxtar != "" {
+				tmpDir := t.TempDir()
+				for i, arg := range tc.args {
+					if arg == "[TMPDIR]" {
+						tc.args[i] = tmpDir
+					}
+				}
+				ar, err := txtar.ParseFile(tc.extractTxtar)
+				if err != nil {
+					t.Fatal(err)
+				}
+				testutil.ExtractTxtar(t, ar, tmpDir)
+			}
 
 			var stdout, stderr bytes.Buffer
 			err := run(tc.args, &stdout, &stderr)
