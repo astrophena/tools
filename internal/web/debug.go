@@ -1,6 +1,7 @@
 // Copyright (c) 2021 Tailscale Inc & AUTHORS All rights reserved.
 // Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+// license that can be found in the LICENSE file located at
+// https://github.com/tailscale/tailscale/blob/main/LICENSE.
 
 // Adapted from https://pkg.go.dev/tailscale.com/tsweb#Debugger.
 

@@ -1,6 +1,9 @@
 // Package logstream implements an [io.Writer] that buffers lines written to it
 // in a ring buffer and allows them to be streamed through an HTTP endpoint or
 // retrieved as a snapshot.
+//
+// This package is based on gokrazy's code, see
+// https://github.com/gokrazy/gokrazy/blob/main/LICENSE.
 package logstream
 
 import (
