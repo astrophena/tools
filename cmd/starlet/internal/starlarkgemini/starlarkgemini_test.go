@@ -22,7 +22,7 @@ var update = flag.Bool("update", false, "update golden files in testdata")
 
 // Updating this test:
 //
-//	$  GEMINI_API_KEY=... go test -httprecord testdata/*.httprr
+//	$  GEMINI_API_KEY=... go test -update -httprecord testdata/*.httprr
 //
 // (notice an extra space before command to prevent recording it in shell
 // history)
