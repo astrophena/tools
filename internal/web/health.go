@@ -34,12 +34,12 @@ type HealthFunc func() (status string, ok bool)
 // health check function with this name already exists, RegisterFunc panics.
 func (h *HealthHandler) RegisterFunc(name string, f HealthFunc) {
 	h.mu.Lock()
+	defer h.mu.Unlock()
 	_, dup := h.checks[name]
 	if dup {
 		panic("health: health check function with this name already exists")
 	}
 	h.checks[name] = f
-	h.mu.Unlock()
 }
 
 // Types used in JSON responses.
