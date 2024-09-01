@@ -1,0 +1,61 @@
+httprr trace v1
+376 3700
+POST https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent HTTP/1.1
+Host: generativelanguage.googleapis.com
+User-Agent: starlarkgemini.test/ (+https://astrophena.name/bleep-bloop)
+Content-Length: 103
+Content-Type: application/json
+
+{"contents":[{"parts":[{"text":"Write a story about very kind heiress and her maid."}],"role":"user"}]}HTTP/2.0 200 OK
+Alt-Svc: h3=":443"; ma=2592000,h3-29=":443"; ma=2592000
+Cache-Control: private
+Content-Type: application/json; charset=UTF-8
+Date: Sun, 01 Sep 2024 10:54:46 GMT
+Server: scaffolding on HTTPServer2
+Server-Timing: gfet4t7; dur=3575
+Vary: Origin
+Vary: X-Origin
+Vary: Referer
+X-Content-Type-Options: nosniff
+X-Frame-Options: SAMEORIGIN
+X-Xss-Protection: 0
+
+{
+  "candidates": [
+    {
+      "content": {
+        "parts": [
+          {
+            "text": "The sun, a golden coin, peeked over the horizon, casting long shadows across the sprawling estate of Willow Creek. Inside the grand manor, Lady Amelia, heiress to the vast Willow Creek fortune, was already awake, her heart brimming with a gentle, unassuming kindness that belied her status.\n\nAmelia wasn't like other heiresses. She didn't crave lavish balls or designer gowns. Her joy resided in simple things: the soft rustle of leaves in the wind, the scent of freshly baked bread, and the companionship of her maid, Eliza.\n\nEliza, with her warm brown eyes and a smile that could light up a room, was more than just a maid. She was Amelia's confidante, her closest friend. They shared laughter, secrets, and a deep bond forged in the crucible of mutual respect and affection.\n\nOne autumn afternoon, as the leaves danced a fiery ballet outside, Amelia found Eliza in the kitchen, her brow furrowed over a worn book. \"What troubles you, Eliza?\" Amelia asked, her voice as gentle as the breeze.\n\n\"It's my brother, Milly,\" Eliza sighed, her voice tinged with worry. \"He's been ill for weeks, and the doctor says he needs a special tonic that we can't afford.\"\n\nA shadow crossed Amelia's face, but it quickly faded. \"We'll find a way, Eliza,\" she said, her voice firm with resolve. \"He will be well again.\"\n\nTrue to her word, Amelia discreetly contacted a renowned apothecary, sending him a generous sum and a detailed description of Eliza's brother's ailment. The tonic arrived within a week, wrapped in velvet and smelling of herbs and hope.\n\nEliza, overwhelmed with gratitude, wept tears of joy. \"You shouldn't have done this, Milly,\" she said, her voice choked with emotion.\n\nAmelia, her face radiating warmth, replied, \"Eliza, you are my family. Your happiness is my happiness.\"\n\nAs Eliza tended to her ailing brother, Amelia, who was known for her philanthropy, anonymously set up a fund to help other impoverished families in need. Her kindness, like a silent river, flowed out, touching countless lives and leaving behind a legacy of compassion.\n\nYears passed, and the bond between Amelia and Eliza grew even stronger. They navigated life's joys and sorrows together, their friendship a beacon of light in the sprawling manor of Willow Creek. Their story became a legend, whispered in the wind and echoing in the hearts of those who knew them, a testament to the enduring power of kindness and the unbreakable bond forged between a kind heiress and her faithful maid."
+          }
+        ],
+        "role": "model"
+      },
+      "finishReason": "STOP",
+      "index": 0,
+      "safetyRatings": [
+        {
+          "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+          "probability": "NEGLIGIBLE"
+        },
+        {
+          "category": "HARM_CATEGORY_HATE_SPEECH",
+          "probability": "NEGLIGIBLE"
+        },
+        {
+          "category": "HARM_CATEGORY_HARASSMENT",
+          "probability": "NEGLIGIBLE"
+        },
+        {
+          "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+          "probability": "NEGLIGIBLE"
+        }
+      ]
+    }
+  ],
+  "usageMetadata": {
+    "promptTokenCount": 12,
+    "candidatesTokenCount": 548,
+    "totalTokenCount": 560
+  }
+}
