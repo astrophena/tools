@@ -35,6 +35,8 @@ func main() {
 	sb.WriteString("```sh\n")
 	sb.WriteString("$ go install go.astrophena.name/tools/cmd/...@master\n")
 	sb.WriteString("```\n")
+	sb.WriteString("\n")
+	sb.WriteString("See documentation at https://go.astrophena.name/tools.\n")
 
 	if err := os.WriteFile("README.md", []byte(sb.String()), 0o644); err != nil {
 		log.Fatalf("failed to write README.md: %v", err)

@@ -14,3 +14,5 @@ Install them:
 ```sh
 $ go install go.astrophena.name/tools/cmd/...@master
 ```
+
+See documentation at https://go.astrophena.name/tools.
