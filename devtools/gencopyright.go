@@ -15,6 +15,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 const tmpl = `// © %d Ilya Mateyko. All rights reserved.
@@ -23,13 +24,31 @@ const tmpl = `// © %d Ilya Mateyko. All rights reserved.
 
 `
 
+var exclusions = []string{
+	// Based on Tailscale code.
+	"internal/web/debug.go",
+	"internal/web/debug_test.go",
+	// Based on Oscar (golang.org/x/oscar) code.
+	"internal/util/rr/rr.go",
+	"internal/util/rr/rr_test.go",
+}
+
+func isExcluded(path string) bool {
+	for _, ex := range exclusions {
+		if strings.HasSuffix(path, ex) {
+			return true
+		}
+	}
+	return false
+}
+
 func main() {
 	if err := filepath.WalkDir(".", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 
-		if d.IsDir() || filepath.Ext(path) != ".go" {
+		if d.IsDir() || filepath.Ext(path) != ".go" || isExcluded(path) {
 			return nil
 		}
 
