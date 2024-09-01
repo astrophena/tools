@@ -676,7 +676,13 @@ func (f *fetcher) fetch(ctx context.Context, url string, updates chan *gofeed.It
 		return
 	}
 	if res.StatusCode != http.StatusOK {
-		f.handleFetchFailure(ctx, state, url, fmt.Errorf("want 200, got %d", res.StatusCode))
+		const readLimit = 16384 // 16 KB is enough for error messages (probably)
+		var body []byte
+		body, err = io.ReadAll(io.LimitReader(res.Body, readLimit))
+		if err != nil {
+			body = []byte("unable to read body")
+		}
+		f.handleFetchFailure(ctx, state, url, fmt.Errorf("want 200, got %d: %s", res.StatusCode, body))
 		return
 	}
 

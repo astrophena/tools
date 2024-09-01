@@ -248,7 +248,7 @@ func TestFailingFeed(t *testing.T) {
 	state := testutil.UnmarshalJSON[map[string]feedState](t, []byte(stateJSON.Content))
 
 	testutil.AssertEqual(t, state["https://example.com/feed.xml"].ErrorCount, 1)
-	testutil.AssertEqual(t, state["https://example.com/feed.xml"].LastError, "want 200, got 418")
+	testutil.AssertEqual(t, state["https://example.com/feed.xml"].LastError, "want 200, got 418: I'm a teapot.\n")
 }
 
 func TestDisablingAndReenablingFailingFeed(t *testing.T) {
@@ -281,10 +281,10 @@ func TestDisablingAndReenablingFailingFeed(t *testing.T) {
 
 	testutil.AssertEqual(t, state["https://example.com/feed.xml"].Disabled, true)
 	testutil.AssertEqual(t, state["https://example.com/feed.xml"].ErrorCount, attempts)
-	testutil.AssertEqual(t, state["https://example.com/feed.xml"].LastError, "want 200, got 418")
+	testutil.AssertEqual(t, state["https://example.com/feed.xml"].LastError, "want 200, got 418: I'm a teapot.\n")
 
 	testutil.AssertEqual(t, len(tm.sentMessages), 1)
-	testutil.AssertEqual(t, tm.sentMessages[0]["text"], "❌ Something went wrong:\n<pre><code>"+html.EscapeString("fetching feed \"https://example.com/feed.xml\" failed after 12 previous attempts: want 200, got 418; feed was disabled, to reenable it run 'tgfeed -reenable \"https://example.com/feed.xml\"'")+"</code></pre>")
+	testutil.AssertEqual(t, tm.sentMessages[0]["text"], "❌ Something went wrong:\n<pre><code>"+html.EscapeString("fetching feed \"https://example.com/feed.xml\" failed after 12 previous attempts: want 200, got 418: I'm a teapot.\n; feed was disabled, to reenable it run 'tgfeed -reenable \"https://example.com/feed.xml\"'")+"</code></pre>")
 
 	if err := f.reenable(context.Background(), "https://example.com/feed.xml"); err != nil {
 		t.Fatal(err)
