@@ -1,3 +1,7 @@
+// © 2024 Ilya Mateyko. All rights reserved.
+// Use of this source code is governed by the ISC
+// license that can be found in the LICENSE.md file.
+
 // Package serviceaccount provides functions for working with Google service accounts.
 //
 // See https://developers.google.com/identity/protocols/oauth2/service-account.

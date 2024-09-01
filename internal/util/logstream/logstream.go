@@ -1,3 +1,7 @@
+// © 2024 Ilya Mateyko. All rights reserved.
+// Use of this source code is governed by the ISC
+// license that can be found in the LICENSE.md file.
+
 // Package logstream implements an [io.Writer] that buffers lines written to it
 // in a ring buffer and allows them to be streamed through an HTTP endpoint or
 // retrieved as a snapshot.

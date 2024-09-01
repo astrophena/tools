@@ -1,3 +1,7 @@
+// © 2024 Ilya Mateyko. All rights reserved.
+// Use of this source code is governed by the ISC
+// license that can be found in the LICENSE.md file.
+
 // Audiorenamer traverses a directory and renames music tracks based on their
 // metadata. It extracts the track number and title from the files' metadata.
 // If the title contains slashes, it strips them out to create a valid filename.

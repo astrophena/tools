@@ -1,5 +1,10 @@
+// © 2024 Ilya Mateyko. All rights reserved.
+// Use of this source code is governed by the ISC
+// license that can be found in the LICENSE.md file.
+
 package devtools
 
+//go:generate go run devtools/gencopyright.go
 //go:generate go run devtools/genhelpdoc.go
 //go:generate go run devtools/genreadme.go
 
