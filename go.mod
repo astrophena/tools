@@ -7,7 +7,7 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.2.1
 	github.com/google/go-cmp v0.6.0
 	github.com/mmcdole/gofeed v1.3.0
-	go.astrophena.name/base v0.1.0
+	go.astrophena.name/base v0.1.1-0.20240901141857-1f20669cea00
 	go.starlark.net v0.0.0-20240520160348-046347dcd104
 )
 

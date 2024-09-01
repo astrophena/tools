@@ -82,7 +82,7 @@ print(result)
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			httpc := testutil.MockHTTPClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			httpc := testutil.MockHTTPClient(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if tc.mockStatusCode != 0 {
 					w.WriteHeader(tc.mockStatusCode)
 				}

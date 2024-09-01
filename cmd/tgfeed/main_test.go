@@ -380,7 +380,7 @@ func readFile(t *testing.T, path string) []byte {
 
 func testFetcher(t *testing.T, m *mux) *fetcher {
 	f := &fetcher{
-		httpc:   testutil.MockHTTPClient(t, m.mux),
+		httpc:   testutil.MockHTTPClient(m.mux),
 		logf:    t.Logf,
 		ghToken: "superdupersecret",
 		gistID:  "test",

@@ -116,7 +116,7 @@ func TestHealth(t *testing.T) {
 	health, err := request.Make[web.HealthResponse](context.Background(), request.Params{
 		Method:     http.MethodGet,
 		URL:        "/health",
-		HTTPClient: testutil.MockHTTPClient(t, e.mux),
+		HTTPClient: testutil.MockHTTPClient(e.mux),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -157,7 +157,7 @@ func TestHandleTelegramWebhook(t *testing.T) {
 			Headers: map[string]string{
 				"X-Telegram-Bot-Api-Secret-Token": e.tgSecret,
 			},
-			HTTPClient: testutil.MockHTTPClient(t, e.mux),
+			HTTPClient: testutil.MockHTTPClient(e.mux),
 		})
 		if err != nil {
 			t.Fatal(err)
@@ -175,7 +175,7 @@ func testEngine(t *testing.T, m *mux) *engine {
 	e := &engine{
 		ghToken:  "test",
 		gistID:   "test",
-		httpc:    testutil.MockHTTPClient(t, m.mux),
+		httpc:    testutil.MockHTTPClient(m.mux),
 		tgOwner:  123456789,
 		stderr:   logger.Logf(t.Logf),
 		tgSecret: "test",
