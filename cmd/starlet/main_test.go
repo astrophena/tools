@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"errors"
 	"flag"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -31,6 +32,8 @@ import (
 	"go.astrophena.name/base/txtar"
 	"go.astrophena.name/tools/internal/api/gist"
 	"go.astrophena.name/tools/internal/web"
+
+	"go.starlark.net/starlark"
 )
 
 // Typical Telegram Bot API token, copied from docs.
@@ -351,6 +354,82 @@ func getCookieValue(t *testing.T, cookies []*http.Cookie, name string) string {
 	}
 	t.Fatalf("cookie %q not found", name)
 	return ""
+}
+
+func TestReadFile(t *testing.T) {
+	e := testEngine(t, testMux(t, nil))
+	e.files = map[string]gist.File{
+		"test.txt": {Content: "test"},
+	}
+
+	cases := map[string]struct {
+		name      string
+		wantValue string
+		wantErr   error
+	}{
+		"file exists": {
+			name:      "test.txt",
+			wantValue: "test",
+		},
+		"file does not exist": {
+			name:    "nonexistent.txt",
+			wantErr: fmt.Errorf("file %s not found in Gist", "nonexistent.txt"),
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			value, err := e.readFile(
+				e.newStarlarkThread(context.Background()),
+				starlark.NewBuiltin("read", e.readFile),
+				starlark.Tuple{starlark.String(tc.name)}, nil)
+			if tc.wantErr != nil {
+				testutil.AssertEqual(t, err.Error(), tc.wantErr.Error())
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			testutil.AssertEqual(t, value.(starlark.String).GoString(), tc.wantValue)
+		})
+	}
+}
+
+func TestEscapeHTML(t *testing.T) {
+	e := testEngine(t, testMux(t, nil))
+
+	cases := map[string]struct {
+		in   string
+		want string
+	}{
+		"no escaping": {
+			in:   "plain text",
+			want: "plain text",
+		},
+		"basic escaping": {
+			in:   "<b>bold</b>",
+			want: "&lt;b&gt;bold&lt;/b&gt;",
+		},
+		"complex escaping": {
+			in:   "<script>alert('hello')</script>",
+			want: "&lt;script&gt;alert(&#39;hello&#39;)&lt;/script&gt;",
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			value, err := escapeHTML(
+				e.newStarlarkThread(context.Background()),
+				starlark.NewBuiltin("escape", escapeHTML),
+				starlark.Tuple{starlark.String(tc.in)},
+				nil,
+			)
+			if err != nil {
+				t.Fatal(err)
+			}
+			testutil.AssertEqual(t, value.(starlark.String).GoString(), tc.want)
+		})
+	}
 }
 
 func testEngine(t *testing.T, m *mux) *engine {
