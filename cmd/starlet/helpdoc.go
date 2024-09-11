@@ -36,6 +36,9 @@ available to the bot code:
     		- system (dict, optional): System instructions to guide Gemini's response, containing a single key "text" with string value.
     		- unsafe (bool, optional): Disables all model safety measures.
 
+    markdown: Allows operations with Markdown text.
+    	- strip(text: str) -> str: Strips out all formatting from Markdown text.
+
     html: Helper functions for working with HTML.
     	- escape(s): Escapes HTML string.
 
