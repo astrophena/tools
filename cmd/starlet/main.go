@@ -416,15 +416,13 @@ func (e *engine) loadFromGist(ctx context.Context) {
 		return
 	}
 
-	e.files = g.Files
-
-	bot, exists := e.files["bot.star"]
+	bot, exists := g.Files["bot.star"]
 	if !exists {
 		e.loadGistErr = errors.New("bot.star should contain bot code in Gist")
 		return
 	}
-	e.bot = []byte(bot.Content)
-	if errorTmpl, exists := e.files["error.tmpl"]; exists {
+	botCode := []byte(bot.Content)
+	if errorTmpl, exists := g.Files["error.tmpl"]; exists {
 		e.errorTemplate = errorTmpl.Content
 	} else {
 		e.errorTemplate = defaultErrorTemplate
@@ -466,7 +464,7 @@ func (e *engine) loadFromGist(ctx context.Context) {
 		&syntax.FileOptions{},
 		e.newStarlarkThread(context.Background()),
 		"bot.star",
-		e.bot,
+		botCode,
 		predeclared,
 	)
 	if err != nil {
@@ -482,7 +480,9 @@ func (e *engine) loadFromGist(ctx context.Context) {
 		}
 	}
 
+	e.bot = botCode
 	e.botProg = botProg
+	e.files = g.Files
 	e.loadGistErr = nil
 }
 
