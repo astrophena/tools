@@ -38,6 +38,9 @@ available to the bot code:
 			- system (dict, optional): System instructions to guide Gemini's response, containing a single key "text" with string value.
 			- unsafe (bool, optional): Disables all model safety measures.
 
+	markdown: Allows operations with Markdown text.
+		- strip(text: str) -> str: Strips out all formatting from Markdown text.
+
 	html: Helper functions for working with HTML.
 		- escape(s): Escapes HTML string.
 
@@ -137,6 +140,7 @@ import (
 	"go.astrophena.name/tools/internal/version"
 	"go.astrophena.name/tools/internal/web"
 
+	stripmd "github.com/writeas/go-strip-markdown/v2"
 	starlarktime "go.starlark.net/lib/time"
 	"go.starlark.net/starlark"
 	"go.starlark.net/starlarkstruct"
@@ -434,14 +438,20 @@ func (e *engine) loadFromGist(ctx context.Context) {
 				"version":  starlark.String(version.Version().String()),
 			},
 		),
+		"convcache": e.convCache,
 		"files": &starlarkstruct.Module{
 			Name: "files",
 			Members: starlark.StringDict{
 				"read": starlark.NewBuiltin("files.read", e.readFile),
 			},
 		},
-		"convcache": e.convCache,
-		"gemini":    starlarkgemini.Module(e.geminic),
+		"gemini": starlarkgemini.Module(e.geminic),
+		"markdown": &starlarkstruct.Module{
+			Name: "markdown",
+			Members: starlark.StringDict{
+				"strip": starlark.NewBuiltin("markdown.strip", stripMarkdown),
+			},
+		},
 		"html": &starlarkstruct.Module{
 			Name: "html",
 			Members: starlark.StringDict{
@@ -543,6 +553,14 @@ func escapeHTML(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tupl
 		return starlark.None, err
 	}
 	return starlark.String(html.EscapeString(s)), nil
+}
+
+func stripMarkdown(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	var s string
+	if err := starlark.UnpackArgs(b.Name(), args, kwargs, "s", &s); err != nil {
+		return starlark.None, err
+	}
+	return starlark.String(stripmd.Strip(s)), nil
 }
 
 // e.mu must be held.
