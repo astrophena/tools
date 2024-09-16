@@ -485,13 +485,13 @@ func (f *fetcher) unsubscribe(ctx context.Context, url string) error { // {{{
 // Feed state {{{
 
 type feedState struct {
-	LastModified time.Time `json:"last_modified"`
-	LastUpdated  time.Time `json:"last_updated"`
-	ETag         string    `json:"etag"`
 	Disabled     bool      `json:"disabled"`
-	ErrorCount   int       `json:"error_count"`
-	LastError    string    `json:"last_error"`
-	CachedTitle  string    `json:"cached_title"`
+	LastUpdated  time.Time `json:"last_updated"`
+	LastModified time.Time `json:"last_modified,omitempty"`
+	ETag         string    `json:"etag,omitempty"`
+	ErrorCount   int       `json:"error_count,omitempty"`
+	LastError    string    `json:"last_error,omitempty"`
+	CachedTitle  string    `json:"cached_title,omitempty"`
 
 	// Stats.
 	FetchCount     int64 `json:"fetch_count"`      // successful fetches
@@ -500,7 +500,7 @@ type feedState struct {
 	// Special flags. Not covered by tests or any common sense.
 
 	// Only return updates matching this list of categories.
-	FilteredCategories []string `json:"filtered_categories"`
+	FilteredCategories []string `json:"filtered_categories,omitempty"`
 }
 
 func (f *fetcher) getState(url string) (state *feedState, exists bool) {
