@@ -32,8 +32,6 @@ import (
 
 func main() { cli.Run(run(os.Args[1:], os.Stdout, os.Stderr)) }
 
-var errDirectoryRequired = errors.New("directory is required")
-
 func run(args []string, stdout, stderr io.Writer) error {
 	// Define and parse flags.
 	a := &cli.App{
@@ -54,7 +52,8 @@ func run(args []string, stdout, stderr io.Writer) error {
 	}
 
 	if len(a.Flags.Args()) != 1 {
-		return errDirectoryRequired
+		a.Flags.Usage()
+		return cli.ErrArgsNeeded
 	}
 	dir := a.Flags.Args()[0]
 

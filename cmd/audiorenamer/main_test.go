@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"go.astrophena.name/base/testutil"
+	"go.astrophena.name/tools/internal/cli"
 )
 
 func TestRun(t *testing.T) {
@@ -33,7 +34,7 @@ func TestRun(t *testing.T) {
 	}{
 		"without directory": {
 			args:    []string{},
-			wantErr: errDirectoryRequired,
+			wantErr: cli.ErrArgsNeeded,
 		},
 		"version": {
 			args:         []string{"-version"},
