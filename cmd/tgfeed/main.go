@@ -23,7 +23,8 @@ variable.
 
 # Where it keeps state?
 
-tgfeed stores it's state on GitHub Gist.
+tgfeed stores it's state on GitHub Gist, optionally encrypted with the help of
+age encryption library (https://filippo.io/age).
 
 It maintains a state for each feed, including last modified time, last updated
 time, ETag, error count, and last error message. It keeps track of failing feeds
@@ -42,6 +43,7 @@ The tgfeed program relies on the following environment variables:
   - STATS_SPREADSHEET_ID: ID of the Google Spreadsheet to which the program uploads
     statistics for every run. This is required if the SERVICE_ACCOUNT_KEY is
     provided.
+  - STATE_PASSWORD: Optional password with which the state is encrypted.
   - SERVICE_ACCOUNT_KEY: JSON string representing the service account key for
     accessing the Google API. It's not required, and stats won't be uploaded to a
     spreadsheet if this variable is not set.
@@ -101,6 +103,7 @@ URLs of feeds that have encountered errors during fetching. For example:
 package main
 
 import (
+	"bytes"
 	"cmp"
 	"context"
 	"encoding/json"
@@ -131,6 +134,8 @@ import (
 	"go.astrophena.name/tools/internal/util/syncx"
 	"go.astrophena.name/tools/internal/version"
 
+	"filippo.io/age"
+	"filippo.io/age/armor"
 	"github.com/mmcdole/gofeed"
 )
 
@@ -202,6 +207,20 @@ func (f *fetcher) main(
 	f.statsSpreadsheetID = cmp.Or(f.statsSpreadsheetID, getenv("STATS_SPREADSHEET_ID"))
 	f.tgToken = cmp.Or(f.tgToken, getenv("TELEGRAM_TOKEN"))
 
+	// Initialize encryption key.
+	if password := getenv("STATE_PASSWORD"); password != "" {
+		var err error
+		f.stateIdent, err = age.NewScryptIdentity(password)
+		if err != nil {
+			return err
+		}
+		f.stateRecipient, err = age.NewScryptRecipient(password)
+		if err != nil {
+			return err
+		}
+		f.encrypted = true
+	}
+
 	// Load Google service account key from SERVICE_ACCOUNT_KEY environment
 	// variable. If it's not defined, stats won't be uploaded to a Google
 	// spreadsheet.
@@ -249,6 +268,10 @@ type fetcher struct {
 	gistID  string
 	ghToken string
 	gistc   *gist.Client
+
+	encrypted      bool
+	stateIdent     *age.ScryptIdentity
+	stateRecipient *age.ScryptRecipient
 
 	geminiKey string
 	geminic   *gemini.Client
@@ -518,14 +541,22 @@ func (f *fetcher) loadFromGist(ctx context.Context) error {
 
 	errorTemplate, ok := g.Files["error.tmpl"]
 	if ok {
-		f.errorTemplate = errorTemplate.Content
+		b, err := decrypt([]byte(errorTemplate.Content), f.stateIdent)
+		if err != nil {
+			return err
+		}
+		f.errorTemplate = string(b)
 	} else {
 		f.errorTemplate = defaultErrorTemplate
 	}
 
 	feeds, ok := g.Files["feeds.json"]
 	if ok {
-		if err := json.Unmarshal([]byte(feeds.Content), &f.feeds); err != nil {
+		b, err := decrypt([]byte(feeds.Content), f.stateIdent)
+		if err != nil {
+			return err
+		}
+		if err := json.Unmarshal(b, &f.feeds); err != nil {
 			return err
 		}
 	}
@@ -533,17 +564,70 @@ func (f *fetcher) loadFromGist(ctx context.Context) error {
 	f.state = make(map[string]*feedState)
 	state, ok := g.Files["state.json"]
 	if ok {
-		return json.Unmarshal([]byte(state.Content), &f.state)
+		b, err := decrypt([]byte(state.Content), f.stateIdent)
+		if err != nil {
+			return err
+		}
+		return json.Unmarshal(b, &f.state)
 	}
 	return nil
 }
 
+func decrypt(b []byte, ident age.Identity) ([]byte, error) {
+	if ident == nil || !isEncrypted(b) {
+		return b, nil
+	}
+	cr, err := age.Decrypt(armor.NewReader(bytes.NewReader(b)), ident)
+	if err != nil {
+		return nil, err
+	}
+	cb, err := io.ReadAll(cr)
+	if err != nil {
+		return nil, err
+	}
+	return cb, nil
+}
+
+func isEncrypted(b []byte) bool {
+	return bytes.HasPrefix(b, []byte("-----BEGIN AGE ENCRYPTED FILE-----\n"))
+}
+
+func encrypt(b []byte, recipient age.Recipient) ([]byte, error) {
+	var buf bytes.Buffer
+	aw := armor.NewWriter(&buf)
+	cw, err := age.Encrypt(aw, recipient)
+	if err != nil {
+		return nil, err
+	}
+	if _, err = cw.Write(b); err != nil {
+		return nil, err
+	}
+	if err := cw.Close(); err != nil {
+		return nil, err
+	}
+	if err := aw.Close(); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+func (f *fetcher) marshalAndOrEncrypt(v any) ([]byte, error) {
+	j, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+	if !f.encrypted {
+		return j, nil
+	}
+	return encrypt(j, f.stateRecipient)
+}
+
 func (f *fetcher) saveToGist(ctx context.Context) error {
-	state, err := json.MarshalIndent(f.state, "", "  ")
+	state, err := f.marshalAndOrEncrypt(f.state)
 	if err != nil {
 		return err
 	}
-	feeds, err := json.MarshalIndent(f.feeds, "", "  ")
+	feeds, err := f.marshalAndOrEncrypt(f.feeds)
 	if err != nil {
 		return err
 	}
