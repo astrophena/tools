@@ -21,7 +21,8 @@ variable.
 
 # Where it keeps state?
 
-tgfeed stores it's state on GitHub Gist.
+tgfeed stores it's state on GitHub Gist, optionally encrypted with the help of
+age encryption library (https://filippo.io/age).
 
 It maintains a state for each feed, including last modified time, last updated
 time, ETag, error count, and last error message. It keeps track of failing
@@ -40,6 +41,7 @@ The tgfeed program relies on the following environment variables:
   - STATS_SPREADSHEET_ID: ID of the Google Spreadsheet to which the
     program uploads statistics for every run. This is required if the
     SERVICE_ACCOUNT_KEY is provided.
+  - STATE_PASSWORD: Optional password with which the state is encrypted.
   - SERVICE_ACCOUNT_KEY: JSON string representing the service account key for
     accessing the Google API. It's not required, and stats won't be uploaded to
     a spreadsheet if this variable is not set.
