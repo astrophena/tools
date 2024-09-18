@@ -543,7 +543,7 @@ func (f *fetcher) loadFromGist(ctx context.Context) error {
 	if ok {
 		b, err := decrypt([]byte(errorTemplate.Content), f.stateIdent)
 		if err != nil {
-			return err
+			return fmt.Errorf("error.tmpl: %v", err)
 		}
 		f.errorTemplate = string(b)
 	} else {
@@ -554,7 +554,7 @@ func (f *fetcher) loadFromGist(ctx context.Context) error {
 	if ok {
 		b, err := decrypt([]byte(feeds.Content), f.stateIdent)
 		if err != nil {
-			return err
+			return fmt.Errorf("feeds.json: %v", err)
 		}
 		if err := json.Unmarshal(b, &f.feeds); err != nil {
 			return err
@@ -566,16 +566,19 @@ func (f *fetcher) loadFromGist(ctx context.Context) error {
 	if ok {
 		b, err := decrypt([]byte(state.Content), f.stateIdent)
 		if err != nil {
-			return err
+			return fmt.Errorf("state.json: %v", err)
 		}
 		return json.Unmarshal(b, &f.state)
 	}
 	return nil
 }
 
-func decrypt(b []byte, ident age.Identity) ([]byte, error) {
-	if ident == nil || !isEncrypted(b) {
+func decrypt(b []byte, ident *age.ScryptIdentity) ([]byte, error) {
+	if !isEncrypted(b) {
 		return b, nil
+	}
+	if ident == nil {
+		return nil, errors.New("password is not provided, but this file is encrypted")
 	}
 	cr, err := age.Decrypt(armor.NewReader(bytes.NewReader(b)), ident)
 	if err != nil {
@@ -592,7 +595,7 @@ func isEncrypted(b []byte) bool {
 	return bytes.HasPrefix(b, []byte("-----BEGIN AGE ENCRYPTED FILE-----\n"))
 }
 
-func encrypt(b []byte, recipient age.Recipient) ([]byte, error) {
+func encrypt(b []byte, recipient *age.ScryptRecipient) ([]byte, error) {
 	var buf bytes.Buffer
 	aw := armor.NewWriter(&buf)
 	cw, err := age.Encrypt(aw, recipient)
