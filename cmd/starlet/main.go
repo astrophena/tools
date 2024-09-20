@@ -149,6 +149,8 @@ import (
 	"go.starlark.net/syntax"
 )
 
+//go:generate npm run --prefix editor esbuild -- --minify --bundle main.js --outfile=editor.min.js
+
 const defaultErrorTemplate = `❌ Something went wrong:
 <pre><code>%v</code></pre>`
 
