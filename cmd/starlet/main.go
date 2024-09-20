@@ -104,10 +104,12 @@ URL>/login" as login URL.
 package main
 
 import (
+	"bytes"
 	"cmp"
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
+	_ "embed"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -261,8 +263,8 @@ type engine struct {
 	mu sync.Mutex
 	// loaded from gist
 	bot           []byte
+	files         map[string]string
 	botProg       starlark.StringDict
-	files         map[string]gist.File
 	errorTemplate string
 	loadGistErr   error
 }
@@ -355,6 +357,31 @@ func (e *engine) initRoutes() {
 		w.Write(e.bot)
 	})
 
+	dbg.HandleFunc("edit", "Edit bot code", func(w http.ResponseWriter, r *http.Request) {
+		e.mu.Lock()
+		defer e.mu.Unlock()
+
+		switch r.Method {
+		case http.MethodGet:
+			fmt.Fprintf(w, editorTmpl, e.bot)
+		case http.MethodPost:
+			code := r.FormValue("bot")
+			if code == "" {
+				http.Error(w, "code is empty", http.StatusBadRequest)
+				return
+			}
+			e.bot = []byte(code)
+			if err := e.saveToGist(r.Context()); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			http.Redirect(w, r, "/debug/", http.StatusFound)
+		}
+	})
+	e.mux.HandleFunc("/debug/editor.min.js", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeContent(w, r, "editor.min.js", time.Time{}, bytes.NewReader(editorJS))
+	})
+
 	dbg.HandleFunc("logs", "Logs", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, logsTmpl, strings.Join(e.logStream.Lines(), ""))
 	})
@@ -372,6 +399,14 @@ func (e *engine) initRoutes() {
 		http.Redirect(w, r, "/debug/", http.StatusFound)
 	})
 }
+
+var (
+	//go:embed editor/template.html
+	editorTmpl string
+
+	//go:embed editor/editor.min.js
+	editorJS []byte
+)
 
 func jsonOK(w http.ResponseWriter) {
 	var res struct {
@@ -415,18 +450,20 @@ func (e *engine) loadFromGist(ctx context.Context) {
 		e.loadGistErr = err
 		return
 	}
+	files := make(map[string]string)
+	for name, file := range g.Files {
+		files[name] = file.Content
+	}
+	e.loadGistErr = e.loadCode(ctx, files)
+}
 
-	bot, exists := g.Files["bot.star"]
+// e.mu must be held.
+func (e *engine) loadCode(ctx context.Context, files map[string]string) error {
+	bot, exists := files["bot.star"]
 	if !exists {
-		e.loadGistErr = errors.New("bot.star should contain bot code in Gist")
-		return
+		return errors.New("bot.star should contain bot code")
 	}
-	botCode := []byte(bot.Content)
-	if errorTmpl, exists := g.Files["error.tmpl"]; exists {
-		e.errorTemplate = errorTmpl.Content
-	} else {
-		e.errorTemplate = defaultErrorTemplate
-	}
+	botCode := []byte(bot)
 
 	predeclared := starlark.StringDict{
 		"config": starlarkstruct.FromStringDict(
@@ -468,22 +505,26 @@ func (e *engine) loadFromGist(ctx context.Context) {
 		predeclared,
 	)
 	if err != nil {
-		e.loadGistErr = err
-		return
+		return err
 	}
 
 	if hook, ok := botProg["on_load"]; ok {
 		_, err = starlark.Call(e.newStarlarkThread(ctx), hook, starlark.Tuple{}, nil)
 		if err != nil {
-			e.loadGistErr = err
-			return
+			return err
 		}
 	}
 
+	if errorTmpl, exists := files["error.tmpl"]; exists {
+		e.errorTemplate = errorTmpl
+	} else {
+		e.errorTemplate = defaultErrorTemplate
+	}
 	e.bot = botCode
 	e.botProg = botProg
-	e.files = g.Files
-	e.loadGistErr = nil
+	e.files = files
+
+	return nil
 }
 
 func (e *engine) newStarlarkThread(ctx context.Context) *starlark.Thread {
@@ -494,6 +535,29 @@ func (e *engine) newStarlarkThread(ctx context.Context) *starlark.Thread {
 		thread.SetLocal("context", ctx)
 	}
 	return thread
+}
+
+// e.mu must be held.
+func (e *engine) saveToGist(ctx context.Context) error {
+	g, err := e.gistc.Get(ctx, e.gistID)
+	if err != nil {
+		return err
+	}
+	g.Files["bot.star"] = gist.File{
+		Content: string(e.bot),
+	}
+	files := make(map[string]string)
+	for name, file := range g.Files {
+		files[name] = file.Content
+	}
+
+	// Try to switch to new version before updating.
+	if err := e.loadCode(ctx, files); err != nil {
+		return err
+	}
+
+	_, err = e.gistc.Update(ctx, e.gistID, g)
+	return err
 }
 
 var errNoHandleFunc = errors.New("handle function not found in bot code")
@@ -573,7 +637,7 @@ func (e *engine) readFile(thread *starlark.Thread, b *starlark.Builtin, args sta
 	if !exists {
 		return starlark.None, fmt.Errorf("file %s not found in Gist", name)
 	}
-	return starlark.String(file.Content), nil
+	return starlark.String(file), nil
 }
 
 func (e *engine) setWebhook(ctx context.Context) error {

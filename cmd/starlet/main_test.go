@@ -358,8 +358,8 @@ func getCookieValue(t *testing.T, cookies []*http.Cookie, name string) string {
 
 func TestReadFile(t *testing.T) {
 	e := testEngine(t, testMux(t, nil))
-	e.files = map[string]gist.File{
-		"test.txt": {Content: "test"},
+	e.files = map[string]string{
+		"test.txt": "test",
 	}
 
 	cases := map[string]struct {
