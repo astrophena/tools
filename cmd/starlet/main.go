@@ -89,6 +89,7 @@ The following environment variables can be used to configure Starlet:
 Starlet provides a debug interface at /debug with the following endpoints:
 
   - /debug/code: Displays the currently loaded bot code.
+  - /debug/edit: Allows to edit bot code.
   - /debug/logs: Displays the last 300 lines of logs, streamed automatically.
   - /debug/reload: Reloads the bot code from the GitHub Gist.
 
@@ -363,18 +364,24 @@ func (e *engine) initRoutes() {
 		e.mu.Lock()
 		defer e.mu.Unlock()
 
+		e.loadGist.Do(func() { e.loadFromGist(r.Context()) })
+		if e.loadGistErr != nil {
+			e.respondError(w, e.loadGistErr)
+			return
+		}
+
 		switch r.Method {
 		case http.MethodGet:
 			fmt.Fprintf(w, editorTmpl, e.bot)
 		case http.MethodPost:
 			code := r.FormValue("bot")
 			if code == "" {
-				http.Error(w, "code is empty", http.StatusBadRequest)
+				e.respondError(w, web.ErrBadRequest)
 				return
 			}
 			e.bot = []byte(code)
 			if err := e.saveToGist(r.Context()); err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
+				e.respondError(w, err)
 				return
 			}
 			http.Redirect(w, r, "/debug/", http.StatusFound)
