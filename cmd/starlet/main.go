@@ -89,7 +89,6 @@ The following environment variables can be used to configure Starlet:
 Starlet provides a debug interface at /debug with the following endpoints:
 
   - /debug/code: Displays the currently loaded bot code.
-  - /debug/edit: Allows to edit bot code.
   - /debug/logs: Displays the last 300 lines of logs, streamed automatically.
   - /debug/reload: Reloads the bot code from the GitHub Gist.
 
@@ -105,7 +104,6 @@ URL>/login" as login URL.
 package main
 
 import (
-	"bytes"
 	"cmp"
 	"context"
 	"crypto/hmac"
@@ -149,8 +147,6 @@ import (
 	"go.starlark.net/starlarkstruct"
 	"go.starlark.net/syntax"
 )
-
-//go:generate npm run --prefix editor esbuild -- --minify --bundle main.js --outfile=editor.min.js
 
 const defaultErrorTemplate = `❌ Something went wrong:
 <pre><code>%v</code></pre>`
@@ -353,42 +349,12 @@ func (e *engine) initRoutes() {
 	dbg.HandleFunc("code", "Bot code", func(w http.ResponseWriter, r *http.Request) {
 		e.mu.Lock()
 		defer e.mu.Unlock()
-		if e.bot == nil {
-			fmt.Fprintf(w, "(not loaded, go to /debug/reload or talk with bot on Telegram)\n")
-			return
-		}
-		w.Write(e.bot)
-	})
-
-	dbg.HandleFunc("edit", "Edit bot code", func(w http.ResponseWriter, r *http.Request) {
-		e.mu.Lock()
-		defer e.mu.Unlock()
-
 		e.loadGist.Do(func() { e.loadFromGist(r.Context()) })
 		if e.loadGistErr != nil {
 			e.respondError(w, e.loadGistErr)
 			return
 		}
-
-		switch r.Method {
-		case http.MethodGet:
-			fmt.Fprintf(w, editorTmpl, e.bot)
-		case http.MethodPost:
-			code := r.FormValue("bot")
-			if code == "" {
-				e.respondError(w, web.ErrBadRequest)
-				return
-			}
-			e.bot = []byte(code)
-			if err := e.saveToGist(r.Context()); err != nil {
-				e.respondError(w, err)
-				return
-			}
-			http.Redirect(w, r, "/debug/", http.StatusFound)
-		}
-	})
-	e.mux.HandleFunc("/debug/editor.min.js", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeContent(w, r, "editor.min.js", time.Time{}, bytes.NewReader(editorJS))
+		w.Write(e.bot)
 	})
 
 	dbg.HandleFunc("logs", "Logs", func(w http.ResponseWriter, r *http.Request) {
@@ -408,14 +374,6 @@ func (e *engine) initRoutes() {
 		http.Redirect(w, r, "/debug/", http.StatusFound)
 	})
 }
-
-var (
-	//go:embed editor/template.html
-	editorTmpl string
-
-	//go:embed editor/editor.min.js
-	editorJS []byte
-)
 
 func jsonOK(w http.ResponseWriter) {
 	var res struct {

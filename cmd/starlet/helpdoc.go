@@ -88,7 +88,6 @@ The following environment variables can be used to configure Starlet:
 Starlet provides a debug interface at /debug with the following endpoints:
 
   - /debug/code: Displays the currently loaded bot code.
-  - /debug/edit: Allows to edit bot code.
   - /debug/logs: Displays the last 300 lines of logs, streamed automatically.
   - /debug/reload: Reloads the bot code from the GitHub Gist.
 
