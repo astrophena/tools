@@ -23,8 +23,7 @@ variable.
 
 # Where it keeps state?
 
-tgfeed stores it's state on GitHub Gist, optionally encrypted with the help of
-age encryption library (https://filippo.io/age).
+tgfeed stores it's state on GitHub Gist.
 
 It maintains a state for each feed, including last modified time, last updated
 time, ETag, error count, and last error message. It keeps track of failing feeds
@@ -43,18 +42,9 @@ The tgfeed program relies on the following environment variables:
   - STATS_SPREADSHEET_ID: ID of the Google Spreadsheet to which the program uploads
     statistics for every run. This is required if the SERVICE_ACCOUNT_KEY is
     provided.
-  - STATE_PASSWORD: Optional password with which the state is encrypted.
   - SERVICE_ACCOUNT_KEY: JSON string representing the service account key for
     accessing the Google API. It's not required, and stats won't be uploaded to a
     spreadsheet if this variable is not set.
-
-# Summarization with Gemini API
-
-tgfeed can summarize the text content of articles using the Gemini API. This
-feature requires setting the GEMINI_API_KEY environment variable. When provided,
-tgfeed will attempt to summarize the description field of fetched RSS items and
-include the summary in the Telegram notification along with the article title
-and link.
 
 # Stats collection
 
@@ -103,7 +93,6 @@ URLs of feeds that have encountered errors during fetching. For example:
 package main
 
 import (
-	"bytes"
 	"cmp"
 	"context"
 	"encoding/json"
@@ -115,7 +104,6 @@ import (
 	"log"
 	"math/rand/v2"
 	"net/http"
-	"net/url"
 	"os"
 	"os/signal"
 	"runtime"
@@ -128,14 +116,11 @@ import (
 	"go.astrophena.name/base/logger"
 	"go.astrophena.name/base/request"
 	"go.astrophena.name/tools/internal/api/gist"
-	"go.astrophena.name/tools/internal/api/google/gemini"
 	"go.astrophena.name/tools/internal/api/google/serviceaccount"
 	"go.astrophena.name/tools/internal/cli"
 	"go.astrophena.name/tools/internal/util/syncx"
 	"go.astrophena.name/tools/internal/version"
 
-	"filippo.io/age"
-	"filippo.io/age/armor"
 	"github.com/mmcdole/gofeed"
 )
 
@@ -201,25 +186,10 @@ func (f *fetcher) main(
 
 	// Load configuration from environment variables.
 	f.chatID = cmp.Or(f.chatID, getenv("CHAT_ID"))
-	f.geminiKey = cmp.Or(f.geminiKey, getenv("GEMINI_API_KEY"))
 	f.ghToken = cmp.Or(f.ghToken, getenv("GITHUB_TOKEN"))
 	f.gistID = cmp.Or(f.gistID, getenv("GIST_ID"))
 	f.statsSpreadsheetID = cmp.Or(f.statsSpreadsheetID, getenv("STATS_SPREADSHEET_ID"))
 	f.tgToken = cmp.Or(f.tgToken, getenv("TELEGRAM_TOKEN"))
-
-	// Initialize encryption key.
-	if password := getenv("STATE_PASSWORD"); password != "" {
-		var err error
-		f.stateIdent, err = age.NewScryptIdentity(password)
-		if err != nil {
-			return err
-		}
-		f.stateRecipient, err = age.NewScryptRecipient(password)
-		if err != nil {
-			return err
-		}
-		f.encrypted = true
-	}
 
 	// Load Google service account key from SERVICE_ACCOUNT_KEY environment
 	// variable. If it's not defined, stats won't be uploaded to a Google
@@ -269,13 +239,6 @@ type fetcher struct {
 	ghToken string
 	gistc   *gist.Client
 
-	encrypted      bool
-	stateIdent     *age.ScryptIdentity
-	stateRecipient *age.ScryptRecipient
-
-	geminiKey string
-	geminic   *gemini.Client
-
 	feeds   []string
 	chatID  string
 	tgToken string
@@ -299,30 +262,12 @@ func (f *fetcher) doInit() {
 		f.httpc = request.DefaultClient
 	}
 
-	if f.geminiKey != "" {
-		f.geminic = &gemini.Client{
-			APIKey:     f.geminiKey,
-			Model:      "gemini-1.5-flash-latest",
-			HTTPClient: f.httpc,
-			Scrubber:   f.scrubber,
-		}
-	}
-
 	f.fp = gofeed.NewParser()
 
-	scrubPairs := []string{
+	f.scrubber = strings.NewReplacer(
 		f.ghToken, "[EXPUNGED]",
 		f.tgToken, "[EXPUNGED]",
-	}
-	if f.geminiKey != "" {
-		scrubPairs = append(scrubPairs, f.geminiKey, "[EXPUNGED]")
-	}
-	// Quick sanity check.
-	if len(scrubPairs)%2 != 0 {
-		panic("scrubPairs are not even; check doInit method on fetcher")
-	}
-
-	f.scrubber = strings.NewReplacer(scrubPairs...)
+	)
 
 	f.gistc = &gist.Client{
 		Token:      f.ghToken,
@@ -510,7 +455,7 @@ func (f *fetcher) unsubscribe(ctx context.Context, url string) error { // {{{
 type feedState struct {
 	Disabled     bool      `json:"disabled"`
 	LastUpdated  time.Time `json:"last_updated"`
-	LastModified time.Time `json:"last_modified,omitempty"`
+	LastModified string    `json:"last_modified,omitempty"`
 	ETag         string    `json:"etag,omitempty"`
 	ErrorCount   int       `json:"error_count,omitempty"`
 	LastError    string    `json:"last_error,omitempty"`
@@ -541,22 +486,14 @@ func (f *fetcher) loadFromGist(ctx context.Context) error {
 
 	errorTemplate, ok := g.Files["error.tmpl"]
 	if ok {
-		b, err := decrypt([]byte(errorTemplate.Content), f.stateIdent)
-		if err != nil {
-			return fmt.Errorf("error.tmpl: %v", err)
-		}
-		f.errorTemplate = string(b)
+		f.errorTemplate = errorTemplate.Content
 	} else {
 		f.errorTemplate = defaultErrorTemplate
 	}
 
 	feeds, ok := g.Files["feeds.json"]
 	if ok {
-		b, err := decrypt([]byte(feeds.Content), f.stateIdent)
-		if err != nil {
-			return fmt.Errorf("feeds.json: %v", err)
-		}
-		if err := json.Unmarshal(b, &f.feeds); err != nil {
+		if err := json.Unmarshal([]byte(feeds.Content), &f.feeds); err != nil {
 			return err
 		}
 	}
@@ -564,73 +501,17 @@ func (f *fetcher) loadFromGist(ctx context.Context) error {
 	f.state = make(map[string]*feedState)
 	state, ok := g.Files["state.json"]
 	if ok {
-		b, err := decrypt([]byte(state.Content), f.stateIdent)
-		if err != nil {
-			return fmt.Errorf("state.json: %v", err)
-		}
-		return json.Unmarshal(b, &f.state)
+		return json.Unmarshal([]byte(state.Content), &f.state)
 	}
 	return nil
 }
 
-func decrypt(b []byte, ident *age.ScryptIdentity) ([]byte, error) {
-	if !isEncrypted(b) {
-		return b, nil
-	}
-	if ident == nil {
-		return nil, errors.New("password is not provided, but this file is encrypted")
-	}
-	cr, err := age.Decrypt(armor.NewReader(bytes.NewReader(b)), ident)
-	if err != nil {
-		return nil, err
-	}
-	cb, err := io.ReadAll(cr)
-	if err != nil {
-		return nil, err
-	}
-	return cb, nil
-}
-
-func isEncrypted(b []byte) bool {
-	return bytes.HasPrefix(b, []byte("-----BEGIN AGE ENCRYPTED FILE-----\n"))
-}
-
-func encrypt(b []byte, recipient *age.ScryptRecipient) ([]byte, error) {
-	var buf bytes.Buffer
-	aw := armor.NewWriter(&buf)
-	cw, err := age.Encrypt(aw, recipient)
-	if err != nil {
-		return nil, err
-	}
-	if _, err = cw.Write(b); err != nil {
-		return nil, err
-	}
-	if err := cw.Close(); err != nil {
-		return nil, err
-	}
-	if err := aw.Close(); err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
-}
-
-func (f *fetcher) marshalAndOrEncrypt(v any) ([]byte, error) {
-	j, err := json.MarshalIndent(v, "", "  ")
-	if err != nil {
-		return nil, err
-	}
-	if !f.encrypted {
-		return j, nil
-	}
-	return encrypt(j, f.stateRecipient)
-}
-
 func (f *fetcher) saveToGist(ctx context.Context) error {
-	state, err := f.marshalAndOrEncrypt(f.state)
+	state, err := json.MarshalIndent(f.state, "", "  ")
 	if err != nil {
 		return err
 	}
-	feeds, err := f.marshalAndOrEncrypt(f.feeds)
+	feeds, err := json.MarshalIndent(f.feeds, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -648,9 +529,6 @@ func (f *fetcher) saveToGist(ctx context.Context) error {
 
 // Stats {{{
 
-// stats represents data uploaded at every run to stats collector.
-//
-// DON'T CHANGE LAYOUT OF THIS STRUCT!!!
 type stats struct {
 	mu sync.Mutex
 
@@ -746,10 +624,10 @@ func (f *fetcher) fetch(ctx context.Context, url string, updates chan *gofeed.It
 
 	req.Header.Set("User-Agent", version.UserAgent())
 	if state.ETag != "" {
-		req.Header.Set("If-None-Match", fmt.Sprintf(`"%s"`, state.ETag))
+		req.Header.Set("If-None-Match", state.ETag)
 	}
-	if !state.LastModified.IsZero() {
-		req.Header.Set("If-Modified-Since", state.LastModified.In(time.UTC).Format(time.RFC1123))
+	if state.LastModified != "" {
+		req.Header.Set("If-Modified-Since", state.LastModified)
 	}
 
 	res, err := f.httpc.Do(req)
@@ -785,10 +663,7 @@ func (f *fetcher) fetch(ctx context.Context, url string, updates chan *gofeed.It
 
 	state.ETag = res.Header.Get("ETag")
 	if lastModified := res.Header.Get("Last-Modified"); lastModified != "" {
-		parsed, err := time.ParseInLocation(time.RFC1123, lastModified, time.UTC)
-		if err == nil {
-			state.LastModified = parsed
-		}
+		state.LastModified = lastModified
 	}
 
 	for _, item := range feed.Items {
@@ -840,49 +715,17 @@ func (f *fetcher) handleFetchFailure(ctx context.Context, state *feedState, url 
 	}
 }
 
-var bannedDomains = []string{
-	// Twitter/X. Not available without login.
-	"twitter.com",
-	"x.com",
-	// Reddit. Shithole.
-	"old.reddit.com",
-	"reddit.com",
-}
-
 func (f *fetcher) sendUpdate(ctx context.Context, item *gofeed.Item) {
 	title := item.Title
 	if item.Title == "" {
 		title = item.Link
 	}
 
-	// Filter links from banned domains.
-	u, err := url.Parse(item.Link)
-	if err != nil {
-		f.logf("sendUpdate: item %q has an invalid URL, skipping", item.Link)
-		return
-	}
-	if slices.Contains(bannedDomains, u.Host) {
-		f.logf("sendUpdate: skipping item %q from banned domain", item.Link)
-		return
-	}
-
 	msg := fmt.Sprintf(
 		`🔗 <a href="%[1]s">%[2]s</a>`,
 		item.Link,
-		// Escape HTML from title, but replace non-breaking spaces with normal ones.
-		strings.Replace(html.EscapeString(title), "&nbsp;", " ", -1),
+		html.EscapeString(title),
 	)
-
-	// If we have access to Gemini API, try to summarize an article.
-	if f.geminic != nil && item.Description != "" {
-		summary, err := f.summarize(ctx, item.Description)
-		if err != nil {
-			f.logf("sendUpdate: summarizing item %q failed: %v", item.Link, err)
-		}
-		if summary != "" && !strings.Contains(summary, "TGFEED_SKIP") {
-			msg += "\n<blockquote>" + html.EscapeString(summary) + "</blockquote>"
-		}
-	}
 
 	inlineKeyboardButtons := []inlineKeyboardButton{}
 
@@ -902,43 +745,6 @@ func (f *fetcher) sendUpdate(ctx context.Context, item *gofeed.Item) {
 	}); err != nil {
 		f.logf("Sending %q to %q failed: %v", msg, f.chatID, err)
 	}
-}
-
-func (f *fetcher) summarize(ctx context.Context, text string) (string, error) {
-	const systemInstruction = `
-You are a friendly bot that fetches articles from RSS feeds and given
-descriptions of articles, YouTube videos and sometimes full articles themselves.
-
-Your task is to make a concise summary of article or video description in three
-sentences in English.
-
-If text only contains an image or something you can't summarize, return exactly
-"TGFEED_SKIP" (without quotes).
-`
-
-	params := gemini.GenerateContentParams{
-		Contents: []*gemini.Content{
-			{
-				Parts: []*gemini.Part{{Text: text}},
-			},
-		},
-		SystemInstruction: &gemini.Content{
-			Parts: []*gemini.Part{{Text: systemInstruction}},
-		},
-	}
-
-	resp, err := f.geminic.GenerateContent(ctx, params)
-	if err != nil {
-		return "", err
-	}
-	if len(resp.Candidates) == 0 {
-		return "", errors.New("no candidates provided")
-	}
-	candidate := resp.Candidates[0]
-	if candidate.Content == nil || len(candidate.Content.Parts) == 0 {
-		return "", errors.New("candidate.Content is nil or has no Parts")
-	}
-	return candidate.Content.Parts[0].Text, nil
 }
 
 // }}}

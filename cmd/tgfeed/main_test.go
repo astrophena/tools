@@ -16,17 +16,17 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"go.astrophena.name/base/testutil"
 	"go.astrophena.name/base/txtar"
 	"go.astrophena.name/tools/internal/api/gist"
-	"go.astrophena.name/tools/internal/api/google/gemini"
+	"go.astrophena.name/tools/internal/api/google/serviceaccount"
 	"go.astrophena.name/tools/internal/cli"
-	"go.astrophena.name/tools/internal/util/rr"
+	"go.astrophena.name/tools/internal/web"
 )
 
 // Typical Telegram Bot API token, copied from docs.
@@ -273,15 +273,7 @@ func TestDisablingAndReenablingFailingFeed(t *testing.T) {
 		}
 	}
 
-	getState := func() map[string]feedState {
-		updatedGist := testutil.UnmarshalJSON[*gist.Gist](t, tm.gist)
-		stateJSON, ok := updatedGist.Files["state.json"]
-		if !ok {
-			t.Fatal("state.json has not found in updated gist")
-		}
-		return testutil.UnmarshalJSON[map[string]feedState](t, []byte(stateJSON.Content))
-	}
-	state := getState()
+	state := tm.state(t)
 
 	testutil.AssertEqual(t, state["https://example.com/feed.xml"].Disabled, true)
 	testutil.AssertEqual(t, state["https://example.com/feed.xml"].ErrorCount, attempts)
@@ -293,7 +285,7 @@ func TestDisablingAndReenablingFailingFeed(t *testing.T) {
 	if err := f.reenable(context.Background(), "https://example.com/feed.xml"); err != nil {
 		t.Fatal(err)
 	}
-	state = getState()
+	state = tm.state(t)
 	testutil.AssertEqual(t, state["https://example.com/feed.xml"].Disabled, false)
 	testutil.AssertEqual(t, state["https://example.com/feed.xml"].ErrorCount, 0)
 	testutil.AssertEqual(t, state["https://example.com/feed.xml"].LastError, "")
@@ -335,41 +327,107 @@ func TestLoadFromGistHandleError(t *testing.T) {
 	testutil.AssertEqual(t, err.Error(), fmt.Sprintf("GET \"https://api.github.com/gists/test\": want 200, got 404: %s", gistErrorJSON))
 }
 
-// Updating this test:
-//
-//	$  GEMINI_API_KEY=... go test -httprecord testdata/summarize.httprr
-//
-// (notice an extra space before command to prevent recording it in shell
-// history)
-
-func TestSummarize(t *testing.T) {
+func TestFetchWithIfModifiedSinceAndETag(t *testing.T) {
 	t.Parallel()
 
-	rec, err := rr.Open(filepath.Join("testdata", "summarize.httprr"), http.DefaultTransport)
-	if err != nil {
-		t.Fatal(err)
-	}
-	rec.Scrub(func(r *http.Request) error {
-		r.Header.Del("x-goog-api-key")
-		return nil
+	const (
+		ifModifiedSince = "Tue, 25 Jun 2024 12:00:00 GMT"
+		eTag            = "test"
+	)
+
+	tm := testMux(t, map[string]http.HandlerFunc{
+		"GET example.com/feed.xml": func(w http.ResponseWriter, r *http.Request) {
+			if r.Header.Get("If-Modified-Since") == ifModifiedSince && r.Header.Get("If-None-Match") == eTag {
+				w.WriteHeader(http.StatusNotModified)
+				return
+			}
+			w.Header().Set("Last-Modified", ifModifiedSince)
+			w.Header().Set("ETag", eTag)
+			w.Write(atomFeed)
+		},
 	})
+	f := testFetcher(t, tm)
 
-	f := testFetcher(t, testMux(t, nil))
-	f.geminic = &gemini.Client{
-		Model:      "gemini-1.5-flash-latest",
-		HTTPClient: rec.Client(),
-	}
-	if rec.Recording() {
-		f.geminic.APIKey = os.Getenv("GEMINI_API_KEY")
+	// Initial fetch, should update state with Last-Modified and ETag.
+	if err := f.run(context.Background()); err != nil {
+		t.Fatal(err)
 	}
 
-	article, err := os.ReadFile(filepath.Join("testdata", "summarize.md"))
+	state := tm.state(t)
+
+	testutil.AssertEqual(t, state["https://example.com/feed.xml"].LastModified, ifModifiedSince)
+	testutil.AssertEqual(t, state["https://example.com/feed.xml"].ETag, eTag)
+	testutil.AssertEqual(t, f.stats.NotModifiedFeeds, 0)
+
+	// Second fetch, should use If-Modified-Since and ETag and get 304.
+	if err := f.run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	state = tm.state(t)
+
+	testutil.AssertEqual(t, state["https://example.com/feed.xml"].LastModified, ifModifiedSince)
+	testutil.AssertEqual(t, state["https://example.com/feed.xml"].ETag, eTag)
+	testutil.AssertEqual(t, f.stats.NotModifiedFeeds, 1)
+}
+
+//go:embed testdata/serviceaccount.json
+var testKey []byte
+
+func TestReportStats(t *testing.T) {
+	t.Parallel()
+
+	wantValues := [][]string{
+		{
+			"1", "1", "0", "0",
+			"2024-06-22T12:00:00Z", "1s", "1", "1s", "0s", "1000",
+		},
+	}
+
+	tm := testMux(t, map[string]http.HandlerFunc{
+		"POST sheets.googleapis.com/v4/spreadsheets/test/values/Stats:append": func(w http.ResponseWriter, r *http.Request) {
+			var req struct {
+				Values [][]string `json:"values"`
+			}
+			readJSON(t, r.Body, &req)
+			testutil.AssertEqual(t, req.Values, wantValues)
+			w.Write([]byte("{}"))
+		},
+		`POST oauth2.googleapis.com/token`: func(w http.ResponseWriter, r *http.Request) {
+			// Assume that authentication always succeeds.
+			var response struct {
+				AccessToken string `json:"access_token"`
+			}
+			response.AccessToken = "foobar"
+			web.RespondJSON(w, response)
+		},
+	})
+	f := testFetcher(t, tm)
+
+	f.statsSpreadsheetID = "test"
+	var err error
+	f.serviceAccountKey, err = serviceaccount.LoadKey(testKey)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	_, err = f.summarize(context.Background(), string(article))
-	if err != nil {
+	f.stats = &stats{
+		TotalFeeds:       1,
+		SuccessFeeds:     1,
+		StartTime:        time.Date(2024, 6, 22, 12, 0, 0, 0, time.UTC),
+		Duration:         time.Second,
+		TotalItemsParsed: 1,
+		TotalFetchTime:   time.Second,
+		MemoryUsage:      1000,
+	}
+
+	if err := f.reportStats(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func readJSON(t *testing.T, r io.Reader, v any) {
+	if err := json.NewDecoder(r).Decode(v); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -400,6 +458,17 @@ type mux struct {
 	mu           sync.Mutex
 	gist         []byte
 	sentMessages []map[string]any
+}
+
+func (m *mux) state(t *testing.T) map[string]feedState {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	updatedGist := testutil.UnmarshalJSON[*gist.Gist](t, m.gist)
+	stateJSON, ok := updatedGist.Files["state.json"]
+	if !ok {
+		t.Fatal("state.json has not found in updated gist")
+	}
+	return testutil.UnmarshalJSON[map[string]feedState](t, []byte(stateJSON.Content))
 }
 
 const (

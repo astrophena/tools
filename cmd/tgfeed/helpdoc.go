@@ -21,8 +21,7 @@ variable.
 
 # Where it keeps state?
 
-tgfeed stores it's state on GitHub Gist, optionally encrypted with the help of
-age encryption library (https://filippo.io/age).
+tgfeed stores it's state on GitHub Gist.
 
 It maintains a state for each feed, including last modified time, last updated
 time, ETag, error count, and last error message. It keeps track of failing
@@ -41,18 +40,9 @@ The tgfeed program relies on the following environment variables:
   - STATS_SPREADSHEET_ID: ID of the Google Spreadsheet to which the
     program uploads statistics for every run. This is required if the
     SERVICE_ACCOUNT_KEY is provided.
-  - STATE_PASSWORD: Optional password with which the state is encrypted.
   - SERVICE_ACCOUNT_KEY: JSON string representing the service account key for
     accessing the Google API. It's not required, and stats won't be uploaded to
     a spreadsheet if this variable is not set.
-
-# Summarization with Gemini API
-
-tgfeed can summarize the text content of articles using the Gemini API. This
-feature requires setting the GEMINI_API_KEY environment variable. When provided,
-tgfeed will attempt to summarize the description field of fetched RSS items and
-include the summary in the Telegram notification along with the article title
-and link.
 
 # Stats collection
 

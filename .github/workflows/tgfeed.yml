@@ -18,11 +18,9 @@ jobs:
       - name: 'Run tgfeed'
         env:
           CHAT_ID: '${{ secrets.CHAT_ID }}'
-          GEMINI_API_KEY: '${{ secrets.GEMINI_API_KEY }}'
           GIST_ID: '${{ secrets.TGFEED_GIST_ID }}'
           GITHUB_TOKEN: '${{ secrets.TGFEED_GIST_TOKEN }}'
           SERVICE_ACCOUNT_KEY: '${{ secrets.SERVICE_ACCOUNT_KEY }}'
-          STATE_PASSWORD: '${{ secrets.STATE_PASSWORD }}'
           STATS_SPREADSHEET_ID: '${{ secrets.STATS_SPREADSHEET_ID }}'
           TELEGRAM_TOKEN: '${{ secrets.TGFEED_TOKEN }}'
         run: 'go run -buildvcs ./cmd/tgfeed -run'
