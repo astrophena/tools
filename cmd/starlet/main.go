@@ -331,12 +331,14 @@ func (e *engine) initRoutes() {
 
 	e.mux.HandleFunc("POST /telegram", e.handleTelegramWebhook)
 
-	// Redirect from starlet.onrender.com to bot.astrophena.name.
+	// Redirect from *.onrender.com to bot.astrophena.name.
 	if e.onRender {
-		e.mux.HandleFunc("starlet.onrender.com/", func(w http.ResponseWriter, r *http.Request) {
-			targetURL := "https://bot.astrophena.name" + r.URL.Path
-			http.Redirect(w, r, targetURL, http.StatusMovedPermanently)
-		})
+		if onRenderHost := os.Getenv("RENDER_EXTERNAL_HOSTNAME"); onRenderHost != "" {
+			e.mux.HandleFunc(onRenderHost+"/", func(w http.ResponseWriter, r *http.Request) {
+				targetURL := "https://" + e.host + r.URL.Path
+				http.Redirect(w, r, targetURL, http.StatusMovedPermanently)
+			})
+		}
 	}
 
 	// Authentication.
