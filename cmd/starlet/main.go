@@ -320,13 +320,16 @@ func (e *engine) doInit() {
 func (e *engine) initRoutes() {
 	e.mux = http.NewServeMux()
 
-	// Redirect to Telegram chat with bot.
 	e.mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			e.respondError(w, web.ErrNotFound)
 			return
 		}
-		http.Redirect(w, r, "https://t.me/astrophena_bot", http.StatusFound)
+		if e.loggedIn(r) {
+			http.Redirect(w, r, "/debug/", http.StatusFound)
+			return
+		}
+		http.Redirect(w, r, "https://go.astrophena.name/tools/cmd/starlet", http.StatusFound)
 	})
 
 	e.mux.HandleFunc("POST /telegram", e.handleTelegramWebhook)
