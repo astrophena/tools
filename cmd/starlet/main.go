@@ -104,6 +104,7 @@ URL>/login" as login URL.
 package main
 
 import (
+	"bytes"
 	"cmp"
 	"context"
 	"crypto/hmac"
@@ -280,7 +281,7 @@ func (e *engine) doInit() {
 
 	const logLineLimit = 300
 	e.logStream = logstream.New(logLineLimit)
-	e.logf = log.New(io.MultiWriter(e.stderr, e.logStream), "", log.LstdFlags).Printf
+	e.logf = log.New(io.MultiWriter(e.stderr, &timestampWriter{e.logStream}), "", 0).Printf
 	e.initRoutes()
 
 	scrubPairs := []string{
@@ -315,6 +316,35 @@ func (e *engine) doInit() {
 			Scrubber:   e.scrubber,
 		}
 	}
+}
+
+// timestampWriter is an io.Writer that prefixes each line with the current date and time.
+type timestampWriter struct {
+	w io.Writer
+}
+
+// Write implements the [io.Writer] interface.
+func (tw *timestampWriter) Write(p []byte) (n int, err error) {
+	// Split the input into lines.
+	lines := bytes.SplitAfter(p, []byte{'\n'})
+
+	// Iterate over the lines and prefix each with the timestamp.
+	for _, line := range lines {
+		if len(line) > 0 {
+			timestamp := time.Now().Format(time.DateTime + "\t")
+			_, err := tw.w.Write([]byte(timestamp))
+			if err != nil {
+				return n, err
+			}
+			nn, err := tw.w.Write(line)
+			n += nn
+			if err != nil {
+				return n, err
+			}
+		}
+	}
+
+	return n, nil
 }
 
 func (e *engine) initRoutes() {
