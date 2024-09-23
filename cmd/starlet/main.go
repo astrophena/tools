@@ -260,7 +260,7 @@ type engine struct {
 	tgSecret  string
 	tgToken   string
 
-	mu sync.Mutex
+	mu sync.RWMutex
 	// loaded from gist
 	bot           []byte
 	files         map[string]string
@@ -382,13 +382,12 @@ func (e *engine) initRoutes() {
 	dbg := web.Debugger(e.logf, e.mux)
 
 	dbg.HandleFunc("code", "Bot code", func(w http.ResponseWriter, r *http.Request) {
-		e.mu.Lock()
-		defer e.mu.Unlock()
-		e.loadGist.Do(func() { e.loadFromGist(r.Context()) })
-		if e.loadGistErr != nil {
+		if err := e.ensureLoaded(r.Context()); err != nil {
 			e.respondError(w, e.loadGistErr)
 			return
 		}
+		e.mu.RLock()
+		defer e.mu.RUnlock()
 		w.Write(e.bot)
 	})
 
@@ -445,7 +444,16 @@ new EventSource("/debug/log", { withCredentials: true }).addEventListener("logli
 </body>
 </html>`
 
-// e.mu must be held.
+func (e *engine) ensureLoaded(ctx context.Context) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.loadGist.Do(func() {
+		e.loadFromGist(ctx)
+	})
+	return e.loadGistErr
+}
+
+// e.mu must be held for writing.
 func (e *engine) loadFromGist(ctx context.Context) {
 	g, err := e.gistc.Get(ctx, e.gistID)
 	if err != nil {
@@ -459,7 +467,7 @@ func (e *engine) loadFromGist(ctx context.Context) {
 	e.loadGistErr = e.loadCode(ctx, files)
 }
 
-// e.mu must be held.
+// e.mu must be held for writing.
 func (e *engine) loadCode(ctx context.Context, files map[string]string) error {
 	bot, exists := files["bot.star"]
 	if !exists {
@@ -565,15 +573,14 @@ func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
-	e.loadGist.Do(func() { e.loadFromGist(r.Context()) })
-	if e.loadGistErr != nil {
-		e.reportError(r.Context(), w, e.loadGistErr)
+	if err := e.ensureLoaded(r.Context()); err != nil {
+		e.reportError(r.Context(), w, err)
 		jsonOK(w)
 		return
 	}
+
+	e.mu.RLock()
+	defer e.mu.RUnlock()
 
 	f, ok := e.botProg["handle"]
 	if !ok {
@@ -610,7 +617,7 @@ func stripMarkdown(thread *starlark.Thread, b *starlark.Builtin, args starlark.T
 	return starlark.String(stripmd.Strip(s)), nil
 }
 
-// files.read Starlark function. e.mu must be held.
+// files.read Starlark function. e.mu must be held for reading.
 func (e *engine) readFile(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	var name string
 	if err := starlark.UnpackArgs(b.Name(), args, kwargs, "name", &name); err != nil {
@@ -697,7 +704,7 @@ func (e *engine) respondError(w http.ResponseWriter, err error) {
 	web.RespondError(e.logf, w, err)
 }
 
-// e.mu must be held.
+// e.mu must be held for reading.
 func (e *engine) reportError(ctx context.Context, w http.ResponseWriter, err error) {
 	errMsg := err.Error()
 	if evalErr, ok := err.(*starlark.EvalError); ok {
