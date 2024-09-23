@@ -5,6 +5,7 @@
 package convcache
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -12,7 +13,10 @@ import (
 )
 
 func TestConvCache(t *testing.T) {
-	mod := Module(time.Hour)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	mod := Module(ctx, time.Hour)
 
 	thread := &starlark.Thread{}
 
@@ -42,7 +46,10 @@ func TestConvCache(t *testing.T) {
 }
 
 func TestConvCacheTTL(t *testing.T) {
-	mod := Module(time.Nanosecond)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	mod := Module(ctx, time.Nanosecond)
 
 	thread := &starlark.Thread{}
 
