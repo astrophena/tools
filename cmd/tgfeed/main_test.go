@@ -244,12 +244,7 @@ func TestFailingFeed(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	updatedGist := testutil.UnmarshalJSON[*gist.Gist](t, tm.gist)
-	stateJSON, ok := updatedGist.Files["state.json"]
-	if !ok {
-		t.Fatal("state.json has not found in updated gist")
-	}
-	state := testutil.UnmarshalJSON[map[string]feedState](t, []byte(stateJSON.Content))
+	state := tm.state(t)
 
 	testutil.AssertEqual(t, state["https://example.com/feed.xml"].ErrorCount, 1)
 	testutil.AssertEqual(t, state["https://example.com/feed.xml"].LastError, "want 200, got 418: I'm a teapot.\n")

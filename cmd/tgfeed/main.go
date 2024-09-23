@@ -135,7 +135,6 @@ const (
 
 // Some types of errors that can happen during tgfeed execution.
 var (
-	errUnknownMode    = errors.New("unknown mode")
 	errAlreadyRunning = errors.New("already running")
 	errDuplicateFeed  = errors.New("already in list of feeds")
 	errNoFeed         = errors.New("no such feed")

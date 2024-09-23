@@ -213,13 +213,13 @@ func TestHandleLogin(t *testing.T) {
 				"username":   {"astrophena"},
 				"photo_url":  {"https://t.me/i/userpic/320/XyqYqXyqYqXyqYqXyqYqXyqYqXyqYqXyqYqXyqYqXyq.jpg"},
 				"auth_date":  {strconv.FormatInt(time.Now().Unix(), 10)},
-				"hash":       {computeAuthHash(t, e.tgToken, e.tgOwner)},
+				"hash":       {computeAuthHash(e.tgToken, e.tgOwner)},
 			},
 			wantStatusCode: http.StatusFound,
 			wantLocation:   "/debug/",
 			wantCookies: map[string]string{
-				"auth_data":      base64.URLEncoding.EncodeToString([]byte(constructAuthData(t, e.tgOwner))),
-				"auth_data_hash": computeAuthHash(t, e.tgToken, e.tgOwner),
+				"auth_data":      base64.URLEncoding.EncodeToString([]byte(constructAuthData(e.tgOwner))),
+				"auth_data_hash": computeAuthHash(e.tgToken, e.tgOwner),
 			},
 		},
 	}
@@ -274,29 +274,29 @@ func TestLoggedIn(t *testing.T) {
 		},
 		"invalid auth_data_hash": {
 			cookies: []*http.Cookie{
-				{Name: "auth_data", Value: base64.URLEncoding.EncodeToString([]byte(constructAuthData(t, e.tgOwner)))},
+				{Name: "auth_data", Value: base64.URLEncoding.EncodeToString([]byte(constructAuthData(e.tgOwner)))},
 				{Name: "auth_data_hash", Value: "invalid"},
 			},
 			wantLogged: false,
 		},
 		"wrong owner": {
 			cookies: []*http.Cookie{
-				{Name: "auth_data", Value: base64.URLEncoding.EncodeToString([]byte(constructAuthData(t, 1)))},
-				{Name: "auth_data_hash", Value: computeAuthHash(t, e.tgToken, 1)},
+				{Name: "auth_data", Value: base64.URLEncoding.EncodeToString([]byte(constructAuthData(1)))},
+				{Name: "auth_data_hash", Value: computeAuthHash(e.tgToken, 1)},
 			},
 			wantLogged: false,
 		},
 		"expired": {
 			cookies: []*http.Cookie{
-				{Name: "auth_data", Value: base64.URLEncoding.EncodeToString([]byte(constructExpiredAuthData(t, e.tgOwner)))},
-				{Name: "auth_data_hash", Value: computeAuthHash(t, e.tgToken, e.tgOwner, time.Now().Add(-25*time.Hour))},
+				{Name: "auth_data", Value: base64.URLEncoding.EncodeToString([]byte(constructExpiredAuthData(e.tgOwner)))},
+				{Name: "auth_data_hash", Value: computeAuthHash(e.tgToken, e.tgOwner, time.Now().Add(-25*time.Hour))},
 			},
 			wantLogged: false,
 		},
 		"valid": {
 			cookies: []*http.Cookie{
-				{Name: "auth_data", Value: base64.URLEncoding.EncodeToString([]byte(constructAuthData(t, e.tgOwner)))},
-				{Name: "auth_data_hash", Value: computeAuthHash(t, e.tgToken, e.tgOwner)},
+				{Name: "auth_data", Value: base64.URLEncoding.EncodeToString([]byte(constructAuthData(e.tgOwner)))},
+				{Name: "auth_data_hash", Value: computeAuthHash(e.tgToken, e.tgOwner)},
 			},
 			wantLogged: true,
 		},
@@ -313,14 +313,14 @@ func TestLoggedIn(t *testing.T) {
 	}
 }
 
-func computeAuthHash(t *testing.T, token string, owner int64, authTimes ...time.Time) string {
+func computeAuthHash(token string, owner int64, authTimes ...time.Time) string {
 	var authTime time.Time
 	if len(authTimes) > 0 {
 		authTime = authTimes[0]
 	} else {
 		authTime = time.Now()
 	}
-	data := constructAuthData(t, owner, authTime)
+	data := constructAuthData(owner, authTime)
 	h := sha256.New()
 	h.Write([]byte(token))
 	tokenHash := h.Sum(nil)
@@ -330,7 +330,7 @@ func computeAuthHash(t *testing.T, token string, owner int64, authTimes ...time.
 	return hex.EncodeToString(hm.Sum(nil))
 }
 
-func constructAuthData(t *testing.T, owner int64, authTimes ...time.Time) string {
+func constructAuthData(owner int64, authTimes ...time.Time) string {
 	var authTime time.Time
 	if len(authTimes) > 0 {
 		authTime = authTimes[0]
@@ -342,8 +342,8 @@ func constructAuthData(t *testing.T, owner int64, authTimes ...time.Time) string
 		"\nlast_name=Mateyko\nphoto_url=https://t.me/i/userpic/320/XyqYqXyqYqXyqYqXyqYqXyqYqXyqYqXyqYqXyqYqXyq.jpg\nusername=astrophena"
 }
 
-func constructExpiredAuthData(t *testing.T, owner int64) string {
-	return constructAuthData(t, owner, time.Now().Add(-25*time.Hour))
+func constructExpiredAuthData(owner int64) string {
+	return constructAuthData(owner, time.Now().Add(-25*time.Hour))
 }
 
 func getCookieValue(t *testing.T, cookies []*http.Cookie, name string) string {

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"go.astrophena.name/tools/cmd/starlet/internal/starlarkconv"
+
 	"go.starlark.net/starlark"
 	"go.starlark.net/starlarkstruct"
 )

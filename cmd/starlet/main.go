@@ -334,8 +334,8 @@ func (e *engine) initRoutes() {
 
 	e.mux.HandleFunc("POST /telegram", e.handleTelegramWebhook)
 
-	// Redirect from *.onrender.com to bot.astrophena.name.
-	if e.onRender {
+	// Redirect from *.onrender.com to bot host.
+	if e.onRender && e.host != "" {
 		if onRenderHost := os.Getenv("RENDER_EXTERNAL_HOSTNAME"); onRenderHost != "" {
 			e.mux.HandleFunc(onRenderHost+"/", func(w http.ResponseWriter, r *http.Request) {
 				targetURL := "https://" + e.host + r.URL.Path
@@ -509,29 +509,6 @@ func (e *engine) newStarlarkThread(ctx context.Context) *starlark.Thread {
 	return thread
 }
 
-// e.mu must be held.
-func (e *engine) saveToGist(ctx context.Context) error {
-	g, err := e.gistc.Get(ctx, e.gistID)
-	if err != nil {
-		return err
-	}
-	g.Files["bot.star"] = gist.File{
-		Content: string(e.bot),
-	}
-	files := make(map[string]string)
-	for name, file := range g.Files {
-		files[name] = file.Content
-	}
-
-	// Try to switch to new version before updating.
-	if err := e.loadCode(ctx, files); err != nil {
-		return err
-	}
-
-	_, err = e.gistc.Update(ctx, e.gistID, g)
-	return err
-}
-
 var errNoHandleFunc = errors.New("handle function not found in bot code")
 
 func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
@@ -583,6 +560,9 @@ func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w)
 }
 
+// Starlark builtins {{{
+
+// html.escape Starlark function.
 func escapeHTML(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	var s string
 	if err := starlark.UnpackArgs(b.Name(), args, kwargs, "s", &s); err != nil {
@@ -591,6 +571,7 @@ func escapeHTML(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tupl
 	return starlark.String(html.EscapeString(s)), nil
 }
 
+// markdown.strip Starlark function.
 func stripMarkdown(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	var s string
 	if err := starlark.UnpackArgs(b.Name(), args, kwargs, "s", &s); err != nil {
@@ -599,7 +580,7 @@ func stripMarkdown(thread *starlark.Thread, b *starlark.Builtin, args starlark.T
 	return starlark.String(stripmd.Strip(s)), nil
 }
 
-// e.mu must be held.
+// files.read Starlark function. e.mu must be held.
 func (e *engine) readFile(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	var name string
 	if err := starlark.UnpackArgs(b.Name(), args, kwargs, "name", &name); err != nil {
@@ -611,6 +592,10 @@ func (e *engine) readFile(thread *starlark.Thread, b *starlark.Builtin, args sta
 	}
 	return starlark.String(file), nil
 }
+
+// }}}
+
+// Render environment {{{
 
 func (e *engine) setWebhook(ctx context.Context) error {
 	if e.host == "" {
@@ -636,6 +621,45 @@ func (e *engine) setWebhook(ctx context.Context) error {
 	})
 	return err
 }
+
+// selfPing continusly pings Starlet every 10 minutes in production to prevent it's Render app from sleeping.
+func (e *engine) selfPing(ctx context.Context) {
+	ticker := time.NewTicker(10 * time.Minute)
+	defer ticker.Stop()
+
+	e.logf("selfPing: started")
+	defer e.logf("selfPing: stopped")
+
+	for {
+		select {
+		case <-ticker.C:
+			url := os.Getenv("RENDER_EXTERNAL_URL")
+			if url == "" {
+				e.logf("selfPing: RENDER_EXTERNAL_URL is not set; are you really on Render?")
+				return
+			}
+			health, err := request.Make[web.HealthResponse](ctx, request.Params{
+				Method: http.MethodGet,
+				URL:    url + "/health",
+				Headers: map[string]string{
+					"User-Agent": version.UserAgent(),
+				},
+				HTTPClient: e.httpc,
+				Scrubber:   e.scrubber,
+			})
+			if err != nil {
+				e.logf("selfPing: %v", err)
+			}
+			if !health.OK {
+				e.logf("selfPing: unhealthy: %+v", health)
+			}
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+// }}}
 
 // Error handling {{{
 
@@ -801,40 +825,3 @@ func setCookie(w http.ResponseWriter, key, val string) {
 }
 
 // }}}
-
-// selfPing continusly pings Starlet every 10 minutes in production to prevent it's Render app from sleeping.
-func (e *engine) selfPing(ctx context.Context) {
-	ticker := time.NewTicker(10 * time.Minute)
-	defer ticker.Stop()
-
-	e.logf("selfPing: started")
-	defer e.logf("selfPing: stopped")
-
-	for {
-		select {
-		case <-ticker.C:
-			url := os.Getenv("RENDER_EXTERNAL_URL")
-			if url == "" {
-				e.logf("selfPing: RENDER_EXTERNAL_URL is not set; are you really on Render?")
-				return
-			}
-			health, err := request.Make[web.HealthResponse](ctx, request.Params{
-				Method: http.MethodGet,
-				URL:    url + "/health",
-				Headers: map[string]string{
-					"User-Agent": version.UserAgent(),
-				},
-				HTTPClient: e.httpc,
-				Scrubber:   e.scrubber,
-			})
-			if err != nil {
-				e.logf("selfPing: %v", err)
-			}
-			if !health.OK {
-				e.logf("selfPing: unhealthy: %+v", health)
-			}
-		case <-ctx.Done():
-			return
-		}
-	}
-}
