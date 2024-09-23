@@ -445,12 +445,14 @@ new EventSource("/debug/log", { withCredentials: true }).addEventListener("logli
 </html>`
 
 func (e *engine) ensureLoaded(ctx context.Context) error {
-	e.mu.Lock()
-	defer e.mu.Unlock()
+	var err error
 	e.loadGist.Do(func() {
+		e.mu.Lock()
+		defer e.mu.Unlock()
 		e.loadFromGist(ctx)
+		err = e.loadGistErr
 	})
-	return e.loadGistErr
+	return err
 }
 
 // e.mu must be held for writing.
