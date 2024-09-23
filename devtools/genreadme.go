@@ -36,6 +36,7 @@ func main() {
 	sb.WriteString("$ go install go.astrophena.name/tools/cmd/...@master\n")
 	sb.WriteString("```\n")
 	sb.WriteString("\n")
+	sb.WriteString("**Be warned**: these tools are for personal use, subject to change without notice and may gain or lose functionality at any time.\n\n")
 	sb.WriteString("See documentation at https://go.astrophena.name/tools.\n")
 
 	if err := os.WriteFile("README.md", []byte(sb.String()), 0o644); err != nil {
