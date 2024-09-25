@@ -82,6 +82,8 @@ The following environment variables can be used to configure Starlet:
   - HOST: Bot domain used for setting up webhook.
   - TG_OWNER: Telegram user ID of the bot owner.
   - TG_SECRET: Secret token used to validate Telegram Bot API updates.
+  - RELOAD_TOKEN: Secret token used to make POST requests to /reload endpoint
+    triggering bot code reload from GitHub Gist.
   - TG_TOKEN: Telegram Bot API token.
 
 # Debug interface
