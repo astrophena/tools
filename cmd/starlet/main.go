@@ -167,14 +167,15 @@ func (e *engine) main(ctx context.Context, args []string, getenv func(string) st
 		Flags:       flag.NewFlagSet("starlet", flag.ContinueOnError),
 	}
 	var (
-		addr      = a.Flags.String("addr", "localhost:3000", "Listen on `host:port`.")
-		geminiKey = a.Flags.String("gemini-key", "", "Gemini API `key`.")
-		ghToken   = a.Flags.String("gh-token", "", "GitHub API `token`.")
-		gistID    = a.Flags.String("gist-id", "", "GitHub Gist `ID` to load bot code from.")
-		host      = a.Flags.String("host", "", "Bot `domain` used for setting up webhook.")
-		tgOwner   = a.Flags.Int64("tg-owner", 0, "Telegram user `ID` of the bot owner.")
-		tgSecret  = a.Flags.String("tg-secret", "", "Secret `token` used to validate Telegram Bot API updates.")
-		tgToken   = a.Flags.String("tg-token", "", "Telegram Bot API `token`.")
+		addr        = a.Flags.String("addr", "localhost:3000", "Listen on `host:port`.")
+		geminiKey   = a.Flags.String("gemini-key", "", "Gemini API `key`.")
+		ghToken     = a.Flags.String("gh-token", "", "GitHub API `token`.")
+		gistID      = a.Flags.String("gist-id", "", "GitHub Gist `ID` to load bot code from.")
+		host        = a.Flags.String("host", "", "Bot `domain` used for setting up webhook.")
+		reloadToken = a.Flags.String("reload-token", "", "Secret `token` used for calling /reload endpoint.")
+		tgOwner     = a.Flags.Int64("tg-owner", 0, "Telegram user `ID` of the bot owner.")
+		tgSecret    = a.Flags.String("tg-secret", "", "Secret `token` used to validate Telegram Bot API updates.")
+		tgToken     = a.Flags.String("tg-token", "", "Telegram Bot API `token`.")
 	)
 	if err := a.HandleStartup(args, stdout, stderr); err != nil {
 		if errors.Is(err, cli.ErrExitVersion) {
@@ -188,10 +189,11 @@ func (e *engine) main(ctx context.Context, args []string, getenv func(string) st
 	e.ghToken = cmp.Or(e.ghToken, getenv("GH_TOKEN"), *ghToken)
 	e.gistID = cmp.Or(e.gistID, getenv("GIST_ID"), *gistID)
 	e.host = cmp.Or(e.host, getenv("HOST"), *host)
+	e.onRender = getenv("RENDER") == "true"
+	e.reloadToken = cmp.Or(e.reloadToken, getenv("RELOAD_TOKEN"), *reloadToken)
 	e.tgOwner = cmp.Or(e.tgOwner, parseInt(getenv("TG_OWNER")), *tgOwner)
 	e.tgSecret = cmp.Or(e.tgSecret, getenv("TG_SECRET"), *tgSecret)
 	e.tgToken = cmp.Or(e.tgToken, getenv("TG_TOKEN"), *tgToken)
-	e.onRender = getenv("RENDER") == "true"
 
 	// Initialize internal state.
 	e.stderr = stderr
@@ -250,16 +252,17 @@ type engine struct {
 	noServerStart bool
 
 	// configuration, read-only after initialization
-	geminiKey string
-	ghToken   string
-	gistID    string
-	host      string
-	httpc     *http.Client
-	onRender  bool
-	stderr    io.Writer
-	tgOwner   int64
-	tgSecret  string
-	tgToken   string
+	geminiKey   string
+	ghToken     string
+	gistID      string
+	host        string
+	httpc       *http.Client
+	onRender    bool
+	reloadToken string
+	stderr      io.Writer
+	tgOwner     int64
+	tgSecret    string
+	tgToken     string
 
 	mu sync.RWMutex
 	// loaded from gist
@@ -267,7 +270,6 @@ type engine struct {
 	files         map[string]string
 	botProg       starlark.StringDict
 	errorTemplate string
-	loadGistErr   error
 }
 
 func (e *engine) doInit() {
@@ -362,6 +364,7 @@ func (e *engine) initRoutes() {
 	})
 
 	e.mux.HandleFunc("POST /telegram", e.handleTelegramWebhook)
+	e.mux.HandleFunc("POST /reload", e.handleReload)
 
 	// Redirect from *.onrender.com to bot host.
 	if e.onRender && e.host != "" {
@@ -382,7 +385,7 @@ func (e *engine) initRoutes() {
 
 	dbg.HandleFunc("code", "Bot code", func(w http.ResponseWriter, r *http.Request) {
 		if err := e.ensureLoaded(r.Context()); err != nil {
-			e.respondError(w, e.loadGistErr)
+			e.respondError(w, err)
 			return
 		}
 		e.mu.RLock()
@@ -398,22 +401,12 @@ func (e *engine) initRoutes() {
 	dbg.HandleFunc("reload", "Reload from gist", func(w http.ResponseWriter, r *http.Request) {
 		e.mu.Lock()
 		defer e.mu.Unlock()
-		e.loadFromGist(r.Context())
-		err := e.loadGistErr
-		if err != nil {
+		if err := e.loadFromGist(r.Context()); err != nil {
 			e.respondError(w, err)
 			return
 		}
 		http.Redirect(w, r, "/debug/", http.StatusFound)
 	})
-}
-
-func jsonOK(w http.ResponseWriter) {
-	var res struct {
-		Status string `json:"success"`
-	}
-	res.Status = "success"
-	web.RespondJSON(w, res)
 }
 
 const logsTmpl = `<!DOCTYPE html>
@@ -445,27 +438,22 @@ new EventSource("/debug/log", { withCredentials: true }).addEventListener("logli
 
 func (e *engine) ensureLoaded(ctx context.Context) error {
 	var err error
-	e.loadGist.Do(func() {
-		e.mu.Lock()
-		defer e.mu.Unlock()
-		e.loadFromGist(ctx)
-		err = e.loadGistErr
-	})
+	e.loadGist.Do(func() { err = e.loadFromGist(ctx) })
 	return err
 }
 
-// e.mu must be held for writing.
-func (e *engine) loadFromGist(ctx context.Context) {
+func (e *engine) loadFromGist(ctx context.Context) error {
 	g, err := e.gistc.Get(ctx, e.gistID)
 	if err != nil {
-		e.loadGistErr = err
-		return
+		return err
 	}
 	files := make(map[string]string)
 	for name, file := range g.Files {
 		files[name] = file.Content
 	}
-	e.loadGistErr = e.loadCode(ctx, files)
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.loadCode(ctx, files)
 }
 
 // e.mu must be held for writing.
@@ -596,6 +584,27 @@ func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	jsonOK(w)
+}
+
+func (e *engine) handleReload(w http.ResponseWriter, r *http.Request) {
+	tok := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+	if tok != e.reloadToken {
+		web.RespondJSONError(e.logf, w, web.ErrUnauthorized)
+		return
+	}
+	if err := e.loadFromGist(r.Context()); err != nil {
+		web.RespondJSONError(e.logf, w, err)
+		return
+	}
+	jsonOK(w)
+}
+
+func jsonOK(w http.ResponseWriter) {
+	var res struct {
+		Status string `json:"status"`
+	}
+	res.Status = "success"
+	web.RespondJSON(w, res)
 }
 
 // Starlark builtins {{{
