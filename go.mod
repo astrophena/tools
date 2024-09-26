@@ -3,6 +3,7 @@ module go.astrophena.name/tools
 go 1.23.0
 
 require (
+	github.com/benbjohnson/hashfs v0.2.2
 	github.com/dhowden/tag v0.0.0-20240417053706-3d75831295e8
 	github.com/golang-jwt/jwt/v5 v5.2.1
 	github.com/google/go-cmp v0.6.0

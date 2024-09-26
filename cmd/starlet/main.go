@@ -396,7 +396,7 @@ func (e *engine) initRoutes() {
 	})
 
 	dbg.HandleFunc("logs", "Logs", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintf(w, logsTmpl, strings.Join(e.logStream.Lines(), ""))
+		fmt.Fprintf(w, logsTmpl, strings.Join(e.logStream.Lines(), ""), web.StaticFS.HashName("static/css/main.css"))
 	})
 	e.mux.Handle("/debug/log", e.logStream)
 
@@ -416,7 +416,7 @@ const logsTmpl = `<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/%[2]s">
 <title>Logs</title>
 <script>
 const maxLines = 300;

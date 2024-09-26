@@ -115,7 +115,7 @@ func respondError(json bool, logf logger.Logf, w http.ResponseWriter, err error)
 		respondJSON(w, &errorResponse{Status: "error", Error: err.Error()}, true)
 		return
 	}
-	fmt.Fprintf(w, errorTemplate, int(se), http.StatusText(int(se)))
+	fmt.Fprintf(w, errorTemplate, int(se), http.StatusText(int(se)), StaticFS.HashName("static/css/main.css"))
 }
 
 func escapeForJSON(s string) string {

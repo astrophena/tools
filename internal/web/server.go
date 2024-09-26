@@ -5,8 +5,8 @@
 package web
 
 import (
-	"bytes"
 	"context"
+	"embed"
 	_ "embed"
 	"errors"
 	"fmt"
@@ -17,12 +17,11 @@ import (
 	"time"
 
 	"go.astrophena.name/base/logger"
+
+	"github.com/benbjohnson/hashfs"
 )
 
-//go:generate curl --fail-with-body -s -o static/style.css https://astrophena.name/css/main.css
-
-//go:embed static/style.css
-var style []byte
+//go:generate curl --fail-with-body -s -o static/css/main.css https://astrophena.name/css/main.css
 
 // ListenAndServeConfig is used to configure the HTTP server started by
 // [ListenAndServe].
@@ -124,10 +123,15 @@ func ListenAndServe(ctx context.Context, c *ListenAndServeConfig) error {
 	return nil
 }
 
+//go:embed static
+var embedFS embed.FS
+
+// StaticFS is a [fs.FS] that contains static resources served on /static/ path
+// prefix of [ListenAndServe] servers.
+var StaticFS = hashfs.NewFS(embedFS)
+
 func initInternalRoutes(c *ListenAndServeConfig) {
-	c.Mux.HandleFunc("/style.css", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeContent(w, r, "style.css", time.Time{}, bytes.NewReader(style))
-	})
+	c.Mux.Handle("/static/", hashfs.FileServer(StaticFS))
 	Health(c.Mux)
 	if c.Debuggable {
 		Debugger(c.Logf, c.Mux)

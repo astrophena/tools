@@ -92,7 +92,8 @@ func TestListenAndServe(t *testing.T) {
 		url        string
 		wantStatus int
 	}{
-		{url: "/style.css", wantStatus: http.StatusOK},
+		{url: "/static/css/main.css", wantStatus: http.StatusOK},
+		{url: "/static/" + StaticFS.HashName("css/main.css"), wantStatus: http.StatusOK},
 		{url: "/health", wantStatus: http.StatusOK},
 	}
 

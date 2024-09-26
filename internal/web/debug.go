@@ -134,16 +134,18 @@ func (d *DebugHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := struct {
-		CmdName string
-		Version version.Info
-		KVs     []kv
-		HasIcon bool
-		Links   []link
+		CmdName    string
+		Version    version.Info
+		KVs        []kv
+		HasIcon    bool
+		Links      []link
+		Stylesheet string
 	}{
-		CmdName: version.CmdName(),
-		Version: version.Version(),
-		KVs:     kvs,
-		Links:   d.links,
+		CmdName:    version.CmdName(),
+		Version:    version.Version(),
+		KVs:        kvs,
+		Links:      d.links,
+		Stylesheet: StaticFS.HashName("static/css/main.css"),
 	}
 
 	var buf bytes.Buffer
