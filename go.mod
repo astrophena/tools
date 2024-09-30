@@ -11,6 +11,7 @@ require (
 	github.com/writeas/go-strip-markdown/v2 v2.1.1
 	go.astrophena.name/base v0.1.2
 	go.starlark.net v0.0.0-20240520160348-046347dcd104
+	rsc.io/markdown v0.0.0-20240717201619-868a055c40ae
 )
 
 require (
