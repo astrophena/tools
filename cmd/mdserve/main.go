@@ -19,7 +19,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"os/signal"
 	"path"
 	"path/filepath"
 	"strings"
@@ -39,10 +38,9 @@ var (
 )
 
 func main() {
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
-	defer cancel()
-	e := new(engine)
-	cli.Run(e.main(ctx, os.Args[1:], os.Stdout, os.Stderr))
+	cli.Run(func(ctx context.Context) error {
+		return new(engine).main(ctx, os.Args[1:], os.Stdout, os.Stderr)
+	})
 }
 
 type engine struct {

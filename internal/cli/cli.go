@@ -6,47 +6,70 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
 	"strings"
 
 	"go.astrophena.name/tools/internal/version"
 )
 
-// Run is a helper that wraps a call to function that implements main in a
-// program, and if error returned is not nil, it prints the error message (if
-// error is printable) and exits with code 1.
-func Run(err error) {
+// Run executes the provided function f within a context that is canceled when
+// an interrupt signal (e.g., Ctrl+C) is received.
+//
+// If f returns a non-nil error, Run prints the error message to standard error
+// (if the error is considered "printable") and exits the program with a status
+// code of 1.
+//
+// Printable errors are those that provide useful information to the user.
+// Errors like flag parsing errors or help requests are considered non-printable
+// and are not displayed to the user.
+func Run(f func(ctx context.Context) error) {
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer cancel()
+
+	err := f(ctx)
+
 	if err == nil {
 		return
 	}
+
 	if isPrintableError(err) {
 		fmt.Fprintln(os.Stderr, err)
 	}
 	os.Exit(1)
 }
 
-func isPrintableError(err error) bool {
-	var ue *unprintableError
-	if ok := errors.As(err, &ue); ok {
-		return false
-	}
-	if errors.Is(err, flag.ErrHelp) {
-		return false
-	}
-	if errors.Is(err, ErrArgsNeeded) {
-		return false
-	}
-	return true
-}
-
 type unprintableError struct{ err error }
 
 func (e *unprintableError) Error() string { return e.err.Error() }
 func (e *unprintableError) Unwrap() error { return e.err }
+
+func isPrintableError(err error) bool {
+	if errors.Is(err, flag.ErrHelp) {
+		return false
+	}
+	var ue *unprintableError
+	return !errors.As(err, &ue)
+}
+
+var (
+	// ErrExitVersion is an error indicating the application should exit after
+	// showing version.
+	ErrExitVersion = &unprintableError{errors.New("version flag exit")}
+	// ErrInvalidArgs indicates that the command-line arguments provided to the
+	// application are invalid or insufficient. This error should be wrapped with
+	// fmt.Errorf to provide a specific, user-friendly message explaining the
+	// nature of the invalid arguments. For example:
+	//
+	// 	return fmt.Errorf("%w: missing required argument 'filename'", cli.ErrInvalidArgs)
+	//
+	ErrInvalidArgs = errors.New("invalid arguments")
+)
 
 // App represents a command-line application.
 type App struct {
@@ -55,15 +78,6 @@ type App struct {
 	ArgsUsage   string        // Usage message for the command-line arguments.
 	Flags       *flag.FlagSet // Command-line flags.
 }
-
-var (
-	// ErrExitVersion is an error indicating the application should exit after
-	// showing version.
-	ErrExitVersion = errors.New("version flag exit")
-	// ErrArgsNeeded is an error indicating the application needed some additional
-	// flags or arguments passed to continue.
-	ErrArgsNeeded = errors.New("additional flags or arguments needed")
-)
 
 // HandleStartup handles the command startup. All exported fields shouldn't be
 // modified after HandleStartup is called.

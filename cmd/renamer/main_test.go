@@ -30,7 +30,7 @@ func TestRun(t *testing.T) {
 	}{
 		"usage": {
 			args:         []string{},
-			wantErr:      cli.ErrArgsNeeded,
+			wantErr:      cli.ErrInvalidArgs,
 			wantInStderr: "renamer",
 		},
 		"version flag": {

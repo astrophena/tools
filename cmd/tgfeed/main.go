@@ -105,7 +105,6 @@ import (
 	"math/rand/v2"
 	"net/http"
 	"os"
-	"os/signal"
 	"runtime"
 	"slices"
 	"strings"
@@ -141,10 +140,9 @@ var (
 )
 
 func main() {
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
-	defer cancel()
-	f := new(fetcher)
-	cli.Run(f.main(ctx, os.Args[1:], os.Getenv, os.Stdout, os.Stderr))
+	cli.Run(func(ctx context.Context) error {
+		return new(fetcher).main(ctx, os.Args[1:], os.Getenv, os.Stdout, os.Stderr)
+	})
 }
 
 func (f *fetcher) main(
@@ -221,7 +219,7 @@ func (f *fetcher) main(
 		return f.unsubscribe(ctx, *unsubscribe)
 	default:
 		a.Flags.Usage()
-		return cli.ErrArgsNeeded
+		return fmt.Errorf("%w: pick a mode: -feeds, -run, -subscribe, -reenable or -unsubscribe", cli.ErrInvalidArgs)
 	}
 }
 

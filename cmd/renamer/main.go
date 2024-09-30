@@ -6,6 +6,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -19,7 +20,11 @@ import (
 	"go.astrophena.name/tools/internal/cli"
 )
 
-func main() { cli.Run(run(os.Args[1:], os.Stdout, os.Stderr)) }
+func main() {
+	cli.Run(func(_ context.Context) error {
+		return run(os.Args[1:], os.Stdout, os.Stderr)
+	})
+}
 
 func run(args []string, stdout, stderr io.Writer) error {
 	a := &cli.App{
@@ -40,7 +45,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 
 	if len(a.Flags.Args()) != 1 {
 		a.Flags.Usage()
-		return cli.ErrArgsNeeded
+		return fmt.Errorf("%w: missing required argument 'dir'", cli.ErrInvalidArgs)
 	}
 	dir := a.Flags.Args()[0]
 	if realdir, err := filepath.EvalSymlinks(dir); err == nil {

@@ -8,6 +8,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -20,7 +21,11 @@ import (
 	"go.astrophena.name/tools/internal/cli"
 )
 
-func main() { cli.Run(run(os.Args[1:], os.Getenv, os.Stdout, os.Stderr)) }
+func main() {
+	cli.Run(func(_ context.Context) error {
+		return run(os.Args[1:], os.Getenv, os.Stdout, os.Stderr)
+	})
+}
 
 var errInvalidNum = errors.New("invalid number of commands")
 

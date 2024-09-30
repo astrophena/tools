@@ -6,6 +6,7 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"flag"
 	"io"
@@ -30,10 +31,10 @@ func TestRun(t *testing.T) {
 			wantCode:         1,
 			wantErrorPrinted: false,
 		},
-		"ErrArgsNeeded": {
-			err:              ErrArgsNeeded,
+		"ErrInvalidArgs": {
+			err:              ErrInvalidArgs,
 			wantCode:         1,
-			wantErrorPrinted: false,
+			wantErrorPrinted: true,
 		},
 		"io.EOF": {
 			err:              io.EOF,
@@ -53,7 +54,9 @@ func TestRun(t *testing.T) {
 	}
 
 	if tcName := os.Getenv("CLI_TEST_RUN"); tcName != "" {
-		Run(cases[tcName].err)
+		Run(func(_ context.Context) error {
+			return cases[tcName].err
+		})
 		return
 	}
 

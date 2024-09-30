@@ -32,7 +32,7 @@ func TestRun(t *testing.T) {
 	}{
 		"without directory": {
 			args:         []string{},
-			wantErr:      cli.ErrArgsNeeded,
+			wantErr:      cli.ErrInvalidArgs,
 			wantInStderr: "Usage: dupfind",
 		},
 		"version flag": {

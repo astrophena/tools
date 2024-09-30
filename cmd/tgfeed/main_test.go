@@ -53,7 +53,7 @@ func TestFetcherMain(t *testing.T) {
 	}{
 		"prints usage without flags": {
 			args:         []string{},
-			wantErr:      cli.ErrArgsNeeded,
+			wantErr:      cli.ErrInvalidArgs,
 			wantInStderr: "Usage: tgfeed",
 		},
 		"run": {

@@ -124,7 +124,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"os/signal"
 	"sort"
 	"strconv"
 	"strings"
@@ -155,10 +154,9 @@ const defaultErrorTemplate = `❌ Something went wrong:
 <pre><code>%v</code></pre>`
 
 func main() {
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
-	defer cancel()
-	e := new(engine)
-	cli.Run(e.main(ctx, os.Args[1:], os.Getenv, os.Stdout, os.Stderr))
+	cli.Run(func(ctx context.Context) error {
+		return new(engine).main(ctx, os.Args[1:], os.Getenv, os.Stdout, os.Stderr)
+	})
 }
 
 func (e *engine) main(ctx context.Context, args []string, getenv func(string) string, stdout, stderr io.Writer) error {
