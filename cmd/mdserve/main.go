@@ -13,7 +13,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"html/template"
 	"io"
 	"io/fs"
 	"log"
@@ -31,11 +30,8 @@ import (
 	"rsc.io/markdown"
 )
 
-var (
-	//go:embed template.html
-	tmplHTML string
-	tmpl     = template.Must(template.New("").Parse(tmplHTML))
-)
+//go:embed template.html
+var tmpl string
 
 func main() {
 	cli.Run(func(ctx context.Context) error {
@@ -140,20 +136,7 @@ func (e *engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		e.respondError(w, fmt.Errorf("parsing title: %w", err))
 	}
 
-	data := struct {
-		Title      string
-		Content    template.HTML
-		Stylesheet string
-	}{
-		Title:      title,
-		Content:    template.HTML(markdown.ToHTML(doc)),
-		Stylesheet: web.StaticFS.HashName("static/css/main.css"),
-	}
-
-	if err := tmpl.Execute(w, data); err != nil {
-		e.respondError(w, fmt.Errorf("executing template: %w", err))
-		return
-	}
+	fmt.Fprintf(w, tmpl, title, markdown.ToHTML(doc), web.StaticFS.HashName("static/css/main.css"))
 }
 
 func parseTitle(b []byte) (title string, err error) {
