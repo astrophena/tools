@@ -61,7 +61,7 @@ func TestListenAndServe(t *testing.T) {
 	var wg sync.WaitGroup
 
 	ready := make(chan struct{})
-	serveReadyHook = func() {
+	readyFunc := func() {
 		ready <- struct{}{}
 	}
 	errCh := make(chan error, 1)
@@ -75,6 +75,7 @@ func TestListenAndServe(t *testing.T) {
 			Mux:        http.NewServeMux(),
 			Logf:       t.Logf,
 			Debuggable: true,
+			Ready:      readyFunc,
 		}); err != nil {
 			errCh <- err
 		}

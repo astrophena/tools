@@ -41,10 +41,10 @@ type ListenAndServeConfig struct {
 	// debug handlers at /debug/ to allow or deny access to them. If not provided,
 	// all access is allowed.
 	DebugAuth func(r *http.Request) bool
+	// Ready specifies an optional function to be called when the server is ready
+	// to serve requests.
+	Ready func()
 }
-
-// used in tests
-var serveReadyHook func()
 
 var (
 	errNoAddr = errors.New("c.Addr is empty")
@@ -102,8 +102,8 @@ func ListenAndServe(ctx context.Context, c *ListenAndServeConfig) error {
 		}
 	}()
 
-	if serveReadyHook != nil {
-		serveReadyHook()
+	if c.Ready != nil {
+		c.Ready()
 	}
 
 	select {

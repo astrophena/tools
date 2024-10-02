@@ -224,6 +224,7 @@ func (e *engine) main(ctx context.Context, args []string, getenv func(string) st
 		Debuggable: true, // debug endpoints protected by Telegram auth
 		Logf:       e.logf,
 		Mux:        e.mux,
+		Ready:      e.ready,
 	})
 }
 
@@ -248,9 +249,6 @@ type engine struct {
 	logf      logger.Logf
 	mux       *http.ServeMux
 
-	// test flags
-	noServerStart bool
-
 	// configuration, read-only after initialization
 	geminiKey   string
 	ghToken     string
@@ -263,6 +261,9 @@ type engine struct {
 	tgOwner     int64
 	tgSecret    string
 	tgToken     string
+	// for tests
+	noServerStart bool
+	ready         func() // see web.ListenAndServeConfig.Ready
 
 	mu sync.RWMutex
 	// loaded from gist
