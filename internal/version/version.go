@@ -51,26 +51,30 @@ func (i Info) String() string {
 	return strings.TrimSpace(sb.String()) + "\n"
 }
 
-var (
-	once sync.Once
-	info Info
-)
-
 // CmdName returns the base name of the current binary.
-func CmdName() string {
-	once.Do(initOnce)
-	return info.Name
-}
+func CmdName() string { return info().Name }
 
 // Version returns the version and build information of the current binary.
-func Version() Info {
-	once.Do(initOnce)
-	return info
+func Version() Info { return info() }
+
+// UserAgent returns a user agent string by combining the version information
+// and a special URL leading to bot information page.
+func UserAgent() string {
+	i := Version()
+	ver := i.Version
+	if i.Version == "devel" && i.Commit != "" {
+		ver = i.Commit
+	}
+	return i.Name + "/" + ver + " (+https://astrophena.name/bleep-bloop)"
 }
 
-var loadFunc = debug.ReadBuildInfo // used in tests
+var (
+	loadFunc = debug.ReadBuildInfo // used in tests
 
-func initOnce() { info = loadInfo(loadFunc) }
+	info = sync.OnceValue(func() Info {
+		return loadInfo(loadFunc)
+	})
+)
 
 func loadInfo(buildinfo func() (*debug.BuildInfo, bool)) Info {
 	bi, ok := buildinfo()
@@ -115,15 +119,4 @@ func loadInfo(buildinfo func() (*debug.BuildInfo, bool)) Info {
 	}
 
 	return *i
-}
-
-// UserAgent returns a user agent string by combining the version information
-// and a special URL leading to bot information page.
-func UserAgent() string {
-	i := Version()
-	ver := i.Version
-	if i.Version == "devel" && i.Commit != "" {
-		ver = i.Commit
-	}
-	return i.Name + "/" + ver + " (+https://astrophena.name/bleep-bloop)"
 }
