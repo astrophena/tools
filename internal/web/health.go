@@ -5,7 +5,6 @@
 package web
 
 import (
-	"encoding/json"
 	"net/http"
 	"net/url"
 	"sync"
@@ -26,7 +25,7 @@ func Health(mux *http.ServeMux) *HealthHandler {
 // HealthHandler is an HTTP handler that returns information about the health
 // status of the running service.
 type HealthHandler struct {
-	mu     sync.Mutex
+	mu     sync.RWMutex
 	checks map[string]HealthFunc
 }
 
@@ -36,6 +35,8 @@ type HealthFunc func() (status string, ok bool)
 
 // RegisterFunc registers the health check function by the given name. If the
 // health check function with this name already exists, RegisterFunc panics.
+//
+// Health check function must be safe for concurrent use.
 func (h *HealthHandler) RegisterFunc(name string, f HealthFunc) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -46,23 +47,22 @@ func (h *HealthHandler) RegisterFunc(name string, f HealthFunc) {
 	h.checks[name] = f
 }
 
-// Types used in JSON responses.
-type (
-	HealthResponse struct {
-		OK     bool                     `json:"ok"`
-		Checks map[string]CheckResponse `json:"checks"`
-	}
+// HealthResponse represents a response of the /health endpoint.
+type HealthResponse struct {
+	OK     bool                     `json:"ok"`
+	Checks map[string]CheckResponse `json:"checks"`
+}
 
-	CheckResponse struct {
-		Status string `json:"status"`
-		OK     bool   `json:"ok"`
-	}
-)
+// CheckResponse represents a status of an individual check.
+type CheckResponse struct {
+	Status string `json:"status"`
+	OK     bool   `json:"ok"`
+}
 
 // ServeHTTP implements the [http.Handler] interface.
 func (h *HealthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
+	h.mu.RLock()
+	defer h.mu.RUnlock()
 
 	hr := &HealthResponse{
 		OK:     true,
@@ -83,7 +83,6 @@ func (h *HealthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	} else {
 		w.WriteHeader(http.StatusInternalServerError)
 	}
-	enc := json.NewEncoder(w)
-	enc.SetIndent("", "  ")
-	enc.Encode(hr)
+
+	RespondJSON(w, hr)
 }

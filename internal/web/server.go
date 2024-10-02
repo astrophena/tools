@@ -124,11 +124,11 @@ func ListenAndServe(ctx context.Context, c *ListenAndServeConfig) error {
 }
 
 //go:embed static
-var embedFS embed.FS
+var staticFS embed.FS
 
-// StaticFS is a [embed.FS] that contains static resources served on /static/ path
+// StaticFS is an [embed.FS] that contains static resources served on /static/ path
 // prefix of [ListenAndServe] servers.
-var StaticFS = hashfs.NewFS(embedFS)
+var StaticFS = hashfs.NewFS(staticFS)
 
 func initInternalRoutes(c *ListenAndServeConfig) {
 	c.Mux.Handle("/static/", hashfs.FileServer(StaticFS))
