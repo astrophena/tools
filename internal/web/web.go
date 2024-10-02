@@ -81,7 +81,7 @@ var errorTemplate string
 // specific HTTP status code:
 //
 //	// This will set the status code to 404 (Not Found).
-//	web.RespondError(w, fmt.Errorf("%w: resource not found", web.ErrNotFound))
+//	web.RespondError(w, fmt.Errorf("resource %w", web.ErrNotFound))
 func RespondError(logf logger.Logf, w http.ResponseWriter, err error) {
 	respondError(false, logf, w, err)
 }
