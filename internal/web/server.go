@@ -126,7 +126,7 @@ func ListenAndServe(ctx context.Context, c *ListenAndServeConfig) error {
 //go:embed static
 var embedFS embed.FS
 
-// StaticFS is a [fs.FS] that contains static resources served on /static/ path
+// StaticFS is a [embed.FS] that contains static resources served on /static/ path
 // prefix of [ListenAndServe] servers.
 var StaticFS = hashfs.NewFS(embedFS)
 
