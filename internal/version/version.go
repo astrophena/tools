@@ -30,7 +30,7 @@ func (i Info) String() string {
 	var sb strings.Builder
 
 	ver := i.Version
-	if ver == "devel" && i.Commit != "" {
+	if ver == "git" && i.Commit != "" {
 		ver = "git-" + i.Commit
 		if i.Dirty {
 			ver += "-dirty"
@@ -62,7 +62,7 @@ func Version() Info { return info() }
 func UserAgent() string {
 	i := Version()
 	ver := i.Version
-	if i.Version == "devel" && i.Commit != "" {
+	if i.Version == "git" && i.Commit != "" {
 		ver = i.Commit
 	}
 	return i.Name + "/" + ver + " (+https://astrophena.name/bleep-bloop)"
@@ -86,7 +86,7 @@ func loadInfo(buildinfo func() (*debug.BuildInfo, bool)) Info {
 
 	i.Version = bi.Main.Version
 	if i.Version == "(devel)" {
-		i.Version = "devel"
+		i.Version = "git"
 	}
 
 	i.Name = strings.TrimPrefix(bi.Path, bi.Main.Path+"/cmd/")
@@ -116,6 +116,11 @@ func loadInfo(buildinfo func() (*debug.BuildInfo, bool)) Info {
 		case "vcs.time":
 			i.BuiltAt = s.Value
 		}
+	}
+
+	// If built without VCS info, fallback to "unknown".
+	if i.Version == "git" && i.Commit == "" && i.BuiltAt == "" {
+		i.Version = "unknown"
 	}
 
 	return *i

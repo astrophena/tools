@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"go.astrophena.name/base/logger"
+	"go.astrophena.name/tools/internal/version"
 
 	"github.com/benbjohnson/hashfs"
 )
@@ -131,7 +132,8 @@ var staticFS embed.FS
 var StaticFS = hashfs.NewFS(staticFS)
 
 func initInternalRoutes(c *ListenAndServeConfig) {
-	c.Mux.Handle("/static/", hashfs.FileServer(StaticFS))
+	c.Mux.Handle("GET /static/", hashfs.FileServer(StaticFS))
+	c.Mux.HandleFunc("GET /version", func(w http.ResponseWriter, r *http.Request) { RespondJSON(w, version.Version()) })
 	Health(c.Mux)
 	if c.Debuggable {
 		Debugger(c.Logf, c.Mux)
