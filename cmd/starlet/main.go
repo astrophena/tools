@@ -288,22 +288,25 @@ func (e *engine) doInit() {
 	e.logf = log.New(io.MultiWriter(e.stderr, &timestampWriter{e.logStream}), "", 0).Printf
 	e.initRoutes()
 
-	scrubPairs := []string{
-		e.ghToken, "[EXPUNGED]",
-		e.gistID, "[EXPUNGED]",
-		e.tgSecret, "[EXPUNGED]",
-		e.tgToken, "[EXPUNGED]",
+	var scrubPairs []string
+	for _, val := range []string{
+		e.ghToken,
+		e.gistID,
+		e.tgSecret,
+		e.tgToken,
+		e.geminiKey,
+	} {
+		if val != "" {
+			scrubPairs = append(scrubPairs, val, "[EXPUNGED]")
+		}
 	}
-	if e.geminiKey != "" {
-		scrubPairs = append(scrubPairs, e.geminiKey, "[EXPUNGED]")
-	}
-
 	// Quick sanity check.
 	if len(scrubPairs)%2 != 0 {
 		panic("scrubPairs are not even; check doInit method on engine")
 	}
-
-	e.scrubber = strings.NewReplacer(scrubPairs...)
+	if len(scrubPairs) > 0 {
+		e.scrubber = strings.NewReplacer(scrubPairs...)
+	}
 
 	e.gistc = &gist.Client{
 		Token:      e.ghToken,
@@ -721,8 +724,10 @@ func (e *engine) reportError(ctx context.Context, w http.ResponseWriter, err err
 	if evalErr, ok := err.(*starlark.EvalError); ok {
 		errMsg = evalErr.Backtrace()
 	}
-	// Mask secrets in error messages.
-	errMsg = e.scrubber.Replace(errMsg)
+	if e.scrubber != nil {
+		// Mask secrets in error messages.
+		errMsg = e.scrubber.Replace(errMsg)
+	}
 
 	// https://core.telegram.org/bots/api#linkpreviewoptions
 	type linkPreviewOptions struct {
