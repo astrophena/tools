@@ -261,10 +261,12 @@ func (f *fetcher) doInit() {
 
 	f.fp = gofeed.NewParser()
 
-	f.scrubber = strings.NewReplacer(
-		f.ghToken, "[EXPUNGED]",
-		f.tgToken, "[EXPUNGED]",
-	)
+	if f.ghToken != "" && f.tgToken != "" {
+		f.scrubber = strings.NewReplacer(
+			f.ghToken, "[EXPUNGED]",
+			f.tgToken, "[EXPUNGED]",
+		)
+	}
 
 	f.gistc = &gist.Client{
 		Token:      f.ghToken,
@@ -585,6 +587,7 @@ func (f *fetcher) reportStats(ctx context.Context) error {
 			"User-Agent":    version.UserAgent(),
 		},
 		HTTPClient: f.httpc,
+		Scrubber:   f.scrubber,
 	})
 	return err
 }
@@ -790,6 +793,7 @@ func (f *fetcher) makeTelegramRequest(ctx context.Context, method string, args a
 			"User-Agent": version.UserAgent(),
 		},
 		HTTPClient: f.httpc,
+		Scrubber:   f.scrubber,
 	}); err != nil {
 		return err
 	}
