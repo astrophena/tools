@@ -47,6 +47,23 @@ type ListenAndServeConfig struct {
 	Ready func()
 }
 
+// Stolen from https://github.com/tailscale/tailscale/blob/4ad3f01225745294474f1ae0de33e5a86824a744/safeweb/http.go.
+
+// The Content-Security-Policy header.
+var cspHeader = strings.Join([]string{
+	`default-src 'self'`,      // origin is the only valid source for all content types
+	`script-src 'self'`,       // disallow inline javascript
+	`frame-ancestors 'none'`,  // disallow framing of the page
+	`form-action 'self'`,      // disallow form submissions to other origins
+	`base-uri 'self'`,         // disallow base URIs from other origins
+	`block-all-mixed-content`, // disallow mixed content when serving over HTTPS
+	`object-src 'self'`,       // disallow embedding of resources from other origins
+}, "; ")
+
+// The Strict-Transport-Security header. This header tells the browser
+// to exclusively use HTTPS for all requests to the origin for the next year.
+const hstsHeader = "max-age=31536000"
+
 var (
 	errNoAddr = errors.New("c.Addr is empty")
 	errNilMux = errors.New("c.Mux is nil")
@@ -87,9 +104,21 @@ func ListenAndServe(ctx context.Context, c *ListenAndServeConfig) error {
 		})
 	}
 
+	setHeaders := func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("X-Content-Type-Options", "nosniff")
+			w.Header().Set("Referer-Policy", "same-origin")
+			w.Header().Set("Content-Security-Policy", cspHeader)
+			if isHTTPS(r) {
+				w.Header().Set("Strict-Transport-Security", hstsHeader)
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+
 	s := &http.Server{
 		ErrorLog: log.New(c.Logf, "", 0),
-		Handler:  protectDebug(c.Mux),
+		Handler:  setHeaders(protectDebug(c.Mux)),
 	}
 	initInternalRoutes(c)
 
@@ -122,6 +151,16 @@ func ListenAndServe(ctx context.Context, c *ListenAndServeConfig) error {
 	}
 
 	return nil
+}
+
+func isHTTPS(r *http.Request) bool {
+	if r.TLS != nil {
+		return true
+	}
+	if r.Header.Get("X-Forwarded-Proto") == "https" {
+		return true
+	}
+	return false
 }
 
 //go:embed static

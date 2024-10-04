@@ -12,6 +12,8 @@ import (
 	"net/http"
 	"sync"
 	"testing"
+
+	"go.astrophena.name/base/testutil"
 )
 
 func TestListenAndServeConfig(t *testing.T) {
@@ -106,6 +108,9 @@ func TestListenAndServe(t *testing.T) {
 		if req.StatusCode != u.wantStatus {
 			t.Fatalf("GET %s: want status code %d, got %d", u.url, u.wantStatus, req.StatusCode)
 		}
+		testutil.AssertEqual(t, req.Header.Get("X-Content-Type-Options"), "nosniff")
+		testutil.AssertEqual(t, req.Header.Get("Referer-Policy"), "same-origin")
+		testutil.AssertEqual(t, req.Header.Get("Content-Security-Policy"), cspHeader)
 	}
 
 	// Try to gracefully shutdown the server.
