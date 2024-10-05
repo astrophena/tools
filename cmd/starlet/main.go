@@ -277,7 +277,8 @@ type engine struct {
 func (e *engine) doInit() {
 	if e.httpc == nil {
 		e.httpc = &http.Client{
-			Timeout: 10 * time.Second,
+			// Increase timeout to properly handle Gemini API response times.
+			Timeout: 60 * time.Second,
 		}
 	}
 	if e.stderr == nil {
