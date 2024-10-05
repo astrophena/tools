@@ -5,6 +5,7 @@ This repository holds personal tools:
 - Audiorenamer traverses a directory and renames music tracks based on their metadata.
 - Cmdtop displays the top of most used commands in bash history.
 - Dupfind finds duplicate files in a directory.
+- Kp reads passwords from KeePass databases.
 - Mdserve serves Markdown files from a directory.
 - Renamer renames files sequentially.
 - Starlet is a Telegram bot runner using Starlark.
