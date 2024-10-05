@@ -34,7 +34,6 @@ func TestGenerateContent(t *testing.T) {
 	})
 
 	c := &Client{
-		Model:      "gemini-1.5-flash",
 		HTTPClient: rec.Client(),
 	}
 	if rec.Recording() {
@@ -43,7 +42,7 @@ func TestGenerateContent(t *testing.T) {
 
 	const prompt = "Write a poem about broken door handle."
 
-	content, err := c.GenerateContent(context.Background(), GenerateContentParams{
+	content, err := c.GenerateContent(context.Background(), "gemini-1.5-flash", GenerateContentParams{
 		Contents: []*Content{{Parts: []*Part{{Text: prompt}}}},
 	})
 	if err != nil {
@@ -51,4 +50,12 @@ func TestGenerateContent(t *testing.T) {
 	}
 
 	testutil.AssertEqual(t, len(content.Candidates), 1)
+}
+
+func TestEmptyModel(t *testing.T) {
+	c := &Client{}
+	_, err := c.GenerateContent(context.Background(), "", GenerateContentParams{})
+	if err == nil {
+		t.Fatalf("GenerateContent should fail when called with empty model")
+	}
 }

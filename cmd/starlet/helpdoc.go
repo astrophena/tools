@@ -31,7 +31,8 @@ available to the bot code:
     	- read(name: str) -> str: Retrieves a file from GitHub Gist.
 
     gemini: Allows interaction with Gemini API.
-    	- generate_content(contents, system, unsafe): Generates text using Gemini:
+    	- generate_content(model, contents, system, unsafe): Generates text using Gemini:
+    		- model (str): The name of the model to use for generation.
     		- contents (list of strings): The text to be provided to Gemini for generation.
     		- system (dict, optional): System instructions to guide Gemini's response, containing a single key "text" with string value.
     		- unsafe (bool, optional): Disables all model safety measures.

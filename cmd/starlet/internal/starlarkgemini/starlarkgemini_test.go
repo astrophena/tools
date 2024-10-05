@@ -45,7 +45,6 @@ func TestModule(t *testing.T) {
 		})
 
 		c := &gemini.Client{
-			Model:      "gemini-1.5-flash",
 			HTTPClient: rec.Client(),
 		}
 		if rec.Recording() {

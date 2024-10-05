@@ -20,8 +20,9 @@ import (
 // This module provides a single function, generate_content, which uses the
 // Gemini API to generate text.
 //
-// It accepts three keyword arguments:
+// It accepts four keyword arguments:
 //
+//   - model (str): The name of the model to use for generation.
 //   - contents (list of strings): The text to be provided to Gemini for generation.
 //   - system (dict, optional): System instructions to guide Gemini's response.
 //   - unsafe (bool, optional): Disables all model safety measures.
@@ -83,12 +84,14 @@ func (m *module) generateContent(thread *starlark.Thread, b *starlark.Builtin, a
 		return starlark.None, fmt.Errorf("%s: unexpected positional arguments", b.Name())
 	}
 	var (
+		model        starlark.String
 		contentsList *starlark.List
 		system       *starlark.Dict
 		unsafe       starlark.Bool
 	)
 	if err := starlark.UnpackArgs(
 		b.Name(), args, kwargs,
+		"model", &model,
 		"contents", &contentsList,
 		"system?", &system,
 		"unsafe?", &unsafe,
@@ -159,7 +162,7 @@ func (m *module) generateContent(thread *starlark.Thread, b *starlark.Builtin, a
 		}
 	}
 
-	resp, err := m.c.GenerateContent(ctx, params)
+	resp, err := m.c.GenerateContent(ctx, string(model), params)
 	if err != nil {
 		return starlark.None, fmt.Errorf("%s: failed to generate text: %w", b.Name(), err)
 	}

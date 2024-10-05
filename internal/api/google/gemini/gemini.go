@@ -8,6 +8,7 @@ package gemini
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strings"
 
@@ -21,8 +22,6 @@ const apiURL = "https://generativelanguage.googleapis.com/v1beta"
 type Client struct {
 	// APIKey is the API key used for authentication.
 	APIKey string
-	// Model specifies the name of the model to use for generation.
-	Model string
 	// HTTPClient is an optional HTTP client to use for requests. Defaults to
 	// request.DefaultClient.
 	HTTPClient *http.Client
@@ -107,10 +106,13 @@ type Candidate struct {
 
 // GenerateContent sends a request to the Gemini API to generate creative text
 // content.
-func (c *Client) GenerateContent(ctx context.Context, params GenerateContentParams) (GenerateContentResponse, error) {
-	return request.Make[GenerateContentResponse](ctx, request.Params{
+func (c *Client) GenerateContent(ctx context.Context, model string, params GenerateContentParams) (*GenerateContentResponse, error) {
+	if model == "" {
+		return nil, errors.New("model should't be empty")
+	}
+	return request.Make[*GenerateContentResponse](ctx, request.Params{
 		Method: http.MethodPost,
-		URL:    apiURL + "/models/" + c.Model + ":generateContent",
+		URL:    apiURL + "/models/" + model + ":generateContent",
 		Headers: map[string]string{
 			"x-goog-api-key": c.APIKey,
 			"User-Agent":     version.UserAgent(),
