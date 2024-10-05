@@ -115,18 +115,28 @@ func (e *engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	p = strings.TrimPrefix(path.Clean(p), "/")
 
-	if !strings.HasSuffix(p, ".md") {
+	fi, err := fs.Stat(e.fs, p)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			e.respondError(w, web.ErrNotFound)
+			return
+		}
+		e.respondError(w, fmt.Errorf("reading file info: %w", err))
+		return
+	}
+	if fi.IsDir() {
 		e.respondError(w, web.ErrNotFound)
 		return
 	}
 
 	b, err := fs.ReadFile(e.fs, p)
 	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			e.respondError(w, web.ErrNotFound)
-			return
-		}
 		e.respondError(w, fmt.Errorf("reading file: %w", err))
+		return
+	}
+
+	if !strings.HasSuffix(p, ".md") {
+		http.ServeContent(w, r, fi.Name(), fi.ModTime(), bytes.NewReader(b))
 		return
 	}
 

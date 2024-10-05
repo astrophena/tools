@@ -110,6 +110,30 @@ This is bla bla bla.
 			wantStatus: http.StatusOK,
 			wantInBody: "<title>Hello, world!</title>",
 		},
+		"serves static file": {
+			files: map[string]string{
+				"hello.js": `alert("Hello, world!");`,
+			},
+			path:       "/hello.js",
+			wantStatus: http.StatusOK,
+			wantInBody: `alert("Hello, world!");`,
+		},
+		"returns 404 when requesting directory": {
+			files: map[string]string{
+				"hello/world": "foobar",
+			},
+			path:       "/hello/",
+			wantStatus: http.StatusNotFound,
+			wantInBody: "404 Not Found",
+		},
+		"correctly handles files in directory": {
+			files: map[string]string{
+				"hello/world": "foobar",
+			},
+			path:       "/hello/world",
+			wantStatus: http.StatusOK,
+			wantInBody: "foobar",
+		},
 	}
 
 	for name, tc := range cases {
