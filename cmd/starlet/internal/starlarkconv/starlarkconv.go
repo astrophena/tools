@@ -15,7 +15,22 @@ import (
 	"go.starlark.net/starlark"
 )
 
-// ToValue converts val to [starlark.Value].
+// ToValue converts a Go value to a Starlark value.
+//
+// It supports the following Go types:
+//
+//   - nil: converted to [starlark.None]
+//   - bool: converted to [starlark.Bool]
+//   - string: converted to [starlark.String]
+//   - int, int8, int16, int32, int64: converted to [starlark.Int]
+//   - uint, uint8, uint16, uint32, uint64: converted to [starlark.Int]
+//   - float32, float64: converted to [starlark.Float] or [starlark.Int] (if the value can be represented as an integer without loss of precision)
+//   - [time.Time]: converted to [starlark.Time]
+//   - slice: converted to [starlark.List] (elements are recursively converted)
+//   - map: converted to [starlark.Dict] (keys and values are recursively converted)
+//   - struct: converted to [starlark.Dict] (field names are used as keys, and field values are recursively converted). Unexported fields are ignored.
+//
+// If the Go value cannot be converted, an error is returned.
 func ToValue(val any) (starlark.Value, error) {
 	rv := reflect.ValueOf(val)
 
