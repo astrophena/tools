@@ -19,5 +19,5 @@ jobs:
         env:
           GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
         run: |
-          go run autobump.go
+          go run devtools/autobump.go
           git push --tags
