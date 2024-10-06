@@ -27,7 +27,7 @@ converted = {
     },
     "type": "multimodal_chat",
     "messages": [],
-    "model": models[prompt["runSettings"]["model"]],
+    "model": models.get(prompt["runSettings"]["model"], "gemini-1.5-pro"),
 }
 
 for message in prompt["chunkedPrompt"]["chunks"]:
