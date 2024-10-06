@@ -1,3 +1,7 @@
+// © 2024 Ilya Mateyko. All rights reserved.
+// Use of this source code is governed by the ISC
+// license that can be found in the LICENSE.md file.
+
 //go:build ignore
 
 // autobump.go bumps the minor version of the Git tag (e.g., v0.1.0 -> v0.2.0).
