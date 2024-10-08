@@ -587,9 +587,10 @@ func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	chatID := e.lookupChatID(gu) // for error reports
+
 	if err := e.ensureLoaded(r.Context()); err != nil {
-		e.reportError(r.Context(), w, err)
-		jsonOK(w)
+		e.reportError(r.Context(), chatID, w, err)
 		return
 	}
 
@@ -598,17 +599,42 @@ func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 
 	f, ok := e.botProg["handle"]
 	if !ok {
-		e.reportError(r.Context(), w, errNoHandleFunc)
+		e.reportError(r.Context(), chatID, w, errNoHandleFunc)
 		return
 	}
 
 	_, err = starlark.Call(e.newStarlarkThread(r.Context()), f, starlark.Tuple{u}, nil)
 	if err != nil {
-		e.reportError(r.Context(), w, err)
+		e.reportError(r.Context(), chatID, w, err)
 		return
 	}
 
 	jsonOK(w)
+}
+
+func (e *engine) lookupChatID(update map[string]any) int64 {
+	msg, ok := update["message"]
+	if !ok {
+		return e.tgOwner
+	}
+	msgMap, ok := msg.(map[string]any)
+	if !ok {
+		return e.tgOwner
+	}
+	id, ok := msgMap["chat_id"]
+	if !ok {
+		return e.tgOwner
+	}
+	iid, ok := id.(int64)
+	if !ok {
+		fid, ok := id.(float64)
+		if ok {
+			iid = int64(fid)
+		} else {
+			return e.tgOwner
+		}
+	}
+	return iid
 }
 
 func (e *engine) handleReload(w http.ResponseWriter, r *http.Request) {
@@ -740,7 +766,7 @@ func (e *engine) respondError(w http.ResponseWriter, err error) {
 }
 
 // e.mu must be held for reading.
-func (e *engine) reportError(ctx context.Context, w http.ResponseWriter, err error) {
+func (e *engine) reportError(ctx context.Context, chatID int64, w http.ResponseWriter, err error) {
 	errMsg := err.Error()
 	if evalErr, ok := err.(*starlark.EvalError); ok {
 		errMsg = evalErr.Backtrace()
