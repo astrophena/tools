@@ -41,11 +41,14 @@ func main() {
 
 type engine struct {
 	init sync.Once
+	md   *markdown.Parser
 
+	// configuration
 	fs   fs.FS
 	logf logger.Logf
 
-	md *markdown.Parser
+	// used in tests
+	noServerStart bool
 }
 
 func (e *engine) main(ctx context.Context, args []string, stdout, stderr io.Writer) error {
@@ -85,6 +88,11 @@ func (e *engine) main(ctx context.Context, args []string, stdout, stderr io.Writ
 	mux.Handle("/", e)
 
 	e.logf("Serving from %s.", e.fs)
+
+	if e.noServerStart {
+		return nil
+	}
+
 	return web.ListenAndServe(ctx, &web.ListenAndServeConfig{
 		Addr: *addr,
 		Logf: e.logf,
@@ -141,15 +149,13 @@ func (e *engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	doc := e.md.Parse(string(b))
-	title, err := parseTitle(b)
-	if err != nil {
-		e.respondError(w, fmt.Errorf("parsing title: %w", err))
-	}
+	title := parseTitle(b)
 
 	fmt.Fprintf(w, tmpl, title, markdown.ToHTML(doc), web.StaticFS.HashName("static/css/main.css"))
 }
 
-func parseTitle(b []byte) (title string, err error) {
+func parseTitle(b []byte) string {
+	var title string
 	s := bufio.NewScanner(bytes.NewReader(b))
 	for s.Scan() {
 		if strings.HasPrefix(s.Text(), "#") {
@@ -157,10 +163,10 @@ func parseTitle(b []byte) (title string, err error) {
 			break
 		}
 	}
-	if err := s.Err(); err != nil && title == "" {
-		return "", err
+	if title == "" {
+		return ""
 	}
-	return title, nil
+	return title
 }
 
 func (e *engine) respondError(w http.ResponseWriter, err error) {

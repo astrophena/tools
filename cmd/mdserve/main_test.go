@@ -12,6 +12,7 @@ import (
 	"io/fs"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -26,6 +27,7 @@ func TestEngineMain(t *testing.T) {
 		wantNothingPrinted bool
 		wantInStdout       string
 		wantInStderr       string
+		checkFunc          func(t *testing.T, e *engine)
 	}{
 		"prints usage with help flag": {
 			args:         []string{"-h"},
@@ -34,6 +36,10 @@ func TestEngineMain(t *testing.T) {
 		},
 		"version": {
 			args: []string{"-version"},
+		},
+		"serves in current dir when passed no args": {
+			args:         []string{},
+			wantInStderr: "Serving from [CURDIR].",
 		},
 	}
 
@@ -46,6 +52,7 @@ func TestEngineMain(t *testing.T) {
 				stdout, stderr bytes.Buffer
 			)
 
+			e.noServerStart = true
 			err := e.main(context.Background(), tc.args, &stdout, &stderr)
 
 			// Don't use && because we want to trap all cases where err is
@@ -72,6 +79,13 @@ func TestEngineMain(t *testing.T) {
 			if tc.wantInStdout != "" && !strings.Contains(stdout.String(), tc.wantInStdout) {
 				t.Errorf("stdout must contain %q, got: %q", tc.wantInStdout, stdout.String())
 			}
+			if strings.Contains(tc.wantInStderr, "[CURDIR]") {
+				wd, err := os.Getwd()
+				if err != nil {
+					t.Fatal(err)
+				}
+				tc.wantInStderr = strings.ReplaceAll(tc.wantInStderr, "[CURDIR]", wd)
+			}
 			if tc.wantInStderr != "" && !strings.Contains(stderr.String(), tc.wantInStderr) {
 				t.Errorf("stderr must contain %q, got: %q", tc.wantInStderr, stderr.String())
 			}
@@ -85,6 +99,7 @@ func TestServe(t *testing.T) {
 		path       string
 		wantStatus int
 		wantInBody string
+		failRead   bool
 	}{
 		"not found": {
 			path:       "/404.md",
@@ -134,12 +149,22 @@ This is bla bla bla.
 			wantStatus: http.StatusOK,
 			wantInBody: "foobar",
 		},
+		"returns 500 when fails to read": {
+			files:      map[string]string{},
+			path:       "/hello",
+			wantStatus: http.StatusInternalServerError,
+			wantInBody: "500 Internal Server Error",
+			failRead:   true,
+		},
 	}
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			e := &engine{
 				fs: filesToFS(tc.files),
+			}
+			if tc.failRead {
+				e.fs = &failFS{}
 			}
 
 			r := httptest.NewRequest(http.MethodGet, tc.path, nil)
@@ -166,3 +191,7 @@ func filesToFS(files map[string]string) fs.FS {
 	}
 	return fs
 }
+
+type failFS struct{}
+
+func (_ *failFS) Open(name string) (fs.File, error) { return nil, errors.New("failed") }
