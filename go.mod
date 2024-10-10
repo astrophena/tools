@@ -30,3 +30,6 @@ require (
 	golang.org/x/text v0.19.0 // indirect
 	google.golang.org/protobuf v1.34.1 // indirect
 )
+
+// Doesn't exist in this repository.
+retract [v0.0.1, v0.2.0]
