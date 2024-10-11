@@ -57,23 +57,32 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 		return err
 	}
 
+	e, err := lookup(f, password, entry)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintln(stdout, e.GetPassword())
+
+	return nil
+}
+
+var errNotFound = errors.New("not found")
+
+func lookup(r io.Reader, password string, entry string) (*gokeepasslib.Entry, error) {
 	db := gokeepasslib.NewDatabase()
 	db.Credentials = gokeepasslib.NewPasswordCredentials(password)
-	if err := gokeepasslib.NewDecoder(f).Decode(db); err != nil {
-		return err
+	if err := gokeepasslib.NewDecoder(r).Decode(db); err != nil {
+		return nil, err
 	}
 	if err := db.UnlockProtectedEntries(); err != nil {
-		return err
+		return nil, err
 	}
-
 	for _, g := range db.Content.Root.Groups {
 		if e := findEntry(g, entry); e != nil {
-			fmt.Fprintln(stdout, e.GetPassword())
-			return nil
+			return e, nil
 		}
 	}
-
-	return fmt.Errorf("entry %q not found", entry)
+	return nil, fmt.Errorf("entry %q %w", entry, errNotFound)
 }
 
 func findEntry(g gokeepasslib.Group, title string) *gokeepasslib.Entry {
