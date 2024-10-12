@@ -128,7 +128,7 @@ const (
 <pre><code>%v</code></pre>`
 	ghAPI            = "https://api.github.com"
 	tgAPI            = "https://api.telegram.org"
-	errorThreshold   = 12 // failing continuously for four days will disable feed and complain loudly
+	errorThreshold   = 12 // failing continuously for twelve days will disable feed and complain loudly
 	concurrencyLimit = 10
 )
 
