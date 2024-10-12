@@ -128,6 +128,8 @@ func TestEngineMain(t *testing.T) {
 }
 
 func TestListenAndServe(t *testing.T) {
+	t.Parallel()
+
 	e := testEngine(t, testMux(t, nil))
 
 	// Find a free port for us.
@@ -213,6 +215,8 @@ func getFreePort() (port int, err error) {
 }
 
 func TestHealth(t *testing.T) {
+	t.Parallel()
+
 	e := testEngine(t, testMux(t, nil))
 	health, err := request.Make[web.HealthResponse](context.Background(), request.Params{
 		Method:     http.MethodGet,
@@ -228,7 +232,11 @@ func TestHealth(t *testing.T) {
 var update = flag.Bool("update", false, "update golden files in testdata")
 
 func TestHandleTelegramWebhook(t *testing.T) {
+	t.Parallel()
+
 	testutil.RunGolden(t, "testdata/*.txtar", func(t *testing.T, match string) []byte {
+		t.Parallel()
+
 		ar, err := txtar.ParseFile(match)
 		if err != nil {
 			t.Fatal(err)
@@ -273,6 +281,8 @@ func TestHandleTelegramWebhook(t *testing.T) {
 }
 
 func TestHandleLogin(t *testing.T) {
+	t.Parallel()
+
 	e := testEngine(t, testMux(t, nil))
 
 	cases := map[string]struct {
@@ -312,6 +322,8 @@ func TestHandleLogin(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
 			r := httptest.NewRequest(http.MethodGet, "/login?"+tc.query.Encode(), nil)
 			w := httptest.NewRecorder()
 			e.handleLogin(w, r)
@@ -330,6 +342,8 @@ func TestHandleLogin(t *testing.T) {
 }
 
 func TestLoggedIn(t *testing.T) {
+	t.Parallel()
+
 	e := testEngine(t, testMux(t, nil))
 
 	cases := map[string]struct {
@@ -390,6 +404,8 @@ func TestLoggedIn(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
 			r := httptest.NewRequest(http.MethodGet, "/", nil)
 			for _, c := range tc.cookies {
 				r.AddCookie(c)
@@ -443,6 +459,8 @@ func getCookieValue(t *testing.T, cookies []*http.Cookie, name string) string {
 }
 
 func TestReadFile(t *testing.T) {
+	t.Parallel()
+
 	e := testEngine(t, testMux(t, nil))
 	e.files = map[string]string{
 		"test.txt": "test",
@@ -465,6 +483,8 @@ func TestReadFile(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
 			value, err := e.readFile(
 				e.newStarlarkThread(context.Background()),
 				starlark.NewBuiltin("read", e.readFile),
@@ -482,6 +502,8 @@ func TestReadFile(t *testing.T) {
 }
 
 func TestEscapeHTML(t *testing.T) {
+	t.Parallel()
+
 	e := testEngine(t, testMux(t, nil))
 
 	cases := map[string]struct {
@@ -504,6 +526,8 @@ func TestEscapeHTML(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
 			value, err := escapeHTML(
 				e.newStarlarkThread(context.Background()),
 				starlark.NewBuiltin("escape", escapeHTML),
@@ -519,6 +543,8 @@ func TestEscapeHTML(t *testing.T) {
 }
 
 func TestSelfPing(t *testing.T) {
+	t.Parallel()
+
 	recv := make(chan struct{})
 
 	e := testEngine(t, testMux(t, map[string]http.HandlerFunc{
