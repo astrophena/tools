@@ -785,7 +785,7 @@ func (e *engine) reportError(ctx context.Context, chatID int64, w http.ResponseW
 		Method: http.MethodPost,
 		URL:    "https://api.telegram.org/bot" + e.tgToken + "/sendMessage",
 		Body: map[string]any{
-			"chat_id":    strconv.FormatInt(e.tgOwner, 10),
+			"chat_id":    strconv.FormatInt(chatID, 10),
 			"text":       fmt.Sprintf(e.errorTemplate, html.EscapeString(errMsg)),
 			"parse_mode": "HTML",
 			"link_preview_options": linkPreviewOptions{
