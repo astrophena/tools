@@ -31,7 +31,6 @@ import (
 	"go.astrophena.name/base/request"
 	"go.astrophena.name/base/testutil"
 	"go.astrophena.name/base/txtar"
-	"go.astrophena.name/tools/cmd/starlet/internal/convcache"
 	"go.astrophena.name/tools/internal/api/gist"
 	"go.astrophena.name/tools/internal/web"
 
@@ -529,7 +528,6 @@ func testEngine(t *testing.T, m *mux) *engine {
 		tgSecret: "test",
 		tgToken:  tgToken,
 	}
-	e.convCache = convcache.Module(context.Background(), 24*time.Hour)
 	e.init.Do(e.doInit)
 	return e
 }

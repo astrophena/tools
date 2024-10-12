@@ -6,7 +6,6 @@
 package convcache
 
 import (
-	"context"
 	"sync"
 	"time"
 
@@ -27,15 +26,11 @@ import (
 // The chat ID is an integer representing a unique conversation identifier.
 //
 // The ttl argument specifies the time-to-live duration after which a cache entry will expire.
-//
-// Expired entries are purged from cache by background goroutine that can be
-// stopped by canceling the provided [context.Context].
-func Module(ctx context.Context, ttl time.Duration) *starlarkstruct.Module {
+func Module(ttl time.Duration) *starlarkstruct.Module {
 	m := &module{
 		cache: make(map[int64]cacheEntry),
 		ttl:   ttl,
 	}
-	go m.cleanupLoop(ctx)
 	return &starlarkstruct.Module{
 		Name: "convcache",
 		Members: starlark.StringDict{
@@ -50,32 +45,6 @@ type module struct {
 	mu    sync.Mutex
 	cache map[int64]cacheEntry
 	ttl   time.Duration
-}
-
-const cleanupInterval = 1 * time.Hour
-
-// cleanupLoop runs in a separate goroutine.
-func (m *module) cleanupLoop(ctx context.Context) {
-	ticker := time.NewTicker(cleanupInterval)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ticker.C:
-			m.cleanup()
-		case <-ctx.Done():
-			return
-		}
-	}
-}
-
-func (m *module) cleanup() {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	for chatID, entry := range m.cache {
-		if time.Since(entry.lastAccessed) > m.ttl {
-			delete(m.cache, chatID)
-		}
-	}
 }
 
 type cacheEntry struct {

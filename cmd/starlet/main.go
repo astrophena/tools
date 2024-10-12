@@ -198,7 +198,6 @@ func (e *engine) main(ctx context.Context, args []string, getenv func(string) st
 
 	// Initialize internal state.
 	e.stderr = stderr
-	e.convCache = convcache.Module(ctx, 24*time.Hour)
 	e.init.Do(e.doInit)
 
 	// Used in tests.
@@ -284,6 +283,8 @@ func (e *engine) doInit() {
 	if e.stderr == nil {
 		e.stderr = os.Stderr
 	}
+
+	e.convCache = convcache.Module(24 * time.Hour)
 
 	const logLineLimit = 300
 	e.logStream = logstream.New(logLineLimit)
