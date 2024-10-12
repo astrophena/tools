@@ -215,7 +215,7 @@ func (e *engine) main(ctx context.Context, args []string, getenv func(string) st
 		if err := e.setWebhook(ctx); err != nil {
 			return err
 		}
-		go e.selfPing(ctx)
+		go e.selfPing(ctx, getenv)
 	}
 
 	return web.ListenAndServe(ctx, &web.ListenAndServeConfig{
@@ -721,9 +721,11 @@ func (e *engine) setWebhook(ctx context.Context) error {
 	return err
 }
 
+var selfPingInterval = 10 * time.Minute // changed in tests
+
 // selfPing continusly pings Starlet every 10 minutes in production to prevent it's Render app from sleeping.
-func (e *engine) selfPing(ctx context.Context) {
-	ticker := time.NewTicker(10 * time.Minute)
+func (e *engine) selfPing(ctx context.Context, getenv func(string) string) {
+	ticker := time.NewTicker(selfPingInterval)
 	defer ticker.Stop()
 
 	e.logf("selfPing: started")
@@ -732,7 +734,7 @@ func (e *engine) selfPing(ctx context.Context) {
 	for {
 		select {
 		case <-ticker.C:
-			url := os.Getenv("RENDER_EXTERNAL_URL")
+			url := getenv("RENDER_EXTERNAL_URL")
 			if url == "" {
 				e.logf("selfPing: RENDER_EXTERNAL_URL is not set; are you really on Render?")
 				return

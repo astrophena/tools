@@ -518,6 +518,33 @@ func TestEscapeHTML(t *testing.T) {
 	}
 }
 
+func TestSelfPing(t *testing.T) {
+	recv := make(chan struct{})
+
+	e := testEngine(t, testMux(t, map[string]http.HandlerFunc{
+		"GET bot.astrophena.name/health": func(w http.ResponseWriter, r *http.Request) {
+			testutil.AssertEqual(t, r.URL.Scheme, "https")
+			web.RespondJSON(w, web.HealthResponse{OK: true})
+			recv <- struct{}{}
+		},
+	}))
+
+	selfPingInterval = 10 * time.Millisecond
+	getenv := func(key string) string {
+		if key != "RENDER_EXTERNAL_URL" {
+			t.Fatalf("selfPing tried to read environment variable %s", key)
+		}
+		return "https://bot.astrophena.name"
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go e.selfPing(ctx, getenv)
+
+	<-recv
+}
+
 func testEngine(t *testing.T, m *mux) *engine {
 	e := &engine{
 		ghToken:  "test",
