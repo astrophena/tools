@@ -36,7 +36,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 		Flags:       flag.NewFlagSet("kp", flag.ContinueOnError),
 	}
 	var (
-		format = a.Flags.String("f", "{{ .GetPassword }}", "format `template`")
+		format = a.Flags.String("f", "{{ .GetPassword }}", "format `template`, see https://pkg.go.dev/github.com/tobischo/gokeepasslib/v3#Entry for available fields")
 		list   = a.Flags.Bool("l", false, "list all entries")
 	)
 	if err := a.HandleStartup(args, stdout, stderr); err != nil {
