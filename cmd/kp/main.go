@@ -24,11 +24,21 @@ import (
 
 func main() {
 	cli.Run(func(_ context.Context) error {
-		return run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr)
+		return run(os.Args[1:], os.Getenv, os.Stdin, os.Stdout, os.Stderr)
 	})
 }
 
-func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
+var (
+	errInvalidFormat = errors.New("invalid format")
+	errNotFound      = errors.New("not found")
+)
+
+func run(
+	args []string,
+	getenv func(string) string,
+	stdin io.Reader,
+	stdout, stderr io.Writer,
+) error {
 	a := &cli.App{
 		Name:        "kp",
 		Description: helpDoc,
@@ -48,7 +58,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 
 	tmpl, err := template.New("main").Parse(*format)
 	if err != nil {
-		return fmt.Errorf("invalid format: %v", err)
+		return fmt.Errorf("%w: %v", errInvalidFormat, err)
 	}
 
 	fargs := a.Flags.Args()
@@ -68,9 +78,12 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	}
 	defer f.Close()
 
-	password, err := ask(file, stderr)
-	if err != nil {
-		return err
+	password := getenv("KP_PASSWORD")
+	if password == "" {
+		password, err = ask(file, stderr)
+		if err != nil {
+			return err
+		}
 	}
 
 	if *list {
@@ -108,8 +121,6 @@ func printEntry(tmpl *template.Template, e *gokeepasslib.Entry, stdout io.Writer
 	buf.WriteTo(stdout)
 	return nil
 }
-
-var errNotFound = errors.New("not found")
 
 func open(r io.Reader, password string) (*gokeepasslib.Database, error) {
 	db := gokeepasslib.NewDatabase()
