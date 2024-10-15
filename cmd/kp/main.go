@@ -11,10 +11,10 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"html/template"
 	"io"
 	"os"
 	"syscall"
+	"text/template"
 
 	"go.astrophena.name/tools/internal/cli"
 
