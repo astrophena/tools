@@ -614,28 +614,27 @@ func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 }
 
 func (e *engine) lookupChatID(update map[string]any) int64 {
-	msg, ok := update["message"]
+	msg, ok := update["message"].(map[string]any)
 	if !ok {
 		return e.tgOwner
 	}
-	msgMap, ok := msg.(map[string]any)
+
+	chat, ok := msg["chat"].(map[string]any)
 	if !ok {
 		return e.tgOwner
 	}
-	id, ok := msgMap["chat_id"]
-	if !ok {
-		return e.tgOwner
+
+	id, ok := chat["id"].(int64)
+	if ok {
+		return id
 	}
-	iid, ok := id.(int64)
-	if !ok {
-		fid, ok := id.(float64)
-		if ok {
-			iid = int64(fid)
-		} else {
-			return e.tgOwner
-		}
+
+	fid, ok := chat["id"].(float64)
+	if ok {
+		return int64(fid)
 	}
-	return iid
+
+	return e.tgOwner
 }
 
 func (e *engine) handleReload(w http.ResponseWriter, r *http.Request) {
