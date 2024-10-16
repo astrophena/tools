@@ -9,6 +9,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io/fs"
 	"strings"
 	"testing"
 
@@ -38,6 +39,10 @@ func TestRun(t *testing.T) {
 		"version flag": {
 			args:         []string{"-version"},
 			wantInStderr: "dupfind",
+		},
+		"nonexistent directory": {
+			args:    []string{"nonexistent"},
+			wantErr: fs.ErrNotExist,
 		},
 		"lookup nondup": {
 			args:               []string{"[TMPDIR]"},
