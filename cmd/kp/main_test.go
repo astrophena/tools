@@ -10,9 +10,12 @@ import (
 	"errors"
 	"flag"
 	"io"
+	"io/fs"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
+	"text/template"
 
 	"go.astrophena.name/base/testutil"
 	"go.astrophena.name/tools/internal/cli"
@@ -35,7 +38,8 @@ func TestRun(t *testing.T) {
 	cases := map[string]struct {
 		args         []string
 		env          map[string]string
-		wantErr      error
+		wantErr      error // checked with errors.Is
+		wantErrType  error // checked with errors.As
 		wantInStdout string
 		wantInStderr string
 	}{
@@ -46,6 +50,10 @@ func TestRun(t *testing.T) {
 		},
 		"version": {
 			args: []string{"-version"},
+		},
+		"nonexistent file": {
+			args:    []string{"nonexistent.kdbx", "foo"},
+			wantErr: fs.ErrNotExist,
 		},
 		"invalid format": {
 			args:    []string{"-f", "{{", dbPath, "foo"},
@@ -66,12 +74,26 @@ func TestRun(t *testing.T) {
 			},
 			wantInStdout: "bar",
 		},
+		"nonexistent entry": {
+			args: []string{dbPath, "foobar"},
+			env: map[string]string{
+				"KP_PASSWORD": "test",
+			},
+			wantErr: errNotFound,
+		},
 		"custom template": {
 			args: []string{"-f", "{{ .GetTitle }}", dbPath, "foo"},
 			env: map[string]string{
 				"KP_PASSWORD": "test",
 			},
 			wantInStdout: "foo",
+		},
+		"invalid field in custom template": {
+			args: []string{"-f", "{{ .Foo }}", dbPath, "foo"},
+			env: map[string]string{
+				"KP_PASSWORD": "test",
+			},
+			wantErrType: template.ExecError{},
 		},
 		"list": {
 			args: []string{"-l", dbPath},
@@ -114,9 +136,25 @@ func TestRun(t *testing.T) {
 				if tc.wantErr != nil {
 					t.Fatalf("must fail with error: %v", tc.wantErr)
 				}
+				if tc.wantErrType != nil {
+					t.Fatalf("must fail with error type %T", tc.wantErrType)
+				}
 			}
 
-			if err != nil && !errors.Is(err, tc.wantErr) {
+			if err != nil && tc.wantErrType != nil {
+				gotErr := reflect.Zero(reflect.TypeOf(tc.wantErrType)).Interface()
+				fail := func() {
+					t.Fatalf("want error type %T, got %T", tc.wantErrType, err)
+				}
+				if !errors.As(err, &gotErr) {
+					fail()
+				}
+				if gotErr != nil && reflect.TypeOf(gotErr) != reflect.TypeOf(tc.wantErrType) {
+					fail()
+				}
+			}
+
+			if err != nil && tc.wantErr != nil && !errors.Is(err, tc.wantErr) {
 				t.Fatalf("got error: %v", err)
 			}
 
