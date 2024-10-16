@@ -95,7 +95,13 @@ func ListenAndServe(ctx context.Context, c *ListenAndServeConfig) error {
 		return fmt.Errorf("failed to listen: %v", err)
 	}
 	defer l.Close()
-	c.Logf("Listening on %s://%s...", l.Addr().Network(), l.Addr().String())
+
+	scheme, host := "http", l.Addr().String()
+	if isTLS {
+		scheme, host = "https", c.Addr
+	}
+
+	c.Logf("Listening on %s://%s...", scheme, host)
 
 	// Redirect HTTP requests to HTTPS.
 	if isTLS {
