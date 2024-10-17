@@ -267,6 +267,7 @@ type engine struct {
 
 	mu sync.RWMutex
 	// loaded from gist
+	loadGistErr   error
 	bot           []byte
 	files         map[string]string
 	botProg       starlark.StringDict
@@ -463,9 +464,8 @@ new EventSource("/debug/log", { withCredentials: true }).addEventListener("logli
 </html>`
 
 func (e *engine) ensureLoaded(ctx context.Context) error {
-	var err error
-	e.loadGist.Do(func() { err = e.loadFromGist(ctx) })
-	return err
+	e.loadGist.Do(func() { e.loadGistErr = e.loadFromGist(ctx) })
+	return e.loadGistErr
 }
 
 func (e *engine) loadFromGist(ctx context.Context) error {
@@ -548,6 +548,7 @@ func (e *engine) loadCode(ctx context.Context, files map[string]string) error {
 	e.bot = botCode
 	e.botProg = botProg
 	e.files = files
+	e.loadGistErr = nil
 
 	return nil
 }

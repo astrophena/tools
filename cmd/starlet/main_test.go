@@ -543,8 +543,6 @@ func TestEscapeHTML(t *testing.T) {
 }
 
 func TestSelfPing(t *testing.T) {
-	t.Parallel()
-
 	recv := make(chan struct{})
 
 	e := testEngine(t, testMux(t, map[string]http.HandlerFunc{
