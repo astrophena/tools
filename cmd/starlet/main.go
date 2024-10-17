@@ -426,8 +426,6 @@ func (e *engine) initRoutes() {
 	e.mux.Handle("/debug/log", e.logStream)
 
 	dbg.HandleFunc("reload", "Reload from gist", func(w http.ResponseWriter, r *http.Request) {
-		e.mu.Lock()
-		defer e.mu.Unlock()
 		if err := e.loadFromGist(r.Context()); err != nil {
 			e.respondError(w, err)
 			return
