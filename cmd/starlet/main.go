@@ -407,7 +407,11 @@ func (e *engine) initRoutes() {
 		if err := json.Indent(&buf, []byte(botInfo), "", "  "); err != nil {
 			return err
 		}
-		return buf.String()
+		unquoted, err := strconv.Unquote(`"` + buf.String() + `"`)
+		if err != nil {
+			return err
+		}
+		return unquoted
 	})
 
 	dbg.HandleFunc("code", "Bot code", func(w http.ResponseWriter, r *http.Request) {
