@@ -57,6 +57,7 @@ func (e *engine) main(ctx context.Context, args []string, stdout, stderr io.Writ
 		Name:        "mdserve",
 		ArgsUsage:   "[flags...] [dir]",
 		Description: helpDoc,
+		Credits:     credits,
 		Flags:       flag.NewFlagSet("mdserve", flag.ContinueOnError),
 	}
 	var (

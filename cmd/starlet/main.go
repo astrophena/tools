@@ -165,6 +165,7 @@ func (e *engine) main(ctx context.Context, args []string, getenv func(string) st
 	a := &cli.App{
 		Name:        "starlet",
 		Description: helpDoc,
+		Credits:     credits,
 		Flags:       flag.NewFlagSet("starlet", flag.ContinueOnError),
 	}
 	var (

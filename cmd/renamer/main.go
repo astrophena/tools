@@ -30,6 +30,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 	a := &cli.App{
 		Name:        "renamer",
 		Description: helpDoc,
+		Credits:     credits,
 		ArgsUsage:   "[flags...] <dir>",
 		Flags:       flag.NewFlagSet("renamer", flag.ContinueOnError),
 	}

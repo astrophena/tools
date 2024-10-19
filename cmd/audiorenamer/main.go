@@ -42,6 +42,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 	a := &cli.App{
 		Name:        "audiorenamer",
 		Description: helpDoc,
+		Credits:     credits,
 		ArgsUsage:   "[flags...] <dir>",
 		Flags:       flag.NewFlagSet("audiorenamer", flag.ContinueOnError),
 	}

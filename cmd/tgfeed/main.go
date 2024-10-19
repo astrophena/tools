@@ -165,6 +165,7 @@ func (f *fetcher) main(
 	a := &cli.App{
 		Name:        "tgfeed",
 		Description: helpDoc,
+		Credits:     credits,
 		Flags:       flag.NewFlagSet("tgfeed", flag.ContinueOnError),
 	}
 	var (

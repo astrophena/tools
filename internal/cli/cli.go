@@ -75,6 +75,7 @@ var (
 type App struct {
 	Name        string        // Name of the application.
 	Description string        // Description of the application.
+	Credits     string        // Licenses of third-party libraries used in the application.
 	ArgsUsage   string        // Usage message for the command-line arguments.
 	Flags       *flag.FlagSet // Command-line flags.
 }
@@ -99,6 +100,10 @@ func (a *App) HandleStartup(args []string, stdout, stderr io.Writer) error {
 	if a.Flags.Lookup("version") == nil {
 		a.Flags.BoolVar(&showVersion, "version", false, "Show version.")
 	}
+	var showCredits bool
+	if a.Credits != "" && a.Flags.Lookup("credits") == nil {
+		a.Flags.BoolVar(&showCredits, "credits", false, "Show third-party licenses.")
+	}
 
 	a.Flags.Usage = a.usage(stderr)
 	a.Flags.SetOutput(stderr)
@@ -108,6 +113,10 @@ func (a *App) HandleStartup(args []string, stdout, stderr io.Writer) error {
 	}
 	if showVersion {
 		fmt.Fprint(stderr, version.Version())
+		return ErrExitVersion
+	}
+	if showCredits {
+		fmt.Fprintf(stderr, a.Credits)
 		return ErrExitVersion
 	}
 

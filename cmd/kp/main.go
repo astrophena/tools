@@ -42,12 +42,13 @@ func run(
 	a := &cli.App{
 		Name:        "kp",
 		Description: helpDoc,
+		Credits:     credits,
 		ArgsUsage:   "[flags...] <file> [entry]",
 		Flags:       flag.NewFlagSet("kp", flag.ContinueOnError),
 	}
 	var (
-		format = a.Flags.String("f", "{{ .GetPassword }}", "format `template`, see https://pkg.go.dev/github.com/tobischo/gokeepasslib/v3#Entry for available fields")
-		list   = a.Flags.Bool("l", false, "list all entries")
+		format = a.Flags.String("f", "{{ .GetPassword }}", "Format `template`.\nSee https://pkg.go.dev/github.com/tobischo/gokeepasslib/v3#Entry for available fields.")
+		list   = a.Flags.Bool("l", false, "List all entries.")
 	)
 	if err := a.HandleStartup(args, stdout, stderr); err != nil {
 		if errors.Is(err, cli.ErrExitVersion) {
