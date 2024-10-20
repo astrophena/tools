@@ -4,9 +4,9 @@
 
 package devtools
 
-//go:generate go run devtools/gencopyright.go
 //go:generate go run devtools/gencredits.go
 //go:generate go run devtools/genhelpdoc.go
+//go:generate go run devtools/gencopyright.go
 //go:generate go run devtools/genreadme.go
 
 import (
