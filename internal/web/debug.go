@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"go.astrophena.name/base/logger"
+	"go.astrophena.name/tools/internal/util/syncx"
 	"go.astrophena.name/tools/internal/version"
 )
 
@@ -48,8 +49,7 @@ type DebugHandler struct {
 	kvfuncs []kvfunc           // output one table row each, see KV()
 	links   []link             // one link in header
 	tpl     *template.Template // template that is used for rendering debug page
-	tplInit sync.Once          // guards template initialization
-	tplErr  error              // error that happened during template initialization
+	tplInit syncx.Lazy[error]  // guards template initialization
 	logf    logger.Logf        // log.Printf if nil
 }
 
@@ -120,11 +120,12 @@ func (d *DebugHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 
-	d.tplInit.Do(func() {
-		d.tpl, d.tplErr = template.New("debug").Parse(debugTemplate)
-	})
-	if d.tplErr != nil {
-		RespondError(d.logf, w, fmt.Errorf("failed to initialize template: %w", d.tplErr))
+	if err := d.tplInit.Get(func() error {
+		var err error
+		d.tpl, err = template.New("debug").Parse(debugTemplate)
+		return err
+	}); err != nil {
+		RespondError(d.logf, w, fmt.Errorf("failed to initialize template: %w", err))
 		return
 	}
 
