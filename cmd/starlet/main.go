@@ -392,7 +392,7 @@ func (e *engine) initRoutes() {
 	dbg := web.Debugger(e.logf, e.mux)
 
 	dbg.KVFunc("Bot information", func() any {
-		botInfo, err := request.Make[json.RawMessage](context.Background(), request.Params{
+		botInfo, err := request.Make[map[string]any](context.Background(), request.Params{
 			Method:     http.MethodGet,
 			URL:        "https://api.telegram.org/bot" + e.tgToken + "/getMe",
 			HTTPClient: e.httpc,
@@ -404,11 +404,7 @@ func (e *engine) initRoutes() {
 		if err != nil {
 			return err
 		}
-		var buf bytes.Buffer
-		if err := json.Indent(&buf, []byte(botInfo), "", "  "); err != nil {
-			return err
-		}
-		return buf.String()
+		return fmt.Sprintf("%+v", botInfo)
 	})
 
 	dbg.HandleFunc("code", "Bot code", func(w http.ResponseWriter, r *http.Request) {
