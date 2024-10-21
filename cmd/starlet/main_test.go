@@ -581,7 +581,7 @@ func testEngine(t *testing.T, m *mux) *engine {
 		tgSecret: "test",
 		tgToken:  tgToken,
 	}
-	if err := e.init.get(e.doInit); err != nil {
+	if err := e.init.Get(e.doInit); err != nil {
 		t.Fatal(err)
 	}
 	return e

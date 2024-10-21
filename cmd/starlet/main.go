@@ -143,6 +143,7 @@ import (
 	"go.astrophena.name/tools/internal/api/google/gemini"
 	"go.astrophena.name/tools/internal/cli"
 	"go.astrophena.name/tools/internal/util/logstream"
+	"go.astrophena.name/tools/internal/util/syncx"
 	"go.astrophena.name/tools/internal/version"
 	"go.astrophena.name/tools/internal/web"
 
@@ -205,7 +206,7 @@ func (e *engine) main(ctx context.Context, args []string, getenv func(string) st
 
 	// Initialize internal state.
 	e.stderr = stderr
-	if err := e.init.get(e.doInit); err != nil {
+	if err := e.init.Get(e.doInit); err != nil {
 		return err
 	}
 
@@ -245,19 +246,9 @@ func parseInt(s string) int64 {
 	return 0
 }
 
-type lazy[T any] struct {
-	sync.Once
-	val T
-}
-
-func (l *lazy[T]) get(f func() T) T {
-	l.Do(func() { l.val = f() })
-	return l.val
-}
-
 type engine struct {
-	init     lazy[error] // main initialization
-	loadGist sync.Once   // lazily loads gist when first webhook request arrives
+	init     syncx.Lazy[error] // main initialization
+	loadGist sync.Once         // lazily loads gist when first webhook request arrives
 
 	// initialized by doInit
 	convCache *starlarkstruct.Module
