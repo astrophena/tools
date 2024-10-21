@@ -7,6 +7,18 @@ package syncx
 
 import "sync"
 
+// Lazy represents a lazily computed value.
+type Lazy[T any] struct {
+	once sync.Once
+	val  T
+}
+
+// Get returns T, calling f to compute it, if necessary.
+func (l *Lazy[T]) Get(f func() T) T {
+	l.once.Do(func() { l.val = f() })
+	return l.val
+}
+
 // LimitedWaitGroup is a version of [sync.WaitGroup] that that limits the
 // number of concurrently working goroutines by using a buffered channel
 // as a semaphore.

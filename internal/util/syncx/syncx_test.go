@@ -13,6 +13,29 @@ import (
 	"go.astrophena.name/base/testutil"
 )
 
+func TestLazy(t *testing.T) {
+	t.Parallel()
+
+	var l Lazy[int]
+	var count int
+	var mu sync.Mutex
+
+	f := func() int {
+		mu.Lock()
+		defer mu.Unlock()
+		count++
+		return count
+	}
+
+	v1 := l.Get(f)
+	testutil.AssertEqual(t, v1, 1)
+
+	v2 := l.Get(f)
+	testutil.AssertEqual(t, v2, 1)
+
+	testutil.AssertEqual(t, count, 1)
+}
+
 func TestLimitedWaitGroup(t *testing.T) {
 	t.Parallel()
 
