@@ -21,6 +21,8 @@ In addition to the standard Starlark modules, the following modules are
 available to the bot code:
 
 	config: Contains bot configuration.
+		- bot_id (int): Telegram user ID of the bot.
+		- bot_username (str): Telegram username of the bot.
 		- owner_id (int): Telegram user ID of the bot owner.
 		- version (str): Bot version string.
 
@@ -151,8 +153,12 @@ import (
 	"go.starlark.net/syntax"
 )
 
-const defaultErrorTemplate = `❌ Something went wrong:
+const (
+	tgAPI = "https://api.telegram.org"
+
+	defaultErrorTemplate = `❌ Something went wrong:
 <pre><code>%v</code></pre>`
+)
 
 func main() {
 	cli.Run(func(ctx context.Context) error {
@@ -199,7 +205,9 @@ func (e *engine) main(ctx context.Context, args []string, getenv func(string) st
 
 	// Initialize internal state.
 	e.stderr = stderr
-	e.init.Do(e.doInit)
+	if err := e.init.get(e.doInit); err != nil {
+		return err
+	}
 
 	// Used in tests.
 	if e.noServerStart {
@@ -237,9 +245,19 @@ func parseInt(s string) int64 {
 	return 0
 }
 
+type lazy[T any] struct {
+	sync.Once
+	val T
+}
+
+func (l *lazy[T]) get(f func() T) T {
+	l.Do(func() { l.val = f() })
+	return l.val
+}
+
 type engine struct {
-	init     sync.Once // main initialization
-	loadGist sync.Once // lazily loads gist when first webhook request arrives
+	init     lazy[error] // main initialization
+	loadGist sync.Once   // lazily loads gist when first webhook request arrives
 
 	// initialized by doInit
 	convCache *starlarkstruct.Module
@@ -251,17 +269,19 @@ type engine struct {
 	mux       *http.ServeMux
 
 	// configuration, read-only after initialization
-	geminiKey   string
-	ghToken     string
-	gistID      string
-	host        string
-	httpc       *http.Client
-	onRender    bool
-	reloadToken string
-	stderr      io.Writer
-	tgOwner     int64
-	tgSecret    string
-	tgToken     string
+	geminiKey     string
+	ghToken       string
+	gistID        string
+	host          string
+	httpc         *http.Client
+	onRender      bool
+	reloadToken   string
+	stderr        io.Writer
+	tgBotID       int64
+	tgBotUsername string
+	tgOwner       int64
+	tgSecret      string
+	tgToken       string
 	// for tests
 	noServerStart bool
 	ready         func() // see web.ListenAndServeConfig.Ready
@@ -275,7 +295,22 @@ type engine struct {
 	errorTemplate string
 }
 
-func (e *engine) doInit() {
+type getMeResponse struct {
+	OK     bool `json:"ok"`
+	Result struct {
+		ID                      int64  `json:"id"`
+		IsBot                   bool   `json:"is_bot"`
+		FirstName               string `json:"first_name"`
+		Username                string `json:"username"`
+		CanJoinGroups           bool   `json:"can_join_groups"`
+		CanReadAllGroupMessages bool   `json:"can_read_all_group_messages"`
+		SupportsInlineQueries   bool   `json:"supports_inline_queries"`
+		CanConnectToBusiness    bool   `json:"can_connect_to_business"`
+		HasMainWebApp           bool   `json:"has_main_web_app"`
+	} `json:"result"`
+}
+
+func (e *engine) doInit() error {
 	if e.httpc == nil {
 		e.httpc = &http.Client{
 			// Increase timeout to properly handle Gemini API response times.
@@ -325,6 +360,27 @@ func (e *engine) doInit() {
 			Scrubber:   e.scrubber,
 		}
 	}
+
+	me, err := e.getMe()
+	if err != nil {
+		return err
+	}
+	e.tgBotID = me.Result.ID
+	e.tgBotUsername = me.Result.Username
+
+	return nil
+}
+
+func (e *engine) getMe() (getMeResponse, error) {
+	return request.Make[getMeResponse](context.Background(), request.Params{
+		Method:     http.MethodGet,
+		URL:        tgAPI + "/bot" + e.tgToken + "/getMe",
+		HTTPClient: e.httpc,
+		Headers: map[string]string{
+			"User-Agent": version.UserAgent(),
+		},
+		Scrubber: e.scrubber,
+	})
 }
 
 // timestampWriter is an io.Writer that prefixes each line with the current date and time.
@@ -392,19 +448,11 @@ func (e *engine) initRoutes() {
 	dbg := web.Debugger(e.logf, e.mux)
 
 	dbg.KVFunc("Bot information", func() any {
-		botInfo, err := request.Make[map[string]any](context.Background(), request.Params{
-			Method:     http.MethodGet,
-			URL:        "https://api.telegram.org/bot" + e.tgToken + "/getMe",
-			HTTPClient: e.httpc,
-			Headers: map[string]string{
-				"User-Agent": version.UserAgent(),
-			},
-			Scrubber: e.scrubber,
-		})
+		me, err := e.getMe()
 		if err != nil {
 			return err
 		}
-		return fmt.Sprintf("%+v", botInfo)
+		return fmt.Sprintf("%+v", me)
 	})
 
 	dbg.HandleFunc("code", "Bot code", func(w http.ResponseWriter, r *http.Request) {
@@ -489,8 +537,10 @@ func (e *engine) loadCode(ctx context.Context, files map[string]string) error {
 		"config": starlarkstruct.FromStringDict(
 			starlarkstruct.Default,
 			starlark.StringDict{
-				"owner_id": starlark.MakeInt64(e.tgOwner),
-				"version":  starlark.String(version.Version().String()),
+				"bot_id":       starlark.MakeInt64(e.tgBotID),
+				"bot_username": starlark.String(e.tgBotUsername),
+				"owner_id":     starlark.MakeInt64(e.tgOwner),
+				"version":      starlark.String(version.Version().String()),
 			},
 		),
 		"convcache": e.convCache,

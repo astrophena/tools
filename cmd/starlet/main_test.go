@@ -60,10 +60,10 @@ func TestEngineMain(t *testing.T) {
 		"overrides telegram token passed from flag by env": {
 			args: []string{"-tg-token", "blablabla"},
 			env: map[string]string{
-				"TG_TOKEN": "foobarfoo",
+				"TG_TOKEN": tgToken,
 			},
 			checkFunc: func(t *testing.T, e *engine) {
-				testutil.AssertEqual(t, e.tgToken, "foobarfoo")
+				testutil.AssertEqual(t, e.tgToken, tgToken)
 			},
 		},
 		"version": {
@@ -88,6 +88,7 @@ func TestEngineMain(t *testing.T) {
 				e              = new(engine)
 				stdout, stderr bytes.Buffer
 			)
+			e.httpc = testutil.MockHTTPClient(testMux(t, nil).mux)
 			e.noServerStart = true
 
 			err := e.main(context.Background(), tc.args, getenvFunc(tc.env), &stdout, &stderr)
@@ -570,6 +571,7 @@ func TestSelfPing(t *testing.T) {
 }
 
 func testEngine(t *testing.T, m *mux) *engine {
+	t.Helper()
 	e := &engine{
 		ghToken:  "test",
 		gistID:   "test",
@@ -579,7 +581,9 @@ func testEngine(t *testing.T, m *mux) *engine {
 		tgSecret: "test",
 		tgToken:  tgToken,
 	}
-	e.init.Do(e.doInit)
+	if err := e.init.get(e.doInit); err != nil {
+		t.Fatal(err)
+	}
 	return e
 }
 
@@ -596,8 +600,9 @@ type call struct {
 }
 
 const (
-	getGist      = "GET api.github.com/gists/test"
-	postTelegram = "POST api.telegram.org/{token}/{method}"
+	getGist       = "GET api.github.com/gists/test"
+	getMeTelegram = "GET api.telegram.org/{token}/getMe"
+	postTelegram  = "POST api.telegram.org/{token}/{method}"
 )
 
 func testMux(t *testing.T, overrides map[string]http.HandlerFunc) *mux {
@@ -609,6 +614,14 @@ func testMux(t *testing.T, overrides map[string]http.HandlerFunc) *mux {
 		if m.gist != nil {
 			w.Write(m.gist)
 		}
+	}))
+	m.mux.HandleFunc(getMeTelegram, orHandler(overrides[getMeTelegram], func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertEqual(t, tgToken, strings.TrimPrefix(r.PathValue("token"), "bot"))
+		var resp getMeResponse
+		resp.OK = true
+		resp.Result.ID = 123456789
+		resp.Result.Username = "foo_bot"
+		web.RespondJSON(w, resp)
 	}))
 	m.mux.HandleFunc(postTelegram, orHandler(overrides[postTelegram], func(w http.ResponseWriter, r *http.Request) {
 		testutil.AssertEqual(t, tgToken, strings.TrimPrefix(r.PathValue("token"), "bot"))

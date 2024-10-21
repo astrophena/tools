@@ -23,6 +23,8 @@ In addition to the standard Starlark modules, the following modules are
 available to the bot code:
 
     config: Contains bot configuration.
+    	- bot_id (int): Telegram user ID of the bot.
+    	- bot_username (str): Telegram username of the bot.
     	- owner_id (int): Telegram user ID of the bot owner.
     	- version (str): Bot version string.
 
