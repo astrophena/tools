@@ -635,7 +635,7 @@ func testMux(t *testing.T, overrides map[string]http.HandlerFunc) *mux {
 		jsonOK(w)
 	}))
 	for pat, h := range overrides {
-		if pat == getGist || pat == postTelegram {
+		if pat == getGist || pat == postTelegram || pat == getMeTelegram {
 			continue
 		}
 		m.mux.HandleFunc(pat, h)
