@@ -44,13 +44,12 @@ var debugTemplate string
 //
 // Methods of DebugHandler can be safely called by multiple goroutines.
 type DebugHandler struct {
-	mux     *http.ServeMux     // where this handler is registered
-	mu      sync.RWMutex       // covers all fields below, mux is protected by it's own mutex
-	kvfuncs []kvfunc           // output one table row each, see KV()
-	links   []link             // one link in header
-	tpl     *template.Template // template that is used for rendering debug page
-	tplInit syncx.Lazy[error]  // guards template initialization
-	logf    logger.Logf        // log.Printf if nil
+	mux     *http.ServeMux                 // where this handler is registered
+	mu      sync.RWMutex                   // covers all fields below, mux is protected by it's own mutex
+	kvfuncs []kvfunc                       // output one table row each, see KV()
+	links   []link                         // one link in header
+	tpl     syncx.Lazy[*template.Template] // template that is used for rendering debug page
+	logf    logger.Logf                    // log.Printf if nil
 }
 
 // Utility types used for rendering templates.
@@ -120,11 +119,10 @@ func (d *DebugHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 
-	if err := d.tplInit.Get(func() error {
-		var err error
-		d.tpl, err = template.New("debug").Parse(debugTemplate)
-		return err
-	}); err != nil {
+	tpl, err := d.tpl.GetErr(func() (*template.Template, error) {
+		return template.New("debug").Parse(debugTemplate)
+	})
+	if err != nil {
 		RespondError(d.logf, w, fmt.Errorf("failed to initialize template: %w", err))
 		return
 	}
@@ -150,7 +148,7 @@ func (d *DebugHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var buf bytes.Buffer
-	if err := d.tpl.Execute(&buf, &data); err != nil {
+	if err := tpl.Execute(&buf, &data); err != nil {
 		RespondError(d.logf, w, err)
 		return
 	}

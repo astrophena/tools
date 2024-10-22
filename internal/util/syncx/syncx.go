@@ -11,12 +11,19 @@ import "sync"
 type Lazy[T any] struct {
 	once sync.Once
 	val  T
+	err  error
 }
 
 // Get returns T, calling f to compute it, if necessary.
 func (l *Lazy[T]) Get(f func() T) T {
 	l.once.Do(func() { l.val = f() })
 	return l.val
+}
+
+// GetErr returns T and an error, calling f to compute them, if necessary.
+func (l *Lazy[T]) GetErr(f func() (T, error)) (T, error) {
+	l.once.Do(func() { l.val, l.err = f() })
+	return l.val, l.err
 }
 
 // LimitedWaitGroup is a version of [sync.WaitGroup] that that limits the

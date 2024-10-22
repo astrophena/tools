@@ -5,6 +5,7 @@
 package syncx
 
 import (
+	"errors"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -34,6 +35,26 @@ func TestLazy(t *testing.T) {
 	testutil.AssertEqual(t, v2, 1)
 
 	testutil.AssertEqual(t, count, 1)
+
+	var l2 Lazy[string]
+
+	f2 := func() (string, error) {
+		return "", errors.New("something went wrong")
+	}
+
+	notnil := func(err error) {
+		if err == nil {
+			t.Fatalf("err must not be nil")
+		}
+	}
+
+	ev1, err := l2.GetErr(f2)
+	testutil.AssertEqual(t, ev1, "")
+	notnil(err)
+
+	ev2, err := l2.GetErr(f2)
+	testutil.AssertEqual(t, ev2, "")
+	notnil(err)
 }
 
 func TestLimitedWaitGroup(t *testing.T) {
