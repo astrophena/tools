@@ -13,15 +13,28 @@ Tgfeed fetches RSS feeds and sends new articles via Telegram.
 
 tgfeed runs as a GitHub Actions workflow.
 
-It fetches RSS feeds from URLs provided in the feeds.json file on GitHub Gist
-that is a simple array of feed URLs:
-
-    [
-      "https://astrophena.name/feed.xml"
-    ]
-
 New articles are sent to a Telegram chat specified by the CHAT_ID environment
 variable.
+
+# Configuration
+
+tgfeed loads it's configuration from config.star file on GitHub Gist. This file
+is written in Starlark language and defines a list of feeds.
+
+Each feed can have a title, URL, and optional block and keep rules.
+
+Block and keep rules are Starlark functions that take a feed item as an argument
+and return a boolean value. If a block rule returns true, the item is not
+sent to Telegram. If a keep rule returns true, the item is sent to Telegram,
+even if it doesn't match other criteria.
+
+The feed item passed to block_rule and keep_rule is a dictionary with the
+following keys:
+
+  - title: The title of the item.
+  - description: The description of the item.
+  - content: The content of the item.
+  - categories: A list of categories the item belongs to.
 
 # Where it keeps state?
 
@@ -72,15 +85,12 @@ feeds are causing problems.
 
 # Administration
 
-To subscribe to a feed, you can use the -subscribe flag followed by the URL of
-the feed. For example:
+To edit the config.star file, you can use the -edit flag. This will open the
+file in your default editor (specified by the $EDITOR environment variable).
+After you save the changes and close the editor, the updated config.star will be
+saved back to the Gist. For example:
 
-    $ tgfeed -subscribe https://example.com/feed
-
-To unsubscribe from a feed, you can use the -unsubscribe flag followed by the
-URL of the feed. For example:
-
-    $ tgfeed -unsubscribe https://example.com/feed
+    $ tgfeed -edit
 
 To reenable a failing feed that has been disabled due to consecutive failures,
 you can use the -reenable flag followed by the URL of the feed. For example:

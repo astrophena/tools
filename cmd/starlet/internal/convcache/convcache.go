@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"go.astrophena.name/tools/cmd/starlet/internal/starlarkconv"
+	"go.astrophena.name/tools/internal/util/starlarkconv"
 
 	"go.starlark.net/starlark"
 	"go.starlark.net/starlarkstruct"

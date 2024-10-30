@@ -37,6 +37,8 @@ var (
 	gistTxtar []byte
 )
 
+// TODO: Test keep and block rules, edit mode.
+
 var update = flag.Bool("update", false, "update golden files in testdata")
 
 func TestFetcherMain(t *testing.T) {
@@ -60,17 +62,6 @@ func TestFetcherMain(t *testing.T) {
 			args:               []string{"-run"},
 			wantNothingPrinted: true,
 		},
-		"subscribe": {
-			args:               []string{"-subscribe", "https://example.com/new.xml"},
-			wantNothingPrinted: true,
-			checkFunc: func(t *testing.T, f *fetcher) {
-				testutil.AssertContains(t, f.feeds, "https://example.com/new.xml")
-			},
-		},
-		"subscribe to already subscribed feed": {
-			args:    []string{"-subscribe", "https://example.com/feed.xml"},
-			wantErr: errDuplicateFeed,
-		},
 		"reenable disabled feed": {
 			args:               []string{"-reenable", "https://example.com/disabled.xml"},
 			wantNothingPrinted: true,
@@ -80,17 +71,6 @@ func TestFetcherMain(t *testing.T) {
 		},
 		"reenable non-existent feed": {
 			args:    []string{"-reenable", "https://example.com/non-existent.xml"},
-			wantErr: errNoFeed,
-		},
-		"unsubscribe": {
-			args:               []string{"-unsubscribe", "https://example.com/feed.xml"},
-			wantNothingPrinted: true,
-			checkFunc: func(t *testing.T, f *fetcher) {
-				testutil.AssertNotContains(t, f.feeds, "https://example.com/feed.xml")
-			},
-		},
-		"unsubscribe from non-existent feed": {
-			args:    []string{"-unsubscribe", "https://example.com/non-existent.xml"},
 			wantErr: errNoFeed,
 		},
 		"version": {
@@ -187,50 +167,6 @@ func TestRun(t *testing.T) {
 	}
 }
 
-func TestSubscribeAndUnsubscribe(t *testing.T) {
-	t.Parallel()
-
-	f := testFetcher(t, testMux(t, nil))
-
-	const feedURL = "https://example.com/feed2.xml"
-
-	testutil.AssertNotContains(t, f.feeds, feedURL)
-	if err := f.subscribe(context.Background(), feedURL); err != nil {
-		t.Fatal(err)
-	}
-	testutil.AssertContains(t, f.feeds, feedURL)
-	if err := f.unsubscribe(context.Background(), feedURL); err != nil {
-		t.Fatal(err)
-	}
-	testutil.AssertNotContains(t, f.feeds, feedURL)
-}
-
-func TestUnsubscribeRemovesState(t *testing.T) {
-	t.Parallel()
-
-	f := testFetcher(t, testMux(t, nil))
-
-	if err := f.run(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	const feedURL = "https://example.com/feed.xml"
-	_, hasState := f.state[feedURL]
-	if !hasState {
-		t.Fatalf("f.state doesn't contain state for feed %s", feedURL)
-	}
-
-	if err := f.unsubscribe(context.Background(), feedURL); err != nil {
-		t.Fatal(err)
-	}
-	if err := f.run(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	_, hasState = f.state[feedURL]
-	if hasState {
-		t.Fatalf("f.state still contains state for feed %s even after unsubscribing", feedURL)
-	}
-}
-
 func TestFailingFeed(t *testing.T) {
 	t.Parallel()
 
@@ -268,11 +204,11 @@ func TestDisablingAndReenablingFailingFeed(t *testing.T) {
 		}
 	}
 
-	state := tm.state(t)
+	state1 := tm.state(t)
 
-	testutil.AssertEqual(t, state["https://example.com/feed.xml"].Disabled, true)
-	testutil.AssertEqual(t, state["https://example.com/feed.xml"].ErrorCount, attempts)
-	testutil.AssertEqual(t, state["https://example.com/feed.xml"].LastError, "want 200, got 418: I'm a teapot.\n")
+	testutil.AssertEqual(t, state1["https://example.com/feed.xml"].Disabled, true)
+	testutil.AssertEqual(t, state1["https://example.com/feed.xml"].ErrorCount, attempts)
+	testutil.AssertEqual(t, state1["https://example.com/feed.xml"].LastError, "want 200, got 418: I'm a teapot.\n")
 
 	testutil.AssertEqual(t, len(tm.sentMessages), 1)
 	testutil.AssertEqual(t, tm.sentMessages[0]["text"], "❌ Something went wrong:\n<pre><code>"+html.EscapeString("fetching feed \"https://example.com/feed.xml\" failed after 12 previous attempts: want 200, got 418: I'm a teapot.\n; feed was disabled, to reenable it run 'tgfeed -reenable \"https://example.com/feed.xml\"'")+"</code></pre>")
@@ -280,10 +216,10 @@ func TestDisablingAndReenablingFailingFeed(t *testing.T) {
 	if err := f.reenable(context.Background(), "https://example.com/feed.xml"); err != nil {
 		t.Fatal(err)
 	}
-	state = tm.state(t)
-	testutil.AssertEqual(t, state["https://example.com/feed.xml"].Disabled, false)
-	testutil.AssertEqual(t, state["https://example.com/feed.xml"].ErrorCount, 0)
-	testutil.AssertEqual(t, state["https://example.com/feed.xml"].LastError, "")
+	state2 := tm.state(t)
+	testutil.AssertEqual(t, state2["https://example.com/feed.xml"].Disabled, false)
+	testutil.AssertEqual(t, state2["https://example.com/feed.xml"].ErrorCount, 0)
+	testutil.AssertEqual(t, state2["https://example.com/feed.xml"].LastError, "")
 }
 
 var (
@@ -348,10 +284,10 @@ func TestFetchWithIfModifiedSinceAndETag(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	state := tm.state(t)
+	state1 := tm.state(t)
 
-	testutil.AssertEqual(t, state["https://example.com/feed.xml"].LastModified, ifModifiedSince)
-	testutil.AssertEqual(t, state["https://example.com/feed.xml"].ETag, eTag)
+	testutil.AssertEqual(t, state1["https://example.com/feed.xml"].LastModified, ifModifiedSince)
+	testutil.AssertEqual(t, state1["https://example.com/feed.xml"].ETag, eTag)
 	testutil.AssertEqual(t, f.stats.NotModifiedFeeds, 0)
 
 	// Second fetch, should use If-Modified-Since and ETag and get 304.
@@ -359,10 +295,10 @@ func TestFetchWithIfModifiedSinceAndETag(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	state = tm.state(t)
+	state2 := tm.state(t)
 
-	testutil.AssertEqual(t, state["https://example.com/feed.xml"].LastModified, ifModifiedSince)
-	testutil.AssertEqual(t, state["https://example.com/feed.xml"].ETag, eTag)
+	testutil.AssertEqual(t, state2["https://example.com/feed.xml"].LastModified, ifModifiedSince)
+	testutil.AssertEqual(t, state2["https://example.com/feed.xml"].ETag, eTag)
 	testutil.AssertEqual(t, f.stats.NotModifiedFeeds, 1)
 }
 
@@ -455,7 +391,7 @@ type mux struct {
 	sentMessages []map[string]any
 }
 
-func (m *mux) state(t *testing.T) map[string]feedState {
+func (m *mux) state(t *testing.T) map[string]*feedState {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	updatedGist := testutil.UnmarshalJSON[*gist.Gist](t, m.gist)
@@ -463,7 +399,7 @@ func (m *mux) state(t *testing.T) map[string]feedState {
 	if !ok {
 		t.Fatal("state.json has not found in updated gist")
 	}
-	return testutil.UnmarshalJSON[map[string]feedState](t, []byte(stateJSON.Content))
+	return testutil.UnmarshalJSON[map[string]*feedState](t, []byte(stateJSON.Content))
 }
 
 const (

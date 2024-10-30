@@ -11,15 +11,28 @@ Tgfeed fetches RSS feeds and sends new articles via Telegram.
 
 tgfeed runs as a GitHub Actions workflow.
 
-It fetches RSS feeds from URLs provided in the feeds.json file on GitHub Gist
-that is a simple array of feed URLs:
-
-	[
-	  "https://astrophena.name/feed.xml"
-	]
-
 New articles are sent to a Telegram chat specified by the CHAT_ID environment
 variable.
+
+# Configuration
+
+tgfeed loads it's configuration from config.star file on GitHub Gist. This file
+is written in Starlark language and defines a list of feeds.
+
+Each feed can have a title, URL, and optional block and keep rules.
+
+Block and keep rules are Starlark functions that take a feed item as an argument
+and return a boolean value. If a block rule returns true, the item is not sent
+to Telegram. If a keep rule returns true, the item is sent to Telegram, even if
+it doesn't match other criteria.
+
+The feed item passed to block_rule and keep_rule is a dictionary with the
+following keys:
+
+  - title: The title of the item.
+  - description: The description of the item.
+  - content: The content of the item.
+  - categories: A list of categories the item belongs to.
 
 # Where it keeps state?
 
@@ -70,15 +83,12 @@ feeds are causing problems.
 
 # Administration
 
-To subscribe to a feed, you can use the -subscribe flag followed by the URL of
-the feed. For example:
+To edit the config.star file, you can use the -edit flag. This will open the
+file in your default editor (specified by the $EDITOR environment variable).
+After you save the changes and close the editor, the updated config.star will
+be saved back to the Gist. For example:
 
-	$ tgfeed -subscribe https://example.com/feed
-
-To unsubscribe from a feed, you can use the -unsubscribe flag followed by the URL of
-the feed. For example:
-
-	$ tgfeed -unsubscribe https://example.com/feed
+	$ tgfeed -edit
 
 To reenable a failing feed that has been disabled due to consecutive failures,
 you can use the -reenable flag followed by the URL of the feed. For example:
@@ -105,6 +115,7 @@ import (
 	"math/rand/v2"
 	"net/http"
 	"os"
+	"os/exec"
 	"runtime"
 	"slices"
 	"strings"
@@ -121,6 +132,9 @@ import (
 	"go.astrophena.name/tools/internal/version"
 
 	"github.com/mmcdole/gofeed"
+	"go.starlark.net/starlark"
+	"go.starlark.net/starlarkstruct"
+	"go.starlark.net/syntax"
 )
 
 const (
@@ -135,7 +149,6 @@ const (
 // Some types of errors that can happen during tgfeed execution.
 var (
 	errAlreadyRunning = errors.New("already running")
-	errDuplicateFeed  = errors.New("already in list of feeds")
 	errNoFeed         = errors.New("no such feed")
 )
 
@@ -169,11 +182,10 @@ func (f *fetcher) main(
 		Flags:       flag.NewFlagSet("tgfeed", flag.ContinueOnError),
 	}
 	var (
-		feeds       = a.Flags.Bool("feeds", false, "List available feeds.")
-		reenable    = a.Flags.String("reenable", "", "Reenable disabled `feed`.")
-		run         = a.Flags.Bool("run", false, "Fetch feeds and send updates.")
-		subscribe   = a.Flags.String("subscribe", "", "Subscribe to a `feed`.")
-		unsubscribe = a.Flags.String("unsubscribe", "", "Unsubscribe from a `feed`.")
+		feeds    = a.Flags.Bool("feeds", false, "List available feeds.")
+		edit     = a.Flags.Bool("edit", false, "Edit config.star file in your EDITOR.")
+		reenable = a.Flags.String("reenable", "", "Reenable disabled `feed`.")
+		run      = a.Flags.Bool("run", false, "Fetch feeds and send updates.")
 	)
 	if err := a.HandleStartup(args, stdout, stderr); err != nil {
 		if errors.Is(err, cli.ErrExitVersion) {
@@ -207,20 +219,18 @@ func (f *fetcher) main(
 	switch {
 	case *feeds:
 		return f.listFeeds(ctx, stdout)
+	case *edit:
+		return f.edit(ctx)
 	case *run:
 		if err := f.run(ctx); err != nil {
 			return f.errNotify(ctx, err)
 		}
 		return nil
-	case *subscribe != "":
-		return f.subscribe(ctx, *subscribe)
 	case *reenable != "":
 		return f.reenable(ctx, *reenable)
-	case *unsubscribe != "":
-		return f.unsubscribe(ctx, *unsubscribe)
 	default:
 		a.Flags.Usage()
-		return fmt.Errorf("%w: pick a mode: -feeds, -run, -subscribe, -reenable or -unsubscribe", cli.ErrInvalidArgs)
+		return fmt.Errorf("%w: pick a mode", cli.ErrInvalidArgs)
 	}
 }
 
@@ -237,7 +247,8 @@ type fetcher struct {
 	ghToken string
 	gistc   *gist.Client
 
-	feeds   []string
+	config  string
+	feeds   []*feed
 	chatID  string
 	tgToken string
 
@@ -285,16 +296,16 @@ func (f *fetcher) listFeeds(ctx context.Context, w io.Writer) error { // {{{
 
 	var sb strings.Builder
 
-	for _, url := range f.feeds {
-		state, hasState := f.getState(url)
-		fmt.Fprintf(&sb, "%s", url)
+	for _, feed := range f.feeds {
+		state, hasState := f.getState(feed.URL)
+		fmt.Fprintf(&sb, "%s", feed.URL)
 		if !hasState {
 			fmt.Fprintf(&sb, " \n")
 			continue
 		}
 		fmt.Fprintf(&sb, " (")
-		if state.CachedTitle != "" {
-			fmt.Fprintf(&sb, "%q, ", state.CachedTitle)
+		if feed.Title != "" {
+			fmt.Fprintf(&sb, "%q, ", feed.Title)
 		}
 		fmt.Fprintf(&sb, "last updated %s", state.LastUpdated.Format(time.DateTime))
 		if state.ErrorCount > 0 {
@@ -327,6 +338,50 @@ func pluralize(n int64) string {
 
 // }}}
 
+func (f *fetcher) edit(ctx context.Context) error { // {{{
+	editor := os.Getenv("EDITOR")
+	if editor == "" {
+		return errors.New("$EDITOR is not defined")
+	}
+
+	if err := f.loadFromGist(ctx); err != nil {
+		return err
+	}
+
+	tmpfile, err := os.CreateTemp("", "tgfeed-config*.star")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmpfile.Name())
+
+	if _, err := tmpfile.WriteString(f.config); err != nil {
+		return err
+	}
+	if err := tmpfile.Close(); err != nil {
+		return err
+	}
+
+	cmd := exec.Command(editor, tmpfile.Name())
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+
+	edited, err := os.ReadFile(tmpfile.Name())
+	if err != nil {
+		return err
+	}
+	if string(edited) == f.config {
+		f.logf("No changes made to config.star, not doing anything.")
+		return nil
+	}
+
+	f.config = string(edited)
+	return f.saveToGist(ctx)
+} // }}}
+
 func (f *fetcher) run(ctx context.Context) error { // {{{
 	// Start with empty stats for every run.
 	f.stats = &stats{
@@ -357,12 +412,12 @@ func (f *fetcher) run(ctx context.Context) error { // {{{
 
 	// Enqueue fetches.
 	lwg := syncx.NewLimitedWaitGroup(concurrencyLimit)
-	for _, url := range shuffle(f.feeds) {
+	for _, feed := range shuffle(f.feeds) {
 		lwg.Add(1)
-		go func(url string) {
+		go func() {
 			defer lwg.Done()
-			f.fetch(ctx, url, updates)
-		}(url)
+			f.fetch(ctx, feed, updates)
+		}()
 	}
 
 	// Wait for all fetches to complete.
@@ -370,24 +425,19 @@ func (f *fetcher) run(ctx context.Context) error { // {{{
 	// Stop sending goroutine.
 	close(updates)
 
-	slices.Sort(f.feeds)
-	if err := f.saveToGist(ctx); err != nil {
-		return err
-	}
-
 	// Prepare and report stats.
-	f.stats.mu.Lock()
-	defer f.stats.mu.Unlock()
-
-	f.stats.Duration = time.Since(f.stats.StartTime)
-	f.stats.TotalFeeds = len(f.feeds)
-	if f.stats.SuccessFeeds > 0 {
-		f.stats.AvgFetchTime = f.stats.TotalFetchTime / time.Duration(f.stats.SuccessFeeds)
-	}
 
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
-	f.stats.MemoryUsage = m.Alloc
+
+	f.modifyStats(func(s *stats) {
+		s.Duration = time.Since(s.StartTime)
+		s.TotalFeeds = len(f.feeds)
+		if s.SuccessFeeds > 0 {
+			s.AvgFetchTime = s.TotalFetchTime / time.Duration(s.SuccessFeeds)
+		}
+		f.stats.MemoryUsage = m.Alloc
+	})
 
 	if f.serviceAccountKey != nil && f.statsSpreadsheetID != "" {
 		if err := f.reportStats(ctx); err != nil {
@@ -395,7 +445,7 @@ func (f *fetcher) run(ctx context.Context) error { // {{{
 		}
 	}
 
-	return nil
+	return f.saveToGist(ctx)
 }
 
 func shuffle[S any](s []S) []S {
@@ -404,17 +454,6 @@ func shuffle[S any](s []S) []S {
 		s2[i], s2[j] = s2[j], s2[i]
 	})
 	return s2
-} // }}}
-
-func (f *fetcher) subscribe(ctx context.Context, url string) error { // {{{
-	if err := f.loadFromGist(ctx); err != nil {
-		return err
-	}
-	if slices.Contains(f.feeds, url) {
-		return fmt.Errorf("%q: %w", url, errDuplicateFeed)
-	}
-	f.feeds = append(f.feeds, url)
-	return f.saveToGist(ctx)
 } // }}}
 
 func (f *fetcher) reenable(ctx context.Context, url string) error { // {{{
@@ -434,23 +473,56 @@ func (f *fetcher) reenable(ctx context.Context, url string) error { // {{{
 	return f.saveToGist(ctx)
 } // }}}
 
-func (f *fetcher) unsubscribe(ctx context.Context, url string) error { // {{{
-	if err := f.loadFromGist(ctx); err != nil {
-		return err
-	}
-	if !slices.Contains(f.feeds, url) {
-		return fmt.Errorf("%q: %w", url, errNoFeed)
-	}
-	f.feeds = slices.DeleteFunc(f.feeds, func(sub string) bool {
-		return sub == url
-	})
-	delete(f.state, url)
-	return f.saveToGist(ctx)
-} // }}}
-
 // }}}
 
 // Feed state {{{
+
+type feed struct {
+	URL       string
+	Title     string
+	BlockRule *starlark.Function // optional, (item) -> bool
+	KeepRule  *starlark.Function // optional, (item) -> bool
+}
+
+// String implements the [starlark.Value] interface.
+func (f *feed) String() string { return fmt.Sprintf("<feed title=%q url=%q>", f.Title, f.URL) }
+
+// Type implements the [starlark.Value] interface.
+func (f *feed) Type() string { return "feed" }
+
+// Freeze implements the [starlark.Value] interface.
+func (f *feed) Freeze() {} // immutable
+
+// Truth implements the [starlark.Value] interface.
+func (f *feed) Truth() starlark.Bool { return starlark.Bool(f.URL != "") }
+
+// Hash implements the [starlark.Value] interface.
+func (f *feed) Hash() (uint32, error) { return 0, fmt.Errorf("unhashable: %s", f.Type()) }
+
+func feedFunc(thread *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	var (
+		title     string
+		url       string
+		blockRule *starlark.Function
+		keepRule  *starlark.Function
+	)
+
+	if err := starlark.UnpackArgs("feed", args, kwargs,
+		"url", &url,
+		"title?", &title,
+		"block_rule?", &blockRule,
+		"keep_rule?", &keepRule,
+	); err != nil {
+		return nil, err
+	}
+
+	return &feed{
+		BlockRule: blockRule,
+		KeepRule:  keepRule,
+		Title:     title,
+		URL:       url,
+	}, nil
+}
 
 type feedState struct {
 	Disabled     bool      `json:"disabled"`
@@ -459,16 +531,10 @@ type feedState struct {
 	ETag         string    `json:"etag,omitempty"`
 	ErrorCount   int       `json:"error_count,omitempty"`
 	LastError    string    `json:"last_error,omitempty"`
-	CachedTitle  string    `json:"cached_title,omitempty"`
 
 	// Stats.
 	FetchCount     int64 `json:"fetch_count"`      // successful fetches
 	FetchFailCount int64 `json:"fetch_fail_count"` // failed fetches
-
-	// Special flags. Not covered by tests or any common sense.
-
-	// Only return updates matching this list of categories.
-	FilteredCategories []string `json:"filtered_categories,omitempty"`
 }
 
 func (f *fetcher) getState(url string) (state *feedState, exists bool) {
@@ -491,11 +557,14 @@ func (f *fetcher) loadFromGist(ctx context.Context) error {
 		f.errorTemplate = defaultErrorTemplate
 	}
 
-	feeds, ok := g.Files["feeds.json"]
-	if ok {
-		if err := json.Unmarshal([]byte(feeds.Content), &f.feeds); err != nil {
-			return err
-		}
+	config, ok := g.Files["config.star"]
+	if !ok {
+		return errors.New("config.star not found")
+	}
+	f.config = config.Content
+
+	if err := f.parseConfig(f.config); err != nil {
+		return err
 	}
 
 	f.state = make(map[string]*feedState)
@@ -506,19 +575,54 @@ func (f *fetcher) loadFromGist(ctx context.Context) error {
 	return nil
 }
 
+func (f *fetcher) parseConfig(config string) error {
+	predecl := starlark.StringDict{
+		"feed": starlark.NewBuiltin("feed", feedFunc),
+	}
+
+	globals, err := starlark.ExecFileOptions(
+		&syntax.FileOptions{
+			TopLevelControl: true,
+		},
+		&starlark.Thread{
+			Print: func(_ *starlark.Thread, msg string) { f.logf("%s", msg) },
+		},
+		"config.star",
+		config,
+		predecl,
+	)
+	if err != nil {
+		return err
+	}
+
+	feedsList, ok := globals["feeds"].(*starlark.List)
+	if !ok {
+		return errors.New("feeds must be defined and be a list")
+	}
+
+	var feeds []*feed
+
+	for elem := range feedsList.Elements() {
+		feed, ok := elem.(*feed)
+		if !ok {
+			continue
+		}
+		feeds = append(feeds, feed)
+	}
+
+	f.feeds = feeds
+	return nil
+}
+
 func (f *fetcher) saveToGist(ctx context.Context) error {
 	state, err := json.MarshalIndent(f.state, "", "  ")
 	if err != nil {
 		return err
 	}
-	feeds, err := json.MarshalIndent(f.feeds, "", "  ")
-	if err != nil {
-		return err
-	}
 	ng := &gist.Gist{
 		Files: map[string]gist.File{
-			"feeds.json": {Content: string(feeds)},
-			"state.json": {Content: string(state)},
+			"config.star": {Content: f.config},
+			"state.json":  {Content: string(state)},
 		},
 	}
 	_, err = f.gistc.Update(ctx, f.gistID, ng)
@@ -547,7 +651,16 @@ type stats struct {
 	MemoryUsage uint64 `json:"memory_usage"`
 }
 
+func (f *fetcher) modifyStats(fn func(s *stats)) {
+	f.stats.mu.Lock()
+	defer f.stats.mu.Unlock()
+	fn(f.stats)
+}
+
 func (f *fetcher) reportStats(ctx context.Context) error {
+	f.stats.mu.Lock()
+	defer f.stats.mu.Unlock()
+
 	tok, err := f.serviceAccountKey.AccessToken(ctx, f.httpc, "https://www.googleapis.com/auth/spreadsheets")
 	if err != nil {
 		return err
@@ -597,17 +710,17 @@ func (f *fetcher) reportStats(ctx context.Context) error {
 
 // Feed fetching {{{
 
-func (f *fetcher) fetch(ctx context.Context, url string, updates chan *gofeed.Item) {
+func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *gofeed.Item) {
 	startTime := time.Now()
 
-	state, exists := f.getState(url)
+	state, exists := f.getState(fd.URL)
 	// If we don't remember this feed, it's probably new. Set it's last update
 	// date to current so we don't get a lot of unread articles and trigger
 	// Telegram Bot API rate limit.
 	if !exists {
 		f.mu.Lock()
-		f.state[url] = new(feedState)
-		state = f.state[url]
+		f.state[fd.URL] = new(feedState)
+		state = f.state[fd.URL]
 		f.mu.Unlock()
 		state.LastUpdated = time.Now()
 	}
@@ -617,9 +730,9 @@ func (f *fetcher) fetch(ctx context.Context, url string, updates chan *gofeed.It
 		return
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fd.URL, nil)
 	if err != nil {
-		f.handleFetchFailure(ctx, state, url, err)
+		f.handleFetchFailure(ctx, state, fd.URL, err)
 		return
 	}
 
@@ -633,16 +746,16 @@ func (f *fetcher) fetch(ctx context.Context, url string, updates chan *gofeed.It
 
 	res, err := f.httpc.Do(req)
 	if err != nil {
-		f.handleFetchFailure(ctx, state, url, err)
+		f.handleFetchFailure(ctx, state, fd.URL, err)
 		return
 	}
 	defer res.Body.Close()
 
 	// Ignore unmodified feeds and report an error otherwise.
 	if res.StatusCode == http.StatusNotModified {
-		f.stats.mu.Lock()
-		defer f.stats.mu.Unlock()
-		f.stats.NotModifiedFeeds += 1
+		f.modifyStats(func(s *stats) {
+			s.NotModifiedFeeds += 1
+		})
 		return
 	}
 	if res.StatusCode != http.StatusOK {
@@ -652,13 +765,13 @@ func (f *fetcher) fetch(ctx context.Context, url string, updates chan *gofeed.It
 		if err != nil {
 			body = []byte("unable to read body")
 		}
-		f.handleFetchFailure(ctx, state, url, fmt.Errorf("want 200, got %d: %s", res.StatusCode, body))
+		f.handleFetchFailure(ctx, state, fd.URL, fmt.Errorf("want 200, got %d: %s", res.StatusCode, body))
 		return
 	}
 
 	feed, err := f.fp.Parse(res.Body)
 	if err != nil {
-		f.handleFetchFailure(ctx, state, url, err)
+		f.handleFetchFailure(ctx, state, fd.URL, err)
 		return
 	}
 
@@ -671,36 +784,66 @@ func (f *fetcher) fetch(ctx context.Context, url string, updates chan *gofeed.It
 		if item.PublishedParsed.Before(state.LastUpdated) {
 			continue
 		}
-		if len(state.FilteredCategories) > 0 {
-			if !slices.ContainsFunc(item.Categories, func(category string) bool {
-				return slices.Contains(state.FilteredCategories, category)
-			}) {
+
+		if fd.BlockRule != nil {
+			if blocked, err := f.applyRule(fd.BlockRule, item); err != nil {
+				f.logf("Error applying block rule for feed %q: %v", fd.URL, err)
+				continue
+			} else if blocked.(starlark.Bool) {
 				continue
 			}
 		}
-		// Skip some ads in Telegram channels.
-		if strings.Contains(item.Description, "#реклама") {
-			continue
+
+		if fd.KeepRule != nil {
+			if keep, err := f.applyRule(fd.KeepRule, item); err != nil {
+				f.logf("Error applying keep rule for feed %q: %v", fd.URL, err)
+				continue
+			} else if !keep.(starlark.Bool) {
+				continue
+			}
 		}
+
 		updates <- item
 	}
 	state.LastUpdated = time.Now()
 	state.ErrorCount = 0
 	state.LastError = ""
-	state.CachedTitle = feed.Title
 	state.FetchCount += 1
 
-	f.stats.mu.Lock()
-	defer f.stats.mu.Unlock()
-	f.stats.TotalItemsParsed += len(feed.Items)
-	f.stats.SuccessFeeds += 1
-	f.stats.TotalFetchTime += time.Since(startTime)
+	f.modifyStats(func(s *stats) {
+		s.TotalItemsParsed += len(feed.Items)
+		s.SuccessFeeds += 1
+		s.TotalFetchTime += time.Since(startTime)
+	})
+}
+
+func (f *fetcher) applyRule(rule *starlark.Function, item *gofeed.Item) (starlark.Value, error) {
+	var categories []starlark.Value
+	for _, category := range item.Categories {
+		categories = append(categories, starlark.String(category))
+	}
+	return starlark.Call(
+		&starlark.Thread{
+			Print: func(_ *starlark.Thread, msg string) { f.logf("%s", msg) },
+		},
+		rule,
+		starlark.Tuple{starlarkstruct.FromStringDict(
+			starlarkstruct.Default,
+			starlark.StringDict{
+				"title":       starlark.String(item.Title),
+				"description": starlark.String(item.Description),
+				"content":     starlark.String(item.Content),
+				"categories":  starlark.NewList(categories),
+			},
+		)},
+		[]starlark.Tuple{},
+	)
 }
 
 func (f *fetcher) handleFetchFailure(ctx context.Context, state *feedState, url string, err error) {
-	f.stats.mu.Lock()
-	f.stats.FailedFeeds += 1
-	f.stats.mu.Unlock()
+	f.modifyStats(func(s *stats) {
+		s.FailedFeeds += 1
+	})
 
 	state.FetchFailCount += 1
 	state.ErrorCount += 1
