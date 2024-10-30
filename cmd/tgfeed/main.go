@@ -34,8 +34,8 @@ and return a boolean value. If a block rule returns true, the item is not sent
 to Telegram. If a keep rule returns true, the item is sent to Telegram, even if
 it doesn't match other criteria.
 
-The feed item passed to block_rule and keep_rule is a dictionary with the
-following keys:
+The feed item passed to block_rule and keep_rule is a struct with the following
+keys:
 
   - title: The title of the item.
   - description: The description of the item.
