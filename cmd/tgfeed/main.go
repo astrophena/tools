@@ -383,6 +383,11 @@ func (f *fetcher) edit(ctx context.Context) error { // {{{
 		return nil
 	}
 
+	_, err = f.parseConfig(string(edited))
+	if err != nil {
+		return err
+	}
+
 	f.config = string(edited)
 	return f.saveToGist(ctx)
 } // }}}
@@ -568,7 +573,8 @@ func (f *fetcher) loadFromGist(ctx context.Context) error {
 	}
 	f.config = config.Content
 
-	if err := f.parseConfig(f.config); err != nil {
+	f.feeds, err = f.parseConfig(f.config)
+	if err != nil {
 		return err
 	}
 
@@ -580,7 +586,7 @@ func (f *fetcher) loadFromGist(ctx context.Context) error {
 	return nil
 }
 
-func (f *fetcher) parseConfig(config string) error {
+func (f *fetcher) parseConfig(config string) ([]*feed, error) {
 	predecl := starlark.StringDict{
 		"feed": starlark.NewBuiltin("feed", feedFunc),
 	}
@@ -597,12 +603,12 @@ func (f *fetcher) parseConfig(config string) error {
 		predecl,
 	)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	feedsList, ok := globals["feeds"].(*starlark.List)
 	if !ok {
-		return errors.New("feeds must be defined and be a list")
+		return nil, errors.New("feeds must be defined and be a list")
 	}
 
 	var feeds []*feed
@@ -615,8 +621,7 @@ func (f *fetcher) parseConfig(config string) error {
 		feeds = append(feeds, feed)
 	}
 
-	f.feeds = feeds
-	return nil
+	return feeds, nil
 }
 
 func (f *fetcher) saveToGist(ctx context.Context) error {
