@@ -48,6 +48,7 @@ The feed item passed to block_rule and keep_rule is a struct with the following
 keys:
 
   - title: The title of the item.
+  - url: The URL of the item.
   - description: The description of the item.
   - content: The content of the item.
   - categories: A list of categories the item belongs to.
@@ -846,6 +847,7 @@ func (f *fetcher) applyRule(rule *starlark.Function, item *gofeed.Item) (starlar
 			starlarkstruct.Default,
 			starlark.StringDict{
 				"title":       starlark.String(item.Title),
+				"url":         starlark.String(item.Link),
 				"description": starlark.String(item.Description),
 				"content":     starlark.String(item.Content),
 				"categories":  starlark.NewList(categories),

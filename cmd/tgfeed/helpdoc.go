@@ -50,6 +50,7 @@ The feed item passed to block_rule and keep_rule is a struct with the following
 keys:
 
   - title: The title of the item.
+  - url: The URL of the item.
   - description: The description of the item.
   - content: The content of the item.
   - categories: A list of categories the item belongs to.
