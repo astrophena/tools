@@ -9,8 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"go.astrophena.name/tools/internal/util/starlarkconv"
-
 	"go.starlark.net/starlark"
 	"go.starlark.net/starlarkstruct"
 )
@@ -28,7 +26,7 @@ import (
 // The ttl argument specifies the time-to-live duration after which a cache entry will expire.
 func Module(ttl time.Duration) *starlarkstruct.Module {
 	m := &module{
-		cache: make(map[int64]cacheEntry),
+		cache: make(map[int64]*cacheEntry),
 		ttl:   ttl,
 	}
 	return &starlarkstruct.Module{
@@ -43,7 +41,7 @@ func Module(ttl time.Duration) *starlarkstruct.Module {
 
 type module struct {
 	mu    sync.Mutex
-	cache map[int64]cacheEntry
+	cache map[int64]*cacheEntry
 	ttl   time.Duration
 }
 
@@ -75,7 +73,12 @@ func (m *module) get(thread *starlark.Thread, b *starlark.Builtin, args starlark
 	entry.lastAccessed = time.Now()
 	m.cache[chatID] = entry
 
-	return starlarkconv.ToValue(entry.value)
+	var values []starlark.Value
+	for _, val := range entry.value {
+		values = append(values, starlark.String(val))
+	}
+
+	return starlark.NewList(values), nil
 }
 
 func (m *module) append(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
@@ -92,7 +95,7 @@ func (m *module) append(thread *starlark.Thread, b *starlark.Builtin, args starl
 	if ok {
 		entry.value = append(entry.value, message)
 	} else {
-		entry = cacheEntry{
+		entry = &cacheEntry{
 			value:        []string{message},
 			lastAccessed: time.Now(),
 		}
