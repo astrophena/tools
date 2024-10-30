@@ -17,7 +17,15 @@ variable.
 # Configuration
 
 tgfeed loads it's configuration from config.star file on GitHub Gist. This file
-is written in Starlark language and defines a list of feeds.
+is written in Starlark language and defines a list of feeds, for example:
+
+	feeds = [
+	    feed(
+	        url = "https://hnrss.org/newest",
+	        title = "Hacker News: Newest",
+	        block_rule = lambda item: "pdf" in item.title.lower(), # Block PDF files.
+	    )
+	]
 
 Each feed can have a title, URL, and optional block and keep rules.
 
