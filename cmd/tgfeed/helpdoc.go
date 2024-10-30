@@ -9,12 +9,22 @@ package main
 const helpDoc = `
 Tgfeed fetches RSS feeds and sends new articles via Telegram.
 
-# How it works?
+# Environment variables
 
-tgfeed runs as a GitHub Actions workflow.
+The tgfeed program relies on the following environment variables:
 
-New articles are sent to a Telegram chat specified by the CHAT_ID environment
-variable.
+  - CHAT_ID: Telegram chat ID where the program sends new articles.
+  - GIST_ID: GitHub Gist ID where the program stores its state.
+  - GITHUB_TOKEN: GitHub personal access token for accessing the GitHub API.
+  - TELEGRAM_TOKEN: Telegram bot token for accessing the Telegram Bot API.
+  - STATS_SPREADSHEET_ID: ID of the Google Spreadsheet to which the
+    program uploads statistics for every run. This is required if the
+    SERVICE_ACCOUNT_KEY is provided.
+  - STATS_SPREADSHEET_RANGE: Range of the Google Spreadsheet to which the
+    program uploads statistics for every run. Defaults to "Stats".
+  - SERVICE_ACCOUNT_KEY: JSON string representing the service account key for
+    accessing the Google API. It's not required, and stats won't be uploaded to
+    a spreadsheet if this variable is not set.
 
 # Configuration
 
@@ -44,7 +54,7 @@ keys:
   - content: The content of the item.
   - categories: A list of categories the item belongs to.
 
-# Where it keeps state?
+# State
 
 tgfeed stores it's state on GitHub Gist.
 
@@ -53,21 +63,6 @@ time, ETag, error count, and last error message. It keeps track of failing
 feeds and disables them after a certain threshold of consecutive failures.
 State information is stored and updated in the state.json file on GitHub Gist.
 You won't need to touch this file at all, except from very rare cases.
-
-# Environment variables
-
-The tgfeed program relies on the following environment variables:
-
-  - CHAT_ID: Telegram chat ID where the program sends new articles.
-  - GIST_ID: GitHub Gist ID where the program stores its state.
-  - GITHUB_TOKEN: GitHub personal access token for accessing the GitHub API.
-  - TELEGRAM_TOKEN: Telegram bot token for accessing the Telegram Bot API.
-  - STATS_SPREADSHEET_ID: ID of the Google Spreadsheet to which the
-    program uploads statistics for every run. This is required if the
-    SERVICE_ACCOUNT_KEY is provided.
-  - SERVICE_ACCOUNT_KEY: JSON string representing the service account key for
-    accessing the Google API. It's not required, and stats won't be uploaded to
-    a spreadsheet if this variable is not set.
 
 # Stats collection
 

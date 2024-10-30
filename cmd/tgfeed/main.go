@@ -7,12 +7,22 @@
 /*
 Tgfeed fetches RSS feeds and sends new articles via Telegram.
 
-# How it works?
+# Environment variables
 
-tgfeed runs as a GitHub Actions workflow.
+The tgfeed program relies on the following environment variables:
 
-New articles are sent to a Telegram chat specified by the CHAT_ID environment
-variable.
+  - CHAT_ID: Telegram chat ID where the program sends new articles.
+  - GIST_ID: GitHub Gist ID where the program stores its state.
+  - GITHUB_TOKEN: GitHub personal access token for accessing the GitHub API.
+  - TELEGRAM_TOKEN: Telegram bot token for accessing the Telegram Bot API.
+  - STATS_SPREADSHEET_ID: ID of the Google Spreadsheet to which the program uploads
+    statistics for every run. This is required if the SERVICE_ACCOUNT_KEY is
+    provided.
+  - STATS_SPREADSHEET_RANGE: Range of the Google Spreadsheet to which the
+    program uploads statistics for every run. Defaults to "Stats".
+  - SERVICE_ACCOUNT_KEY: JSON string representing the service account key for
+    accessing the Google API. It's not required, and stats won't be uploaded to a
+    spreadsheet if this variable is not set.
 
 # Configuration
 
@@ -42,7 +52,7 @@ keys:
   - content: The content of the item.
   - categories: A list of categories the item belongs to.
 
-# Where it keeps state?
+# State
 
 tgfeed stores it's state on GitHub Gist.
 
@@ -51,21 +61,6 @@ time, ETag, error count, and last error message. It keeps track of failing feeds
 and disables them after a certain threshold of consecutive failures. State
 information is stored and updated in the state.json file on GitHub Gist. You
 won't need to touch this file at all, except from very rare cases.
-
-# Environment variables
-
-The tgfeed program relies on the following environment variables:
-
-  - CHAT_ID: Telegram chat ID where the program sends new articles.
-  - GIST_ID: GitHub Gist ID where the program stores its state.
-  - GITHUB_TOKEN: GitHub personal access token for accessing the GitHub API.
-  - TELEGRAM_TOKEN: Telegram bot token for accessing the Telegram Bot API.
-  - STATS_SPREADSHEET_ID: ID of the Google Spreadsheet to which the program uploads
-    statistics for every run. This is required if the SERVICE_ACCOUNT_KEY is
-    provided.
-  - SERVICE_ACCOUNT_KEY: JSON string representing the service account key for
-    accessing the Google API. It's not required, and stats won't be uploaded to a
-    spreadsheet if this variable is not set.
 
 # Stats collection
 
@@ -207,6 +202,7 @@ func (f *fetcher) main(
 	f.ghToken = cmp.Or(f.ghToken, getenv("GITHUB_TOKEN"))
 	f.gistID = cmp.Or(f.gistID, getenv("GIST_ID"))
 	f.statsSpreadsheetID = cmp.Or(f.statsSpreadsheetID, getenv("STATS_SPREADSHEET_ID"))
+	f.statsSpreadsheetRange = cmp.Or(f.statsSpreadsheetRange, getenv("STATS_SPREADSHEET_RANGE"), "Stats")
 	f.tgToken = cmp.Or(f.tgToken, getenv("TELEGRAM_TOKEN"))
 
 	// Load Google service account key from SERVICE_ACCOUNT_KEY environment
@@ -262,9 +258,10 @@ type fetcher struct {
 
 	errorTemplate string
 
-	stats              *stats
-	serviceAccountKey  *serviceaccount.Key
-	statsSpreadsheetID string
+	stats                 *stats
+	serviceAccountKey     *serviceaccount.Key
+	statsSpreadsheetID    string
+	statsSpreadsheetRange string
 
 	mu    sync.Mutex
 	state map[string]*feedState
@@ -669,6 +666,11 @@ func (f *fetcher) reportStats(ctx context.Context) error {
 	f.stats.mu.Lock()
 	defer f.stats.mu.Unlock()
 
+	sheetRange := f.statsSpreadsheetRange
+	if sheetRange == "" {
+		sheetRange = "Stats"
+	}
+
 	tok, err := f.serviceAccountKey.AccessToken(ctx, f.httpc, "https://www.googleapis.com/auth/spreadsheets")
 	if err != nil {
 		return err
@@ -680,7 +682,7 @@ func (f *fetcher) reportStats(ctx context.Context) error {
 		MajorDimension string     `json:"majorDimension"`
 		Values         [][]string `json:"values"`
 	}{
-		Range: "Stats",
+		Range: sheetRange,
 		// https://developers.google.com/sheets/api/reference/rest/v4/Dimension
 		MajorDimension: "ROWS",
 		Values: [][]string{
@@ -702,7 +704,7 @@ func (f *fetcher) reportStats(ctx context.Context) error {
 	_, err = request.Make[any](ctx, request.Params{
 		Method: http.MethodPost,
 		// https://developers.google.com/sheets/api/reference/rest/v4/ValueInputOption
-		URL:  "https://sheets.googleapis.com/v4/spreadsheets/" + f.statsSpreadsheetID + "/values/Stats:append?valueInputOption=USER_ENTERED",
+		URL:  "https://sheets.googleapis.com/v4/spreadsheets/" + f.statsSpreadsheetID + "/values/" + sheetRange + ":append?valueInputOption=USER_ENTERED",
 		Body: req,
 		Headers: map[string]string{
 			"Authorization": "Bearer " + tok,
