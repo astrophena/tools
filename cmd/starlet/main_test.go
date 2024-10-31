@@ -9,6 +9,7 @@ import (
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
+	_ "embed"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -24,6 +25,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -570,16 +572,119 @@ func TestSelfPing(t *testing.T) {
 	<-recv
 }
 
+//go:embed testdata/message.txtar
+var reloadTxtar []byte
+
+func TestReload(t *testing.T) {
+	t.Parallel()
+
+	tm := testMux(t, nil)
+	tm.gist = txtarToGist(t, reloadTxtar)
+	e := testEngine(t, tm)
+
+	cases := map[string]struct {
+		authHeader string
+		wantStatus int
+		wantBody   string
+	}{
+		"unauthorized": {
+			wantStatus: http.StatusUnauthorized,
+			wantBody:   `{"status":"error","error":"unauthorized"}`,
+		},
+		"authorized": {
+			authHeader: "Bearer " + e.reloadToken,
+			wantStatus: http.StatusOK,
+			wantBody:   `{"status":"success"}`,
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			r := httptest.NewRequest(http.MethodPost, "/reload", nil)
+			r.Header.Set("Authorization", tc.authHeader)
+			w := httptest.NewRecorder()
+
+			e.handleReload(w, r)
+
+			var got bytes.Buffer
+			if err := json.Compact(&got, w.Body.Bytes()); err != nil {
+				t.Fatal(err)
+			}
+
+			testutil.AssertEqual(t, w.Code, tc.wantStatus)
+			testutil.AssertEqual(t, got.String(), tc.wantBody)
+		})
+	}
+}
+
+func TestSetWebhook(t *testing.T) {
+	t.Parallel()
+
+	cases := map[string]struct {
+		host        string
+		wantSetHook bool
+		wantErr     error
+	}{
+		"host not set": {
+			wantErr: errNoHost,
+		},
+		"webhook set": {
+			host:        "bot.astrophena.name",
+			wantSetHook: true,
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			var called atomic.Bool
+
+			tm := testMux(t, map[string]http.HandlerFunc{
+				"POST api.telegram.org/{token}/setWebhook": func(w http.ResponseWriter, r *http.Request) {
+					testutil.AssertEqual(t, tgToken, strings.TrimPrefix(r.PathValue("token"), "bot"))
+					wantURL := "https://bot.astrophena.name/telegram"
+					gotURL := testutil.UnmarshalJSON[map[string]any](t, read(t, r.Body))["url"]
+					testutil.AssertEqual(t, gotURL, wantURL)
+
+					w.WriteHeader(http.StatusOK)
+					web.RespondJSON(w, map[string]bool{"ok": true})
+					called.Store(true)
+				},
+			})
+			e := testEngine(t, tm)
+			e.host = tc.host
+
+			err := e.setWebhook(context.Background())
+
+			if tc.wantErr != nil {
+				if err == nil || err.Error() != tc.wantErr.Error() {
+					t.Fatalf("wanted error %v, got %v", tc.wantErr, err)
+				}
+			} else if err != nil {
+				t.Fatal(err)
+			}
+
+			if tc.wantSetHook {
+				if !called.Load() {
+					t.Fatalf("setWebhook must be called for this case")
+				}
+			}
+		})
+	}
+}
+
 func testEngine(t *testing.T, m *mux) *engine {
 	t.Helper()
 	e := &engine{
-		ghToken:  "test",
-		gistID:   "test",
-		httpc:    testutil.MockHTTPClient(m.mux),
-		tgOwner:  123456789,
-		stderr:   logger.Logf(t.Logf),
-		tgSecret: "test",
-		tgToken:  tgToken,
+		ghToken:     "test",
+		gistID:      "test",
+		httpc:       testutil.MockHTTPClient(m.mux),
+		tgOwner:     123456789,
+		stderr:      logger.Logf(t.Logf),
+		reloadToken: "foobar",
+		tgSecret:    "test",
+		tgToken:     tgToken,
 	}
 	if err := e.init.Get(e.doInit); err != nil {
 		t.Fatal(err)

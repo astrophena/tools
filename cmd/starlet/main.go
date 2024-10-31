@@ -732,9 +732,11 @@ func (e *engine) readFile(thread *starlark.Thread, b *starlark.Builtin, args sta
 
 // Render environment {{{
 
+var errNoHost = errors.New("host hasn't set; pass it with -host flag or HOST environment variable")
+
 func (e *engine) setWebhook(ctx context.Context) error {
 	if e.host == "" {
-		return errors.New("host hasn't set; pass it with -host flag or HOST environment variable")
+		return errNoHost
 	}
 	u := &url.URL{
 		Scheme: "https",
