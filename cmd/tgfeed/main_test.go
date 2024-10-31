@@ -37,8 +37,6 @@ var (
 	defaultGistTxtar []byte
 )
 
-// TODO: Test keep and block rules, edit mode.
-
 var update = flag.Bool("update", false, "update golden files in testdata")
 
 func TestFetcherMain(t *testing.T) {
@@ -502,6 +500,28 @@ func (m *mux) state(t *testing.T) map[string]*feedState {
 		t.Fatal("state.json has not found in updated gist")
 	}
 	return testutil.UnmarshalJSON[map[string]*feedState](t, []byte(stateJSON.Content))
+}
+
+func TestFeedString(t *testing.T) {
+	cases := map[string]struct {
+		in   *feed
+		want string
+	}{
+		"simple": {
+			in:   &feed{url: "https://example.com/feed.xml"},
+			want: `<feed url="https://example.com/feed.xml">`,
+		},
+		"with title": {
+			in:   &feed{title: "example", url: "https://example.com/feed.xml"},
+			want: `<feed title="example" url="https://example.com/feed.xml">`,
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			testutil.AssertEqual(t, tc.in.String(), tc.want)
+		})
+	}
 }
 
 const (
