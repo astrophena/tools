@@ -43,8 +43,8 @@ Each feed can have a title, URL, and optional block and keep rules.
 
 Block and keep rules are Starlark functions that take a feed item as an argument
 and return a boolean value. If a block rule returns true, the item is not
-sent to Telegram. If a keep rule returns true, the item is sent to Telegram,
-even if it doesn't match other criteria.
+sent to Telegram. If a keep rule returns true, the item is sent to Telegram;
+otherwise, it is not.
 
 The feed item passed to block_rule and keep_rule is a struct with the following
 keys:

@@ -33,8 +33,8 @@ import (
 const tgToken = "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
 
 var (
-	//go:embed testdata/gists/main.txtar
-	gistTxtar []byte
+	//go:embed testdata/gists/default.txtar
+	defaultGistTxtar []byte
 )
 
 // TODO: Test keep and block rules, edit mode.
@@ -61,6 +61,20 @@ func TestFetcherMain(t *testing.T) {
 		"run": {
 			args:               []string{"-run"},
 			wantNothingPrinted: true,
+		},
+		"edit without any changes": {
+			args: []string{"-edit"},
+			env: map[string]string{
+				"EDITOR": "true",
+			},
+			wantInStderr: "No changes made to config.star, not doing anything.",
+		},
+		"edit without defined editor": {
+			args:    []string{"-edit"},
+			wantErr: errNoEditor,
+		},
+		"list feeds": {
+			args: []string{"-feeds"},
 		},
 		"reenable disabled feed": {
 			args:               []string{"-reenable", "https://example.com/disabled.xml"},
@@ -93,10 +107,11 @@ func TestFetcherMain(t *testing.T) {
 
 			var (
 				f              = testFetcher(t, testMux(t, nil))
+				stdin          = strings.NewReader("")
 				stdout, stderr bytes.Buffer
 			)
 
-			err := f.main(context.Background(), tc.args, getenvFunc(tc.env), &stdout, &stderr)
+			err := f.main(context.Background(), tc.args, getenvFunc(tc.env), stdin, &stdout, &stderr)
 
 			// Don't use && because we want to trap all cases where err is
 			// nil.
@@ -357,6 +372,93 @@ func TestReportStats(t *testing.T) {
 	}
 }
 
+func TestBlockAndKeepRules(t *testing.T) {
+	cases := map[string]struct {
+		config string
+		// Titles of the messages expected to be sent. Empty slice if no messages are expected.
+		wantSentTitles []string
+	}{
+		"block rule blocks": {
+			config: `
+feeds = [
+    feed(
+        url = "https://example.com/feed.xml",
+        block_rule = lambda item: "block" in item.title.lower(),
+    )
+]
+`,
+			wantSentTitles: []string{"Keep this item"},
+		},
+		"keep rule keeps": {
+			config: `
+feeds = [
+    feed(
+        url = "https://example.com/feed.xml",
+        keep_rule = lambda item: "keep" in item.title.lower(),
+    )
+]
+`,
+			wantSentTitles: []string{"Keep this item"},
+		},
+		"no rules, sends all items": {
+			config: `
+feeds = [
+    feed(
+        url = "https://example.com/feed.xml",
+    )
+]
+`,
+			wantSentTitles: []string{"Block this item", "Keep this item"},
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			tm := testMux(t, map[string]http.HandlerFunc{
+				"GET example.com/feed.xml": func(w http.ResponseWriter, r *http.Request) {
+					w.Write([]byte(`
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xml:lang="en-US">
+  <title>Example Feed</title>
+  <link href="https://example.com/feed.xml" rel="self" type="application/rss+xml"/>
+
+  <entry>
+	<title>Block this item</title>
+	<updated>2024-03-10T00:00:00Z</updated>
+	<link href="https://example.com/block"/>
+  </entry>
+  <entry>
+	<title>Keep this item</title>
+	<updated>2024-03-10T00:00:00Z</updated>
+	<link href="https://example.com/keep"/>
+  </entry>
+</feed>`))
+				},
+			})
+
+			state := map[string]*feedState{
+				"https://example.com/feed.xml": {
+					LastUpdated: time.Time{},
+				},
+			}
+			ar := &txtar.Archive{
+				Files: []txtar.File{
+					{Name: "config.star", Data: []byte(tc.config)},
+					{Name: "state.json", Data: toJSON(t, state)},
+				},
+			}
+			tm.gist = txtarToGist(t, txtar.Format(ar))
+
+			f := testFetcher(t, tm)
+			if err := f.run(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+
+			testutil.AssertEqual(t, len(tm.sentMessages), len(tc.wantSentTitles))
+		})
+	}
+}
+
 func readJSON(t *testing.T, r io.Reader, v any) {
 	if err := json.NewDecoder(r).Decode(v); err != nil {
 		t.Fatal(err)
@@ -380,7 +482,7 @@ func testFetcher(t *testing.T, m *mux) *fetcher {
 		tgToken: tgToken,
 		chatID:  "test",
 	}
-	f.initOnce.Do(f.doInit)
+	f.init.Do(f.doInit)
 	return f
 }
 
@@ -418,7 +520,7 @@ func testMux(t *testing.T, overrides map[string]http.HandlerFunc) *mux {
 			w.Write(m.gist)
 			return
 		}
-		w.Write(txtarToGist(t, gistTxtar))
+		w.Write(txtarToGist(t, defaultGistTxtar))
 	}))
 	m.mux.HandleFunc(patchGist, orHandler(overrides[patchGist], func(w http.ResponseWriter, r *http.Request) {
 		testutil.AssertEqual(t, r.Header.Get("Authorization"), "Bearer superdupersecret")
@@ -477,5 +579,13 @@ func txtarToGist(t *testing.T, b []byte) []byte {
 		t.Fatal(err)
 	}
 
+	return b
+}
+
+func toJSON(t *testing.T, val any) []byte {
+	b, err := json.Marshal(val)
+	if err != nil {
+		t.Fatal(err)
+	}
 	return b
 }
