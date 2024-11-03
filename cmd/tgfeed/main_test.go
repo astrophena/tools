@@ -301,7 +301,9 @@ func TestFetchWithIfModifiedSinceAndETag(t *testing.T) {
 
 	testutil.AssertEqual(t, state1["https://example.com/feed.xml"].LastModified, ifModifiedSince)
 	testutil.AssertEqual(t, state1["https://example.com/feed.xml"].ETag, eTag)
-	testutil.AssertEqual(t, f.stats.NotModifiedFeeds, 0)
+	f.stats.Access(func(s *stats) {
+		testutil.AssertEqual(t, s.NotModifiedFeeds, 0)
+	})
 
 	// Second fetch, should use If-Modified-Since and ETag and get 304.
 	if err := f.run(context.Background()); err != nil {
@@ -312,7 +314,9 @@ func TestFetchWithIfModifiedSinceAndETag(t *testing.T) {
 
 	testutil.AssertEqual(t, state2["https://example.com/feed.xml"].LastModified, ifModifiedSince)
 	testutil.AssertEqual(t, state2["https://example.com/feed.xml"].ETag, eTag)
-	testutil.AssertEqual(t, f.stats.NotModifiedFeeds, 1)
+	f.stats.Access(func(s *stats) {
+		testutil.AssertEqual(t, s.NotModifiedFeeds, 1)
+	})
 }
 
 //go:embed testdata/serviceaccount.json
@@ -355,7 +359,7 @@ func TestReportStats(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	f.stats = &stats{
+	s := &stats{
 		TotalFeeds:       1,
 		SuccessFeeds:     1,
 		StartTime:        time.Date(2024, 6, 22, 12, 0, 0, 0, time.UTC),
@@ -365,7 +369,7 @@ func TestReportStats(t *testing.T) {
 		MemoryUsage:      1000,
 	}
 
-	if err := f.reportStats(context.Background()); err != nil {
+	if err := f.reportStats(context.Background(), s); err != nil {
 		t.Fatal(err)
 	}
 }

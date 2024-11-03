@@ -7,6 +7,31 @@ package syncx
 
 import "sync"
 
+// Protect wraps T into [Protected].
+func Protect[T any](val T) *Protected[T] { return &Protected[T]{val: val} }
+
+// Protected provides synchronized access to a value of type T.
+type Protected[T any] struct {
+	mu  sync.RWMutex
+	val T
+}
+
+// RAccess provides read access to the protected value.
+// It executes the provided function f with the value under a read lock.
+func (p *Protected[T]) RAccess(f func(T)) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	f(p.val)
+}
+
+// Access provides write access to the protected value.
+// It executes the provided function f with the value under a write lock.
+func (p *Protected[T]) Access(f func(T)) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	f(p.val)
+}
+
 // Lazy represents a lazily computed value.
 type Lazy[T any] struct {
 	once sync.Once
@@ -26,7 +51,7 @@ func (l *Lazy[T]) GetErr(f func() (T, error)) (T, error) {
 	return l.val, l.err
 }
 
-// LimitedWaitGroup is a version of [sync.WaitGroup] that that limits the
+// LimitedWaitGroup is a version of [sync.WaitGroup] that limits the
 // number of concurrently working goroutines by using a buffered channel
 // as a semaphore.
 type LimitedWaitGroup struct {
@@ -59,6 +84,4 @@ func (lwg *LimitedWaitGroup) Done() {
 }
 
 // Wait blocks until the counter of the LimitedWaitGroup becomes zero.
-func (lwg *LimitedWaitGroup) Wait() {
-	lwg.wg.Wait()
-}
+func (lwg *LimitedWaitGroup) Wait() { lwg.wg.Wait() }

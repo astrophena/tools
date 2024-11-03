@@ -14,6 +14,50 @@ import (
 	"go.astrophena.name/base/testutil"
 )
 
+func TestProtected(t *testing.T) {
+	t.Parallel()
+
+	t.Run("read access", func(t *testing.T) {
+		p := Protect(42)
+		var result int
+		p.RAccess(func(val int) {
+			result = val
+		})
+		testutil.AssertEqual(t, result, 42)
+	})
+
+	t.Run("write access", func(t *testing.T) {
+		var i int
+		p := Protect(&i)
+		p.Access(func(val *int) {
+			*val = 43 // Modify the value.
+		})
+		var result int
+		p.RAccess(func(val *int) { result = *val }) // Verify change.
+		testutil.AssertEqual(t, result, 43)
+	})
+
+	t.Run("concurrent access", func(t *testing.T) {
+		var i int
+		p := Protect(&i)
+		var wg sync.WaitGroup
+		for range 100 {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				p.Access(func(val *int) {
+					*val += 1
+				})
+			}()
+		}
+		wg.Wait()
+
+		var result int
+		p.RAccess(func(val *int) { result = *val })
+		testutil.AssertEqual(t, result, 100)
+	})
+}
+
 func TestLazy(t *testing.T) {
 	t.Parallel()
 

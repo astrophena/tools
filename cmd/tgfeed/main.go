@@ -170,13 +170,6 @@ func (f *fetcher) main(
 	stdin io.Reader,
 	stdout, stderr io.Writer,
 ) error {
-	// Check if this fetcher is already running.
-	if f.running.Load() {
-		return errAlreadyRunning
-	}
-	f.running.Store(true)
-	defer f.running.Store(false)
-
 	// Initialize logger.
 	f.logf = log.New(stderr, "", 0).Printf
 
@@ -268,7 +261,7 @@ type fetcher struct {
 	mu            sync.Mutex // protects state
 	state         map[string]*feedState
 
-	stats *stats
+	stats *syncx.Protected[*stats]
 }
 
 func (f *fetcher) doInit() {
@@ -401,10 +394,17 @@ func (f *fetcher) edit( // {{{
 } // }}}
 
 func (f *fetcher) run(ctx context.Context) error { // {{{
-	// Start with empty stats for every run.
-	f.stats = &stats{
-		StartTime: time.Now(),
+	// Check if this fetcher is already running.
+	if f.running.Load() {
+		return errAlreadyRunning
 	}
+	f.running.Store(true)
+	defer f.running.Store(false)
+
+	// Start with empty stats for every run.
+	f.stats = syncx.Protect(&stats{
+		StartTime: time.Now(),
+	})
 
 	if err := f.loadFromGist(ctx); err != nil {
 		return fmt.Errorf("fetching gist failed: %w", err)
@@ -464,19 +464,21 @@ func (f *fetcher) run(ctx context.Context) error { // {{{
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
 
-	f.modifyStats(func(s *stats) {
+	f.stats.Access(func(s *stats) {
 		s.Duration = time.Since(s.StartTime)
 		s.TotalFeeds = len(f.feeds)
 		if s.SuccessFeeds > 0 {
 			s.AvgFetchTime = s.TotalFetchTime / time.Duration(s.SuccessFeeds)
 		}
-		f.stats.MemoryUsage = m.Alloc
+		s.MemoryUsage = m.Alloc
 	})
 
 	if f.serviceAccountKey != nil && f.statsSpreadsheetID != "" {
-		if err := f.reportStats(ctx); err != nil {
-			f.logf("Failed to report stats: %v", err)
-		}
+		f.stats.Access(func(s *stats) {
+			if err := f.reportStats(ctx, s); err != nil {
+				f.logf("Failed to report stats: %v", err)
+			}
+		})
 	}
 
 	return f.saveToGist(ctx)
@@ -678,8 +680,6 @@ func (f *fetcher) saveToGist(ctx context.Context) error {
 // Stats {{{
 
 type stats struct {
-	mu sync.Mutex
-
 	TotalFeeds       int `json:"total_feeds"`
 	SuccessFeeds     int `json:"success_feeds"`
 	FailedFeeds      int `json:"failed_feeds"`
@@ -695,16 +695,7 @@ type stats struct {
 	MemoryUsage uint64 `json:"memory_usage"`
 }
 
-func (f *fetcher) modifyStats(fn func(s *stats)) {
-	f.stats.mu.Lock()
-	defer f.stats.mu.Unlock()
-	fn(f.stats)
-}
-
-func (f *fetcher) reportStats(ctx context.Context) error {
-	f.stats.mu.Lock()
-	defer f.stats.mu.Unlock()
-
+func (f *fetcher) reportStats(ctx context.Context, s *stats) error {
 	sheetRange := f.statsSpreadsheetRange
 	if sheetRange == "" {
 		sheetRange = "Stats"
@@ -726,16 +717,16 @@ func (f *fetcher) reportStats(ctx context.Context) error {
 		MajorDimension: "ROWS",
 		Values: [][]string{
 			{
-				fmt.Sprintf("%d", f.stats.TotalFeeds),
-				fmt.Sprintf("%d", f.stats.SuccessFeeds),
-				fmt.Sprintf("%d", f.stats.FailedFeeds),
-				fmt.Sprintf("%d", f.stats.NotModifiedFeeds),
-				f.stats.StartTime.Format(time.RFC3339),
-				f.stats.Duration.String(),
-				fmt.Sprintf("%d", f.stats.TotalItemsParsed),
-				f.stats.TotalFetchTime.String(),
-				f.stats.AvgFetchTime.String(),
-				fmt.Sprintf("%d", f.stats.MemoryUsage),
+				fmt.Sprintf("%d", s.TotalFeeds),
+				fmt.Sprintf("%d", s.SuccessFeeds),
+				fmt.Sprintf("%d", s.FailedFeeds),
+				fmt.Sprintf("%d", s.NotModifiedFeeds),
+				s.StartTime.Format(time.RFC3339),
+				s.Duration.String(),
+				fmt.Sprintf("%d", s.TotalItemsParsed),
+				s.TotalFetchTime.String(),
+				s.AvgFetchTime.String(),
+				fmt.Sprintf("%d", s.MemoryUsage),
 			},
 		},
 	}
@@ -802,7 +793,7 @@ func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *gofeed.Item
 
 	// Ignore unmodified feeds and report an error otherwise.
 	if res.StatusCode == http.StatusNotModified {
-		f.modifyStats(func(s *stats) {
+		f.stats.Access(func(s *stats) {
 			s.NotModifiedFeeds += 1
 		})
 		return
@@ -855,7 +846,7 @@ func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *gofeed.Item
 	state.LastError = ""
 	state.FetchCount += 1
 
-	f.modifyStats(func(s *stats) {
+	f.stats.Access(func(s *stats) {
 		s.TotalItemsParsed += len(feed.Items)
 		s.SuccessFeeds += 1
 		s.TotalFetchTime += time.Since(startTime)
@@ -898,7 +889,7 @@ func (f *fetcher) applyRule(rule *starlark.Function, item *gofeed.Item) bool {
 }
 
 func (f *fetcher) handleFetchFailure(ctx context.Context, state *feedState, url string, err error) {
-	f.modifyStats(func(s *stats) {
+	f.stats.Access(func(s *stats) {
 		s.FailedFeeds += 1
 	})
 
