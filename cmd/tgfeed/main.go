@@ -181,6 +181,7 @@ func (f *fetcher) main(
 		Flags:       flag.NewFlagSet("tgfeed", flag.ContinueOnError),
 	}
 	var (
+		dry      = a.Flags.Bool("dry", false, "Don't send updates and update state when running, log everything instead.")
 		feeds    = a.Flags.Bool("feeds", false, "List available feeds.")
 		edit     = a.Flags.Bool("edit", false, "Edit config.star file in your EDITOR.")
 		reenable = a.Flags.String("reenable", "", "Reenable disabled `feed`.")
@@ -215,6 +216,10 @@ func (f *fetcher) main(
 	// Initialize internal state.
 	f.init.Do(f.doInit)
 
+	if *dry {
+		f.dry = true
+	}
+
 	// Choose a mode based on passed flags and run it.
 	switch {
 	case *feeds:
@@ -240,6 +245,7 @@ type fetcher struct {
 
 	// configuration
 	chatID                string
+	dry                   bool
 	ghToken               string
 	gistID                string
 	logf                  logger.Logf
@@ -262,6 +268,13 @@ type fetcher struct {
 	state         map[string]*feedState
 
 	stats *syncx.Protected[*stats]
+}
+
+func (f *fetcher) dlogf(format string, args ...any) {
+	if !f.dry {
+		return
+	}
+	f.logf(format, args...)
 }
 
 func (f *fetcher) doInit() {
@@ -442,12 +455,15 @@ func (f *fetcher) run(ctx context.Context) error { // {{{
 		baseWg.Done()
 	}()
 
+	var fetchedFeeds atomic.Int64
+
 	// Enqueue fetches.
 	fetchWg := syncx.NewLimitedWaitGroup(concurrencyLimit)
 	for _, feed := range shuffle(f.feeds) {
 		fetchWg.Add(1)
 		go func() {
 			defer fetchWg.Done()
+			defer fetchedFeeds.Add(1)
 			f.fetch(ctx, feed, updates)
 		}()
 	}
@@ -472,6 +488,12 @@ func (f *fetcher) run(ctx context.Context) error { // {{{
 		}
 		s.MemoryUsage = m.Alloc
 	})
+
+	if f.dry {
+		f.logf("Fetched feeds: %d.\nAll feeds: %d.", fetchedFeeds.Load(), len(f.feeds))
+		f.logf("Not reporting stats or saving state.")
+		return nil
+	}
 
 	if f.serviceAccountKey != nil && f.statsSpreadsheetID != "" {
 		f.stats.Access(func(s *stats) {
@@ -758,6 +780,7 @@ func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *gofeed.Item
 	// date to current so we don't get a lot of unread articles and trigger
 	// Telegram Bot API rate limit.
 	if !exists {
+		f.dlogf("State for feed %q doesn't exist, creating it.", fd.url)
 		f.mu.Lock()
 		f.state[fd.url] = new(feedState)
 		state = f.state[fd.url]
@@ -767,6 +790,7 @@ func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *gofeed.Item
 
 	// Skip disabled feeds.
 	if state.Disabled {
+		f.dlogf("Skipping disabled feed %q.", fd.url)
 		return
 	}
 
@@ -793,6 +817,7 @@ func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *gofeed.Item
 
 	// Ignore unmodified feeds and report an error otherwise.
 	if res.StatusCode == http.StatusNotModified {
+		f.dlogf("Feed %q was unmodified since last fetch.", fd.url)
 		f.stats.Access(func(s *stats) {
 			s.NotModifiedFeeds += 1
 		})
@@ -826,15 +851,15 @@ func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *gofeed.Item
 		}
 
 		if fd.blockRule != nil {
-			blocked := f.applyRule(fd.blockRule, item)
-			if blocked {
+			if blocked := f.applyRule(fd.blockRule, item); blocked {
+				f.dlogf("Item %q was blocked due to block rule.", item.Link)
 				continue
 			}
 		}
 
 		if fd.keepRule != nil {
-			keep := f.applyRule(fd.keepRule, item)
-			if !keep {
+			if keep := f.applyRule(fd.keepRule, item); !keep {
+				f.dlogf("Item %q was not kept due to keep rule.", item.Link)
 				continue
 			}
 		}
@@ -882,7 +907,7 @@ func (f *fetcher) applyRule(rule *starlark.Function, item *gofeed.Item) bool {
 
 	ret, ok := val.(starlark.Bool)
 	if !ok {
-		f.logf("Rule for item %q returned not a boolean", item.Link)
+		f.logf("Rule for item %q returned not a boolean value.", item.Link)
 		return false
 	}
 	return bool(ret)
@@ -896,6 +921,8 @@ func (f *fetcher) handleFetchFailure(ctx context.Context, state *feedState, url 
 	state.FetchFailCount += 1
 	state.ErrorCount += 1
 	state.LastError = err.Error()
+
+	f.dlogf("Feed %q failed with an error: %v", url, err)
 
 	// Complain loudly and disable feed, if we failed previously enough.
 	if state.ErrorCount >= errorThreshold {
@@ -928,6 +955,12 @@ func (f *fetcher) sendUpdate(ctx context.Context, item *gofeed.Item) {
 			Text: "↪ Hacker News",
 			URL:  item.GUID,
 		})
+	}
+
+	// If in dry mode, simply log the message, but don't send it.
+	if f.dry {
+		f.logf("Will send message:\n\t%s\n", msg)
+		return
 	}
 
 	if err := f.send(ctx, strings.TrimSpace(msg), func(args map[string]any) {
