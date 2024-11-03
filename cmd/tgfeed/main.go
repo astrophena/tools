@@ -264,8 +264,7 @@ type fetcher struct {
 	config        string
 	feeds         []*feed
 	errorTemplate string
-	mu            sync.Mutex // protects state
-	state         map[string]*feedState
+	state         *syncx.Protected[map[string]*feedState]
 
 	stats *syncx.Protected[*stats]
 }
@@ -608,9 +607,9 @@ type feedState struct {
 }
 
 func (f *fetcher) getState(url string) (state *feedState, exists bool) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	state, exists = f.state[url]
+	f.state.RAccess(func(s map[string]*feedState) {
+		state, exists = s[url]
+	})
 	return
 }
 
@@ -638,11 +637,15 @@ func (f *fetcher) loadFromGist(ctx context.Context) error {
 		return err
 	}
 
-	f.state = make(map[string]*feedState)
+	stateMap := make(map[string]*feedState)
 	state, ok := g.Files["state.json"]
 	if ok {
-		return json.Unmarshal([]byte(state.Content), &f.state)
+		if err := json.Unmarshal([]byte(state.Content), &stateMap); err != nil {
+			return err
+		}
 	}
+	f.state = syncx.Protect(stateMap)
+
 	return nil
 }
 
@@ -683,7 +686,13 @@ func (f *fetcher) parseConfig(config string) ([]*feed, error) {
 }
 
 func (f *fetcher) saveToGist(ctx context.Context) error {
-	state, err := json.MarshalIndent(f.state, "", "  ")
+	var (
+		state []byte
+		err   error
+	)
+	f.state.RAccess(func(s map[string]*feedState) {
+		state, err = json.MarshalIndent(s, "", "  ")
+	})
 	if err != nil {
 		return err
 	}
@@ -781,10 +790,10 @@ func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *gofeed.Item
 	// Telegram Bot API rate limit.
 	if !exists {
 		f.dlogf("State for feed %q doesn't exist, creating it.", fd.url)
-		f.mu.Lock()
-		f.state[fd.url] = new(feedState)
-		state = f.state[fd.url]
-		f.mu.Unlock()
+		f.state.Access(func(s map[string]*feedState) {
+			s[fd.url] = new(feedState)
+			state = s[fd.url]
+		})
 		state.LastUpdated = time.Now()
 	}
 

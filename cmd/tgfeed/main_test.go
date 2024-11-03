@@ -78,7 +78,9 @@ func TestFetcherMain(t *testing.T) {
 			args:               []string{"-reenable", "https://example.com/disabled.xml"},
 			wantNothingPrinted: true,
 			checkFunc: func(t *testing.T, f *fetcher) {
-				testutil.AssertEqual(t, f.state["https://example.com/disabled.xml"].Disabled, false)
+				f.state.RAccess(func(s map[string]*feedState) {
+					testutil.AssertEqual(t, s["https://example.com/disabled.xml"].Disabled, false)
+				})
 			},
 		},
 		"reenable non-existent feed": {
