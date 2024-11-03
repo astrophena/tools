@@ -10,6 +10,7 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"go/build"
 	"go/format"
 	"io/fs"
@@ -34,8 +35,11 @@ func main() {
 			return nil
 		}
 
-		out, err := exec.Command("go", "doc", path).Output()
+		out, err := exec.Command("go", "doc", "./"+path).Output()
 		if err != nil {
+			if exitErr, ok := err.(*exec.ExitError); ok {
+				return fmt.Errorf("`go doc` failed with %v: %s", exitErr, exitErr.Stderr)
+			}
 			return err
 		}
 

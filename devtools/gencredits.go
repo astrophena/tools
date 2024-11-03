@@ -109,13 +109,24 @@ type info struct {
 	Licenses []string `json:"licenses"`
 }
 
+var licensesCache = map[string]string{}
+
 func getLicenses(ctx context.Context, path, version string) (licenses string, err error) {
+	licenses, ok := licensesCache[path+"@"+version]
+	if ok {
+		return licenses, nil
+	}
 	mod, err := request.Make[info](ctx, request.Params{
 		Method: http.MethodGet,
 		URL:    "https://api.deps.dev/v3alpha/systems/go/packages/" + url.PathEscape(path) + "/versions/" + version,
+		Headers: map[string]string{
+			"User-Agent": "gencredits (+https://astrophena.name/bleep-bloop)",
+		},
 	})
 	if err != nil {
 		return "", err
 	}
-	return strings.Join(mod.Licenses, ", "), nil
+	licenses = strings.Join(mod.Licenses, ", ")
+	licensesCache[path+"@"+version] = licenses
+	return licenses, nil
 }
