@@ -111,7 +111,8 @@ func (e *engine) doInit() {
 		e.logf = func(format string, args ...any) {}
 	}
 	e.md = &markdown.Parser{
-		Table: true,
+		Table:    true,
+		TaskList: true,
 	}
 }
 
