@@ -107,6 +107,7 @@ URLs of feeds that have encountered errors during fetching. For example:
 package main
 
 import (
+	"bufio"
 	"cmp"
 	"context"
 	"encoding/json"
@@ -379,31 +380,63 @@ func (f *fetcher) edit( // {{{
 		return err
 	}
 
-	cmd := exec.Command(editor, tmpfile.Name())
-	cmd.Stdin = stdin
-	cmd.Stdout = stdout
-	cmd.Stderr = stderr
-	if err := cmd.Run(); err != nil {
-		return err
+	for {
+		cmd := exec.Command(editor, tmpfile.Name())
+		cmd.Stdin = stdin
+		cmd.Stdout = stdout
+		cmd.Stderr = stderr
+		if err := cmd.Run(); err != nil {
+			return err
+		}
+
+		edited, err := os.ReadFile(tmpfile.Name())
+		if err != nil {
+			return err
+		}
+		if string(edited) == f.config {
+			f.logf("No changes made to config.star, not doing anything.")
+			return nil
+		}
+
+		_, err = f.parseConfig(string(edited))
+		if err != nil {
+			f.logf("Edited file is invalid: %v.", err)
+			if f.ask("Do you want to try editing again?", stdin) {
+				continue
+			}
+			return err
+		}
+
+		f.config = string(edited)
+		break
 	}
 
-	edited, err := os.ReadFile(tmpfile.Name())
-	if err != nil {
-		return err
-	}
-	if string(edited) == f.config {
-		f.logf("No changes made to config.star, not doing anything.")
-		return nil
-	}
-
-	_, err = f.parseConfig(string(edited))
-	if err != nil {
-		return err
-	}
-
-	f.config = string(edited)
 	return f.saveToGist(ctx)
-} // }}}
+}
+
+// ask prompts the user for a yes or no answer.
+func (f *fetcher) ask(prompt string, stdin io.Reader) bool {
+	r := bufio.NewReader(stdin)
+	for {
+		fmt.Printf("%s (y/n): ", prompt)
+		input, err := r.ReadString('\n')
+		if err != nil {
+			f.logf("Error reading input, please try again.")
+			continue
+		}
+
+		input = strings.TrimSpace(strings.ToLower(input))
+
+		if input == "y" || input == "yes" {
+			return true
+		} else if input == "n" || input == "no" {
+			return false
+		}
+		f.logf("Invalid input. Please enter 'y' or 'n'.")
+	}
+}
+
+// }}}
 
 func (f *fetcher) run(ctx context.Context) error { // {{{
 	// Check if this fetcher is already running.
