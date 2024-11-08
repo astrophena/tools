@@ -55,7 +55,7 @@ func TestModule(t *testing.T) {
 
 		thread := &starlark.Thread{
 			Name:  "test",
-			Print: func(_ *starlark.Thread, msg string) { fmt.Fprintf(&buf, msg) },
+			Print: func(_ *starlark.Thread, msg string) { fmt.Fprint(&buf, msg) },
 		}
 
 		predecl := starlark.StringDict{

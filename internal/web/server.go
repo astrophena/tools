@@ -7,7 +7,6 @@ package web
 import (
 	"context"
 	"embed"
-	_ "embed"
 	"errors"
 	"fmt"
 	"log"

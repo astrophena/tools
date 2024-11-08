@@ -17,7 +17,7 @@ import (
 
 func handler(w http.ResponseWriter, r *http.Request) {
 	if strings.HasSuffix(r.URL.Path, "/redirect") {
-		http.Error(w, "redirect me!", 304)
+		http.Error(w, "redirect me!", http.StatusNotModified)
 		return
 	}
 	if r.Method == "GET" {

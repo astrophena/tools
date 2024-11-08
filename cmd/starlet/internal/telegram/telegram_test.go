@@ -99,7 +99,7 @@ print(result)
 
 			thread := &starlark.Thread{
 				Name:  "test",
-				Print: func(_ *starlark.Thread, msg string) { fmt.Fprintf(&buf, msg) },
+				Print: func(_ *starlark.Thread, msg string) { fmt.Fprint(&buf, msg) },
 			}
 			thread.SetLocal("context", context.Background())
 

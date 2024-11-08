@@ -194,4 +194,4 @@ func filesToFS(files map[string]string) fs.FS {
 
 type failFS struct{}
 
-func (_ *failFS) Open(name string) (fs.File, error) { return nil, errors.New("failed") }
+func (*failFS) Open(name string) (fs.File, error) { return nil, errors.New("failed") }

@@ -15,8 +15,8 @@ import (
 	"go.astrophena.name/base/request"
 	"go.astrophena.name/tools/internal/version"
 
+	starlarkjson "go.starlark.net/lib/json"
 	"go.starlark.net/starlark"
-	"go.starlark.net/starlarkjson"
 	"go.starlark.net/starlarkstruct"
 )
 

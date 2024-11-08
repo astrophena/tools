@@ -144,7 +144,7 @@ func TestRun(t *testing.T) {
 				t.Errorf("stderr must contain %q, got: %q", tc.wantInStderr, stderr.String())
 			}
 
-			if tc.wantFilesInDir != nil && len(tc.wantFilesInDir) > 0 {
+			if len(tc.wantFilesInDir) > 0 {
 				gotEntries, err := os.ReadDir(tmpDir)
 				if err != nil {
 					t.Fatal(err)
