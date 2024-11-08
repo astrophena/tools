@@ -4,7 +4,7 @@
 
 //go:build ignore
 
-// genreadme.go generates README.md from the documentation of the tools.
+// readme.go generates README.md from the documentation of the tools.
 
 package main
 
