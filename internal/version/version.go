@@ -25,7 +25,7 @@ type Info struct {
 	Arch    string `json:"arch"`     // runtime.GOARCH
 }
 
-// String implements the fmt.Stringer interface.
+// String implements the [fmt.Stringer] interface.
 func (i Info) String() string {
 	var sb strings.Builder
 
