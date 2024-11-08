@@ -4,10 +4,10 @@
 
 package devtools
 
-//go:generate go run devtools/gencredits.go
-//go:generate go run devtools/genhelpdoc.go
-//go:generate go run devtools/gencopyright.go
-//go:generate go run devtools/genreadme.go
+//go:generate go run devtools/gen/credits.go
+//go:generate go run devtools/gen/helpdoc.go
+//go:generate go run devtools/gen/copyright.go
+//go:generate go run devtools/gen/readme.go
 
 import (
 	"bytes"
@@ -31,6 +31,11 @@ func TestGofmt(t *testing.T) {
 	if diff := w.String(); diff != "" {
 		t.Fatalf("run gofmt on these files:\n\t%v", diff)
 	}
+}
+
+func TestStaticcheck(t *testing.T) {
+	var w bytes.Buffer
+	run(t, &w, "go", "run", "honnef.co/go/tools/cmd/staticcheck", "./...")
 }
 
 func run(t *testing.T, buf *bytes.Buffer, cmd string, args ...string) {

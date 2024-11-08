@@ -4,7 +4,7 @@
 
 //go:build ignore
 
-// gencopyright.go adds copyright header to each Go file.
+// copyright.go adds copyright header to each Go file.
 
 package main
 
