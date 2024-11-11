@@ -301,6 +301,13 @@ type getMeResponse struct {
 	} `json:"result"`
 }
 
+var (
+	//go:embed resources/logs.html
+	logsTmpl string
+	//go:embed resources/logs.js
+	logsJS []byte
+)
+
 func (e *engine) doInit() error {
 	if e.httpc == nil {
 		e.httpc = &http.Client{
@@ -459,7 +466,10 @@ func (e *engine) initRoutes() {
 	dbg.HandleFunc("logs", "Logs", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, logsTmpl, strings.Join(e.logStream.Lines(), ""), web.StaticFS.HashName("static/css/main.css"))
 	})
-	e.mux.HandleFunc("/debug/logs.js", func(w http.ResponseWriter, r *http.Request) { w.Write([]byte(logsJS)) })
+	e.mux.HandleFunc("/debug/logs.js", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+		w.Write(logsJS)
+	})
 	e.mux.Handle("/debug/log", e.logStream)
 
 	dbg.HandleFunc("reload", "Reload from gist", func(w http.ResponseWriter, r *http.Request) {
@@ -470,35 +480,6 @@ func (e *engine) initRoutes() {
 		http.Redirect(w, r, "/debug/", http.StatusFound)
 	})
 }
-
-const logsTmpl = `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="/%[2]s">
-<script src="/debug/logs.js"></script>
-<title>Logs</title>
-<script>
-</script>
-</head>
-<body>
-<main>
-<h1>Logs</h1>
-<p><i>The last 300 lines are displayed, and new ones are streamed automatically.</i></p>
-<pre><code id="logs">%[1]s</code></pre>
-</main>
-</body>
-</html>`
-
-const logsJS = `const maxLines = 300;
-new EventSource("/debug/log", { withCredentials: true }).addEventListener("logline", function(e) {
-  // Append line to whatever is in the pre block. Then, truncate number of lines to maxLines.
-  // This is extremely inefficient, since we're splitting into component lines and joining them
-  // back each time a line is added.
-  var txt = document.getElementById("logs").innerText + e.data + "\n";
-  document.getElementById("logs").innerText = txt.split('\n').slice(-maxLines).join('\n');
-});`
 
 func (e *engine) ensureLoaded(ctx context.Context) error {
 	e.loadGist.Do(func() { e.loadGistErr = e.loadFromGist(ctx) })
