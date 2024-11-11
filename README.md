@@ -7,7 +7,7 @@ This repository holds personal tools:
 - Dupfind finds duplicate files in a directory.
 - Kp reads passwords from KeePass databases.
 - Mdserve serves Markdown files from a directory.
-- Renamer renames files sequentially.
+- Renamer renames files in a specified directory sequentially, starting from a given number.
 - Starlet is a Telegram bot runner using Starlark.
 - Tgfeed fetches RSS feeds and sends new articles via Telegram.
 

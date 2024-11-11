@@ -7,5 +7,9 @@
 package main
 
 const helpDoc = `
-Renamer renames files sequentially.
+Renamer renames files in a specified directory sequentially, starting from a
+given number.
+
+It sorts the files based on name, time, size, or type before renaming. If a file
+with the new name already exists, it skips the file and continues to the next.
 `

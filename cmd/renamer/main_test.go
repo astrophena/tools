@@ -8,6 +8,8 @@ import (
 	"bytes"
 	"errors"
 	"flag"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -25,25 +27,42 @@ func TestRun(t *testing.T) {
 		args         []string
 		wantErr      error
 		extractTxtar string
+		writeGolden  bool
 		wantInStdout string
 		wantInStderr string
 	}{
-		"usage": {
+		"usage (no directory passed)": {
 			args:         []string{},
 			wantErr:      cli.ErrInvalidArgs,
 			wantInStderr: "renamer",
 		},
-		"version flag": {
+		"version": {
 			args:         []string{"-version"},
 			wantInStderr: "renamer",
 		},
-		"rename (123)": {
+		"rename (existing numbered)": {
 			args:         []string{"[TMPDIR]"},
-			extractTxtar: "testdata/123.txtar",
+			extractTxtar: "testdata/existing.txtar",
+			writeGolden:  true,
 		},
-		"rename (abc)": {
+		"rename (name sort mode)": {
 			args:         []string{"[TMPDIR]"},
-			extractTxtar: "testdata/abc.txtar",
+			extractTxtar: "testdata/name.txtar",
+			writeGolden:  true,
+		},
+		"rename (size sort mode)": {
+			args:         []string{"-sort", "size", "[TMPDIR]"},
+			extractTxtar: "testdata/size.txtar",
+			writeGolden:  true,
+		},
+		"rename (type sort mode)": {
+			args:         []string{"-sort", "type", "[TMPDIR]"},
+			extractTxtar: "testdata/type.txtar",
+			writeGolden:  true,
+		},
+		"rename (unknown sort mode)": {
+			args:    []string{"-sort", "foo", "[TMPDIR]"},
+			wantErr: errUnknownSortMode,
 		},
 	}
 
@@ -51,13 +70,14 @@ func TestRun(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			if tc.extractTxtar != "" {
-				tmpDir := t.TempDir()
-				for i, arg := range tc.args {
-					if arg == "[TMPDIR]" {
-						tc.args[i] = tmpDir
-					}
+			tmpDir := t.TempDir()
+			for i, arg := range tc.args {
+				if arg == "[TMPDIR]" {
+					tc.args[i] = tmpDir
 				}
+			}
+
+			if tc.extractTxtar != "" {
 				ar, err := txtar.ParseFile(tc.extractTxtar)
 				if err != nil {
 					t.Fatal(err)
@@ -86,24 +106,22 @@ func TestRun(t *testing.T) {
 			if tc.wantInStderr != "" && !strings.Contains(stderr.String(), tc.wantInStderr) {
 				t.Errorf("stderr must contain %q, got: %q", tc.wantInStderr, stderr.String())
 			}
+
+			if tc.extractTxtar != "" && tc.writeGolden {
+				golden := strings.TrimSuffix(tc.extractTxtar, filepath.Ext(tc.extractTxtar)) + ".golden"
+				got := testutil.BuildTxtar(t, tmpDir)
+				if *update {
+					if err := os.WriteFile(golden, got, 0o644); err != nil {
+						t.Fatalf("unable to write golden file %q: %v", golden, err)
+					}
+					return
+				}
+				want, err := os.ReadFile(golden)
+				if err != nil {
+					t.Fatalf("unable to read golden file %q: %v", golden, err)
+				}
+				testutil.AssertEqual(t, got, want)
+			}
 		})
 	}
-}
-
-func TestRename(t *testing.T) {
-	testutil.RunGolden(t, "testdata/*.txtar", func(t *testing.T, tc string) []byte {
-		tca, err := txtar.ParseFile(tc)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		dir := t.TempDir()
-		testutil.ExtractTxtar(t, tca, dir)
-
-		if err := rename(dir, 1, t.Logf); err != nil {
-			t.Fatal(err)
-		}
-
-		return testutil.BuildTxtar(t, dir)
-	}, *update)
 }
