@@ -459,6 +459,7 @@ func (e *engine) initRoutes() {
 	dbg.HandleFunc("logs", "Logs", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, logsTmpl, strings.Join(e.logStream.Lines(), ""), web.StaticFS.HashName("static/css/main.css"))
 	})
+	e.mux.HandleFunc("/debug/logs.js", func(w http.ResponseWriter, r *http.Request) { w.Write([]byte(logsJS)) })
 	e.mux.Handle("/debug/log", e.logStream)
 
 	dbg.HandleFunc("reload", "Reload from gist", func(w http.ResponseWriter, r *http.Request) {
@@ -476,16 +477,9 @@ const logsTmpl = `<!DOCTYPE html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="/%[2]s">
+<script src="/debug/logs.js"></script>
 <title>Logs</title>
 <script>
-const maxLines = 300;
-new EventSource("/debug/log", { withCredentials: true }).addEventListener("logline", function(e) {
-  // Append line to whatever is in the pre block. Then, truncate number of lines to maxLines.
-  // This is extremely inefficient, since we're splitting into component lines and joining them
-  // back each time a line is added.
-  var txt = document.getElementById("logs").innerText + e.data + "\n";
-  document.getElementById("logs").innerText = txt.split('\n').slice(-maxLines).join('\n');
-});
 </script>
 </head>
 <body>
@@ -496,6 +490,15 @@ new EventSource("/debug/log", { withCredentials: true }).addEventListener("logli
 </main>
 </body>
 </html>`
+
+const logsJS = `const maxLines = 300;
+new EventSource("/debug/log", { withCredentials: true }).addEventListener("logline", function(e) {
+  // Append line to whatever is in the pre block. Then, truncate number of lines to maxLines.
+  // This is extremely inefficient, since we're splitting into component lines and joining them
+  // back each time a line is added.
+  var txt = document.getElementById("logs").innerText + e.data + "\n";
+  document.getElementById("logs").innerText = txt.split('\n').slice(-maxLines).join('\n');
+});`
 
 func (e *engine) ensureLoaded(ctx context.Context) error {
 	e.loadGist.Do(func() { e.loadGistErr = e.loadFromGist(ctx) })
