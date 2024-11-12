@@ -119,6 +119,7 @@ import (
 	"log"
 	"math/rand/v2"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"runtime"
@@ -712,6 +713,12 @@ func (f *fetcher) parseConfig(config string) ([]*feed, error) {
 		if !ok {
 			continue
 		}
+
+		_, err := url.Parse(feed.url)
+		if err != nil {
+			return nil, fmt.Errorf("invalid URL %q of feed %q", feed.url, feed.title)
+		}
+
 		feeds = append(feeds, feed)
 	}
 
