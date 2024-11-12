@@ -870,6 +870,9 @@ func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *gofeed.Item
 		f.stats.Access(func(s *stats) {
 			s.NotModifiedFeeds += 1
 		})
+		state.LastUpdated = time.Now()
+		state.ErrorCount = 0
+		state.LastError = ""
 		return
 	}
 	if res.StatusCode != http.StatusOK {
