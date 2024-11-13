@@ -21,12 +21,10 @@ import (
 	"flag"
 	"fmt"
 	"io/fs"
-	"log"
 	"os"
 	"path/filepath"
 	"slices"
 
-	"go.astrophena.name/base/logger"
 	"go.astrophena.name/tools/internal/cli"
 )
 
@@ -36,7 +34,6 @@ type app struct {
 	dry   bool
 	sort  string
 	start int
-	logf  logger.Logf
 }
 
 func (a *app) Flags(fs *flag.FlagSet) {
@@ -47,11 +44,7 @@ func (a *app) Flags(fs *flag.FlagSet) {
 
 var errUnknownSortMode = errors.New("unknown sort mode")
 
-func (a *app) Run(_ context.Context, env cli.Env) error {
-	if a.logf == nil {
-		a.logf = log.New(env.Stderr, "", 0).Printf
-	}
-
+func (a *app) Run(ctx context.Context, env *cli.Env) error {
 	if len(env.Args) != 1 {
 		return fmt.Errorf("%w: exactly one directory argument is required", cli.ErrInvalidArgs)
 	}
@@ -97,10 +90,10 @@ func (a *app) Run(_ context.Context, env cli.Env) error {
 		return errUnknownSortMode
 	}
 
-	return a.rename(dir, files)
+	return a.rename(env, dir, files)
 }
 
-func (a *app) rename(dir string, files []fs.DirEntry) error {
+func (a *app) rename(env *cli.Env, dir string, files []fs.DirEntry) error {
 	for _, d := range files {
 		if d.IsDir() {
 			return nil
@@ -113,15 +106,15 @@ func (a *app) rename(dir string, files []fs.DirEntry) error {
 		)
 
 		if _, err := os.Stat(newname); !errors.Is(err, fs.ErrNotExist) {
-			a.logf("File %s already exists, skipping.", newname)
+			env.Logf("File %s already exists, skipping.", newname)
 			a.start++
 			continue
 		}
 
 		if a.dry {
-			a.logf("Would rename %s to %s.", oldname, newname)
+			env.Logf("Would rename %s to %s.", oldname, newname)
 		} else {
-			a.logf("Renaming %s to %s.", oldname, newname)
+			env.Logf("Renaming %s to %s.", oldname, newname)
 			if err := os.Rename(oldname, newname); err != nil {
 				return err
 			}

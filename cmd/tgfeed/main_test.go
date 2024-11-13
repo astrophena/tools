@@ -111,7 +111,7 @@ func TestFetcherMain(t *testing.T) {
 				stdout, stderr bytes.Buffer
 			)
 
-			env := cli.Env{
+			env := &cli.Env{
 				Args:   tc.args,
 				Getenv: getenvFunc(tc.env),
 				Stdin:  stdin,

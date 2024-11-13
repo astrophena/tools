@@ -24,7 +24,6 @@ import (
 	"flag"
 	"fmt"
 	"io/fs"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -52,7 +51,7 @@ func (a *app) Flags(fs *flag.FlagSet) {
 	fs.BoolVar(&a.verbose, "verbose", false, "Print all log messages, including those for files that are not renamed.")
 }
 
-func (a *app) Run(_ context.Context, env cli.Env) error {
+func (a *app) Run(ctx context.Context, env *cli.Env) error {
 	tmpl, err := template.New("main").Funcs(template.FuncMap{
 		"track": func(m tag.Metadata) int {
 			num, _ := m.Track()
@@ -72,7 +71,6 @@ func (a *app) Run(_ context.Context, env cli.Env) error {
 		dir = realdir
 	}
 
-	logf := log.New(env.Stderr, "", 0).Printf
 	vlog := func(format string, args ...any) {
 		if !a.dry {
 			if !a.verbose {
@@ -80,7 +78,7 @@ func (a *app) Run(_ context.Context, env cli.Env) error {
 			}
 			return
 		}
-		logf(format, args...)
+		env.Logf(format, args...)
 	}
 
 	var processed, existing, renamed int
@@ -151,7 +149,7 @@ func (a *app) Run(_ context.Context, env cli.Env) error {
 		msg += "Dry run: "
 	}
 	msg += "%d processed: %d renamed, %d existing."
-	logf(msg, processed, renamed, existing)
+	env.Logf(msg, processed, renamed, existing)
 
 	return nil
 }

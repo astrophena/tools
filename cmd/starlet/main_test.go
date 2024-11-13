@@ -94,7 +94,7 @@ func TestEngineMain(t *testing.T) {
 			e.httpc = testutil.MockHTTPClient(testMux(t, nil).mux)
 			e.noServerStart = true
 
-			env := cli.Env{
+			env := &cli.Env{
 				Args:   tc.args,
 				Getenv: getenvFunc(tc.env),
 				Stdout: &stdout,
@@ -163,7 +163,7 @@ func TestListenAndServe(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		env := cli.Env{
+		env := &cli.Env{
 			Args:   []string{"-addr", addr},
 			Getenv: os.Getenv,
 			Stdout: &stdout,

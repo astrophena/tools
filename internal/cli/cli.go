@@ -11,10 +11,13 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/signal"
 	"strings"
 
+	"go.astrophena.name/base/logger"
+	"go.astrophena.name/tools/internal/util/syncx"
 	"go.astrophena.name/tools/internal/version"
 )
 
@@ -68,7 +71,7 @@ var ErrInvalidArgs = errors.New("invalid arguments")
 // App represents a command-line application.
 type App interface {
 	// Run runs the application.
-	Run(context.Context, Env) error
+	Run(context.Context, *Env) error
 }
 
 // HasInfo represents a command-line application that has information about
@@ -90,10 +93,10 @@ type HasFlags interface {
 
 // AppFunc is a function type that implements the [App] interface.
 // It has no information or flags.
-type AppFunc func(context.Context, Env) error
+type AppFunc func(context.Context, *Env) error
 
 // Run calls f(ctx, env).
-func (f AppFunc) Run(ctx context.Context, env Env) error {
+func (f AppFunc) Run(ctx context.Context, env *Env) error {
 	return f(ctx, env)
 }
 
@@ -110,11 +113,20 @@ type Env struct {
 	Stdin  io.Reader
 	Stdout io.Writer
 	Stderr io.Writer
+
+	logf syncx.Lazy[logger.Logf]
+}
+
+// Logf writes the formatted message to standard error of this environment.
+func (e *Env) Logf(format string, args ...any) {
+	e.logf.Get(func() logger.Logf {
+		return log.New(e.Stderr, "", 0).Printf
+	})(format, args...)
 }
 
 // OSEnv returns the current operating system environment.
-func OSEnv() Env {
-	return Env{
+func OSEnv() *Env {
+	return &Env{
 		Args:   os.Args[1:],
 		Getenv: os.Getenv,
 		Stdin:  os.Stdin,
@@ -124,7 +136,7 @@ func OSEnv() Env {
 }
 
 // Run handles the command-line application startup.
-func Run(ctx context.Context, app App, env Env) error {
+func Run(ctx context.Context, app App, env *Env) error {
 	var info Info
 	if ia, ok := app.(HasInfo); ok {
 		info = ia.Info()

@@ -55,7 +55,7 @@ func TestEngineMain(t *testing.T) {
 			)
 
 			e.noServerStart = true
-			env := cli.Env{
+			env := &cli.Env{
 				Args:   tc.args,
 				Stdout: &stdout,
 				Stderr: &stderr,

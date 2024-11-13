@@ -120,7 +120,6 @@ import (
 	"fmt"
 	"html"
 	"io"
-	"log"
 	"math/rand/v2"
 	"net/http"
 	"net/url"
@@ -173,9 +172,9 @@ func (f *fetcher) Flags(fs *flag.FlagSet) {
 	fs.BoolVar(&f.mode.run, "run", false, "Fetch feeds and send updates.")
 }
 
-func (f *fetcher) Run(ctx context.Context, env cli.Env) error {
+func (f *fetcher) Run(ctx context.Context, env *cli.Env) error {
 	// Initialize logger.
-	f.logf = log.New(env.Stderr, "", 0).Printf
+	f.logf = env.Logf
 
 	// Load configuration from environment variables.
 	f.chatID = cmp.Or(f.chatID, env.Getenv("CHAT_ID"))

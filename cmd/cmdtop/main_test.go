@@ -62,7 +62,7 @@ func TestRun(t *testing.T) {
 			}
 
 			var stdout, stderr bytes.Buffer
-			env := cli.Env{
+			env := &cli.Env{
 				Args:   tc.args,
 				Getenv: getenvFunc(tc.env),
 				Stdout: &stdout,

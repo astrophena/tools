@@ -18,7 +18,6 @@ import (
 	"flag"
 	"fmt"
 	"io/fs"
-	"log"
 	"net/http"
 	"os"
 	"path"
@@ -55,7 +54,7 @@ func (e *engine) Flags(fs *flag.FlagSet) {
 	fs.StringVar(&e.addr, "addr", "localhost:3000", "Listen on `host:port`.")
 }
 
-func (e *engine) Run(ctx context.Context, env cli.Env) error {
+func (e *engine) Run(ctx context.Context, env *cli.Env) error {
 	var dir string
 	if len(env.Args) == 1 {
 		dir = env.Args[0]
@@ -67,7 +66,7 @@ func (e *engine) Run(ctx context.Context, env cli.Env) error {
 		e.fs = os.DirFS(dir)
 	}
 
-	e.logf = log.New(env.Stderr, "", 0).Printf
+	e.logf = env.Logf
 
 	e.init.Do(e.doInit)
 
