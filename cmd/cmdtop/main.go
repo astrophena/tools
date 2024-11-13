@@ -3,6 +3,10 @@
 // license that can be found in the LICENSE.md file.
 
 // Cmdtop displays the top of most used commands in bash history.
+//
+// # Usage
+//
+//	$ cmdtop [flags...] [num]
 package main
 
 import (
@@ -21,38 +25,22 @@ import (
 	"go.astrophena.name/tools/internal/cli"
 )
 
-func main() {
-	cli.Run(func(_ context.Context) error {
-		return run(os.Args[1:], os.Getenv, os.Stdout, os.Stderr)
-	})
-}
+func main() { cli.Main(cli.AppFunc(run)) }
 
 var errInvalidNum = errors.New("invalid number of commands")
 
-func run(args []string, getenv func(string) string, stdout, stderr io.Writer) error {
-	a := &cli.App{
-		Name:        "cmdtop",
-		Description: helpDoc,
-		ArgsUsage:   "[flags...] [num]",
-	}
-	if err := a.HandleStartup(args, stdout, stderr); err != nil {
-		if errors.Is(err, cli.ErrExitVersion) {
-			return nil
-		}
-		return err
-	}
-
+func run(_ context.Context, env cli.Env) error {
 	num := int64(10)
-	if len(a.Flags.Args()) > 0 {
+	if len(env.Args) > 0 {
 		var err error
-		num, err = strconv.ParseInt(a.Flags.Args()[0], 10, 64)
+		num, err = strconv.ParseInt(env.Args[0], 10, 64)
 		if err != nil {
 			return fmt.Errorf("%w: %v", errInvalidNum, err)
 		}
 	}
 
 	var histfile string
-	if histfile = getenv("HISTFILE"); histfile == "" {
+	if histfile = env.Getenv("HISTFILE"); histfile == "" {
 		home, err := os.UserHomeDir()
 		if err != nil {
 			return fmt.Errorf("failed to lookup home directory: %w", err)
@@ -70,7 +58,7 @@ func run(args []string, getenv func(string) string, stdout, stderr io.Writer) er
 	if err != nil {
 		return err
 	}
-	_, err = stdout.Write(top)
+	_, err = env.Stdout.Write(top)
 	return err
 }
 

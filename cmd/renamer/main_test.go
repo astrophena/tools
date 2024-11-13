@@ -6,6 +6,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"flag"
 	"os"
@@ -32,13 +33,12 @@ func TestRun(t *testing.T) {
 		wantInStderr string
 	}{
 		"usage (no directory passed)": {
-			args:         []string{},
-			wantErr:      cli.ErrInvalidArgs,
-			wantInStderr: "renamer",
+			args:    []string{},
+			wantErr: cli.ErrInvalidArgs,
 		},
 		"version": {
-			args:         []string{"-version"},
-			wantInStderr: "renamer",
+			args:    []string{"-version"},
+			wantErr: cli.ErrExitVersion,
 		},
 		"rename (existing numbered)": {
 			args:         []string{"[TMPDIR]"},
@@ -86,7 +86,12 @@ func TestRun(t *testing.T) {
 			}
 
 			var stdout, stderr bytes.Buffer
-			err := run(tc.args, &stdout, &stderr)
+			env := cli.Env{
+				Args:   tc.args,
+				Stdout: &stdout,
+				Stderr: &stderr,
+			}
+			err := cli.Run(context.Background(), new(app), env)
 
 			// Don't use && because we want to trap all cases where err is
 			// nil.

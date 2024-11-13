@@ -51,14 +51,17 @@ func TestFetcherMain(t *testing.T) {
 		wantInStderr       string
 		checkFunc          func(t *testing.T, f *fetcher)
 	}{
-		"prints usage without flags": {
-			args:         []string{},
-			wantErr:      cli.ErrInvalidArgs,
-			wantInStderr: "Usage: tgfeed",
+		"returns an error without flags": {
+			args:    []string{},
+			wantErr: cli.ErrInvalidArgs,
 		},
 		"run": {
 			args:               []string{"-run"},
 			wantNothingPrinted: true,
+		},
+		"version": {
+			args:    []string{"-version"},
+			wantErr: cli.ErrExitVersion,
 		},
 		"edit without any changes": {
 			args: []string{"-edit"},
@@ -87,9 +90,6 @@ func TestFetcherMain(t *testing.T) {
 			args:    []string{"-reenable", "https://example.com/non-existent.xml"},
 			wantErr: errNoFeed,
 		},
-		"version": {
-			args: []string{"-version"},
-		},
 	}
 
 	getenvFunc := func(env map[string]string) func(string) string {
@@ -111,7 +111,14 @@ func TestFetcherMain(t *testing.T) {
 				stdout, stderr bytes.Buffer
 			)
 
-			err := f.main(context.Background(), tc.args, getenvFunc(tc.env), stdin, &stdout, &stderr)
+			env := cli.Env{
+				Args:   tc.args,
+				Getenv: getenvFunc(tc.env),
+				Stdin:  stdin,
+				Stdout: &stdout,
+				Stderr: &stderr,
+			}
+			err := cli.Run(context.Background(), f, env)
 
 			// Don't use && because we want to trap all cases where err is
 			// nil.

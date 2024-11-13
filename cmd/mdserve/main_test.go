@@ -16,6 +16,8 @@ import (
 	"strings"
 	"testing"
 	"testing/fstest"
+
+	"go.astrophena.name/tools/internal/cli"
 )
 
 func TestEngineMain(t *testing.T) {
@@ -30,12 +32,12 @@ func TestEngineMain(t *testing.T) {
 		checkFunc          func(t *testing.T, e *engine)
 	}{
 		"prints usage with help flag": {
-			args:         []string{"-h"},
-			wantErr:      flag.ErrHelp,
-			wantInStderr: "Usage: mdserve",
+			args:    []string{"-h"},
+			wantErr: flag.ErrHelp,
 		},
 		"version": {
-			args: []string{"-version"},
+			args:    []string{"-version"},
+			wantErr: cli.ErrExitVersion,
 		},
 		"serves in current dir when passed no args": {
 			args:         []string{},
@@ -53,7 +55,12 @@ func TestEngineMain(t *testing.T) {
 			)
 
 			e.noServerStart = true
-			err := e.main(context.Background(), tc.args, &stdout, &stderr)
+			env := cli.Env{
+				Args:   tc.args,
+				Stdout: &stdout,
+				Stderr: &stderr,
+			}
+			err := cli.Run(context.Background(), e, env)
 
 			// Don't use && because we want to trap all cases where err is
 			// nil.

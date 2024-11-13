@@ -6,6 +6,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	_ "embed"
 	"errors"
 	"flag"
@@ -13,6 +14,7 @@ import (
 	"io/fs"
 	"path/filepath"
 	"reflect"
+	"runtime/debug"
 	"strings"
 	"testing"
 	"text/template"
@@ -44,12 +46,12 @@ func TestRun(t *testing.T) {
 		wantInStderr string
 	}{
 		"prints usage with help flag": {
-			args:         []string{"-h"},
-			wantErr:      flag.ErrHelp,
-			wantInStderr: "Usage: kp",
+			args:    []string{"-h"},
+			wantErr: flag.ErrHelp,
 		},
 		"version": {
-			args: []string{"-version"},
+			args:    []string{"-version"},
+			wantErr: cli.ErrExitVersion,
 		},
 		"nonexistent file": {
 			args:    []string{"nonexistent.kdbx", "foo"},
@@ -128,7 +130,14 @@ func TestRun(t *testing.T) {
 
 			var stdout, stderr bytes.Buffer
 
-			err := run(tc.args, getenvFunc(tc.env), pr, &stdout, &stderr)
+			env := cli.Env{
+				Args:   tc.args,
+				Getenv: getenvFunc(tc.env),
+				Stdin:  pr,
+				Stdout: &stdout,
+				Stderr: &stderr,
+			}
+			err := cli.Run(context.Background(), new(app), env)
 
 			// Don't use && because we want to trap all cases where err is
 			// nil.
@@ -156,6 +165,7 @@ func TestRun(t *testing.T) {
 
 			if err != nil && tc.wantErr != nil && !errors.Is(err, tc.wantErr) {
 				t.Fatalf("got error: %v", err)
+				debug.PrintStack()
 			}
 
 			if tc.wantInStdout != "" && !strings.Contains(stdout.String(), tc.wantInStdout) {

@@ -15,6 +15,10 @@ messages, and interact with the Telegram API.
 Starlet periodically pings itself to prevent [Render] from putting it to
 sleep, ensuring continuous operation.
 
+# Usage
+
+	$ starlet [flags...]
+
 # Starlark environment
 
 In addition to the standard Starlark modules, the following modules are
@@ -161,51 +165,34 @@ const (
 <pre><code>%v</code></pre>`
 )
 
-func main() {
-	cli.Run(func(ctx context.Context) error {
-		return new(engine).main(ctx, os.Args[1:], os.Getenv, os.Stdout, os.Stderr)
-	})
+func main() { cli.Main(new(engine)) }
+
+func (e *engine) Flags(fs *flag.FlagSet) {
+	fs.StringVar(&e.addr, "addr", "localhost:3000", "Listen on `host:port`.")
+	fs.StringVar(&e.geminiKey, "gemini-key", "", "Gemini API `key`.")
+	fs.StringVar(&e.ghToken, "gh-token", "", "GitHub API `token`.")
+	fs.StringVar(&e.gistID, "gist-id", "", "GitHub Gist `ID` to load bot code from.")
+	fs.StringVar(&e.host, "host", "", "Bot `domain` used for setting up webhook.")
+	fs.StringVar(&e.reloadToken, "reload-token", "", "Secret `token` used for calling /reload endpoint.")
+	fs.Int64Var(&e.tgOwner, "tg-owner", 0, "Telegram user `ID` of the bot owner.")
+	fs.StringVar(&e.tgSecret, "tg-secret", "", "Secret `token` used to validate Telegram Bot API updates.")
+	fs.StringVar(&e.tgToken, "tg-token", "", "Telegram Bot API `token`.")
 }
 
-func (e *engine) main(ctx context.Context, args []string, getenv func(string) string, stdout, stderr io.Writer) error {
-	// Define and parse flags.
-	a := &cli.App{
-		Name:        "starlet",
-		Description: helpDoc,
-		Credits:     credits,
-		Flags:       flag.NewFlagSet("starlet", flag.ContinueOnError),
-	}
-	var (
-		addr        = a.Flags.String("addr", "localhost:3000", "Listen on `host:port`.")
-		geminiKey   = a.Flags.String("gemini-key", "", "Gemini API `key`.")
-		ghToken     = a.Flags.String("gh-token", "", "GitHub API `token`.")
-		gistID      = a.Flags.String("gist-id", "", "GitHub Gist `ID` to load bot code from.")
-		host        = a.Flags.String("host", "", "Bot `domain` used for setting up webhook.")
-		reloadToken = a.Flags.String("reload-token", "", "Secret `token` used for calling /reload endpoint.")
-		tgOwner     = a.Flags.Int64("tg-owner", 0, "Telegram user `ID` of the bot owner.")
-		tgSecret    = a.Flags.String("tg-secret", "", "Secret `token` used to validate Telegram Bot API updates.")
-		tgToken     = a.Flags.String("tg-token", "", "Telegram Bot API `token`.")
-	)
-	if err := a.HandleStartup(args, stdout, stderr); err != nil {
-		if errors.Is(err, cli.ErrExitVersion) {
-			return nil
-		}
-		return err
-	}
-
+func (e *engine) Run(ctx context.Context, env cli.Env) error {
 	// Load configuration from environment variables or flags.
-	e.geminiKey = cmp.Or(e.geminiKey, getenv("GEMINI_KEY"), *geminiKey)
-	e.ghToken = cmp.Or(e.ghToken, getenv("GH_TOKEN"), *ghToken)
-	e.gistID = cmp.Or(e.gistID, getenv("GIST_ID"), *gistID)
-	e.host = cmp.Or(e.host, getenv("HOST"), *host)
-	e.onRender = getenv("RENDER") == "true"
-	e.reloadToken = cmp.Or(e.reloadToken, getenv("RELOAD_TOKEN"), *reloadToken)
-	e.tgOwner = cmp.Or(e.tgOwner, parseInt(getenv("TG_OWNER")), *tgOwner)
-	e.tgSecret = cmp.Or(e.tgSecret, getenv("TG_SECRET"), *tgSecret)
-	e.tgToken = cmp.Or(e.tgToken, getenv("TG_TOKEN"), *tgToken)
+	e.geminiKey = cmp.Or(env.Getenv("GEMINI_KEY"), e.geminiKey)
+	e.ghToken = cmp.Or(env.Getenv("GH_TOKEN"), e.ghToken)
+	e.gistID = cmp.Or(env.Getenv("GIST_ID"), e.gistID)
+	e.host = cmp.Or(env.Getenv("HOST"), e.host)
+	e.onRender = env.Getenv("RENDER") == "true"
+	e.reloadToken = cmp.Or(env.Getenv("RELOAD_TOKEN"), e.reloadToken)
+	e.tgOwner = cmp.Or(parseInt(env.Getenv("TG_OWNER")), e.tgOwner)
+	e.tgSecret = cmp.Or(env.Getenv("TG_SECRET"), e.tgSecret)
+	e.tgToken = cmp.Or(env.Getenv("TG_TOKEN"), e.tgToken)
 
 	// Initialize internal state.
-	e.stderr = stderr
+	e.stderr = env.Stderr
 	if err := e.init.Get(e.doInit); err != nil {
 		return err
 	}
@@ -219,17 +206,17 @@ func (e *engine) main(ctx context.Context, args []string, getenv func(string) st
 	// and start goroutine that prevents Starlet from sleeping.
 	if e.onRender {
 		// https://docs.render.com/environment-variables#all-runtimes-1
-		if port := getenv("PORT"); port != "" {
-			*addr = ":" + port
+		if port := env.Getenv("PORT"); port != "" {
+			e.addr = ":" + port
 		}
 		if err := e.setWebhook(ctx); err != nil {
 			return err
 		}
-		go e.selfPing(ctx, getenv)
+		go e.selfPing(ctx, env.Getenv)
 	}
 
 	return web.ListenAndServe(ctx, &web.ListenAndServeConfig{
-		Addr:       *addr,
+		Addr:       e.addr,
 		DebugAuth:  e.debugAuth,
 		Debuggable: true, // debug endpoints protected by Telegram auth
 		Logf:       e.logf,
@@ -260,6 +247,7 @@ type engine struct {
 	mux       *http.ServeMux
 
 	// configuration, read-only after initialization
+	addr          string
 	geminiKey     string
 	ghToken       string
 	gistID        string

@@ -3,12 +3,15 @@
 // license that can be found in the LICENSE.md file.
 
 // Dupfind finds duplicate files in a directory.
+//
+// # Usage
+//
+//	$ dupfind [flags...] <dir>
 package main
 
 import (
 	"context"
 	"crypto/sha256"
-	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -18,31 +21,14 @@ import (
 	"go.astrophena.name/tools/internal/cli"
 )
 
-func main() {
-	cli.Run(func(_ context.Context) error {
-		return run(os.Args[1:], os.Stdout, os.Stderr)
-	})
-}
+func main() { cli.Main(cli.AppFunc(run)) }
 
-func run(args []string, stdout, stderr io.Writer) error {
-	a := &cli.App{
-		Name:        "dupfind",
-		Description: helpDoc,
-		ArgsUsage:   "[flags...] <dir>",
-	}
-	if err := a.HandleStartup(args, stdout, stderr); err != nil {
-		if errors.Is(err, cli.ErrExitVersion) {
-			return nil
-		}
-		return err
-	}
-
-	if len(a.Flags.Args()) != 1 {
-		a.Flags.Usage()
+func run(_ context.Context, env cli.Env) error {
+	if len(env.Args) != 1 {
 		return fmt.Errorf("%w: missing required argument 'dir'", cli.ErrInvalidArgs)
 	}
 
-	dir := a.Flags.Args()[0]
+	dir := env.Args[0]
 
 	if realdir, err := filepath.EvalSymlinks(dir); err == nil {
 		dir = realdir
@@ -54,7 +40,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 	}
 
 	for _, d := range dups {
-		fmt.Fprintf(stderr, "Duplicate file %s of %s.\n", d.cur, d.prev)
+		fmt.Fprintf(env.Stderr, "Duplicate file %s of %s.\n", d.cur, d.prev)
 	}
 
 	return nil

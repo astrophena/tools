@@ -3,6 +3,10 @@
 // license that can be found in the LICENSE.md file.
 
 // Kp reads passwords from KeePass databases.
+//
+// # Usage
+//
+//	$ kp [flags...] <file> [entry]
 package main
 
 import (
@@ -22,56 +26,37 @@ import (
 	"golang.org/x/term"
 )
 
-func main() {
-	cli.Run(func(_ context.Context) error {
-		return run(os.Args[1:], os.Getenv, os.Stdin, os.Stdout, os.Stderr)
-	})
-}
+func main() { cli.Main(new(app)) }
 
 var (
 	errInvalidFormat = errors.New("invalid format")
 	errNotFound      = errors.New("not found")
 )
 
-func run(
-	args []string,
-	getenv func(string) string,
-	stdin io.Reader,
-	stdout, stderr io.Writer,
-) error {
-	a := &cli.App{
-		Name:        "kp",
-		Description: helpDoc,
-		Credits:     credits,
-		ArgsUsage:   "[flags...] <file> [entry]",
-		Flags:       flag.NewFlagSet("kp", flag.ContinueOnError),
-	}
-	var (
-		format = a.Flags.String("f", "{{ .GetPassword }}", "Format `template`.\nSee https://pkg.go.dev/github.com/tobischo/gokeepasslib/v3#Entry for available fields.")
-		list   = a.Flags.Bool("l", false, "List all entries.")
-	)
-	if err := a.HandleStartup(args, stdout, stderr); err != nil {
-		if errors.Is(err, cli.ErrExitVersion) {
-			return nil
-		}
-		return err
-	}
+type app struct {
+	format string
+	list   bool
+}
 
-	tmpl, err := template.New("main").Parse(*format)
+func (a *app) Flags(fs *flag.FlagSet) {
+	fs.StringVar(&a.format, "f", "{{ .GetPassword }}", "Format `template`.\n"+
+		"See https://pkg.go.dev/github.com/tobischo/gokeepasslib/v3#Entry for available fields.")
+	fs.BoolVar(&a.list, "l", false, "List all entries.")
+}
+
+func (a *app) Run(_ context.Context, env cli.Env) error {
+	tmpl, err := template.New("main").Parse(a.format)
 	if err != nil {
 		return fmt.Errorf("%w: %v", errInvalidFormat, err)
 	}
 
-	fargs := a.Flags.Args()
-	if len(fargs) == 0 {
-		a.Flags.Usage()
+	if len(env.Args) == 0 {
 		return fmt.Errorf("%w: missing required argument 'file'", cli.ErrInvalidArgs)
-	} else if !*list && len(fargs) < 2 {
-		a.Flags.Usage()
+	} else if !a.list && len(env.Args) < 2 {
 		return fmt.Errorf("%w: missing required arguments 'file' and/or 'entry'", cli.ErrInvalidArgs)
 	}
 
-	file := fargs[0]
+	file := env.Args[0]
 
 	f, err := os.Open(file)
 	if err != nil {
@@ -79,22 +64,22 @@ func run(
 	}
 	defer f.Close()
 
-	password := getenv("KP_PASSWORD")
+	password := env.Getenv("KP_PASSWORD")
 	if password == "" {
-		password, err = ask(file, stderr)
+		password, err = ask(file, env.Stderr)
 		if err != nil {
 			return err
 		}
 	}
 
-	if *list {
+	if a.list {
 		db, err := open(f, password)
 		if err != nil {
 			return err
 		}
 		for _, g := range db.Content.Root.Groups {
 			for _, e := range g.Entries {
-				if err := printEntry(tmpl, &e, stdout); err != nil {
+				if err := printEntry(tmpl, &e, env.Stdout); err != nil {
 					return err
 				}
 			}
@@ -102,11 +87,11 @@ func run(
 		return nil
 	}
 
-	e, err := lookup(f, password, fargs[1])
+	e, err := lookup(f, password, env.Args[1])
 	if err != nil {
 		return err
 	}
-	if err := printEntry(tmpl, e, stdout); err != nil {
+	if err := printEntry(tmpl, e, env.Stdout); err != nil {
 		return err
 	}
 

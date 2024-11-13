@@ -6,6 +6,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"flag"
 	"os"
@@ -14,6 +15,7 @@ import (
 	"testing"
 
 	"go.astrophena.name/base/testutil"
+	"go.astrophena.name/tools/internal/cli"
 )
 
 var update = flag.Bool("update", false, "update golden files in testdata")
@@ -29,6 +31,11 @@ func TestRun(t *testing.T) {
 		wantInStdout       string
 		wantInStderr       string
 	}{
+		"version": {
+			args:         []string{"-version"},
+			wantErr:      cli.ErrExitVersion,
+			wantInStderr: "cmdtop",
+		},
 		"invalid number of commands": {
 			args:    []string{"foo"},
 			wantErr: errInvalidNum,
@@ -38,10 +45,6 @@ func TestRun(t *testing.T) {
 				"HISTFILE": filepath.Join("testdata", "history"),
 			},
 			wantInStdout: read(filepath.Join("testdata", "history.golden")),
-		},
-		"version flag": {
-			args:         []string{"-version"},
-			wantInStderr: "cmdtop",
 		},
 	}
 
@@ -59,7 +62,13 @@ func TestRun(t *testing.T) {
 			}
 
 			var stdout, stderr bytes.Buffer
-			err := run(tc.args, getenvFunc(tc.env), &stdout, &stderr)
+			env := cli.Env{
+				Args:   tc.args,
+				Getenv: getenvFunc(tc.env),
+				Stdout: &stdout,
+				Stderr: &stderr,
+			}
+			err := cli.Run(context.Background(), cli.AppFunc(run), env)
 
 			// Don't use && because we want to trap all cases where err is
 			// nil.

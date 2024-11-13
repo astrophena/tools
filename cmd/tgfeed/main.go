@@ -7,6 +7,10 @@
 /*
 Tgfeed fetches RSS feeds and sends new articles via Telegram.
 
+# Usage
+
+	$ tgfeed [flags...]
+
 # Environment variables
 
 The tgfeed program relies on the following environment variables:
@@ -159,55 +163,32 @@ var (
 	errNoEditor       = errors.New("environment variable EDITOR is not defined")
 )
 
-func main() {
-	cli.Run(func(ctx context.Context) error {
-		return new(fetcher).main(ctx, os.Args[1:], os.Getenv, os.Stdin, os.Stdout, os.Stderr)
-	})
+func main() { cli.Main(new(fetcher)) }
+
+func (f *fetcher) Flags(fs *flag.FlagSet) {
+	fs.BoolVar(&f.dry, "dry", false, "Don't send updates and update state when running, log everything instead.")
+	fs.BoolVar(&f.mode.feeds, "feeds", false, "List available feeds.")
+	fs.BoolVar(&f.mode.edit, "edit", false, "Edit config.star file in your EDITOR.")
+	fs.StringVar(&f.mode.reenable, "reenable", "", "Reenable disabled `feed`.")
+	fs.BoolVar(&f.mode.run, "run", false, "Fetch feeds and send updates.")
 }
 
-func (f *fetcher) main(
-	ctx context.Context,
-	args []string,
-	getenv func(string) string,
-	stdin io.Reader,
-	stdout, stderr io.Writer,
-) error {
+func (f *fetcher) Run(ctx context.Context, env cli.Env) error {
 	// Initialize logger.
-	f.logf = log.New(stderr, "", 0).Printf
-
-	// Define and parse flags.
-	a := &cli.App{
-		Name:        "tgfeed",
-		Description: helpDoc,
-		Credits:     credits,
-		Flags:       flag.NewFlagSet("tgfeed", flag.ContinueOnError),
-	}
-	var (
-		dry      = a.Flags.Bool("dry", false, "Don't send updates and update state when running, log everything instead.")
-		feeds    = a.Flags.Bool("feeds", false, "List available feeds.")
-		edit     = a.Flags.Bool("edit", false, "Edit config.star file in your EDITOR.")
-		reenable = a.Flags.String("reenable", "", "Reenable disabled `feed`.")
-		run      = a.Flags.Bool("run", false, "Fetch feeds and send updates.")
-	)
-	if err := a.HandleStartup(args, stdout, stderr); err != nil {
-		if errors.Is(err, cli.ErrExitVersion) {
-			return nil
-		}
-		return err
-	}
+	f.logf = log.New(env.Stderr, "", 0).Printf
 
 	// Load configuration from environment variables.
-	f.chatID = cmp.Or(f.chatID, getenv("CHAT_ID"))
-	f.ghToken = cmp.Or(f.ghToken, getenv("GITHUB_TOKEN"))
-	f.gistID = cmp.Or(f.gistID, getenv("GIST_ID"))
-	f.statsSpreadsheetID = cmp.Or(f.statsSpreadsheetID, getenv("STATS_SPREADSHEET_ID"))
-	f.statsSpreadsheetRange = cmp.Or(f.statsSpreadsheetRange, getenv("STATS_SPREADSHEET_RANGE"), "Stats")
-	f.tgToken = cmp.Or(f.tgToken, getenv("TELEGRAM_TOKEN"))
+	f.chatID = cmp.Or(f.chatID, env.Getenv("CHAT_ID"))
+	f.ghToken = cmp.Or(f.ghToken, env.Getenv("GITHUB_TOKEN"))
+	f.gistID = cmp.Or(f.gistID, env.Getenv("GIST_ID"))
+	f.statsSpreadsheetID = cmp.Or(f.statsSpreadsheetID, env.Getenv("STATS_SPREADSHEET_ID"))
+	f.statsSpreadsheetRange = cmp.Or(f.statsSpreadsheetRange, env.Getenv("STATS_SPREADSHEET_RANGE"), "Stats")
+	f.tgToken = cmp.Or(f.tgToken, env.Getenv("TELEGRAM_TOKEN"))
 
 	// Load Google service account key from SERVICE_ACCOUNT_KEY environment
 	// variable. If it's not defined, stats won't be uploaded to a Google
 	// spreadsheet.
-	if key := getenv("SERVICE_ACCOUNT_KEY"); key != "" {
+	if key := env.Getenv("SERVICE_ACCOUNT_KEY"); key != "" {
 		var err error
 		f.serviceAccountKey, err = serviceaccount.LoadKey([]byte(key))
 		if err != nil {
@@ -218,25 +199,20 @@ func (f *fetcher) main(
 	// Initialize internal state.
 	f.init.Do(f.doInit)
 
-	if *dry {
-		f.dry = true
-	}
-
 	// Choose a mode based on passed flags and run it.
 	switch {
-	case *feeds:
-		return f.listFeeds(ctx, stdout)
-	case *edit:
-		return f.edit(ctx, getenv, stdin, stdout, stderr)
-	case *run:
+	case f.mode.feeds:
+		return f.listFeeds(ctx, env.Stdout)
+	case f.mode.edit:
+		return f.edit(ctx, env.Getenv, env.Stdin, env.Stdout, env.Stderr)
+	case f.mode.run:
 		if err := f.run(ctx); err != nil {
 			return f.errNotify(ctx, err)
 		}
 		return nil
-	case *reenable != "":
-		return f.reenable(ctx, *reenable)
+	case f.mode.reenable != "":
+		return f.reenable(ctx, f.mode.reenable)
 	default:
-		a.Flags.Usage()
 		return fmt.Errorf("%w: pick a mode", cli.ErrInvalidArgs)
 	}
 }
@@ -246,6 +222,12 @@ type fetcher struct {
 	init    sync.Once
 
 	// configuration
+	mode struct {
+		feeds    bool
+		edit     bool
+		reenable string
+		run      bool
+	}
 	chatID                string
 	dry                   bool
 	ghToken               string

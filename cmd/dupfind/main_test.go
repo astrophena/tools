@@ -6,6 +6,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -32,13 +33,12 @@ func TestRun(t *testing.T) {
 		wantInStderr       string
 	}{
 		"without directory": {
-			args:         []string{},
-			wantErr:      cli.ErrInvalidArgs,
-			wantInStderr: "Usage: dupfind",
+			args:    []string{},
+			wantErr: cli.ErrInvalidArgs,
 		},
 		"version flag": {
-			args:         []string{"-version"},
-			wantInStderr: "dupfind",
+			args:    []string{"-version"},
+			wantErr: cli.ErrExitVersion,
 		},
 		"nonexistent directory": {
 			args:    []string{"nonexistent"},
@@ -75,7 +75,12 @@ func TestRun(t *testing.T) {
 			}
 
 			var stdout, stderr bytes.Buffer
-			err := run(tc.args, &stdout, &stderr)
+			env := cli.Env{
+				Args:   tc.args,
+				Stdout: &stdout,
+				Stderr: &stderr,
+			}
+			err := cli.Run(context.Background(), cli.AppFunc(run), env)
 
 			// Don't use && because we want to trap all cases where err is
 			// nil.

@@ -3,6 +3,10 @@
 // license that can be found in the LICENSE.md file.
 
 // Mdserve serves Markdown files from a directory.
+//
+// # Usage
+//
+//	$ mdserve [flags...] [dir]
 package main
 
 import (
@@ -13,7 +17,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io"
 	"io/fs"
 	"log"
 	"net/http"
@@ -33,17 +36,14 @@ import (
 //go:embed template.html
 var tmpl string
 
-func main() {
-	cli.Run(func(ctx context.Context) error {
-		return new(engine).main(ctx, os.Args[1:], os.Stdout, os.Stderr)
-	})
-}
+func main() { cli.Main(new(engine)) }
 
 type engine struct {
 	init sync.Once
 	md   *markdown.Parser
 
 	// configuration
+	addr string
 	fs   fs.FS
 	logf logger.Logf
 
@@ -51,28 +51,14 @@ type engine struct {
 	noServerStart bool
 }
 
-func (e *engine) main(ctx context.Context, args []string, stdout, stderr io.Writer) error {
-	// Define and parse flags.
-	a := &cli.App{
-		Name:        "mdserve",
-		ArgsUsage:   "[flags...] [dir]",
-		Description: helpDoc,
-		Credits:     credits,
-		Flags:       flag.NewFlagSet("mdserve", flag.ContinueOnError),
-	}
-	var (
-		addr = a.Flags.String("addr", "localhost:3000", "Listen on `host:port`.")
-	)
-	if err := a.HandleStartup(args, stdout, stderr); err != nil {
-		if errors.Is(err, cli.ErrExitVersion) {
-			return nil
-		}
-		return err
-	}
+func (e *engine) Flags(fs *flag.FlagSet) {
+	fs.StringVar(&e.addr, "addr", "localhost:3000", "Listen on `host:port`.")
+}
 
+func (e *engine) Run(ctx context.Context, env cli.Env) error {
 	var dir string
-	if len(a.Flags.Args()) == 1 {
-		dir = a.Flags.Args()[0]
+	if len(env.Args) == 1 {
+		dir = env.Args[0]
 	}
 	if realdir, err := filepath.Abs(dir); err == nil {
 		dir = realdir
@@ -81,7 +67,7 @@ func (e *engine) main(ctx context.Context, args []string, stdout, stderr io.Writ
 		e.fs = os.DirFS(dir)
 	}
 
-	e.logf = log.New(stderr, "", 0).Printf
+	e.logf = log.New(env.Stderr, "", 0).Printf
 
 	e.init.Do(e.doInit)
 
@@ -95,7 +81,7 @@ func (e *engine) main(ctx context.Context, args []string, stdout, stderr io.Writ
 	}
 
 	return web.ListenAndServe(ctx, &web.ListenAndServeConfig{
-		Addr: *addr,
+		Addr: e.addr,
 		Logf: e.logf,
 		Mux:  mux,
 	})

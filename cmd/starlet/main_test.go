@@ -34,6 +34,7 @@ import (
 	"go.astrophena.name/base/testutil"
 	"go.astrophena.name/base/txtar"
 	"go.astrophena.name/tools/internal/api/gist"
+	"go.astrophena.name/tools/internal/cli"
 	"go.astrophena.name/tools/internal/web"
 
 	"go.starlark.net/starlark"
@@ -55,9 +56,8 @@ func TestEngineMain(t *testing.T) {
 		checkFunc          func(t *testing.T, e *engine)
 	}{
 		"prints usage with help flag": {
-			args:         []string{"-h"},
-			wantErr:      flag.ErrHelp,
-			wantInStderr: "Usage: starlet",
+			args:    []string{"-h"},
+			wantErr: flag.ErrHelp,
 		},
 		"overrides telegram token passed from flag by env": {
 			args: []string{"-tg-token", "blablabla"},
@@ -69,7 +69,8 @@ func TestEngineMain(t *testing.T) {
 			},
 		},
 		"version": {
-			args: []string{"-version"},
+			args:    []string{"-version"},
+			wantErr: cli.ErrExitVersion,
 		},
 	}
 
@@ -93,7 +94,13 @@ func TestEngineMain(t *testing.T) {
 			e.httpc = testutil.MockHTTPClient(testMux(t, nil).mux)
 			e.noServerStart = true
 
-			err := e.main(context.Background(), tc.args, getenvFunc(tc.env), &stdout, &stderr)
+			env := cli.Env{
+				Args:   tc.args,
+				Getenv: getenvFunc(tc.env),
+				Stdout: &stdout,
+				Stderr: &stderr,
+			}
+			err := cli.Run(context.Background(), e, env)
 
 			// Don't use && because we want to trap all cases where err is
 			// nil.
@@ -156,7 +163,13 @@ func TestListenAndServe(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		if err := e.main(ctx, []string{"-addr", addr}, os.Getenv, &stdout, &stderr); err != nil {
+		env := cli.Env{
+			Args:   []string{"-addr", addr},
+			Getenv: os.Getenv,
+			Stdout: &stdout,
+			Stderr: &stderr,
+		}
+		if err := cli.Run(ctx, e, env); err != nil {
 			errCh <- err
 		}
 	}()

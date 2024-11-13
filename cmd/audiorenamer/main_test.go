@@ -6,6 +6,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -38,6 +39,7 @@ func TestRun(t *testing.T) {
 		},
 		"version": {
 			args:         []string{"-version"},
+			wantErr:      cli.ErrExitVersion,
 			wantInStderr: "audiorenamer",
 		},
 		"rename (mp3)": {
@@ -114,7 +116,12 @@ func TestRun(t *testing.T) {
 			}
 
 			var stdout, stderr bytes.Buffer
-			err := run(tc.args, &stdout, &stderr)
+			env := cli.Env{
+				Args:   tc.args,
+				Stdout: &stdout,
+				Stderr: &stderr,
+			}
+			err := cli.Run(context.Background(), new(app), env)
 
 			// Don't use && because we want to trap all cases where err is
 			// nil.

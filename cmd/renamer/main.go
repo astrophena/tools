@@ -5,6 +5,10 @@
 // Renamer renames files in a specified directory sequentially, starting from a
 // given number.
 //
+// # Usage
+//
+//	$ renamer [flags...] <dir>
+//
 // It sorts the files based on name, time, size, or type before renaming. If a
 // file with the new name already exists, it skips the file and continues to the
 // next.
@@ -16,7 +20,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io"
 	"io/fs"
 	"log"
 	"os"
@@ -27,38 +30,32 @@ import (
 	"go.astrophena.name/tools/internal/cli"
 )
 
-func main() {
-	cli.Run(func(_ context.Context) error {
-		return run(os.Args[1:], os.Stdout, os.Stderr)
-	})
+func main() { cli.Main(new(app)) }
+
+type app struct {
+	dry   bool
+	sort  string
+	start int
+	logf  logger.Logf
+}
+
+func (a *app) Flags(fs *flag.FlagSet) {
+	fs.BoolVar(&a.dry, "dry", false, "Print what would be done, but don't rename files.")
+	fs.StringVar(&a.sort, "sort", "name", "Sort files by `name, time, size or type`.")
+	fs.IntVar(&a.start, "start", 1, "Start numbering files from this `number`.")
 }
 
 var errUnknownSortMode = errors.New("unknown sort mode")
 
-func run(args []string, stdout, stderr io.Writer) error {
-	a := &cli.App{
-		Name:        "renamer",
-		Description: helpDoc,
-		ArgsUsage:   "[flags...] <dir>",
-		Flags:       flag.NewFlagSet("renamer", flag.ContinueOnError),
-	}
-	var (
-		dry   = a.Flags.Bool("dry", false, "Print what would be done, but don't rename files.")
-		sort  = a.Flags.String("sort", "name", "Sort files by `name, time, size or type`.")
-		start = a.Flags.Int("start", 1, "Start numbering files from this `number`.")
-	)
-	if err := a.HandleStartup(args, stdout, stderr); err != nil {
-		if errors.Is(err, cli.ErrExitVersion) {
-			return nil
-		}
-		return err
+func (a *app) Run(_ context.Context, env cli.Env) error {
+	if a.logf == nil {
+		a.logf = log.New(env.Stderr, "", 0).Printf
 	}
 
-	if len(a.Flags.Args()) != 1 {
-		a.Flags.Usage()
+	if len(env.Args) != 1 {
 		return fmt.Errorf("%w: exactly one directory argument is required", cli.ErrInvalidArgs)
 	}
-	dir := a.Flags.Args()[0]
+	dir := env.Args[0]
 	if realdir, err := filepath.EvalSymlinks(dir); err == nil {
 		dir = realdir
 	}
@@ -79,7 +76,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return fis[de.Name()]
 	}
 
-	switch *sort {
+	switch a.sort {
 	case "name":
 		slices.SortStableFunc(files, func(a, b fs.DirEntry) int {
 			return cmp.Compare(a.Name(), b.Name())
@@ -100,10 +97,10 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return errUnknownSortMode
 	}
 
-	return rename(*dry, dir, files, *start, log.New(stderr, "", 0).Printf)
+	return a.rename(dir, files)
 }
 
-func rename(dry bool, dir string, files []fs.DirEntry, start int, logf logger.Logf) error {
+func (a *app) rename(dir string, files []fs.DirEntry) error {
 	for _, d := range files {
 		if d.IsDir() {
 			return nil
@@ -112,25 +109,25 @@ func rename(dry bool, dir string, files []fs.DirEntry, start int, logf logger.Lo
 		var (
 			ext     = filepath.Ext(d.Name())
 			oldname = filepath.Join(dir, d.Name())
-			newname = filepath.Join(dir, fmt.Sprintf("%d%s", start, ext))
+			newname = filepath.Join(dir, fmt.Sprintf("%d%s", a.start, ext))
 		)
 
 		if _, err := os.Stat(newname); !errors.Is(err, fs.ErrNotExist) {
-			logf("File %s already exists, skipping.", newname)
-			start++
+			a.logf("File %s already exists, skipping.", newname)
+			a.start++
 			continue
 		}
 
-		if dry {
-			logf("Would rename %s to %s.", oldname, newname)
+		if a.dry {
+			a.logf("Would rename %s to %s.", oldname, newname)
 		} else {
-			logf("Renaming %s to %s.", oldname, newname)
+			a.logf("Renaming %s to %s.", oldname, newname)
 			if err := os.Rename(oldname, newname); err != nil {
 				return err
 			}
 		}
 
-		start++
+		a.start++
 	}
 	return nil
 }

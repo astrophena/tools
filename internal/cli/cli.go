@@ -2,7 +2,7 @@
 // Use of this source code is governed by the ISC
 // license that can be found in the LICENSE.md file.
 
-// Package cli contains common command-line flags and configuration options.
+// Package cli provides utilities for building command-line applications.
 package cli
 
 import (
@@ -18,21 +18,14 @@ import (
 	"go.astrophena.name/tools/internal/version"
 )
 
-// Run executes the provided function f within a context that is canceled when
-// an interrupt signal (e.g., Ctrl+C) is received.
-//
-// If f returns a non-nil error, Run prints the error message to standard error
-// (if the error is considered "printable") and exits the program with a status
-// code of 1.
-//
-// Printable errors are those that provide useful information to the user.
-// Errors like flag parsing errors or help requests are considered non-printable
-// and are not displayed to the user.
-func Run(f func(ctx context.Context) error) {
+// Main is a helper function that handles common startup tasks for command-line
+// applications. It sets up signal handling for interrupts, runs the application,
+// and prints errors to stderr.
+func Main(app App) {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 
-	err := f(ctx)
+	err := Run(ctx, app, OSEnv())
 
 	if err == nil {
 		return
@@ -57,80 +50,133 @@ func isPrintableError(err error) bool {
 	return !errors.As(err, &ue)
 }
 
-var (
-	// ErrExitVersion is an error indicating the application should exit after
-	// showing version.
-	ErrExitVersion = &unprintableError{errors.New("version flag exit")}
-	// ErrInvalidArgs indicates that the command-line arguments provided to the
-	// application are invalid or insufficient. This error should be wrapped with
-	// fmt.Errorf to provide a specific, user-friendly message explaining the
-	// nature of the invalid arguments. For example:
-	//
-	// 	return fmt.Errorf("%w: missing required argument 'filename'", cli.ErrInvalidArgs)
-	//
-	ErrInvalidArgs = errors.New("invalid arguments")
-)
+// ErrExitVersion is an error indicating the application should exit after
+// showing version.
+var ErrExitVersion = &unprintableError{errors.New("version flag exit")}
+
+// ErrInvalidArgs indicates that the command-line arguments provided to the
+// application are invalid or insufficient.
+
+// This error should be wrapped with fmt.Errorf to provide a specific,
+// user-friendly message explaining the nature of the invalid arguments.
+//
+// For example:
+//
+//	return fmt.Errorf("%w: missing required argument 'filename'", cli.ErrInvalidArgs)
+var ErrInvalidArgs = errors.New("invalid arguments")
 
 // App represents a command-line application.
-type App struct {
-	Name        string        // Name of the application.
-	Description string        // Description of the application.
-	Credits     string        // Licenses of third-party libraries used in the application.
-	ArgsUsage   string        // Usage message for the command-line arguments.
-	Flags       *flag.FlagSet // Command-line flags.
+type App interface {
+	// Run runs the application.
+	Run(context.Context, Env) error
 }
 
-// HandleStartup handles the command startup. All exported fields shouldn't be
-// modified after HandleStartup is called.
-//
-// It sets up the command-line flags, parses the arguments, and handles the
-// version flag if specified.
-func (a *App) HandleStartup(args []string, stdout, stderr io.Writer) error {
-	if a.Name == "" {
-		a.Name = version.CmdName()
+// HasInfo represents a command-line application that has information about
+// itself.
+type HasInfo interface {
+	App
+
+	// Info returns information about the application.
+	Info() Info
+}
+
+// HasFlags represents a command-line application that has flags.
+type HasFlags interface {
+	App
+
+	// Flags adds flags to the flag set.
+	Flags(*flag.FlagSet)
+}
+
+// AppFunc is a function type that implements the [App] interface.
+// It has no information or flags.
+type AppFunc func(context.Context, Env) error
+
+// Run calls f(ctx, env).
+func (f AppFunc) Run(ctx context.Context, env Env) error {
+	return f(ctx, env)
+}
+
+// Info contains information about a command-line application.
+type Info struct {
+	Name        string
+	Description string
+}
+
+// Env represents the application environment.
+type Env struct {
+	Args   []string
+	Getenv func(string) string
+	Stdin  io.Reader
+	Stdout io.Writer
+	Stderr io.Writer
+}
+
+// OSEnv returns the current operating system environment.
+func OSEnv() Env {
+	return Env{
+		Args:   os.Args[1:],
+		Getenv: os.Getenv,
+		Stdin:  os.Stdin,
+		Stdout: os.Stdout,
+		Stderr: os.Stderr,
 	}
-	if a.ArgsUsage == "" {
-		a.ArgsUsage = "[flags...]"
+}
+
+// Run handles the command-line application startup.
+func Run(ctx context.Context, app App, env Env) error {
+	var info Info
+	if ia, ok := app.(HasInfo); ok {
+		info = ia.Info()
+	} else {
+		info = globalInfo
 	}
-	if a.Flags == nil {
-		a.Flags = flag.NewFlagSet(a.Name, flag.ContinueOnError)
+
+	if info.Name == "" {
+		info.Name = version.CmdName()
+	}
+
+	flags := flag.NewFlagSet(info.Name, flag.ContinueOnError)
+	if fa, ok := app.(HasFlags); ok {
+		fa.Flags(flags)
 	}
 
 	var showVersion bool
-	if a.Flags.Lookup("version") == nil {
-		a.Flags.BoolVar(&showVersion, "version", false, "Show version.")
-	}
-	var showCredits bool
-	if a.Credits != "" && a.Flags.Lookup("credits") == nil {
-		a.Flags.BoolVar(&showCredits, "credits", false, "Show third-party licenses.")
+	if flags.Lookup("version") == nil {
+		flags.BoolVar(&showVersion, "version", false, "Show version.")
 	}
 
-	a.Flags.Usage = a.usage(stderr)
-	a.Flags.SetOutput(stderr)
-	if err := a.Flags.Parse(args); err != nil {
+	flags.Usage = usage(info, flags, env.Stderr)
+	flags.SetOutput(env.Stderr)
+	if err := flags.Parse(env.Args); err != nil {
 		// Already printed to stderr by flag package, so mark as an unprintable error.
 		return &unprintableError{err}
 	}
 	if showVersion {
-		fmt.Fprint(stderr, version.Version())
+		fmt.Fprint(env.Stderr, version.Version())
 		return ErrExitVersion
 	}
-	if showCredits {
-		fmt.Fprintf(stderr, a.Credits)
-		return ErrExitVersion
-	}
+	env.Args = flags.Args()
 
-	return nil
+	return app.Run(ctx, env)
 }
 
-// usage prints the usage message for the application.
-func (a *App) usage(stderr io.Writer) func() {
+func usage(info Info, flags *flag.FlagSet, stderr io.Writer) func() {
 	return func() {
-		fmt.Fprintf(stderr, "Usage: %s %s\n\n", a.Name, a.ArgsUsage)
-		if a.Description != "" {
-			fmt.Fprintf(stderr, "%s\n\n", strings.TrimSpace(a.Description))
+		if info.Description != "" {
+			fmt.Fprintf(stderr, "%s\n\n", strings.TrimSpace(info.Description))
 		}
 		fmt.Fprint(stderr, "Available flags:\n\n")
-		a.Flags.PrintDefaults()
+		flags.PrintDefaults()
 	}
 }
+
+var globalInfo Info
+
+// SetGlobalInfo sets the global application information.
+//
+// This function is used to inject application information, such as name and
+// description, which is then used by the [Run] function if the application
+// itself does not provide it via the [HasInfo] interface. This is primarily
+// used for automatically generating documentation.
+func SetInfo(info Info) { globalInfo = info }
