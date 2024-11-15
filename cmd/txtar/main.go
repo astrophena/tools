@@ -26,7 +26,7 @@ func (a *app) Flags(fs *flag.FlagSet) {
 
 func (a *app) Run(ctx context.Context, env *cli.Env) error {
 	if len(env.Args) != 2 {
-		return fmt.Errorf("%w: missing required arguments 'file' and 'directory'", cli.ErrInvalidArgs)
+		return fmt.Errorf("%w: missing required arguments 'archive' and 'directory'", cli.ErrInvalidArgs)
 	}
 	file, dir := env.Args[0], env.Args[1]
 
