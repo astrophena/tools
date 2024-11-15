@@ -174,23 +174,31 @@ var (
 //
 // The parsed documentation will be included in the help message.
 //
-// # Example usage:
+// # Example usage
 //
-//	import _ "embed"
+// In application's doc.go:
+//
+//	/*
+//	Amazinator does amazing things...
+//
+//	# Usage
+//
+//		$ amazinator [flags...]
+//
+//	Amazinator amazes amazinations by amazing your amazinators.
+//	*/
+//	package main
+//
+//	import (
+//		_ "embed"
+//
+//		"go.astrophena.name/tools/internal/cli"
+//	)
 //
 //	//go:embed doc.go
 //	var doc []byte
 //
 //	func init() { cli.SetDocComment(doc) }
-//
-// Where doc.go contains the application's documentation within a block comment:
-//
-//	/*
-//	My Application
-//
-//	This application does amazing things...
-//	*/
-//	package main
 func SetDocComment(src []byte) { docSrc = src }
 
 func parseDocComment() string {
