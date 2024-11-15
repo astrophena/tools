@@ -14,7 +14,6 @@ import (
 	"io/fs"
 	"path/filepath"
 	"reflect"
-	"runtime/debug"
 	"strings"
 	"testing"
 	"text/template"
@@ -165,7 +164,6 @@ func TestRun(t *testing.T) {
 
 			if err != nil && tc.wantErr != nil && !errors.Is(err, tc.wantErr) {
 				t.Fatalf("got error: %v", err)
-				debug.PrintStack()
 			}
 
 			if tc.wantInStdout != "" && !strings.Contains(stdout.String(), tc.wantInStdout) {
