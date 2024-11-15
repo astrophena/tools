@@ -2,11 +2,6 @@
 // Use of this source code is governed by the ISC
 // license that can be found in the LICENSE.md file.
 
-// Kp reads passwords from KeePass databases.
-//
-// # Usage
-//
-//	$ kp [flags...] <file> [entry]
 package main
 
 import (

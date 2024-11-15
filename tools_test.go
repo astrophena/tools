@@ -4,7 +4,6 @@
 
 package devtools
 
-//go:generate go run devtools/gen/info.go
 //go:generate go run devtools/gen/copyright.go
 //go:generate go run devtools/gen/readme.go
 

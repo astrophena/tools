@@ -6,6 +6,8 @@
 package cli
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"errors"
 	"flag"
@@ -14,7 +16,6 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"strings"
 
 	"go.astrophena.name/base/logger"
 	"go.astrophena.name/tools/internal/util/syncx"
@@ -74,15 +75,6 @@ type App interface {
 	Run(context.Context, *Env) error
 }
 
-// HasInfo represents a command-line application that has information about
-// itself.
-type HasInfo interface {
-	App
-
-	// Info returns information about the application.
-	Info() Info
-}
-
 // HasFlags represents a command-line application that has flags.
 type HasFlags interface {
 	App
@@ -92,18 +84,12 @@ type HasFlags interface {
 }
 
 // AppFunc is a function type that implements the [App] interface.
-// It has no information or flags.
+// It has no defined flags.
 type AppFunc func(context.Context, *Env) error
 
 // Run calls f(ctx, env).
 func (f AppFunc) Run(ctx context.Context, env *Env) error {
 	return f(ctx, env)
-}
-
-// Info contains information about a command-line application.
-type Info struct {
-	Name        string
-	Description string
 }
 
 // Env represents the application environment.
@@ -137,18 +123,9 @@ func OSEnv() *Env {
 
 // Run handles the command-line application startup.
 func Run(ctx context.Context, app App, env *Env) error {
-	var info Info
-	if ia, ok := app.(HasInfo); ok {
-		info = ia.Info()
-	} else {
-		info = globalInfo
-	}
+	name := version.CmdName()
 
-	if info.Name == "" {
-		info.Name = version.CmdName()
-	}
-
-	flags := flag.NewFlagSet(info.Name, flag.ContinueOnError)
+	flags := flag.NewFlagSet(name, flag.ContinueOnError)
 	if fa, ok := app.(HasFlags); ok {
 		fa.Flags(flags)
 	}
@@ -158,7 +135,7 @@ func Run(ctx context.Context, app App, env *Env) error {
 		flags.BoolVar(&showVersion, "version", false, "Show version.")
 	}
 
-	flags.Usage = usage(info, flags, env.Stderr)
+	flags.Usage = usage(name, flags, env.Stderr)
 	flags.SetOutput(env.Stderr)
 	if err := flags.Parse(env.Args); err != nil {
 		// Already printed to stderr by flag package, so mark as an unprintable error.
@@ -173,22 +150,71 @@ func Run(ctx context.Context, app App, env *Env) error {
 	return app.Run(ctx, env)
 }
 
-func usage(info Info, flags *flag.FlagSet, stderr io.Writer) func() {
+func usage(name string, flags *flag.FlagSet, stderr io.Writer) func() {
 	return func() {
-		if info.Description != "" {
-			fmt.Fprintf(stderr, "%s\n\n", strings.TrimSpace(info.Description))
+		if docSrc != nil {
+			fmt.Fprintf(stderr, "%s\n", doc.Get(parseDocComment))
 		}
 		fmt.Fprint(stderr, "Available flags:\n\n")
 		flags.PrintDefaults()
 	}
 }
 
-var globalInfo Info
+var (
+	docSrc []byte
+	doc    syncx.Lazy[string]
+)
 
-// SetGlobalInfo sets the global application information.
+// SetDocComment stores the provided byte slice as the source for the
+// application's documentation comment.
 //
-// This function is used to inject application information, such as name and
-// description, which is then used by the [Run] function if the application
-// itself does not provide it via the [HasInfo] interface. This is primarily
-// used for automatically generating documentation.
-func SetInfo(info Info) { globalInfo = info }
+// The parsing process assumes that the documentation comment is enclosed
+// within a single /* ... */ block and extracts the content line by line.
+// Any other multi-line comments within the embedded file will be ignored.
+//
+// The parsed documentation will be included in the help message.
+//
+// # Example usage:
+//
+//	import _ "embed"
+//
+//	//go:embed doc.go
+//	var doc []byte
+//
+//	func init() { cli.SetDocComment(doc) }
+//
+// Where doc.go contains the application's documentation within a block comment:
+//
+//	/*
+//	My Application
+//
+//	This application does amazing things...
+//	*/
+//	package main
+func SetDocComment(src []byte) { docSrc = src }
+
+func parseDocComment() string {
+	s := bufio.NewScanner(bytes.NewReader(docSrc))
+	var (
+		doc       string
+		inComment bool
+	)
+	for s.Scan() {
+		line := s.Text()
+		if line == "/*" {
+			inComment = true
+			continue
+		}
+		if line == "*/" {
+			// Comment ended, stop scanning.
+			break
+		}
+		if inComment {
+			doc += s.Text() + "\n"
+		}
+	}
+	if err := s.Err(); err != nil {
+		panic(err)
+	}
+	return doc
+}
