@@ -3,11 +3,30 @@
 // license that can be found in the LICENSE.md file.
 
 /*
-Kp reads passwords from KeePass databases.
+Kp retrieves passwords and other information from KeePass database files.
 
 # Usage
 
-	$ kp [flags...] <file> [entry]
+To retrieve a password for a specific entry:
+
+	$ kp <file> <entry>
+
+To list all entries in the database:
+
+	$ kp -l <file>
+
+By default, kp retrieves the password associated with an entry. You can
+customize the output format using the -f flag, which accepts a Go template
+string:
+
+	$ kp -f "{{ .GetUsername }}:{{ .GetPassword }}" <file> <entry>
+
+The available fields for the template are documented at:
+https://pkg.go.dev/github.com/tobischo/gokeepasslib/v3#Entry.
+
+The password for the KeePass database can be provided via the KP_PASSWORD
+environment variable. If the environment variable is not set, kp will
+prompt for the password interactively.
 */
 package main
 

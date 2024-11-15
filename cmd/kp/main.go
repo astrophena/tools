@@ -34,8 +34,7 @@ type app struct {
 }
 
 func (a *app) Flags(fs *flag.FlagSet) {
-	fs.StringVar(&a.format, "f", "{{ .GetPassword }}", "Format `template`.\n"+
-		"See https://pkg.go.dev/github.com/tobischo/gokeepasslib/v3#Entry for available fields.")
+	fs.StringVar(&a.format, "f", "{{ .GetPassword }}", "Format Go `template`.")
 	fs.BoolVar(&a.list, "l", false, "List all entries.")
 }
 
