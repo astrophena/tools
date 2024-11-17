@@ -399,6 +399,8 @@ func (f *fetcher) run(ctx context.Context) error { // {{{
 		s.MemoryUsage = m.Alloc
 	})
 
+	f.state.Access(f.cleanState)
+
 	if f.dry {
 		f.logf("Fetched feeds: %d.\nAll feeds: %d.", fetchedFeeds.Load(), len(f.feeds))
 		f.logf("Not reporting stats or saving state.")
@@ -414,6 +416,22 @@ func (f *fetcher) run(ctx context.Context) error { // {{{
 	}
 
 	return f.saveToGist(ctx)
+}
+
+func (f *fetcher) cleanState(s map[string]*feedState) {
+	for url := range s {
+		var found bool
+		for _, existing := range f.feeds {
+			if url == existing.url {
+				found = true
+				break
+			}
+		}
+		if !found {
+			f.dlogf("Removing state for non-existent feed %q.", url)
+			delete(s, url)
+		}
+	}
 }
 
 func shuffle[S any](s []S) []S {
