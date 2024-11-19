@@ -17,9 +17,7 @@ To list all entries in the database:
 
 By default, kp retrieves the password associated with an entry. You can
 customize the output format using the -f flag, which accepts a Go template
-string:
-
-	$ kp -f "{{ .GetUsername }}:{{ .GetPassword }}" <file> <entry>
+string.
 
 The available fields for the template are documented at:
 https://pkg.go.dev/github.com/tobischo/gokeepasslib/v3#Entry.
