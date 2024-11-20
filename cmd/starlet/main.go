@@ -62,13 +62,14 @@ const (
 func main() { cli.Main(new(engine)) }
 
 func (e *engine) Flags(fs *flag.FlagSet) {
+	fs.Int64Var(&e.tgOwner, "tg-owner", 0, "Telegram user `ID` of the bot owner.")
 	fs.StringVar(&e.addr, "addr", "localhost:3000", "Listen on `host:port`.")
 	fs.StringVar(&e.geminiKey, "gemini-key", "", "Gemini API `key`.")
 	fs.StringVar(&e.ghToken, "gh-token", "", "GitHub API `token`.")
 	fs.StringVar(&e.gistID, "gist-id", "", "GitHub Gist `ID` to load bot code from.")
 	fs.StringVar(&e.host, "host", "", "Bot `domain` used for setting up webhook.")
+	fs.StringVar(&e.notifyToken, "notify-token", "", "Secret `token` used for calling /notify endpoint.")
 	fs.StringVar(&e.reloadToken, "reload-token", "", "Secret `token` used for calling /reload endpoint.")
-	fs.Int64Var(&e.tgOwner, "tg-owner", 0, "Telegram user `ID` of the bot owner.")
 	fs.StringVar(&e.tgSecret, "tg-secret", "", "Secret `token` used to validate Telegram Bot API updates.")
 	fs.StringVar(&e.tgToken, "tg-token", "", "Telegram Bot API `token`.")
 }
@@ -80,6 +81,7 @@ func (e *engine) Run(ctx context.Context, env *cli.Env) error {
 	e.gistID = cmp.Or(env.Getenv("GIST_ID"), e.gistID)
 	e.host = cmp.Or(env.Getenv("HOST"), e.host)
 	e.onRender = env.Getenv("RENDER") == "true"
+	e.notifyToken = cmp.Or(env.Getenv("NOTIFY_TOKEN"), e.notifyToken)
 	e.reloadToken = cmp.Or(env.Getenv("RELOAD_TOKEN"), e.reloadToken)
 	e.tgOwner = cmp.Or(parseInt(env.Getenv("TG_OWNER")), e.tgOwner)
 	e.tgSecret = cmp.Or(env.Getenv("TG_SECRET"), e.tgSecret)
@@ -148,6 +150,7 @@ type engine struct {
 	host          string
 	httpc         *http.Client
 	onRender      bool
+	notifyToken   string
 	reloadToken   string
 	stderr        io.Writer
 	tgBotID       int64
@@ -309,6 +312,7 @@ func (e *engine) initRoutes() {
 
 	e.mux.HandleFunc("POST /telegram", e.handleTelegramWebhook)
 	e.mux.HandleFunc("POST /reload", e.handleReload)
+	e.mux.HandleFunc("POST /notify", e.handleNotify)
 
 	// Redirect from *.onrender.com to bot host.
 	if e.onRender && e.host != "" {
@@ -553,6 +557,58 @@ func (e *engine) handleReload(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w)
 }
 
+func (e *engine) handleNotify(w http.ResponseWriter, r *http.Request) {
+	tok := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+	if tok != e.notifyToken {
+		web.RespondJSONError(e.logf, w, web.ErrUnauthorized)
+		return
+	}
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		web.RespondJSONError(e.logf, w, err)
+		return
+	}
+	data := struct {
+		ChatID  int64  `json:"chat_id"` // defaults to e.tgOwner if 0
+		Message string `json:"message"`
+	}{}
+	if err := json.Unmarshal(body, &data); err != nil {
+		web.RespondJSONError(e.logf, w, err)
+		return
+	}
+	if data.ChatID == 0 {
+		data.ChatID = e.tgOwner
+	}
+	if data.Message == "" {
+		web.RespondJSONError(e.logf, w, fmt.Errorf("%w: message is empty", web.ErrBadRequest))
+	}
+
+	_, err = request.Make[any](r.Context(), request.Params{
+		Method: http.MethodPost,
+		URL:    "https://api.telegram.org/bot" + e.tgToken + "/sendMessage",
+		Body: map[string]any{
+			"chat_id":    strconv.FormatInt(data.ChatID, 10),
+			"text":       data.Message,
+			"parse_mode": "HTML",
+			"link_preview_options": linkPreviewOptions{
+				IsDisabled: true,
+			},
+		},
+		HTTPClient: e.httpc,
+		Headers: map[string]string{
+			"User-Agent": version.UserAgent(),
+		},
+		Scrubber: e.scrubber,
+	})
+	if err != nil {
+		web.RespondJSONError(e.logf, w, err)
+		return
+	}
+
+	jsonOK(w)
+}
+
 func jsonOK(w http.ResponseWriter) {
 	var res struct {
 		Status string `json:"status"`
@@ -672,6 +728,11 @@ func (e *engine) respondError(w http.ResponseWriter, err error) {
 	web.RespondError(e.logf, w, err)
 }
 
+// https://core.telegram.org/bots/api#linkpreviewoptions
+type linkPreviewOptions struct {
+	IsDisabled bool `json:"is_disabled"`
+}
+
 // e.mu must be held for reading.
 func (e *engine) reportError(ctx context.Context, chatID int64, w http.ResponseWriter, err error) {
 	errMsg := err.Error()
@@ -681,11 +742,6 @@ func (e *engine) reportError(ctx context.Context, chatID int64, w http.ResponseW
 	if e.scrubber != nil {
 		// Mask secrets in error messages.
 		errMsg = e.scrubber.Replace(errMsg)
-	}
-
-	// https://core.telegram.org/bots/api#linkpreviewoptions
-	type linkPreviewOptions struct {
-		IsDisabled bool `json:"is_disabled"`
 	}
 
 	_, sendErr := request.Make[any](ctx, request.Params{
