@@ -45,10 +45,11 @@ import (
 const (
 	defaultErrorTemplate = `❌ Something went wrong:
 <pre><code>%v</code></pre>`
-	ghAPI            = "https://api.github.com"
-	tgAPI            = "https://api.telegram.org"
-	errorThreshold   = 12 // failing continuously for twelve days will disable feed and complain loudly
-	concurrencyLimit = 10
+	ghAPI                 = "https://api.github.com"
+	tgAPI                 = "https://api.telegram.org"
+	errorThreshold        = 12 // failing continuously for N fetches will disable feed and complain loudly
+	fetchConcurrencyLimit = 10 // N fetches that can run at the same time
+	sendConcurrencyLimit  = 2  // N sends that can run at the same time
 )
 
 // Some types of errors that can happen during tgfeed execution.
@@ -341,7 +342,7 @@ func (f *fetcher) run(ctx context.Context) error { // {{{
 	// Start sending goroutine.
 	baseWg.Add(1)
 	go func() {
-		sendWg := syncx.NewLimitedWaitGroup(concurrencyLimit)
+		sendWg := syncx.NewLimitedWaitGroup(sendConcurrencyLimit)
 
 	loop:
 		for {
@@ -368,7 +369,7 @@ func (f *fetcher) run(ctx context.Context) error { // {{{
 	var fetchedFeeds atomic.Int64
 
 	// Enqueue fetches.
-	fetchWg := syncx.NewLimitedWaitGroup(concurrencyLimit)
+	fetchWg := syncx.NewLimitedWaitGroup(fetchConcurrencyLimit)
 	for _, feed := range shuffle(f.feeds) {
 		fetchWg.Add(1)
 		go func() {
