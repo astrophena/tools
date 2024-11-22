@@ -16,6 +16,8 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"runtime"
+	"runtime/pprof"
 
 	"go.astrophena.name/base/logger"
 	"go.astrophena.name/tools/internal/util/syncx"
@@ -130,6 +132,10 @@ func Run(ctx context.Context, app App, env *Env) error {
 		fa.Flags(flags)
 	}
 
+	var (
+		cpuProfile = flags.String("cpuprofile", "", "Write CPU profile to `file`.")
+		memProfile = flags.String("memprofile", "", "Write memory profile to `file`.")
+	)
 	var showVersion bool
 	if flags.Lookup("version") == nil {
 		flags.BoolVar(&showVersion, "version", false, "Show version.")
@@ -141,13 +147,41 @@ func Run(ctx context.Context, app App, env *Env) error {
 		// Already printed to stderr by flag package, so mark as an unprintable error.
 		return &unprintableError{err}
 	}
+	if *cpuProfile != "" {
+		f, err := os.Create(*cpuProfile)
+		if err != nil {
+			return fmt.Errorf("could not create CPU profile: %w", err)
+		}
+		defer f.Close()
+		if err := pprof.StartCPUProfile(f); err != nil {
+			return fmt.Errorf("could not start CPU profile: %w", err)
+		}
+		defer pprof.StopCPUProfile()
+	}
+
 	if showVersion {
 		fmt.Fprint(env.Stderr, version.Version())
 		return ErrExitVersion
 	}
 	env.Args = flags.Args()
 
-	return app.Run(ctx, env)
+	if err := app.Run(ctx, env); err != nil {
+		return err
+	}
+
+	if *memProfile != "" {
+		f, err := os.Create(*memProfile)
+		if err != nil {
+			return fmt.Errorf("could not create memory profile: %w", err)
+		}
+		defer f.Close()
+		runtime.GC() // get up-to-date statistics
+		if err := pprof.WriteHeapProfile(f); err != nil {
+			return fmt.Errorf("could not write memory profile: %w", err)
+		}
+	}
+
+	return nil
 }
 
 func usage(name string, flags *flag.FlagSet, stderr io.Writer) func() {
