@@ -498,29 +498,16 @@ func feedBuiltin(_ *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, k
 	if len(args) > 0 {
 		return nil, fmt.Errorf("unexpected positional arguments")
 	}
-
-	var (
-		title     string
-		url       string
-		blockRule *starlark.Function
-		keepRule  *starlark.Function
-	)
-
+	f := new(feed)
 	if err := starlark.UnpackArgs("feed", args, kwargs,
-		"url", &url,
-		"title?", &title,
-		"block_rule?", &blockRule,
-		"keep_rule?", &keepRule,
+		"url", &f.url,
+		"title?", &f.title,
+		"block_rule?", &f.blockRule,
+		"keep_rule?", &f.keepRule,
 	); err != nil {
 		return nil, err
 	}
-
-	return &feed{
-		blockRule: blockRule,
-		keepRule:  keepRule,
-		title:     title,
-		url:       url,
-	}, nil
+	return f, nil
 }
 
 type feedState struct {
