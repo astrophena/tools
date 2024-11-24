@@ -36,6 +36,7 @@ import (
 // For example:
 //
 //	result = gemini.generate_content(
+//	    model = "gemini-1.5-flash",
 //	    contents = ["Once upon a time,"],
 //	    system = {
 //	        "text": "You are a creative story writer. Write a short story based on the provided prompt."
