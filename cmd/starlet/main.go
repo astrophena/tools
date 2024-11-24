@@ -582,6 +582,7 @@ func (e *engine) handleNotify(w http.ResponseWriter, r *http.Request) {
 	}
 	if data.Message == "" {
 		web.RespondJSONError(e.logf, w, fmt.Errorf("%w: message is empty", web.ErrBadRequest))
+		return
 	}
 
 	_, err = request.Make[any](r.Context(), request.Params{
