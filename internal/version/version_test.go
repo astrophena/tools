@@ -27,7 +27,7 @@ func TestUserAgent(t *testing.T) {
 		loadFunc = func() (*debug.BuildInfo, bool) {
 			return &bi, true
 		}
-		return []byte(UserAgent())
+		return []byte(userAgent(loadInfo(loadFunc)))
 	}, *update)
 }
 

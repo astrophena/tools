@@ -59,8 +59,9 @@ func Version() Info { return info() }
 
 // UserAgent returns a user agent string by combining the version information
 // and a special URL leading to bot information page.
-func UserAgent() string {
-	i := Version()
+func UserAgent() string { return userAgent(Version()) }
+
+func userAgent(i Info) string {
 	ver := i.Version
 	if i.Version == "git" && i.Commit != "" {
 		ver = i.Commit
