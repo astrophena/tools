@@ -5,99 +5,39 @@
 package main
 
 import (
-	"bytes"
-	"context"
 	"errors"
 	"flag"
 	"io/fs"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
 	"testing/fstest"
 
 	"go.astrophena.name/tools/internal/cli"
+	"go.astrophena.name/tools/internal/cli/clitest"
 )
 
 func TestEngineMain(t *testing.T) {
 	t.Parallel()
 
-	cases := map[string]struct {
-		args               []string
-		wantErr            error
-		wantNothingPrinted bool
-		wantInStdout       string
-		wantInStderr       string
-		checkFunc          func(t *testing.T, e *engine)
-	}{
+	clitest.Run[*engine](t, func(t *testing.T) *engine {
+		e := new(engine)
+		e.noServerStart = true
+		return e
+	}, map[string]clitest.Case[*engine]{
 		"prints usage with help flag": {
-			args:    []string{"-h"},
-			wantErr: flag.ErrHelp,
+			Args:    []string{"-h"},
+			WantErr: flag.ErrHelp,
 		},
 		"version": {
-			args:    []string{"-version"},
-			wantErr: cli.ErrExitVersion,
+			Args:    []string{"-version"},
+			WantErr: cli.ErrExitVersion,
 		},
 		"serves in current dir when passed no args": {
-			args:         []string{},
-			wantInStderr: "Serving from [CURDIR].",
+			Args: []string{},
 		},
-	}
-
-	for name, tc := range cases {
-		t.Run(name, func(t *testing.T) {
-			t.Parallel()
-
-			var (
-				e              = new(engine)
-				stdout, stderr bytes.Buffer
-			)
-
-			e.noServerStart = true
-			env := &cli.Env{
-				Args:   tc.args,
-				Stdout: &stdout,
-				Stderr: &stderr,
-			}
-			err := cli.Run(context.Background(), e, env)
-
-			// Don't use && because we want to trap all cases where err is
-			// nil.
-			if err == nil {
-				if tc.wantErr != nil {
-					t.Fatalf("must fail with error: %v", tc.wantErr)
-				}
-			}
-
-			if err != nil && !errors.Is(err, tc.wantErr) {
-				t.Fatalf("got error: %v", err)
-			}
-
-			if tc.wantNothingPrinted {
-				if stdout.String() != "" {
-					t.Errorf("stdout must be empty, got: %q", stdout.String())
-				}
-				if stderr.String() != "" {
-					t.Errorf("stderr must be empty, got: %q", stderr.String())
-				}
-			}
-
-			if tc.wantInStdout != "" && !strings.Contains(stdout.String(), tc.wantInStdout) {
-				t.Errorf("stdout must contain %q, got: %q", tc.wantInStdout, stdout.String())
-			}
-			if strings.Contains(tc.wantInStderr, "[CURDIR]") {
-				wd, err := os.Getwd()
-				if err != nil {
-					t.Fatal(err)
-				}
-				tc.wantInStderr = strings.ReplaceAll(tc.wantInStderr, "[CURDIR]", wd)
-			}
-			if tc.wantInStderr != "" && !strings.Contains(stderr.String(), tc.wantInStderr) {
-				t.Errorf("stderr must contain %q, got: %q", tc.wantInStderr, stderr.String())
-			}
-		})
-	}
+	})
 }
 
 func TestServe(t *testing.T) {

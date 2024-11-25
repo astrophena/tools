@@ -9,7 +9,6 @@ import (
 	"context"
 	_ "embed"
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
 	"html"
@@ -26,6 +25,7 @@ import (
 	"go.astrophena.name/tools/internal/api/gist"
 	"go.astrophena.name/tools/internal/api/google/serviceaccount"
 	"go.astrophena.name/tools/internal/cli"
+	"go.astrophena.name/tools/internal/cli/clitest"
 	"go.astrophena.name/tools/internal/web"
 )
 
@@ -42,117 +42,50 @@ var update = flag.Bool("update", false, "update golden files in testdata")
 func TestFetcherMain(t *testing.T) {
 	t.Parallel()
 
-	cases := map[string]struct {
-		args               []string
-		env                map[string]string
-		wantErr            error
-		wantNothingPrinted bool
-		wantInStdout       string
-		wantInStderr       string
-		checkFunc          func(t *testing.T, f *fetcher)
-	}{
+	clitest.Run[*fetcher](t, func(t *testing.T) *fetcher {
+		return testFetcher(t, testMux(t, nil))
+	}, map[string]clitest.Case[*fetcher]{
 		"returns an error without flags": {
-			args:    []string{},
-			wantErr: cli.ErrInvalidArgs,
+			Args:    []string{},
+			WantErr: cli.ErrInvalidArgs,
 		},
 		"run": {
-			args:               []string{"-run"},
-			wantNothingPrinted: true,
+			Args:               []string{"-run"},
+			WantNothingPrinted: true,
 		},
 		"version": {
-			args:    []string{"-version"},
-			wantErr: cli.ErrExitVersion,
+			Args:    []string{"-version"},
+			WantErr: cli.ErrExitVersion,
 		},
 		"edit without any changes": {
-			args: []string{"-edit"},
-			env: map[string]string{
+			Args: []string{"-edit"},
+			Env: map[string]string{
 				"EDITOR": "true",
 			},
-			wantInStderr: "No changes made to config.star, not doing anything.",
+			WantInStderr: "No changes made to config.star, not doing anything.",
 		},
 		"edit without defined editor": {
-			args:    []string{"-edit"},
-			wantErr: errNoEditor,
+			Args:    []string{"-edit"},
+			WantErr: errNoEditor,
 		},
 		"list feeds": {
-			args: []string{"-feeds"},
+			Args: []string{"-feeds"},
 		},
 		"reenable disabled feed": {
-			args:               []string{"-reenable", "https://example.com/disabled.xml"},
-			wantNothingPrinted: true,
-			checkFunc: func(t *testing.T, f *fetcher) {
+			Args:               []string{"-reenable", "https://example.com/disabled.xml"},
+			WantNothingPrinted: true,
+			CheckFunc: func(t *testing.T, f *fetcher) {
 				f.state.RAccess(func(s map[string]*feedState) {
 					testutil.AssertEqual(t, s["https://example.com/disabled.xml"].Disabled, false)
 				})
 			},
 		},
 		"reenable non-existent feed": {
-			args:    []string{"-reenable", "https://example.com/non-existent.xml"},
-			wantErr: errNoFeed,
+			Args:    []string{"-reenable", "https://example.com/non-existent.xml"},
+			WantErr: errNoFeed,
 		},
-	}
-
-	getenvFunc := func(env map[string]string) func(string) string {
-		return func(name string) string {
-			if env == nil {
-				return ""
-			}
-			return env[name]
-		}
-	}
-
-	for name, tc := range cases {
-		t.Run(name, func(t *testing.T) {
-			t.Parallel()
-
-			var (
-				f              = testFetcher(t, testMux(t, nil))
-				stdin          = strings.NewReader("")
-				stdout, stderr bytes.Buffer
-			)
-
-			env := &cli.Env{
-				Args:   tc.args,
-				Getenv: getenvFunc(tc.env),
-				Stdin:  stdin,
-				Stdout: &stdout,
-				Stderr: &stderr,
-			}
-			err := cli.Run(context.Background(), f, env)
-
-			// Don't use && because we want to trap all cases where err is
-			// nil.
-			if err == nil {
-				if tc.wantErr != nil {
-					t.Fatalf("must fail with error: %v", tc.wantErr)
-				}
-			}
-
-			if err != nil && !errors.Is(err, tc.wantErr) {
-				t.Fatalf("got error: %v", err)
-			}
-
-			if tc.wantNothingPrinted {
-				if stdout.String() != "" {
-					t.Errorf("stdout must be empty, got: %q", stdout.String())
-				}
-				if stderr.String() != "" {
-					t.Errorf("stderr must be empty, got: %q", stderr.String())
-				}
-			}
-
-			if tc.wantInStdout != "" && !strings.Contains(stdout.String(), tc.wantInStdout) {
-				t.Errorf("stdout must contain %q, got: %q", tc.wantInStdout, stdout.String())
-			}
-			if tc.wantInStderr != "" && !strings.Contains(stderr.String(), tc.wantInStderr) {
-				t.Errorf("stderr must contain %q, got: %q", tc.wantInStderr, stderr.String())
-			}
-
-			if tc.checkFunc != nil {
-				tc.checkFunc(t, f)
-			}
-		})
-	}
+	},
+	)
 }
 
 func TestListFeeds(t *testing.T) {

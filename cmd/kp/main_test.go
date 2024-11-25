@@ -6,20 +6,19 @@ package main
 
 import (
 	"bytes"
-	"context"
 	_ "embed"
 	"errors"
 	"flag"
 	"io"
 	"io/fs"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"testing"
 	"text/template"
 
 	"go.astrophena.name/base/testutil"
 	"go.astrophena.name/tools/internal/cli"
+	"go.astrophena.name/tools/internal/cli/clitest"
 
 	"github.com/tobischo/gokeepasslib/v3"
 )
@@ -36,144 +35,76 @@ var (
 func TestRun(t *testing.T) {
 	t.Parallel()
 
-	cases := map[string]struct {
-		args         []string
-		env          map[string]string
-		wantErr      error // checked with errors.Is
-		wantErrType  error // checked with errors.As
-		wantInStdout string
-		wantInStderr string
-	}{
+	clitest.Run[*app](t, func(t *testing.T) *app {
+		return new(app)
+	}, map[string]clitest.Case[*app]{
 		"prints usage with help flag": {
-			args:    []string{"-h"},
-			wantErr: flag.ErrHelp,
+			Args:    []string{"-h"},
+			WantErr: flag.ErrHelp,
 		},
 		"version": {
-			args:    []string{"-version"},
-			wantErr: cli.ErrExitVersion,
+			Args:    []string{"-version"},
+			WantErr: cli.ErrExitVersion,
 		},
 		"nonexistent file": {
-			args:    []string{"nonexistent.kdbx", "foo"},
-			wantErr: fs.ErrNotExist,
+			Args:    []string{"nonexistent.kdbx", "foo"},
+			WantErr: fs.ErrNotExist,
 		},
 		"invalid format": {
-			args:    []string{"-f", "{{", dbPath, "foo"},
-			wantErr: errInvalidFormat,
+			Args:    []string{"-f", "{{", dbPath, "foo"},
+			WantErr: errInvalidFormat,
 		},
 		"missing entry error": {
-			args:    []string{dbPath},
-			wantErr: cli.ErrInvalidArgs,
+			Args:    []string{dbPath},
+			WantErr: cli.ErrInvalidArgs,
 		},
 		"missing db": {
-			args:    []string{},
-			wantErr: cli.ErrInvalidArgs,
+			Args:    []string{},
+			WantErr: cli.ErrInvalidArgs,
 		},
 		"single entry": {
-			args: []string{dbPath, "foo"},
-			env: map[string]string{
+			Args: []string{dbPath, "foo"},
+			Env: map[string]string{
 				"KP_PASSWORD": "test",
 			},
-			wantInStdout: "bar",
+			WantInStdout: "bar",
 		},
 		"nonexistent entry": {
-			args: []string{dbPath, "foobar"},
-			env: map[string]string{
+			Args: []string{dbPath, "foobar"},
+			Env: map[string]string{
 				"KP_PASSWORD": "test",
 			},
-			wantErr: errNotFound,
+			WantErr: errNotFound,
 		},
 		"custom template": {
-			args: []string{"-f", "{{ .GetTitle }}", dbPath, "foo"},
-			env: map[string]string{
+			Args: []string{"-f", "{{ .GetTitle }}", dbPath, "foo"},
+			Env: map[string]string{
 				"KP_PASSWORD": "test",
 			},
-			wantInStdout: "foo",
+			WantInStdout: "foo",
 		},
 		"invalid field in custom template": {
-			args: []string{"-f", "{{ .Foo }}", dbPath, "foo"},
-			env: map[string]string{
+			Args: []string{"-f", "{{ .Foo }}", dbPath, "foo"},
+			Env: map[string]string{
 				"KP_PASSWORD": "test",
 			},
-			wantErrType: template.ExecError{},
+			WantErrType: template.ExecError{},
 		},
 		"list": {
-			args: []string{"-l", dbPath},
-			env: map[string]string{
+			Args: []string{"-l", dbPath},
+			Env: map[string]string{
 				"KP_PASSWORD": "test",
 			},
-			wantInStdout: "bar\nfoo",
+			WantInStdout: "bar\nfoo",
 		},
 		"custom format for list": {
-			args: []string{"-l", "-f", "{{ .GetTitle }}", dbPath},
-			env: map[string]string{
+			Args: []string{"-l", "-f", "{{ .GetTitle }}", dbPath},
+			Env: map[string]string{
 				"KP_PASSWORD": "test",
 			},
-			wantInStdout: "foo\nbar",
+			WantInStdout: "foo\nbar",
 		},
-	}
-
-	getenvFunc := func(env map[string]string) func(string) string {
-		return func(name string) string {
-			if env == nil {
-				return ""
-			}
-			return env[name]
-		}
-	}
-
-	for name, tc := range cases {
-		t.Run(name, func(t *testing.T) {
-			t.Parallel()
-
-			pr, _ := io.Pipe()
-
-			var stdout, stderr bytes.Buffer
-
-			env := &cli.Env{
-				Args:   tc.args,
-				Getenv: getenvFunc(tc.env),
-				Stdin:  pr,
-				Stdout: &stdout,
-				Stderr: &stderr,
-			}
-			err := cli.Run(context.Background(), new(app), env)
-
-			// Don't use && because we want to trap all cases where err is
-			// nil.
-			if err == nil {
-				if tc.wantErr != nil {
-					t.Fatalf("must fail with error: %v", tc.wantErr)
-				}
-				if tc.wantErrType != nil {
-					t.Fatalf("must fail with error type %T", tc.wantErrType)
-				}
-			}
-
-			if err != nil && tc.wantErrType != nil {
-				gotErr := reflect.Zero(reflect.TypeOf(tc.wantErrType)).Interface()
-				fail := func() {
-					t.Fatalf("want error type %T, got %T", tc.wantErrType, err)
-				}
-				if !errors.As(err, &gotErr) {
-					fail()
-				}
-				if gotErr != nil && reflect.TypeOf(gotErr) != reflect.TypeOf(tc.wantErrType) {
-					fail()
-				}
-			}
-
-			if err != nil && tc.wantErr != nil && !errors.Is(err, tc.wantErr) {
-				t.Fatalf("got error: %v", err)
-			}
-
-			if tc.wantInStdout != "" && !strings.Contains(stdout.String(), tc.wantInStdout) {
-				t.Errorf("stdout must contain %q, got: %q", tc.wantInStdout, stdout.String())
-			}
-			if tc.wantInStderr != "" && !strings.Contains(stderr.String(), tc.wantInStderr) {
-				t.Errorf("stderr must contain %q, got: %q", tc.wantInStderr, stderr.String())
-			}
-		})
-	}
+	})
 }
 
 func TestLookup(t *testing.T) {

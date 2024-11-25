@@ -13,7 +13,6 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -35,6 +34,7 @@ import (
 	"go.astrophena.name/base/txtar"
 	"go.astrophena.name/tools/internal/api/gist"
 	"go.astrophena.name/tools/internal/cli"
+	"go.astrophena.name/tools/internal/cli/clitest"
 	"go.astrophena.name/tools/internal/web"
 
 	"go.starlark.net/starlark"
@@ -46,95 +46,31 @@ const tgToken = "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
 func TestEngineMain(t *testing.T) {
 	t.Parallel()
 
-	cases := map[string]struct {
-		args               []string
-		env                map[string]string
-		wantErr            error
-		wantNothingPrinted bool
-		wantInStdout       string
-		wantInStderr       string
-		checkFunc          func(t *testing.T, e *engine)
-	}{
+	clitest.Run[*engine](t, func(t *testing.T) *engine {
+		e := new(engine)
+		e.httpc = testutil.MockHTTPClient(testMux(t, nil).mux)
+		e.noServerStart = true
+		return e
+	}, map[string]clitest.Case[*engine]{
 		"prints usage with help flag": {
-			args:    []string{"-h"},
-			wantErr: flag.ErrHelp,
+			Args:    []string{"-h"},
+			WantErr: flag.ErrHelp,
 		},
 		"overrides telegram token passed from flag by env": {
-			args: []string{"-tg-token", "blablabla"},
-			env: map[string]string{
+			Args: []string{"-tg-token", "blablabla"},
+			Env: map[string]string{
 				"TG_TOKEN": tgToken,
 			},
-			checkFunc: func(t *testing.T, e *engine) {
+			CheckFunc: func(t *testing.T, e *engine) {
 				testutil.AssertEqual(t, e.tgToken, tgToken)
 			},
 		},
 		"version": {
-			args:    []string{"-version"},
-			wantErr: cli.ErrExitVersion,
+			Args:    []string{"-version"},
+			WantErr: cli.ErrExitVersion,
 		},
-	}
-
-	getenvFunc := func(env map[string]string) func(string) string {
-		return func(name string) string {
-			if env == nil {
-				return ""
-			}
-			return env[name]
-		}
-	}
-
-	for name, tc := range cases {
-		t.Run(name, func(t *testing.T) {
-			t.Parallel()
-
-			var (
-				e              = new(engine)
-				stdout, stderr bytes.Buffer
-			)
-			e.httpc = testutil.MockHTTPClient(testMux(t, nil).mux)
-			e.noServerStart = true
-
-			env := &cli.Env{
-				Args:   tc.args,
-				Getenv: getenvFunc(tc.env),
-				Stdout: &stdout,
-				Stderr: &stderr,
-			}
-			err := cli.Run(context.Background(), e, env)
-
-			// Don't use && because we want to trap all cases where err is
-			// nil.
-			if err == nil {
-				if tc.wantErr != nil {
-					t.Fatalf("must fail with error: %v", tc.wantErr)
-				}
-			}
-
-			if err != nil && !errors.Is(err, tc.wantErr) {
-				t.Fatalf("got error: %v", err)
-			}
-
-			if tc.wantNothingPrinted {
-				if stdout.String() != "" {
-					t.Errorf("stdout must be empty, got: %q", stdout.String())
-				}
-				if stderr.String() != "" {
-					t.Errorf("stderr must be empty, got: %q", stderr.String())
-				}
-			}
-
-			if tc.wantInStdout != "" && !strings.Contains(stdout.String(), tc.wantInStdout) {
-				t.Errorf("stdout must contain %q, got: %q", tc.wantInStdout, stdout.String())
-			}
-			if tc.wantInStderr != "" && !strings.Contains(stderr.String(), tc.wantInStderr) {
-				t.Errorf("stderr must contain %q, got: %q", tc.wantInStderr, stderr.String())
-			}
-
-			if tc.checkFunc != nil {
-				tc.checkFunc(t, e)
-			}
-		})
-	}
+	},
+	)
 }
 
 func TestListenAndServe(t *testing.T) {
