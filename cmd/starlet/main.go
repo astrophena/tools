@@ -37,6 +37,7 @@ import (
 	"go.astrophena.name/tools/cmd/starlet/internal/starlarkconv"
 	"go.astrophena.name/tools/cmd/starlet/internal/starlarkgemini"
 	"go.astrophena.name/tools/cmd/starlet/internal/telegram"
+	"go.astrophena.name/tools/cmd/starlet/internal/tgmarkup"
 	"go.astrophena.name/tools/internal/api/gist"
 	"go.astrophena.name/tools/internal/api/google/gemini"
 	"go.astrophena.name/tools/internal/cli"
@@ -415,7 +416,8 @@ func (e *engine) loadCode(ctx context.Context, files map[string]string) error {
 		"markdown": &starlarkstruct.Module{
 			Name: "markdown",
 			Members: starlark.StringDict{
-				"strip": starlark.NewBuiltin("markdown.strip", stripMarkdown),
+				"strip":   starlark.NewBuiltin("markdown.strip", stripMarkdown),
+				"convert": starlark.NewBuiltin("markdown.convert", convertMarkdown),
 			},
 		},
 		"html": &starlarkstruct.Module{
@@ -636,6 +638,19 @@ func stripMarkdown(thread *starlark.Thread, b *starlark.Builtin, args starlark.T
 		return starlark.None, err
 	}
 	return starlark.String(stripmd.Strip(s)), nil
+}
+
+// markdown.convert Starlark function.
+func convertMarkdown(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	var s string
+	if err := starlark.UnpackArgs(b.Name(), args, kwargs, "s", &s); err != nil {
+		return starlark.None, err
+	}
+	val, err := starlarkconv.ToValue(tgmarkup.FromMarkdown(s))
+	if err != nil {
+		return starlark.None, err
+	}
+	return val, nil
 }
 
 // files.read Starlark function. e.mu must be held for reading.
