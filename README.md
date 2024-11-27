@@ -10,7 +10,6 @@ This repository holds personal tools:
 - Renamer renames files in a specified directory sequentially, starting from a given number.
 - Starlet is a Telegram bot runner using Starlark.
 - Tgfeed fetches RSS feeds and sends new articles via Telegram.
-- Tgnotify is a tool for sending Telegram notifications through Starlet.
 - Txtar is a tool for creating and extracting txtar archives.
 
 Install them:
