@@ -26,6 +26,7 @@ func main() { cli.Main(new(app)) }
 var (
 	errInvalidFormat = errors.New("invalid format")
 	errNotFound      = errors.New("not found")
+	errFailOpen      = errors.New("failed to open")
 )
 
 type app struct {
@@ -69,7 +70,7 @@ func (a *app) Run(ctx context.Context, env *cli.Env) error {
 	if a.list {
 		db, err := open(f, password)
 		if err != nil {
-			return err
+			return fmt.Errorf("%w: %v", errFailOpen, err)
 		}
 		for _, g := range db.Content.Root.Groups {
 			for _, e := range g.Entries {

@@ -97,6 +97,13 @@ func TestRun(t *testing.T) {
 			},
 			WantInStdout: "bar\nfoo",
 		},
+		"list (invalid password)": {
+			Args: []string{"-l", dbPath},
+			Env: map[string]string{
+				"KP_PASSWORD": "foo",
+			},
+			WantErr: errFailOpen,
+		},
 		"custom format for list": {
 			Args: []string{"-l", "-f", "{{ .GetTitle }}", dbPath},
 			Env: map[string]string{
