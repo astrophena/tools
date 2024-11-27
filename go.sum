@@ -37,8 +37,6 @@ github.com/tobischo/argon2 v0.1.0 h1:mwAx/9DK/4rP0xzNifb/XMAf43dU3eG1B3aeF88qu4Y
 github.com/tobischo/argon2 v0.1.0/go.mod h1:4NLmLFwhWPbT66nRZNgcktV/mibJ6fESoeEp43h9GRw=
 github.com/tobischo/gokeepasslib/v3 v3.6.0 h1:7SVV7WNvW8EGb0UYETj2IwjbgfqKEmij2gUnndXSIxk=
 github.com/tobischo/gokeepasslib/v3 v3.6.0/go.mod h1:/T7C3zga6hsbLoLIzNN8wQ5OpeYEF81mEuUYF0CciA8=
-github.com/writeas/go-strip-markdown/v2 v2.1.1 h1:hAxUM21Uhznf/FnbVGiJciqzska6iLei22Ijc3q2e28=
-github.com/writeas/go-strip-markdown/v2 v2.1.1/go.mod h1:UvvgPJgn1vvN8nWuE5e7v/+qmDu3BSVnKAB6Gl7hFzA=
 github.com/yuin/goldmark v1.6.0 h1:boZcn2GTjpsynOsC0iJHnBWa4Bi0qzfJjthwauItG68=
 github.com/yuin/goldmark v1.6.0/go.mod h1:6yULJ656Px+3vBD8DxQVa3kxgyrAnzto9xy5taEt/CY=
 go.astrophena.name/base v0.1.3 h1:oER0DEURe50VI463pHtgq2ekLm/lsWiNTDg1hBjLqqU=

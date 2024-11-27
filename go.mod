@@ -9,7 +9,6 @@ require (
 	github.com/google/go-cmp v0.6.0
 	github.com/mmcdole/gofeed v1.3.0
 	github.com/tobischo/gokeepasslib/v3 v3.6.0
-	github.com/writeas/go-strip-markdown/v2 v2.1.1
 	go.astrophena.name/base v0.1.3
 	go.starlark.net v0.0.0-20240925182052-1207426daebd
 	golang.org/x/crypto v0.29.0

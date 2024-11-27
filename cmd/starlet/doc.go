@@ -46,7 +46,6 @@ available to the bot code:
 	markdown: Allows operations with Markdown text.
 		- convert(text: str) -> dict: Converts Markdown text to Telegram-flavored message markup,
 			suitable for including in sendMessage Telegram Bot API call payload.
-		- strip(text: str) -> str: Strips out all formatting from Markdown text.
 
 	html: Helper functions for working with HTML.
 		- escape(s): Escapes HTML string.

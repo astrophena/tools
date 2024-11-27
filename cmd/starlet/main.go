@@ -46,7 +46,6 @@ import (
 	"go.astrophena.name/tools/internal/version"
 	"go.astrophena.name/tools/internal/web"
 
-	stripmd "github.com/writeas/go-strip-markdown/v2"
 	starlarktime "go.starlark.net/lib/time"
 	"go.starlark.net/starlark"
 	"go.starlark.net/starlarkstruct"
@@ -416,7 +415,6 @@ func (e *engine) loadCode(ctx context.Context, files map[string]string) error {
 		"markdown": &starlarkstruct.Module{
 			Name: "markdown",
 			Members: starlark.StringDict{
-				"strip":   starlark.NewBuiltin("markdown.strip", stripMarkdown),
 				"convert": starlark.NewBuiltin("markdown.convert", convertMarkdown),
 			},
 		},
@@ -629,15 +627,6 @@ func escapeHTML(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tupl
 		return starlark.None, err
 	}
 	return starlark.String(html.EscapeString(s)), nil
-}
-
-// markdown.strip Starlark function.
-func stripMarkdown(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	var s string
-	if err := starlark.UnpackArgs(b.Name(), args, kwargs, "s", &s); err != nil {
-		return starlark.None, err
-	}
-	return starlark.String(stripmd.Strip(s)), nil
 }
 
 // markdown.convert Starlark function.
