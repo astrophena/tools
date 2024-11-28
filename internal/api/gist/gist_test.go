@@ -22,6 +22,7 @@ func TestGet(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer rec.Close()
 
 	c := &Client{
 		HTTPClient: rec.Client(),
@@ -52,6 +53,7 @@ func TestUpdate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer rec.Close()
 	rec.Scrub(func(r *http.Request) error {
 		r.Header.Del("Authorization")
 		return nil

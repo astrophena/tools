@@ -39,6 +39,7 @@ func TestFromMarkdown(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		defer rec.Close()
 
 		token, chatID := expunged, expungedChatID
 		if rec.Recording() {
