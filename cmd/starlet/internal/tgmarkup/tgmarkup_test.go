@@ -21,7 +21,7 @@ import (
 
 // Updating this test:
 //
-//	$  TELEGRAM_TOKEN=... TELEGRAM_CHAT_ID= go test -httprecord testdata/*.httprr
+//	$  TELEGRAM_TOKEN=... TELEGRAM_CHAT_ID=... go test -httprecord testdata/*.httprr
 //
 // (notice an extra space before command to prevent recording it in shell
 // history)
