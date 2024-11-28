@@ -1,0 +1,4 @@
+#!/bin/sh
+
+echo "==> Running pre-commit check..."
+go test -count=1 # to invalidate test cache

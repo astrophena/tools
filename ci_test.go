@@ -2,7 +2,7 @@
 // Use of this source code is governed by the ISC
 // license that can be found in the LICENSE.md file.
 
-package devtools
+package tools
 
 //go:generate go run devtools/gen/copyright.go
 //go:generate go run devtools/gen/readme.go
