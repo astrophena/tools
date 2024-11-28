@@ -8,6 +8,7 @@ package tgmarkup
 
 import (
 	"strings"
+	"sync"
 	"unicode/utf16"
 
 	"rsc.io/markdown"
@@ -66,10 +67,22 @@ type Entity struct {
 	Language string `json:"language,omitempty"`
 }
 
+var parser = sync.OnceValue(func() *markdown.Parser {
+	return &markdown.Parser{
+		Strikethrough:      true,
+		TaskList:           false,
+		AutoLinkText:       true,
+		AutoLinkAssumeHTTP: true,
+		Table:              false,
+		SmartDot:           true,
+		SmartDash:          true,
+		SmartQuote:         true,
+	}
+})
+
 // FromMarkdown converts a Markdown text to a [Message].
 func FromMarkdown(text string) Message {
-	var p markdown.Parser
-	md := p.Parse(text)
+	md := parser().Parse(text)
 
 	var sb strings.Builder
 	var entities []Entity
@@ -127,10 +140,7 @@ func convertBlock(b markdown.Block, sb *strings.Builder, entities *[]Entity) {
 		})
 	case *markdown.List:
 		for _, itemBlock := range block.Items {
-			item, ok := itemBlock.(*markdown.Item)
-			if !ok {
-				continue
-			}
+			item := itemBlock.(*markdown.Item)
 			for _, b := range item.Blocks {
 				convertBlock(b, sb, entities)
 			}
