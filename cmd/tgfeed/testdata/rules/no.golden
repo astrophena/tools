@@ -1,0 +1,22 @@
+[
+  {
+    "chat_id": "test",
+    "parse_mode": "HTML",
+    "reply_markup": {
+      "inline_keyboard": [
+        []
+      ]
+    },
+    "text": "🔗 \u003ca href=\"https://example.com/block\"\u003eBlock this item\u003c/a\u003e"
+  },
+  {
+    "chat_id": "test",
+    "parse_mode": "HTML",
+    "reply_markup": {
+      "inline_keyboard": [
+        []
+      ]
+    },
+    "text": "🔗 \u003ca href=\"https://example.com/keep\"\u003eKeep this item\u003c/a\u003e"
+  }
+]

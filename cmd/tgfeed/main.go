@@ -191,15 +191,15 @@ func (f *fetcher) listFeeds(ctx context.Context, w io.Writer) error { // {{{
 	var sb strings.Builder
 
 	for _, feed := range f.feeds {
-		state, hasState := f.getState(feed.url)
-		fmt.Fprintf(&sb, "%s", feed.url)
+		state, hasState := f.getState(feed.URL)
+		fmt.Fprintf(&sb, "%s", feed.URL)
 		if !hasState {
 			fmt.Fprintf(&sb, " \n")
 			continue
 		}
 		fmt.Fprintf(&sb, " (")
-		if feed.title != "" {
-			fmt.Fprintf(&sb, "%q, ", feed.title)
+		if feed.Title != "" {
+			fmt.Fprintf(&sb, "%q, ", feed.Title)
 		}
 		fmt.Fprintf(&sb, "last updated %s", state.LastUpdated.Format(time.DateTime))
 		if state.ErrorCount > 0 {
@@ -423,7 +423,7 @@ func (f *fetcher) cleanState(s map[string]*feedState) {
 	for url := range s {
 		var found bool
 		for _, existing := range f.feeds {
-			if url == existing.url {
+			if url == existing.URL {
 				found = true
 				break
 			}
@@ -465,33 +465,16 @@ func (f *fetcher) reenable(ctx context.Context, url string) error { // {{{
 // Feed state {{{
 
 type feed struct {
-	url       string
-	title     string
-	blockRule *starlark.Function
-	keepRule  *starlark.Function
+	URL       string             `json:"url"`
+	Title     string             `json:"title,omitempty"`
+	BlockRule *starlark.Function `json:"-"`
+	KeepRule  *starlark.Function `json:"-"`
 }
 
-func (f *feed) String() string {
-	var sb strings.Builder
-	sb.WriteString("<feed")
-	if f.title != "" {
-		fmt.Fprintf(&sb, " title=%q", f.title)
-	}
-	if f.url != "" {
-		fmt.Fprintf(&sb, " url=%q", f.url)
-	}
-	if f.blockRule != nil {
-		fmt.Fprintf(&sb, " block_rule=%q", f.blockRule)
-	}
-	if f.keepRule != nil {
-		fmt.Fprintf(&sb, " keep_rule=%q", f.keepRule)
-	}
-	return strings.TrimSpace(sb.String()) + ">"
-}
-
+func (f *feed) String() string        { return fmt.Sprintf("<feed url=%q>", f.URL) }
 func (f *feed) Type() string          { return "feed" }
 func (f *feed) Freeze()               {} // immutable
-func (f *feed) Truth() starlark.Bool  { return starlark.Bool(f.url != "") }
+func (f *feed) Truth() starlark.Bool  { return starlark.Bool(f.URL != "") }
 func (f *feed) Hash() (uint32, error) { return 0, fmt.Errorf("unhashable: %s", f.Type()) }
 
 func feedBuiltin(_ *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
@@ -500,10 +483,10 @@ func feedBuiltin(_ *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, k
 	}
 	f := new(feed)
 	if err := starlark.UnpackArgs("feed", args, kwargs,
-		"url", &f.url,
-		"title?", &f.title,
-		"block_rule?", &f.blockRule,
-		"keep_rule?", &f.keepRule,
+		"url", &f.URL,
+		"title?", &f.Title,
+		"block_rule?", &f.BlockRule,
+		"keep_rule?", &f.KeepRule,
 	); err != nil {
 		return nil, err
 	}
@@ -597,9 +580,9 @@ func (f *fetcher) parseConfig(config string) ([]*feed, error) {
 			continue
 		}
 
-		_, err := url.Parse(feed.url)
+		_, err := url.Parse(feed.URL)
 		if err != nil {
-			return nil, fmt.Errorf("invalid URL %q of feed %q", feed.url, feed.title)
+			return nil, fmt.Errorf("invalid URL %q of feed %q", feed.URL, feed.Title)
 		}
 
 		feeds = append(feeds, feed)
@@ -707,28 +690,28 @@ func (f *fetcher) reportStats(ctx context.Context, s *stats) error {
 func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *gofeed.Item) {
 	startTime := time.Now()
 
-	state, exists := f.getState(fd.url)
+	state, exists := f.getState(fd.URL)
 	// If we don't remember this feed, it's probably new. Set it's last update
 	// date to current so we don't get a lot of unread articles and trigger
 	// Telegram Bot API rate limit.
 	if !exists {
-		f.dlogf("State for feed %q doesn't exist, creating it.", fd.url)
+		f.dlogf("State for feed %q doesn't exist, creating it.", fd.URL)
 		f.state.Access(func(s map[string]*feedState) {
-			s[fd.url] = new(feedState)
-			state = s[fd.url]
+			s[fd.URL] = new(feedState)
+			state = s[fd.URL]
 		})
 		state.LastUpdated = time.Now()
 	}
 
 	// Skip disabled feeds.
 	if state.Disabled {
-		f.dlogf("Skipping disabled feed %q.", fd.url)
+		f.dlogf("Skipping disabled feed %q.", fd.URL)
 		return
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fd.url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fd.URL, nil)
 	if err != nil {
-		f.handleFetchFailure(ctx, state, fd.url, err)
+		f.handleFetchFailure(ctx, state, fd.URL, err)
 		return
 	}
 
@@ -742,14 +725,14 @@ func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *gofeed.Item
 
 	res, err := f.httpc.Do(req)
 	if err != nil {
-		f.handleFetchFailure(ctx, state, fd.url, err)
+		f.handleFetchFailure(ctx, state, fd.URL, err)
 		return
 	}
 	defer res.Body.Close()
 
 	// Ignore unmodified feeds and report an error otherwise.
 	if res.StatusCode == http.StatusNotModified {
-		f.dlogf("Feed %q was unmodified since last fetch.", fd.url)
+		f.dlogf("Feed %q was unmodified since last fetch.", fd.URL)
 		f.stats.Access(func(s *stats) {
 			s.NotModifiedFeeds += 1
 		})
@@ -765,13 +748,13 @@ func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *gofeed.Item
 		if err != nil {
 			body = []byte("unable to read body")
 		}
-		f.handleFetchFailure(ctx, state, fd.url, fmt.Errorf("want 200, got %d: %s", res.StatusCode, body))
+		f.handleFetchFailure(ctx, state, fd.URL, fmt.Errorf("want 200, got %d: %s", res.StatusCode, body))
 		return
 	}
 
 	feed, err := f.fp.Parse(res.Body)
 	if err != nil {
-		f.handleFetchFailure(ctx, state, fd.url, err)
+		f.handleFetchFailure(ctx, state, fd.URL, err)
 		return
 	}
 
@@ -785,15 +768,15 @@ func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *gofeed.Item
 			continue
 		}
 
-		if fd.blockRule != nil {
-			if blocked := f.applyRule(fd.blockRule, item); blocked {
+		if fd.BlockRule != nil {
+			if blocked := f.applyRule(fd.BlockRule, item); blocked {
 				f.dlogf("Item %q was blocked due to block rule.", item.Link)
 				continue
 			}
 		}
 
-		if fd.keepRule != nil {
-			if keep := f.applyRule(fd.keepRule, item); !keep {
+		if fd.KeepRule != nil {
+			if keep := f.applyRule(fd.KeepRule, item); !keep {
 				f.dlogf("Item %q was not kept due to keep rule.", item.Link)
 				continue
 			}

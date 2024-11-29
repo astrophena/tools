@@ -15,6 +15,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -29,6 +30,8 @@ import (
 	"go.astrophena.name/tools/internal/web"
 )
 
+var update = flag.Bool("update", false, "update golden files in testdata")
+
 // Typical Telegram Bot API token, copied from docs.
 const tgToken = "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
 
@@ -37,13 +40,23 @@ var (
 	defaultGistTxtar []byte
 )
 
-var update = flag.Bool("update", false, "update golden files in testdata")
+var (
+	//go:embed testdata/feed.xml
+	atomFeed []byte
+
+	atomFeedRoute = "GET example.com/feed.xml"
+	atomFeedURL   = "https://example.com/feed.xml"
+)
 
 func TestFetcherMain(t *testing.T) {
 	t.Parallel()
 
 	clitest.Run[*fetcher](t, func(t *testing.T) *fetcher {
-		return testFetcher(t, testMux(t, nil))
+		return testFetcher(t, testMux(t, map[string]http.HandlerFunc{
+			atomFeedRoute: func(w http.ResponseWriter, r *http.Request) {
+				w.Write(atomFeed)
+			},
+		}))
 	}, map[string]clitest.Case[*fetcher]{
 		"returns an error without flags": {
 			Args:    []string{},
@@ -52,6 +65,9 @@ func TestFetcherMain(t *testing.T) {
 		"run": {
 			Args:               []string{"-run"},
 			WantNothingPrinted: true,
+		},
+		"run (dry)": {
+			Args: []string{"-run", "-dry"},
 		},
 		"version": {
 			Args:    []string{"-version"},
@@ -107,26 +123,11 @@ func TestListFeeds(t *testing.T) {
 	}, *update)
 }
 
-//go:embed testdata/feed.xml
-var atomFeed []byte
-
-func TestRun(t *testing.T) {
-	t.Parallel()
-	f := testFetcher(t, testMux(t, map[string]http.HandlerFunc{
-		"GET example.com/feed.xml": func(w http.ResponseWriter, r *http.Request) {
-			w.Write(atomFeed)
-		},
-	}))
-	if err := f.run(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-}
-
 func TestFailingFeed(t *testing.T) {
 	t.Parallel()
 
 	tm := testMux(t, map[string]http.HandlerFunc{
-		"GET example.com/feed.xml": func(w http.ResponseWriter, r *http.Request) {
+		atomFeedRoute: func(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "I'm a teapot.", http.StatusTeapot)
 		},
 	})
@@ -137,15 +138,15 @@ func TestFailingFeed(t *testing.T) {
 
 	state := tm.state(t)
 
-	testutil.AssertEqual(t, state["https://example.com/feed.xml"].ErrorCount, 1)
-	testutil.AssertEqual(t, state["https://example.com/feed.xml"].LastError, "want 200, got 418: I'm a teapot.\n")
+	testutil.AssertEqual(t, state[atomFeedURL].ErrorCount, 1)
+	testutil.AssertEqual(t, state[atomFeedURL].LastError, "want 200, got 418: I'm a teapot.\n")
 }
 
 func TestDisablingAndReenablingFailingFeed(t *testing.T) {
 	t.Parallel()
 
 	tm := testMux(t, map[string]http.HandlerFunc{
-		"GET example.com/feed.xml": func(w http.ResponseWriter, r *http.Request) {
+		atomFeedRoute: func(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "I'm a teapot.", http.StatusTeapot)
 		},
 	})
@@ -161,20 +162,20 @@ func TestDisablingAndReenablingFailingFeed(t *testing.T) {
 
 	state1 := tm.state(t)
 
-	testutil.AssertEqual(t, state1["https://example.com/feed.xml"].Disabled, true)
-	testutil.AssertEqual(t, state1["https://example.com/feed.xml"].ErrorCount, attempts)
-	testutil.AssertEqual(t, state1["https://example.com/feed.xml"].LastError, "want 200, got 418: I'm a teapot.\n")
+	testutil.AssertEqual(t, state1[atomFeedURL].Disabled, true)
+	testutil.AssertEqual(t, state1[atomFeedURL].ErrorCount, attempts)
+	testutil.AssertEqual(t, state1[atomFeedURL].LastError, "want 200, got 418: I'm a teapot.\n")
 
 	testutil.AssertEqual(t, len(tm.sentMessages), 1)
 	testutil.AssertEqual(t, tm.sentMessages[0]["text"], "❌ Something went wrong:\n<pre><code>"+html.EscapeString("fetching feed \"https://example.com/feed.xml\" failed after 12 previous attempts: want 200, got 418: I'm a teapot.\n; feed was disabled, to reenable it run 'tgfeed -reenable \"https://example.com/feed.xml\"'")+"</code></pre>")
 
-	if err := f.reenable(context.Background(), "https://example.com/feed.xml"); err != nil {
+	if err := f.reenable(context.Background(), atomFeedURL); err != nil {
 		t.Fatal(err)
 	}
 	state2 := tm.state(t)
-	testutil.AssertEqual(t, state2["https://example.com/feed.xml"].Disabled, false)
-	testutil.AssertEqual(t, state2["https://example.com/feed.xml"].ErrorCount, 0)
-	testutil.AssertEqual(t, state2["https://example.com/feed.xml"].LastError, "")
+	testutil.AssertEqual(t, state2[atomFeedURL].Disabled, false)
+	testutil.AssertEqual(t, state2[atomFeedURL].ErrorCount, 0)
+	testutil.AssertEqual(t, state2[atomFeedURL].LastError, "")
 }
 
 var (
@@ -222,7 +223,7 @@ func TestFetchWithIfModifiedSinceAndETag(t *testing.T) {
 	)
 
 	tm := testMux(t, map[string]http.HandlerFunc{
-		"GET example.com/feed.xml": func(w http.ResponseWriter, r *http.Request) {
+		atomFeedRoute: func(w http.ResponseWriter, r *http.Request) {
 			if r.Header.Get("If-Modified-Since") == ifModifiedSince && r.Header.Get("If-None-Match") == eTag {
 				w.WriteHeader(http.StatusNotModified)
 				return
@@ -241,8 +242,8 @@ func TestFetchWithIfModifiedSinceAndETag(t *testing.T) {
 
 	state1 := tm.state(t)
 
-	testutil.AssertEqual(t, state1["https://example.com/feed.xml"].LastModified, ifModifiedSince)
-	testutil.AssertEqual(t, state1["https://example.com/feed.xml"].ETag, eTag)
+	testutil.AssertEqual(t, state1[atomFeedURL].LastModified, ifModifiedSince)
+	testutil.AssertEqual(t, state1[atomFeedURL].ETag, eTag)
 	f.stats.Access(func(s *stats) {
 		testutil.AssertEqual(t, s.NotModifiedFeeds, 0)
 	})
@@ -254,159 +255,112 @@ func TestFetchWithIfModifiedSinceAndETag(t *testing.T) {
 
 	state2 := tm.state(t)
 
-	testutil.AssertEqual(t, state2["https://example.com/feed.xml"].LastModified, ifModifiedSince)
-	testutil.AssertEqual(t, state2["https://example.com/feed.xml"].ETag, eTag)
+	testutil.AssertEqual(t, state2[atomFeedURL].LastModified, ifModifiedSince)
+	testutil.AssertEqual(t, state2[atomFeedURL].ETag, eTag)
 	f.stats.Access(func(s *stats) {
 		testutil.AssertEqual(t, s.NotModifiedFeeds, 1)
 	})
 }
 
-//go:embed testdata/serviceaccount.json
-var testKey []byte
+var (
+	//go:embed testdata/serviceaccount.json
+	testKeyJSON []byte
+	testKey     = must(serviceaccount.LoadKey(testKeyJSON))
+)
 
-func TestReportStats(t *testing.T) {
-	t.Parallel()
-
-	wantValues := [][]string{
-		{
-			"1", "1", "0", "0",
-			"2024-06-22T12:00:00Z", "1s", "1", "1s", "0s", "1000",
-		},
-	}
-
-	tm := testMux(t, map[string]http.HandlerFunc{
-		"POST sheets.googleapis.com/v4/spreadsheets/test/values/Stats:append": func(w http.ResponseWriter, r *http.Request) {
-			var req struct {
-				Values [][]string `json:"values"`
-			}
-			readJSON(t, r.Body, &req)
-			testutil.AssertEqual(t, req.Values, wantValues)
-			w.Write([]byte("{}"))
-		},
-		`POST oauth2.googleapis.com/token`: func(w http.ResponseWriter, r *http.Request) {
-			// Assume that authentication always succeeds.
-			var response struct {
-				AccessToken string `json:"access_token"`
-			}
-			response.AccessToken = "foobar"
-			web.RespondJSON(w, response)
-		},
-	})
-	f := testFetcher(t, tm)
-
-	f.statsSpreadsheetID = "test"
-	var err error
-	f.serviceAccountKey, err = serviceaccount.LoadKey(testKey)
+func must[T any](val T, err error) T {
 	if err != nil {
-		t.Fatal(err)
+		panic(err)
 	}
-
-	s := &stats{
-		TotalFeeds:       1,
-		SuccessFeeds:     1,
-		StartTime:        time.Date(2024, 6, 22, 12, 0, 0, 0, time.UTC),
-		Duration:         time.Second,
-		TotalItemsParsed: 1,
-		TotalFetchTime:   time.Second,
-		MemoryUsage:      1000,
-	}
-
-	if err := f.reportStats(context.Background(), s); err != nil {
-		t.Fatal(err)
-	}
+	return val
 }
+
+func TestFeedString(t *testing.T) {
+	f := &feed{URL: atomFeedURL}
+	testutil.AssertEqual(t, f.String(), fmt.Sprintf("<feed url=%q>", atomFeedURL))
+}
+
+func TestParseConfig(t *testing.T) {
+	testutil.RunGolden(t, "testdata/config/*.star", func(t *testing.T, match string) []byte {
+		config := readFile(t, match)
+
+		tm := testMux(t, nil)
+
+		ar := &txtar.Archive{
+			Files: []txtar.File{
+				{Name: "config.star", Data: config},
+			},
+		}
+		tm.gist = txtarToGist(t, txtar.Format(ar))
+
+		f := testFetcher(t, tm)
+		if err := f.run(context.Background()); err != nil {
+			return []byte(fmt.Sprintf("Error: %v", err))
+		}
+
+		return toJSON(t, f.feeds)
+	}, *update)
+}
+
+//go:embed testdata/rules/feed.xml
+var rulesAtomFeed []byte
 
 func TestBlockAndKeepRules(t *testing.T) {
-	cases := map[string]struct {
-		config string
-		// Titles of the messages expected to be sent. Empty slice if no messages are expected.
-		wantSentTitles []string
-	}{
-		"block rule blocks": {
-			config: `
-feeds = [
-    feed(
-        url = "https://example.com/feed.xml",
-        block_rule = lambda item: "block" in item.title.lower(),
-    )
-]
-`,
-			wantSentTitles: []string{"Keep this item"},
-		},
-		"keep rule keeps": {
-			config: `
-feeds = [
-    feed(
-        url = "https://example.com/feed.xml",
-        keep_rule = lambda item: "keep" in item.title.lower(),
-    )
-]
-`,
-			wantSentTitles: []string{"Keep this item"},
-		},
-		"no rules, sends all items": {
-			config: `
-feeds = [
-    feed(
-        url = "https://example.com/feed.xml",
-    )
-]
-`,
-			wantSentTitles: []string{"Block this item", "Keep this item"},
-		},
-	}
+	t.Parallel()
 
-	for name, tc := range cases {
-		t.Run(name, func(t *testing.T) {
-			tm := testMux(t, map[string]http.HandlerFunc{
-				"GET example.com/feed.xml": func(w http.ResponseWriter, r *http.Request) {
-					w.Write([]byte(`
-<?xml version="1.0" encoding="UTF-8"?>
-<feed xml:lang="en-US">
-  <title>Example Feed</title>
-  <link href="https://example.com/feed.xml" rel="self" type="application/rss+xml"/>
+	testutil.RunGolden(t, "testdata/rules/*.star", func(t *testing.T, match string) []byte {
+		t.Parallel()
 
-  <entry>
-	<title>Block this item</title>
-	<updated>2024-03-10T00:00:00Z</updated>
-	<link href="https://example.com/block"/>
-  </entry>
-  <entry>
-	<title>Keep this item</title>
-	<updated>2024-03-10T00:00:00Z</updated>
-	<link href="https://example.com/keep"/>
-  </entry>
-</feed>`))
-				},
-			})
+		config := readFile(t, match)
 
-			state := map[string]*feedState{
-				"https://example.com/feed.xml": {
-					LastUpdated: time.Time{},
-				},
-			}
-			ar := &txtar.Archive{
-				Files: []txtar.File{
-					{Name: "config.star", Data: []byte(tc.config)},
-					{Name: "state.json", Data: toJSON(t, state)},
-				},
-			}
-			tm.gist = txtarToGist(t, txtar.Format(ar))
-
-			f := testFetcher(t, tm)
-			if err := f.run(context.Background()); err != nil {
-				t.Fatal(err)
-			}
-
-			testutil.AssertEqual(t, len(tm.sentMessages), len(tc.wantSentTitles))
+		tm := testMux(t, map[string]http.HandlerFunc{
+			atomFeedRoute: func(w http.ResponseWriter, r *http.Request) {
+				w.Write([]byte(rulesAtomFeed))
+			},
 		})
-	}
+
+		state := map[string]*feedState{
+			"https://example.com/feed.xml": {
+				LastUpdated: time.Time{},
+			},
+		}
+		ar := &txtar.Archive{
+			Files: []txtar.File{
+				{Name: "config.star", Data: config},
+				{Name: "state.json", Data: toJSON(t, state)},
+			},
+		}
+		tm.gist = txtarToGist(t, txtar.Format(ar))
+
+		f := testFetcher(t, tm)
+		if err := f.run(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+
+		sort.SliceStable(tm.sentMessages, func(i, j int) bool {
+			return compareMaps(tm.sentMessages[i], tm.sentMessages[j])
+		})
+		return toJSON(t, tm.sentMessages)
+	}, *update)
 }
 
-func readJSON(t *testing.T, r io.Reader, v any) {
-	if err := json.NewDecoder(r).Decode(v); err != nil {
-		t.Fatal(err)
+func compareMaps(map1, map2 map[string]any) bool {
+	text1, ok1 := map1["text"].(string)
+	text2, ok2 := map2["text"].(string)
+	if !ok1 {
+		if !ok2 {
+			// Both don't have text, consider them equal (no change in order).
+			return false
+		}
+		// map1 doesn't have text, map2 does, so map2 comes later.
+		return false
 	}
+	if !ok2 {
+		// map1 has text, map2 doesn't, so map1 comes earlier
+		return true
+	}
+	// Compare texts alphabetically.
+	return text1 < text2
 }
 
 func readFile(t *testing.T, path string) []byte {
@@ -419,12 +373,14 @@ func readFile(t *testing.T, path string) []byte {
 
 func testFetcher(t *testing.T, m *mux) *fetcher {
 	f := &fetcher{
-		httpc:   testutil.MockHTTPClient(m.mux),
-		logf:    t.Logf,
-		ghToken: "superdupersecret",
-		gistID:  "test",
-		tgToken: tgToken,
-		chatID:  "test",
+		httpc:              testutil.MockHTTPClient(m.mux),
+		logf:               t.Logf,
+		ghToken:            "superdupersecret",
+		gistID:             "test",
+		tgToken:            tgToken,
+		chatID:             "test",
+		statsSpreadsheetID: "test",
+		serviceAccountKey:  testKey,
 	}
 	f.init.Do(f.doInit)
 	return f
@@ -435,6 +391,7 @@ type mux struct {
 	mu           sync.Mutex
 	gist         []byte
 	sentMessages []map[string]any
+	statsValues  [][]string
 }
 
 func (m *mux) state(t *testing.T) map[string]*feedState {
@@ -448,32 +405,12 @@ func (m *mux) state(t *testing.T) map[string]*feedState {
 	return testutil.UnmarshalJSON[map[string]*feedState](t, []byte(stateJSON.Content))
 }
 
-func TestFeedString(t *testing.T) {
-	cases := map[string]struct {
-		in   *feed
-		want string
-	}{
-		"simple": {
-			in:   &feed{url: "https://example.com/feed.xml"},
-			want: `<feed url="https://example.com/feed.xml">`,
-		},
-		"with title": {
-			in:   &feed{title: "example", url: "https://example.com/feed.xml"},
-			want: `<feed title="example" url="https://example.com/feed.xml">`,
-		},
-	}
-
-	for name, tc := range cases {
-		t.Run(name, func(t *testing.T) {
-			testutil.AssertEqual(t, tc.in.String(), tc.want)
-		})
-	}
-}
-
 const (
-	getGist      = "GET api.github.com/gists/test"
-	patchGist    = "PATCH api.github.com/gists/test"
-	sendTelegram = "POST api.telegram.org/{token}/sendMessage"
+	getGist        = "GET api.github.com/gists/test"
+	patchGist      = "PATCH api.github.com/gists/test"
+	sendTelegram   = "POST api.telegram.org/{token}/sendMessage"
+	updateSheet    = "POST sheets.googleapis.com/v4/spreadsheets/test/values/Stats:append"
+	getGoogleToken = "POST oauth2.googleapis.com/token"
 )
 
 func testMux(t *testing.T, overrides map[string]http.HandlerFunc) *mux {
@@ -503,8 +440,28 @@ func testMux(t *testing.T, overrides map[string]http.HandlerFunc) *mux {
 		m.sentMessages = append(m.sentMessages, testutil.UnmarshalJSON[map[string]any](t, sentMessage))
 		w.Write([]byte("{}"))
 	}))
+	m.mux.HandleFunc(updateSheet, orHandler(overrides[updateSheet], func(w http.ResponseWriter, r *http.Request) {
+		m.mu.Lock()
+		defer m.mu.Unlock()
+		var req struct {
+			Values [][]string `json:"values"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatal(err)
+		}
+		m.statsValues = req.Values
+		w.Write([]byte("{}"))
+	}))
+	m.mux.HandleFunc(getGoogleToken, orHandler(overrides[getGoogleToken], func(w http.ResponseWriter, r *http.Request) {
+		// Assume that authentication always succeeds.
+		var response struct {
+			AccessToken string `json:"access_token"`
+		}
+		response.AccessToken = "foobar"
+		web.RespondJSON(w, response)
+	}))
 	for pat, h := range overrides {
-		if pat == getGist || pat == patchGist || pat == sendTelegram {
+		if pat == getGist || pat == patchGist || pat == sendTelegram || pat == updateSheet || pat == getGoogleToken {
 			continue
 		}
 		m.mux.HandleFunc(pat, h)
@@ -549,7 +506,7 @@ func txtarToGist(t *testing.T, b []byte) []byte {
 }
 
 func toJSON(t *testing.T, val any) []byte {
-	b, err := json.Marshal(val)
+	b, err := json.MarshalIndent(val, "", "  ")
 	if err != nil {
 		t.Fatal(err)
 	}
