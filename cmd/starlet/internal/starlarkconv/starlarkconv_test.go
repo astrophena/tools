@@ -107,6 +107,20 @@ func TestToValue(t *testing.T) {
 				return dict
 			}(),
 		},
+
+		// Structs with tagged fields.
+		{
+			struct {
+				Name string `starlark:"name"`
+				Age  int    `starlark:"age"`
+			}{"Bob", 30},
+			func() starlark.Value {
+				dict := starlark.NewDict(2)
+				dict.SetKey(starlark.String("name"), starlark.String("Bob"))
+				dict.SetKey(starlark.String("age"), starlark.MakeInt(30))
+				return dict
+			}(),
+		},
 	}
 
 	for _, tc := range cases {

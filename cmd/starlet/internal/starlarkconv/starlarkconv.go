@@ -114,7 +114,11 @@ func structToDict(val reflect.Value) (starlark.Value, error) {
 			continue
 		}
 
-		fieldName := field.Name
+		fieldName, ok := field.Tag.Lookup("starlark")
+		if !ok {
+			fieldName = field.Name
+		}
+
 		fieldVal, err := ToValue(fieldValue.Interface())
 		if err != nil {
 			return nil, fmt.Errorf("error converting field %s: %w", fieldName, err)
