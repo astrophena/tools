@@ -578,26 +578,7 @@ func convertMarkdown(thread *starlark.Thread, b *starlark.Builtin, args starlark
 	if err := starlark.UnpackArgs(b.Name(), args, kwargs, "s", &s); err != nil {
 		return starlark.None, err
 	}
-	msg := tgmarkup.FromMarkdown(s)
-
-	dict := starlark.NewDict(2)
-	dict.SetKey(starlark.String("text"), starlark.String(msg.Text))
-	var entities []starlark.Value
-	for _, ent := range msg.Entities {
-		entities = append(entities, starlarkstruct.FromStringDict(
-			starlarkstruct.Default,
-			starlark.StringDict{
-				"type":     starlark.String(ent.Type),
-				"offset":   starlark.MakeInt(ent.Offset),
-				"length":   starlark.MakeInt(ent.Length),
-				"url":      starlark.String(ent.URL),
-				"language": starlark.String(ent.Language),
-			},
-		))
-	}
-	dict.SetKey(starlark.String("entities"), starlark.NewList(entities))
-
-	return dict, nil
+	return starlarkconv.ToValue(tgmarkup.FromMarkdown(s))
 }
 
 // files.read Starlark function. e.mu must be held for reading.

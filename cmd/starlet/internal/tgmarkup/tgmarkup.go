@@ -18,53 +18,48 @@ import (
 // It is designed to be marshaled into JSON for use with the Telegram Bot API.
 // See https://core.telegram.org/bots/api#message for more information.
 type Message struct {
-	Text     string   `json:"text"`
-	Entities []Entity `json:"entities"`
+	Text     string   `json:"text" starlark:"text"`
+	Entities []Entity `json:"entities" starlark:"entities"`
 }
 
-// Type represents the type of a Telegram message entity.
-// It defines the available formatting options for message text.
+// Constants for various Telegram message entity types.
 // See https://core.telegram.org/bots/api#messageentity for a complete list of
 // supported types.
-type Type string
-
-// Constants for various Telegram message entity types.
 const (
-	Mention              Type = "mention"      // @username
-	Hashtag              Type = "hashtag"      // #hashtag
-	Cashtag              Type = "cashtag"      // $USD
-	BotCommand           Type = "bot_command"  // /start@jobs_bot
-	URL                  Type = "url"          // https://telegram.org
-	Email                Type = "email"        // do-not-reply@telegram.org
-	PhoneNumber          Type = "phone_number" // +1-212-555-0123
-	Bold                 Type = "bold"
-	Italic               Type = "italic"
-	Underline            Type = "underline"
-	Strikethrough        Type = "strikethrough"
-	Spoiler              Type = "spoiler"
-	Blockquote           Type = "blockquote"
-	ExpandableBlockquote Type = "expandable_blockquote"
-	Code                 Type = "code" // monowidth string
-	Pre                  Type = "pre"  // monowidth block
-	TextLink             Type = "text_link"
-	TextMention          Type = "text_mention"
-	CustomEmoji          Type = "custom_emoji"
+	Mention              = "mention"      // @username
+	Hashtag              = "hashtag"      // #hashtag
+	Cashtag              = "cashtag"      // $USD
+	BotCommand           = "bot_command"  // /start@jobs_bot
+	URL                  = "url"          // https://telegram.org
+	Email                = "email"        // do-not-reply@telegram.org
+	PhoneNumber          = "phone_number" // +1-212-555-0123
+	Bold                 = "bold"
+	Italic               = "italic"
+	Underline            = "underline"
+	Strikethrough        = "strikethrough"
+	Spoiler              = "spoiler"
+	Blockquote           = "blockquote"
+	ExpandableBlockquote = "expandable_blockquote"
+	Code                 = "code" // monowidth string
+	Pre                  = "pre"  // monowidth block
+	TextLink             = "text_link"
+	TextMention          = "text_mention"
+	CustomEmoji          = "custom_emoji"
 )
 
-// Entity represents a Telegram message entity.  It defines the type and
-// location of a formatted part of the message text.  See
-// https://core.telegram.org/bots/api#messageentity.
+// Entity defines the type and location of a formatted part of the message text.
+// See https://core.telegram.org/bots/api#messageentity.
 type Entity struct {
-	Type Type `json:"type"`
+	Type string `json:"type" starlark:"type"`
 	// Offset in UTF-16 code units to the start of the entity.
-	Offset int `json:"offset"`
+	Offset int `json:"offset" starlark:"offset"`
 	// Length of the entity in UTF-16 code units.
-	Length int `json:"length"`
+	Length int `json:"length" starlark:"length"`
 	// Optional. For “text_link” only, URL that will be opened after user taps on
 	// the text.
-	URL string `json:"url,omitempty"`
+	URL string `json:"url,omitempty" starlark:"url"`
 	// Optional. For “pre” only, the programming language of the entity text.
-	Language string `json:"language,omitempty"`
+	Language string `json:"language,omitempty" starlark:"language"`
 }
 
 var parser = sync.OnceValue(func() *markdown.Parser {
