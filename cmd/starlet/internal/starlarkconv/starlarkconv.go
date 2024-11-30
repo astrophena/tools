@@ -25,7 +25,7 @@ import (
 //   - int, int8, int16, int32, int64: converted to [starlark.Int]
 //   - uint, uint8, uint16, uint32, uint64: converted to [starlark.Int]
 //   - float32, float64: converted to [starlark.Float] or [starlark.Int] (if the value can be represented as an integer without loss of precision)
-//   - [time.Time]: converted to [starlark.Time]
+//   - [time.Time]: converted to [starlarktime.Time]
 //   - slice: converted to [starlark.List] (elements are recursively converted)
 //   - map: converted to [starlark.Dict] (keys and values are recursively converted)
 //   - struct: converted to [starlark.Dict] (field names are used as keys, and field values are recursively converted). Unexported fields are ignored.
