@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -428,6 +429,13 @@ func (e *engine) predeclared() starlark.StringDict {
 				"version":      starlark.String(version.Version().String()),
 			},
 		),
+		// Undocumented functions, mostly for debugging.
+		"debug": starlarkstruct.FromStringDict(
+			starlarkstruct.Default,
+			starlark.StringDict{
+				"go_stack": starlark.NewBuiltin("debug.go_stack", getGoStack),
+			},
+		),
 		"convcache": e.convCache,
 		"files": &starlarkstruct.Module{
 			Name: "files",
@@ -554,6 +562,16 @@ func jsonOK(w http.ResponseWriter) {
 }
 
 // Starlark builtins {{{
+
+// debug.go_stack Starlark function.
+func getGoStack(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	if len(args) > 0 || len(kwargs) > 0 {
+		return nil, errors.New("unexpected arguments")
+	}
+	var buf []byte
+	runtime.Stack(buf, false)
+	return starlark.String(string(buf)), nil
+}
 
 // markdown.convert Starlark function.
 func convertMarkdown(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
