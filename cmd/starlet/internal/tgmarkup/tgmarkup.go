@@ -7,6 +7,7 @@
 package tgmarkup
 
 import (
+	"regexp"
 	"strings"
 	"sync"
 	"unicode/utf16"
@@ -92,6 +93,14 @@ func FromMarkdown(text string) Message {
 	}
 }
 
+var whiteSpaceRe = sync.OnceValue(func() *regexp.Regexp {
+	return regexp.MustCompile(`[ ]+`)
+})
+
+func cleanWhitespace(text string) string {
+	return whiteSpaceRe().ReplaceAllString(text, " ")
+}
+
 func convertBlock(b markdown.Block, sb *strings.Builder, entities *[]Entity) {
 	switch block := b.(type) {
 	case *markdown.Paragraph:
@@ -159,7 +168,9 @@ func convertInlines(inlines markdown.Inlines, sb *strings.Builder, entities *[]E
 func convertInline(i markdown.Inline, sb *strings.Builder, entities *[]Entity) {
 	switch inline := i.(type) {
 	case *markdown.Plain:
-		sb.WriteString(inline.Text)
+		// Remove 2+ spaces in plain text before writing it.
+		// See https://old.reddit.com/r/GoogleGeminiAI/comments/1d1z9l3/google_gemini_15_output_contains_random_extra/.
+		sb.WriteString(cleanWhitespace(inline.Text))
 	case *markdown.Strong:
 		offset := utf16len(sb.String())
 		convertInlines(inline.Inner, sb, entities)
@@ -187,7 +198,7 @@ func convertInline(i markdown.Inline, sb *strings.Builder, entities *[]Entity) {
 		})
 	case *markdown.AutoLink:
 		offset := utf16len(sb.String())
-		sb.WriteString(inline.Text)
+		sb.WriteString(cleanWhitespace(inline.Text))
 		*entities = append(*entities, Entity{
 			Type:   URL,
 			Offset: offset,
