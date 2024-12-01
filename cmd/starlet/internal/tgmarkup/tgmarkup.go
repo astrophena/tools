@@ -97,6 +97,11 @@ func convertBlock(b markdown.Block, sb *strings.Builder, entities *[]Entity) {
 	case *markdown.Paragraph:
 		convertInlines(block.Text.Inline, sb, entities)
 		sb.WriteString("\n")
+	case *markdown.Text:
+		// This is a Block for tight list items.
+		sb.WriteString("• ")
+		convertInlines(block.Inline, sb, entities)
+		sb.WriteString("\n")
 	case *markdown.Quote:
 		offset := utf16len(sb.String())
 		for _, block := range block.Blocks {
