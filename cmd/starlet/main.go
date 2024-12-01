@@ -433,6 +433,7 @@ func (e *engine) predeclared() starlark.StringDict {
 		"debug": starlarkstruct.FromStringDict(
 			starlarkstruct.Default,
 			starlark.StringDict{
+				"stack":    starlark.NewBuiltin("debug.stack", getStarlarkStack),
 				"go_stack": starlark.NewBuiltin("debug.go_stack", getGoStack),
 			},
 		),
@@ -562,6 +563,14 @@ func jsonOK(w http.ResponseWriter) {
 }
 
 // Starlark builtins {{{
+
+// debug.stack Starlark function.
+func getStarlarkStack(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	if len(args) > 0 || len(kwargs) > 0 {
+		return nil, errors.New("unexpected arguments")
+	}
+	return starlark.String(thread.CallStack().String()), nil
+}
 
 // debug.go_stack Starlark function.
 func getGoStack(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
