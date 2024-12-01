@@ -24,7 +24,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"runtime"
+	"runtime/debug"
 	"sort"
 	"strconv"
 	"strings"
@@ -568,9 +568,7 @@ func getGoStack(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tupl
 	if len(args) > 0 || len(kwargs) > 0 {
 		return nil, errors.New("unexpected arguments")
 	}
-	var buf []byte
-	runtime.Stack(buf, false)
-	return starlark.String(string(buf)), nil
+	return starlark.String(string(debug.Stack())), nil
 }
 
 // markdown.convert Starlark function.
