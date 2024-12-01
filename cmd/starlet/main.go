@@ -19,7 +19,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"html"
 	"io"
 	"log"
 	"net/http"
@@ -52,12 +51,18 @@ import (
 	"go.starlark.net/syntax"
 )
 
-const (
-	tgAPI = "https://api.telegram.org"
+const tgAPI = "https://api.telegram.org"
 
-	defaultErrorTemplate = `❌ Something went wrong:
-<pre><code>%v</code></pre>`
+var (
+	//go:embed resources/error.tmpl
+	defaultErrorTemplate string
+	//go:embed resources/logs.html
+	logsTmpl string
+	//go:embed resources/logs.js
+	logsJS []byte
 )
+
+var selfPingInterval = 10 * time.Minute
 
 func main() { cli.Main(new(engine)) }
 
@@ -106,7 +111,7 @@ func (e *engine) Run(ctx context.Context, env *cli.Env) error {
 		if err := e.setWebhook(ctx); err != nil {
 			return err
 		}
-		go e.selfPing(ctx, env.Getenv)
+		go e.selfPing(ctx, env.Getenv, selfPingInterval)
 	}
 
 	return web.ListenAndServe(ctx, &web.ListenAndServeConfig{
@@ -167,28 +172,6 @@ type engine struct {
 	botProg       starlark.StringDict
 	errorTemplate string
 }
-
-type getMeResponse struct {
-	OK     bool `json:"ok"`
-	Result struct {
-		ID                      int64  `json:"id"`
-		IsBot                   bool   `json:"is_bot"`
-		FirstName               string `json:"first_name"`
-		Username                string `json:"username"`
-		CanJoinGroups           bool   `json:"can_join_groups"`
-		CanReadAllGroupMessages bool   `json:"can_read_all_group_messages"`
-		SupportsInlineQueries   bool   `json:"supports_inline_queries"`
-		CanConnectToBusiness    bool   `json:"can_connect_to_business"`
-		HasMainWebApp           bool   `json:"has_main_web_app"`
-	} `json:"result"`
-}
-
-var (
-	//go:embed resources/logs.html
-	logsTmpl string
-	//go:embed resources/logs.js
-	logsJS []byte
-)
 
 func (e *engine) doInit() error {
 	if e.httpc == nil {
@@ -263,6 +246,21 @@ func (e *engine) getMe() (getMeResponse, error) {
 	})
 }
 
+type getMeResponse struct {
+	OK     bool `json:"ok"`
+	Result struct {
+		ID                      int64  `json:"id"`
+		IsBot                   bool   `json:"is_bot"`
+		FirstName               string `json:"first_name"`
+		Username                string `json:"username"`
+		CanJoinGroups           bool   `json:"can_join_groups"`
+		CanReadAllGroupMessages bool   `json:"can_read_all_group_messages"`
+		SupportsInlineQueries   bool   `json:"supports_inline_queries"`
+		CanConnectToBusiness    bool   `json:"can_connect_to_business"`
+		HasMainWebApp           bool   `json:"has_main_web_app"`
+	} `json:"result"`
+}
+
 // timestampWriter is an io.Writer that prefixes each line with the current date and time.
 type timestampWriter struct {
 	w io.Writer
@@ -270,10 +268,8 @@ type timestampWriter struct {
 
 // Write implements the [io.Writer] interface.
 func (tw *timestampWriter) Write(p []byte) (n int, err error) {
-	// Split the input into lines.
 	lines := bytes.SplitAfter(p, []byte{'\n'})
 
-	// Iterate over the lines and prefix each with the timestamp.
 	for _, line := range lines {
 		if len(line) > 0 {
 			timestamp := time.Now().Format(time.DateTime + "\t")
@@ -390,46 +386,12 @@ func (e *engine) loadCode(ctx context.Context, files map[string]string) error {
 	}
 	botCode := []byte(bot)
 
-	predeclared := starlark.StringDict{
-		"config": starlarkstruct.FromStringDict(
-			starlarkstruct.Default,
-			starlark.StringDict{
-				"bot_id":       starlark.MakeInt64(e.tgBotID),
-				"bot_username": starlark.String(e.tgBotUsername),
-				"owner_id":     starlark.MakeInt64(e.tgOwner),
-				"version":      starlark.String(version.Version().String()),
-			},
-		),
-		"convcache": e.convCache,
-		"files": &starlarkstruct.Module{
-			Name: "files",
-			Members: starlark.StringDict{
-				"read": starlark.NewBuiltin("files.read", e.readFile),
-			},
-		},
-		"gemini": starlarkgemini.Module(e.geminic),
-		"markdown": &starlarkstruct.Module{
-			Name: "markdown",
-			Members: starlark.StringDict{
-				"convert": starlark.NewBuiltin("markdown.convert", convertMarkdown),
-			},
-		},
-		"html": &starlarkstruct.Module{
-			Name: "html",
-			Members: starlark.StringDict{
-				"escape": starlark.NewBuiltin("html.escape", escapeHTML),
-			},
-		},
-		"telegram": telegram.Module(e.tgToken, e.httpc),
-		"time":     starlarktime.Module,
-	}
-
 	botProg, err := starlark.ExecFileOptions(
 		&syntax.FileOptions{},
 		e.newStarlarkThread(context.Background()),
 		"bot.star",
 		botCode,
-		predeclared,
+		e.predeclared(),
 	)
 	if err != nil {
 		return err
@@ -455,6 +417,36 @@ func (e *engine) loadCode(ctx context.Context, files map[string]string) error {
 	return nil
 }
 
+func (e *engine) predeclared() starlark.StringDict {
+	return starlark.StringDict{
+		"config": starlarkstruct.FromStringDict(
+			starlarkstruct.Default,
+			starlark.StringDict{
+				"bot_id":       starlark.MakeInt64(e.tgBotID),
+				"bot_username": starlark.String(e.tgBotUsername),
+				"owner_id":     starlark.MakeInt64(e.tgOwner),
+				"version":      starlark.String(version.Version().String()),
+			},
+		),
+		"convcache": e.convCache,
+		"files": &starlarkstruct.Module{
+			Name: "files",
+			Members: starlark.StringDict{
+				"read": starlark.NewBuiltin("files.read", e.readFile),
+			},
+		},
+		"gemini": starlarkgemini.Module(e.geminic),
+		"markdown": &starlarkstruct.Module{
+			Name: "markdown",
+			Members: starlark.StringDict{
+				"convert": starlark.NewBuiltin("markdown.convert", convertMarkdown),
+			},
+		},
+		"telegram": telegram.Module(e.tgToken, e.httpc),
+		"time":     starlarktime.Module,
+	}
+}
+
 func (e *engine) newStarlarkThread(ctx context.Context) *starlark.Thread {
 	thread := &starlark.Thread{
 		Print: func(thread *starlark.Thread, msg string) { e.logf("%s", msg) },
@@ -468,26 +460,24 @@ func (e *engine) newStarlarkThread(ctx context.Context) *starlark.Thread {
 var errNoHandleFunc = errors.New("handle function not found in bot code")
 
 func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
-	jsonErr := func(err error) { web.RespondJSONError(e.logf, w, err) }
-
 	if r.Header.Get("X-Telegram-Bot-Api-Secret-Token") != e.tgSecret {
-		jsonErr(web.ErrNotFound)
+		e.jsonErr(w, web.ErrNotFound)
 		return
 	}
 
 	b, err := io.ReadAll(r.Body)
 	if err != nil {
-		jsonErr(err)
+		e.jsonErr(w, err)
 		return
 	}
 	var gu map[string]any
 	if err := json.Unmarshal(b, &gu); err != nil {
-		jsonErr(err)
+		e.jsonErr(w, err)
 		return
 	}
 	u, err := starlarkconv.ToValue(gu)
 	if err != nil {
-		jsonErr(err)
+		e.jsonErr(w, err)
 		return
 	}
 
@@ -515,6 +505,8 @@ func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 
 	jsonOK(w)
 }
+
+func (e *engine) jsonErr(w http.ResponseWriter, err error) { web.RespondJSONError(e.logf, w, err) }
 
 func (e *engine) lookupChatID(update map[string]any) int64 {
 	msg, ok := update["message"].(map[string]any)
@@ -562,15 +554,6 @@ func jsonOK(w http.ResponseWriter) {
 }
 
 // Starlark builtins {{{
-
-// html.escape Starlark function.
-func escapeHTML(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	var s string
-	if err := starlark.UnpackArgs(b.Name(), args, kwargs, "s", &s); err != nil {
-		return starlark.None, err
-	}
-	return starlark.String(html.EscapeString(s)), nil
-}
 
 // markdown.convert Starlark function.
 func convertMarkdown(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
@@ -625,11 +608,9 @@ func (e *engine) setWebhook(ctx context.Context) error {
 	return err
 }
 
-var selfPingInterval = 10 * time.Minute // changed in tests
-
 // selfPing continusly pings Starlet every 10 minutes in production to prevent it's Render app from sleeping.
-func (e *engine) selfPing(ctx context.Context, getenv func(string) string) {
-	ticker := time.NewTicker(selfPingInterval)
+func (e *engine) selfPing(ctx context.Context, getenv func(string) string, interval time.Duration) {
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
 	e.logf("selfPing: started")
@@ -668,13 +649,18 @@ func (e *engine) selfPing(ctx context.Context, getenv func(string) string) {
 
 // Error handling {{{
 
-func (e *engine) respondError(w http.ResponseWriter, err error) {
-	web.RespondError(e.logf, w, err)
-}
+func (e *engine) respondError(w http.ResponseWriter, err error) { web.RespondError(e.logf, w, err) }
 
 // https://core.telegram.org/bots/api#linkpreviewoptions
 type linkPreviewOptions struct {
 	IsDisabled bool `json:"is_disabled"`
+}
+
+// https://core.telegram.org/bots/api#message
+type message struct {
+	tgmarkup.Message
+	ChatID             int64              `json:"chat_id"`
+	LinkPreviewOptions linkPreviewOptions `json:"link_preview_options"`
 }
 
 // e.mu must be held for reading.
@@ -688,17 +674,23 @@ func (e *engine) reportError(ctx context.Context, chatID int64, w http.ResponseW
 		errMsg = e.scrubber.Replace(errMsg)
 	}
 
-	_, sendErr := request.Make[any](ctx, request.Params{
-		Method: http.MethodPost,
-		URL:    "https://api.telegram.org/bot" + e.tgToken + "/sendMessage",
-		Body: map[string]any{
-			"chat_id":    strconv.FormatInt(chatID, 10),
-			"text":       fmt.Sprintf(e.errorTemplate, html.EscapeString(errMsg)),
-			"parse_mode": "HTML",
-			"link_preview_options": linkPreviewOptions{
-				IsDisabled: true,
-			},
+	msg := message{
+		ChatID: chatID,
+		LinkPreviewOptions: linkPreviewOptions{
+			IsDisabled: true,
 		},
+	}
+
+	errTmpl := e.errorTemplate
+	if e.errorTemplate == "" {
+		errTmpl = defaultErrorTemplate
+	}
+	msg.Message = tgmarkup.FromMarkdown(fmt.Sprintf(errTmpl, errMsg))
+
+	_, sendErr := request.Make[any](ctx, request.Params{
+		Method:     http.MethodPost,
+		URL:        "https://api.telegram.org/bot" + e.tgToken + "/sendMessage",
+		Body:       msg,
 		HTTPClient: e.httpc,
 		Headers: map[string]string{
 			"User-Agent": version.UserAgent(),

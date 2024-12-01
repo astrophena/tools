@@ -44,11 +44,7 @@ available to the bot code:
 			- unsafe (bool, optional): Disables all model safety measures.
 
 	markdown: Allows operations with Markdown text.
-		- convert(text: str) -> dict: Converts Markdown text to Telegram-flavored message markup,
-			suitable for including in sendMessage Telegram Bot API call payload.
-
-	html: Helper functions for working with HTML.
-		- escape(s): Escapes HTML string.
+		- convert(text: str) -> dict: Converts Markdown text to Telegram-flavored message markup, suitable for including in sendMessage Telegram Bot API call payload.
 
 	telegram: Allows sending requests to the Telegram Bot API.
 		- call(method, args): Calls a Telegram Bot API method:
@@ -65,7 +61,7 @@ the time module.
 The GitHub Gist containing the bot code must have the following structure:
 
   - bot.star: Contains the Starlark code for the bot.
-  - error.tmpl (optional): Contains the HTML template for error messages. If omitted,
+  - error.tmpl (optional): Contains the Markdown template for error messages. If omitted,
     a default template will be used. The template receives the error message as %v.
 
 # Entry point
