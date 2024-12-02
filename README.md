@@ -8,7 +8,7 @@ This repository holds personal tools:
 - Kp retrieves passwords and other information from KeePass database files.
 - Mdserve serves Markdown files from a directory.
 - Renamer renames files in a specified directory sequentially, starting from a given number.
-- Starlet is a Telegram bot runner using Starlark.
+- Starlet is a Telegram bot runner that uses Starlark.
 - Tgfeed fetches RSS feeds and sends new articles via Telegram.
 
 Install them:
