@@ -31,9 +31,9 @@ import (
 	"go.astrophena.name/tools/cmd/starlet/internal/convcache"
 	"go.astrophena.name/tools/cmd/starlet/internal/starlarkconv"
 	"go.astrophena.name/tools/cmd/starlet/internal/starlarkgemini"
-	"go.astrophena.name/tools/cmd/starlet/internal/telegram"
 	"go.astrophena.name/tools/cmd/starlet/internal/tgauth"
 	"go.astrophena.name/tools/cmd/starlet/internal/tgmarkup"
+	"go.astrophena.name/tools/cmd/starlet/internal/tgstarlark"
 	"go.astrophena.name/tools/internal/api/gist"
 	"go.astrophena.name/tools/internal/api/google/gemini"
 	"go.astrophena.name/tools/internal/cli"
@@ -473,7 +473,7 @@ func (e *engine) predeclared() starlark.StringDict {
 				"convert": starlark.NewBuiltin("markdown.convert", convertMarkdown),
 			},
 		},
-		"telegram": telegram.Module(e.tgToken, e.httpc),
+		"telegram": tgstarlark.Module(e.tgToken, e.httpc),
 		"time":     starlarktime.Module,
 	}
 }

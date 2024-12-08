@@ -2,7 +2,7 @@
 // Use of this source code is governed by the ISC
 // license that can be found in the LICENSE.md file.
 
-package telegram
+package tgstarlark
 
 import (
 	"bytes"
@@ -12,9 +12,10 @@ import (
 	"strings"
 	"testing"
 
-	"go.astrophena.name/base/testutil"
 	"go.starlark.net/starlark"
 	"go.starlark.net/syntax"
+
+	"go.astrophena.name/base/testutil"
 )
 
 func TestTelegramModule(t *testing.T) {

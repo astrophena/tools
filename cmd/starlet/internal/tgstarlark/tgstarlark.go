@@ -2,8 +2,8 @@
 // Use of this source code is governed by the ISC
 // license that can be found in the LICENSE.md file.
 
-// Package telegram contains a Starlark module that exposes the Telegram Bot API.
-package telegram
+// Package tgstarlark contains a Starlark module that exposes the Telegram Bot API.
+package tgstarlark
 
 import (
 	"context"
