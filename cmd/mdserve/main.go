@@ -91,8 +91,14 @@ func (e *engine) doInit() {
 		e.logf = func(format string, args ...any) {}
 	}
 	e.md = &markdown.Parser{
-		Table:    true,
-		TaskList: true,
+		Strikethrough:      true,
+		TaskList:           false,
+		AutoLinkText:       true,
+		AutoLinkAssumeHTTP: true,
+		Table:              false,
+		SmartDot:           true,
+		SmartDash:          true,
+		SmartQuote:         true,
 	}
 }
 
