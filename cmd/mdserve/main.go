@@ -92,10 +92,10 @@ func (e *engine) doInit() {
 	}
 	e.md = &markdown.Parser{
 		Strikethrough:      true,
-		TaskList:           false,
+		TaskList:           true,
 		AutoLinkText:       true,
 		AutoLinkAssumeHTTP: true,
-		Table:              false,
+		Table:              true,
 		SmartDot:           true,
 		SmartDash:          true,
 		SmartQuote:         true,
