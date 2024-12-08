@@ -15,6 +15,11 @@ import (
 	"go.starlark.net/starlark"
 )
 
+type (
+	customString string
+	customBool   bool
+)
+
 func TestToValue(t *testing.T) {
 	cases := []struct {
 		in   any
@@ -118,6 +123,28 @@ func TestToValue(t *testing.T) {
 				dict := starlark.NewDict(2)
 				dict.SetKey(starlark.String("name"), starlark.String("Bob"))
 				dict.SetKey(starlark.String("age"), starlark.MakeInt(30))
+				return dict
+			}(),
+		},
+
+		// Custom types.
+		{
+			customString("foobar"),
+			starlark.String("foobar"),
+		},
+		{
+			customBool(true),
+			starlark.Bool(true),
+		},
+		{
+			struct {
+				Type   customString `starlark:"type"`
+				Active customBool   `starlark:"active"`
+			}{Type: customString("foo"), Active: customBool(false)},
+			func() starlark.Value {
+				dict := starlark.NewDict(2)
+				dict.SetKey(starlark.String("type"), starlark.String("foo"))
+				dict.SetKey(starlark.String("active"), starlark.Bool(false))
 				return dict
 			}(),
 		},

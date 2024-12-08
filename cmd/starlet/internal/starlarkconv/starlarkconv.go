@@ -32,11 +32,32 @@ import (
 //
 // If the Go value cannot be converted, an error is returned.
 func ToValue(val any) (starlark.Value, error) {
+	if val == nil {
+		return starlark.None, nil
+	}
+
 	rv := reflect.ValueOf(val)
 
 	switch rv.Kind() {
+	case reflect.Bool:
+		return starlark.Bool(rv.Bool()), nil
+	case reflect.String:
+		return starlark.String(rv.String()), nil
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32:
+		return starlark.MakeInt(int(rv.Int())), nil
+	case reflect.Int64:
+		return starlark.MakeInt64(rv.Int()), nil
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32:
+		return starlark.MakeUint(uint(rv.Uint())), nil
+	case reflect.Uint64:
+		return starlark.MakeUint64(rv.Uint()), nil
+	case reflect.Float32, reflect.Float64:
+		fl := rv.Float()
+		if canBeInt(fl) {
+			return starlark.MakeInt64(int64(fl)), nil
+		}
+		return starlark.Float(fl), nil
 	case reflect.Slice:
-		// Handle Go slice conversion (recursive).
 		var list []starlark.Value
 		for i := range rv.Len() {
 			conv, err := ToValue(rv.Index(i).Interface())
@@ -47,56 +68,15 @@ func ToValue(val any) (starlark.Value, error) {
 		}
 		return starlark.NewList(list), nil
 	case reflect.Map:
-		// Handle nested Go map conversion (recursive).
 		return mapToDict(rv)
 	case reflect.Struct:
-		// Handle Go struct conversion (recursive).
 		switch v := val.(type) {
 		case time.Time:
 			return starlarktime.Time(v), nil
 		}
 		return structToDict(rv)
 	default:
-		switch v := val.(type) {
-		case nil:
-			return starlark.None, nil
-		case bool:
-			return starlark.Bool(v), nil
-		case string:
-			return starlark.String(v), nil
-		case int:
-			return starlark.MakeInt(v), nil
-		case int8:
-			return starlark.MakeInt(int(v)), nil
-		case int16:
-			return starlark.MakeInt(int(v)), nil
-		case int32:
-			return starlark.MakeInt(int(v)), nil
-		case int64:
-			return starlark.MakeInt64(v), nil
-		case uint:
-			return starlark.MakeUint(v), nil
-		case uint8:
-			return starlark.MakeUint(uint(v)), nil
-		case uint16:
-			return starlark.MakeUint(uint(v)), nil
-		case uint32:
-			return starlark.MakeUint(uint(v)), nil
-		case uint64:
-			return starlark.MakeUint64(v), nil
-		case float32:
-			if canBeInt(float64(v)) {
-				return starlark.MakeInt64(int64(v)), nil
-			}
-			return starlark.Float(v), nil
-		case float64:
-			if canBeInt(v) {
-				return starlark.MakeInt64(int64(v)), nil
-			}
-			return starlark.Float(v), nil
-		default:
-			return nil, fmt.Errorf("unsupported Go type: %T", val)
-		}
+		return nil, fmt.Errorf("unsupported Go type: %T", val)
 	}
 }
 
