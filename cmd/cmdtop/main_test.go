@@ -20,7 +20,7 @@ var update = flag.Bool("update", false, "update golden files in testdata")
 func TestRun(t *testing.T) {
 	t.Parallel()
 
-	clitest.Run[cli.AppFunc](t, func(t *testing.T) cli.AppFunc {
+	clitest.Run(t, func(t *testing.T) cli.AppFunc {
 		return cli.AppFunc(run)
 	}, map[string]clitest.Case[cli.AppFunc]{
 		"version": {

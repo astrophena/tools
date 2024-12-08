@@ -51,7 +51,7 @@ var (
 func TestFetcherMain(t *testing.T) {
 	t.Parallel()
 
-	clitest.Run[*fetcher](t, func(t *testing.T) *fetcher {
+	clitest.Run(t, func(t *testing.T) *fetcher {
 		return testFetcher(t, testMux(t, map[string]http.HandlerFunc{
 			atomFeedRoute: func(w http.ResponseWriter, r *http.Request) {
 				w.Write(atomFeed)

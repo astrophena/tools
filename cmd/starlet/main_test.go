@@ -46,7 +46,7 @@ var update = flag.Bool("update", false, "update golden files in testdata")
 func TestEngineMain(t *testing.T) {
 	t.Parallel()
 
-	clitest.Run[*engine](t, func(t *testing.T) *engine {
+	clitest.Run(t, func(t *testing.T) *engine {
 		e := new(engine)
 		e.httpc = testutil.MockHTTPClient(testMux(t, nil).mux)
 		e.noServerStart = true

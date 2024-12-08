@@ -21,7 +21,7 @@ import (
 func TestEngineMain(t *testing.T) {
 	t.Parallel()
 
-	clitest.Run[*engine](t, func(t *testing.T) *engine {
+	clitest.Run(t, func(t *testing.T) *engine {
 		e := new(engine)
 		e.noServerStart = true
 		return e

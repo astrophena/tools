@@ -35,7 +35,7 @@ var (
 func TestRun(t *testing.T) {
 	t.Parallel()
 
-	clitest.Run[*app](t, func(t *testing.T) *app {
+	clitest.Run(t, func(t *testing.T) *app {
 		return new(app)
 	}, map[string]clitest.Case[*app]{
 		"prints usage with help flag": {
