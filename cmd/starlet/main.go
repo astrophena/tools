@@ -754,7 +754,3 @@ func (e *engine) reportError(ctx context.Context, chatID int64, w http.ResponseW
 }
 
 // }}}
-
-// Authentication {{{
-
-// }}}

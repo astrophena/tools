@@ -1,3 +1,7 @@
+// © 2024 Ilya Mateyko. All rights reserved.
+// Use of this source code is governed by the ISC
+// license that can be found in the LICENSE.md file.
+
 // Package tgauth provides middleware for handling Telegram authentication.
 //
 // See https://core.telegram.org/widgets/login for details.
