@@ -10,11 +10,7 @@ import (
 	"bytes"
 	"cmp"
 	"context"
-	"crypto/hmac"
-	"crypto/sha256"
 	_ "embed"
-	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -25,7 +21,6 @@ import (
 	"net/url"
 	"os"
 	"runtime/debug"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -37,6 +32,7 @@ import (
 	"go.astrophena.name/tools/cmd/starlet/internal/starlarkconv"
 	"go.astrophena.name/tools/cmd/starlet/internal/starlarkgemini"
 	"go.astrophena.name/tools/cmd/starlet/internal/telegram"
+	"go.astrophena.name/tools/cmd/starlet/internal/tgauth"
 	"go.astrophena.name/tools/cmd/starlet/internal/tgmarkup"
 	"go.astrophena.name/tools/internal/api/gist"
 	"go.astrophena.name/tools/internal/api/google/gemini"
@@ -145,6 +141,7 @@ type engine struct {
 	logStream logstream.Streamer
 	logf      logger.Logf
 	mux       *http.ServeMux
+	tgAuth    *tgauth.Middleware
 
 	// configuration, read-only after initialization
 	addr          string
@@ -224,6 +221,11 @@ func (e *engine) doInit() error {
 			Scrubber:   e.scrubber,
 		}
 	}
+	e.tgAuth = &tgauth.Middleware{
+		CheckFunc: e.authCheck,
+		Logf:      e.logf,
+		Token:     e.tgToken,
+	}
 
 	me, err := e.getMe()
 	if err != nil {
@@ -297,7 +299,7 @@ func (e *engine) initRoutes() {
 			e.respondError(w, web.ErrNotFound)
 			return
 		}
-		if e.loggedIn(r) {
+		if e.tgAuth.LoggedIn(r) {
 			http.Redirect(w, r, "/debug/", http.StatusFound)
 			return
 		}
@@ -318,7 +320,7 @@ func (e *engine) initRoutes() {
 	}
 
 	// Authentication.
-	e.mux.HandleFunc("GET /login", e.handleLogin)
+	e.mux.Handle("GET /login", e.tgAuth.LoginHandler("/debug/"))
 
 	// Debug routes.
 	web.Health(e.mux)
@@ -358,6 +360,26 @@ func (e *engine) initRoutes() {
 		}
 		http.Redirect(w, r, "/debug/", http.StatusFound)
 	})
+}
+
+func (e *engine) debugAuth(r *http.Request) bool {
+	if !e.onRender || e.tgAuth.LoggedIn(r) {
+		return true
+	}
+	return false
+}
+
+func (e *engine) authCheck(dataMap map[string]string) bool {
+	// Check if ID of authenticated user matches the bot owner ID.
+	if dataMap["id"] != strconv.FormatInt(e.tgOwner, 10) {
+		return false
+	}
+	// Check if auth data was not created more that 24 hours ago.
+	authDateUnix, err := strconv.ParseInt(dataMap["auth_date"], 0, 64)
+	if err != nil {
+		return false
+	}
+	return time.Since(time.Unix(authDateUnix, 0)) < 24*time.Hour
 }
 
 func (e *engine) ensureLoaded(ctx context.Context) error {
@@ -734,118 +756,5 @@ func (e *engine) reportError(ctx context.Context, chatID int64, w http.ResponseW
 // }}}
 
 // Authentication {{{
-
-func (e *engine) debugAuth(r *http.Request) bool {
-	if !e.onRender || e.loggedIn(r) {
-		return true
-	}
-	return false
-}
-
-func (e *engine) handleLogin(w http.ResponseWriter, r *http.Request) {
-	// See https://core.telegram.org/widgets/login#receiving-authorization-data.
-	data := r.URL.Query()
-	hash := data.Get("hash")
-	if hash == "" {
-		e.respondError(w, fmt.Errorf("%w: no hash present in auth data", web.ErrBadRequest))
-		return
-	}
-	data.Del("hash")
-
-	var keys []string
-	for k := range data {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-
-	var sb strings.Builder
-	for i, k := range keys {
-		sb.WriteString(k + "=" + data.Get(k))
-		// Don't append newline on last key.
-		if i+1 != len(keys) {
-			sb.WriteString("\n")
-		}
-	}
-	checkString := sb.String()
-
-	if !e.validateAuthData(checkString, hash) {
-		e.respondError(w, fmt.Errorf("%w: hash is not valid", web.ErrBadRequest))
-		return
-	}
-
-	setCookie(w, "auth_data", base64.URLEncoding.EncodeToString([]byte(checkString)))
-	setCookie(w, "auth_data_hash", hash)
-
-	http.Redirect(w, r, "/debug/", http.StatusFound)
-}
-
-func (e *engine) loggedIn(r *http.Request) bool {
-	if len(r.Cookies()) == 0 {
-		return false
-	}
-	var data, hash string
-	for _, cookie := range r.Cookies() {
-		switch cookie.Name {
-		case "auth_data":
-			bdata, err := base64.URLEncoding.DecodeString(cookie.Value)
-			if err != nil {
-				return false
-			}
-			data = string(bdata)
-		case "auth_data_hash":
-			hash = cookie.Value
-		}
-	}
-	if !e.validateAuthData(data, hash) {
-		return false
-	}
-
-	dataMap := extractAuthData(data)
-
-	// Check if ID of authenticated user matches the bot owner ID.
-	if dataMap["id"] != strconv.FormatInt(e.tgOwner, 10) {
-		return false
-	}
-	// Check if auth data was not created more that 24 hours ago.
-	authDateUnix, err := strconv.ParseInt(dataMap["auth_date"], 0, 64)
-	if err != nil {
-		return false
-	}
-	return time.Since(time.Unix(authDateUnix, 0)) < 24*time.Hour
-}
-
-func extractAuthData(data string) map[string]string {
-	dataMap := make(map[string]string)
-	for _, line := range strings.Split(data, "\n") {
-		parts := strings.SplitN(line, "=", 2)
-		if len(parts) == 2 {
-			dataMap[parts[0]] = parts[1]
-		}
-	}
-	return dataMap
-}
-
-func (e *engine) validateAuthData(data, hash string) bool {
-	// Compute SHA256 hash of the token, serving as the secret key for HMAC.
-	h := sha256.New()
-	h.Write([]byte(e.tgToken))
-	tokenHash := h.Sum(nil)
-
-	// Compute HMAC signature of authentication data.
-	hm := hmac.New(sha256.New, tokenHash)
-	hm.Write([]byte(data))
-	gotHash := hex.EncodeToString(hm.Sum(nil))
-
-	return gotHash == hash
-}
-
-func setCookie(w http.ResponseWriter, key, val string) {
-	http.SetCookie(w, &http.Cookie{
-		Name:     key,
-		Value:    val,
-		Expires:  time.Now().Add(24 * time.Hour),
-		HttpOnly: true,
-	})
-}
 
 // }}}

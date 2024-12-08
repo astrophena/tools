@@ -7,11 +7,7 @@ package main
 import (
 	"bytes"
 	"context"
-	"crypto/hmac"
-	"crypto/sha256"
 	_ "embed"
-	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -19,9 +15,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"os"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -228,184 +222,6 @@ func TestHandleTelegramWebhook(t *testing.T) {
 		}
 		return calls
 	}, *update)
-}
-
-func TestHandleLogin(t *testing.T) {
-	t.Parallel()
-
-	e := testEngine(t, testMux(t, nil))
-
-	cases := map[string]struct {
-		query          url.Values
-		wantStatusCode int
-		wantLocation   string
-		wantCookies    map[string]string
-	}{
-		"missing hash": {
-			query:          url.Values{},
-			wantStatusCode: http.StatusBadRequest,
-		},
-		"invalid hash": {
-			query: url.Values{
-				"hash": {"invalid"},
-			},
-			wantStatusCode: http.StatusBadRequest,
-		},
-		"valid": {
-			query: url.Values{
-				"id":         {strconv.FormatInt(e.tgOwner, 10)},
-				"first_name": {"Ilya"},
-				"last_name":  {"Mateyko"},
-				"username":   {"astrophena"},
-				"photo_url":  {"https://t.me/i/userpic/320/XyqYqXyqYqXyqYqXyqYqXyqYqXyqYqXyqYqXyqYqXyq.jpg"},
-				"auth_date":  {strconv.FormatInt(time.Now().Unix(), 10)},
-				"hash":       {computeAuthHash(e.tgToken, e.tgOwner)},
-			},
-			wantStatusCode: http.StatusFound,
-			wantLocation:   "/debug/",
-			wantCookies: map[string]string{
-				"auth_data":      base64.URLEncoding.EncodeToString([]byte(constructAuthData(e.tgOwner))),
-				"auth_data_hash": computeAuthHash(e.tgToken, e.tgOwner),
-			},
-		},
-	}
-
-	for name, tc := range cases {
-		t.Run(name, func(t *testing.T) {
-			t.Parallel()
-
-			r := httptest.NewRequest(http.MethodGet, "/login?"+tc.query.Encode(), nil)
-			w := httptest.NewRecorder()
-			e.handleLogin(w, r)
-
-			testutil.AssertEqual(t, w.Code, tc.wantStatusCode)
-			testutil.AssertEqual(t, w.Header().Get("Location"), tc.wantLocation)
-
-			if tc.wantCookies != nil {
-				for name, wantVal := range tc.wantCookies {
-					gotVal := getCookieValue(t, w.Result().Cookies(), name)
-					testutil.AssertEqual(t, gotVal, wantVal)
-				}
-			}
-		})
-	}
-}
-
-func TestLoggedIn(t *testing.T) {
-	t.Parallel()
-
-	e := testEngine(t, testMux(t, nil))
-
-	cases := map[string]struct {
-		cookies    []*http.Cookie
-		wantLogged bool
-	}{
-		"no cookies": {
-			wantLogged: false,
-		},
-		"missing auth_data": {
-			cookies: []*http.Cookie{
-				{Name: "auth_data_hash", Value: "hash"},
-			},
-			wantLogged: false,
-		},
-		"missing auth_data_hash": {
-			cookies: []*http.Cookie{
-				{Name: "auth_data", Value: "data"},
-			},
-			wantLogged: false,
-		},
-		"invalid auth_data": {
-			cookies: []*http.Cookie{
-				{Name: "auth_data", Value: "invalid"},
-				{Name: "auth_data_hash", Value: "hash"},
-			},
-			wantLogged: false,
-		},
-		"invalid auth_data_hash": {
-			cookies: []*http.Cookie{
-				{Name: "auth_data", Value: base64.URLEncoding.EncodeToString([]byte(constructAuthData(e.tgOwner)))},
-				{Name: "auth_data_hash", Value: "invalid"},
-			},
-			wantLogged: false,
-		},
-		"wrong owner": {
-			cookies: []*http.Cookie{
-				{Name: "auth_data", Value: base64.URLEncoding.EncodeToString([]byte(constructAuthData(1)))},
-				{Name: "auth_data_hash", Value: computeAuthHash(e.tgToken, 1)},
-			},
-			wantLogged: false,
-		},
-		"expired": {
-			cookies: []*http.Cookie{
-				{Name: "auth_data", Value: base64.URLEncoding.EncodeToString([]byte(constructExpiredAuthData(e.tgOwner)))},
-				{Name: "auth_data_hash", Value: computeAuthHash(e.tgToken, e.tgOwner, time.Now().Add(-25*time.Hour))},
-			},
-			wantLogged: false,
-		},
-		"valid": {
-			cookies: []*http.Cookie{
-				{Name: "auth_data", Value: base64.URLEncoding.EncodeToString([]byte(constructAuthData(e.tgOwner)))},
-				{Name: "auth_data_hash", Value: computeAuthHash(e.tgToken, e.tgOwner)},
-			},
-			wantLogged: true,
-		},
-	}
-
-	for name, tc := range cases {
-		t.Run(name, func(t *testing.T) {
-			t.Parallel()
-
-			r := httptest.NewRequest(http.MethodGet, "/", nil)
-			for _, c := range tc.cookies {
-				r.AddCookie(c)
-			}
-			testutil.AssertEqual(t, e.loggedIn(r), tc.wantLogged)
-		})
-	}
-}
-
-func computeAuthHash(token string, owner int64, authTimes ...time.Time) string {
-	var authTime time.Time
-	if len(authTimes) > 0 {
-		authTime = authTimes[0]
-	} else {
-		authTime = time.Now()
-	}
-	data := constructAuthData(owner, authTime)
-	h := sha256.New()
-	h.Write([]byte(token))
-	tokenHash := h.Sum(nil)
-
-	hm := hmac.New(sha256.New, tokenHash)
-	hm.Write([]byte(data))
-	return hex.EncodeToString(hm.Sum(nil))
-}
-
-func constructAuthData(owner int64, authTimes ...time.Time) string {
-	var authTime time.Time
-	if len(authTimes) > 0 {
-		authTime = authTimes[0]
-	} else {
-		authTime = time.Now()
-	}
-	return "auth_date=" + strconv.FormatInt(authTime.Unix(), 10) +
-		"\nfirst_name=Ilya\nid=" + strconv.FormatInt(owner, 10) +
-		"\nlast_name=Mateyko\nphoto_url=https://t.me/i/userpic/320/XyqYqXyqYqXyqYqXyqYqXyqYqXyqYqXyqYqXyqYqXyq.jpg\nusername=astrophena"
-}
-
-func constructExpiredAuthData(owner int64) string {
-	return constructAuthData(owner, time.Now().Add(-25*time.Hour))
-}
-
-func getCookieValue(t *testing.T, cookies []*http.Cookie, name string) string {
-	for _, c := range cookies {
-		if c.Name == name {
-			return c.Value
-		}
-	}
-	t.Fatalf("cookie %q not found", name)
-	return ""
 }
 
 func TestSelfPing(t *testing.T) {
