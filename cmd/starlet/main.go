@@ -75,7 +75,9 @@ func (e *engine) Flags(fs *flag.FlagSet) {
 	fs.StringVar(&e.tgToken, "tg-token", "", "Telegram Bot API `token`.")
 }
 
-func (e *engine) Run(ctx context.Context, env *cli.Env) error {
+func (e *engine) Run(ctx context.Context) error {
+	env := cli.GetEnv(ctx)
+
 	// Load configuration from environment variables or flags.
 	e.geminiKey = cmp.Or(env.Getenv("GEMINI_KEY"), e.geminiKey)
 	e.ghToken = cmp.Or(env.Getenv("GH_TOKEN"), e.ghToken)

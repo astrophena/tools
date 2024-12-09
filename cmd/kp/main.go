@@ -39,7 +39,9 @@ func (a *app) Flags(fs *flag.FlagSet) {
 	fs.BoolVar(&a.list, "l", false, "List all entries.")
 }
 
-func (a *app) Run(ctx context.Context, env *cli.Env) error {
+func (a *app) Run(ctx context.Context) error {
+	env := cli.GetEnv(ctx)
+
 	tmpl, err := template.New("main").Parse(a.format)
 	if err != nil {
 		return fmt.Errorf("%w: %v", errInvalidFormat, err)

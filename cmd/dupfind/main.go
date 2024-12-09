@@ -18,7 +18,9 @@ import (
 
 func main() { cli.Main(cli.AppFunc(run)) }
 
-func run(ctx context.Context, env *cli.Env) error {
+func run(ctx context.Context) error {
+	env := cli.GetEnv(ctx)
+
 	if len(env.Args) != 1 {
 		return fmt.Errorf("%w: missing required argument 'dir'", cli.ErrInvalidArgs)
 	}

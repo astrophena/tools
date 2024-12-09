@@ -99,7 +99,7 @@ func TestListenAndServe(t *testing.T) {
 			Stdout: &stdout,
 			Stderr: &stderr,
 		}
-		if err := cli.Run(ctx, e, env); err != nil {
+		if err := cli.Run(cli.WithEnv(ctx, env), e); err != nil {
 			errCh <- err
 		}
 	}()

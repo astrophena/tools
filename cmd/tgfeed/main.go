@@ -69,7 +69,9 @@ func (f *fetcher) Flags(fs *flag.FlagSet) {
 	fs.BoolVar(&f.mode.run, "run", false, "Fetch feeds and send updates.")
 }
 
-func (f *fetcher) Run(ctx context.Context, env *cli.Env) error {
+func (f *fetcher) Run(ctx context.Context) error {
+	env := cli.GetEnv(ctx)
+
 	// Initialize logger.
 	f.logf = env.Logf
 

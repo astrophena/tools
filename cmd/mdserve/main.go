@@ -49,7 +49,9 @@ func (e *engine) Flags(fs *flag.FlagSet) {
 	fs.StringVar(&e.addr, "addr", "localhost:3000", "Listen on `host:port`.")
 }
 
-func (e *engine) Run(ctx context.Context, env *cli.Env) error {
+func (e *engine) Run(ctx context.Context) error {
+	env := cli.GetEnv(ctx)
+
 	var dir string
 	if len(env.Args) == 1 {
 		dir = env.Args[0]

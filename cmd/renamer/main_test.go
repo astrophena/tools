@@ -91,7 +91,7 @@ func TestRun(t *testing.T) {
 				Stdout: &stdout,
 				Stderr: &stderr,
 			}
-			err := cli.Run(context.Background(), new(app), env)
+			err := cli.Run(cli.WithEnv(context.Background(), env), new(app))
 
 			// Don't use && because we want to trap all cases where err is
 			// nil.

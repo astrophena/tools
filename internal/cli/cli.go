@@ -31,7 +31,7 @@ func Main(app App) {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 
-	err := Run(ctx, app, OSEnv())
+	err := Run(ctx, app)
 
 	if err == nil {
 		return
@@ -74,7 +74,7 @@ var ErrInvalidArgs = errors.New("invalid arguments")
 // App represents a command-line application.
 type App interface {
 	// Run runs the application.
-	Run(context.Context, *Env) error
+	Run(context.Context) error
 }
 
 // HasFlags represents a command-line application that has flags.
@@ -86,15 +86,36 @@ type HasFlags interface {
 }
 
 // AppFunc is a function type that implements the [App] interface.
-// It has no defined flags.
-type AppFunc func(context.Context, *Env) error
+// AppFunc doesn't have it's own flags.
+type AppFunc func(context.Context) error
 
-// Run calls f(ctx, env).
-func (f AppFunc) Run(ctx context.Context, env *Env) error {
-	return f(ctx, env)
+// Run calls f(ctx).
+func (f AppFunc) Run(ctx context.Context) error {
+	return f(ctx)
+}
+
+type ctxKey int
+
+var envKey ctxKey
+
+// GetEnv returns the [Env] value stored in ctx, returning [OSEnv] in case it
+// doesn't.
+func GetEnv(ctx context.Context) *Env {
+	e, ok := ctx.Value(envKey).(*Env)
+	if !ok {
+		return OSEnv()
+	}
+	return e
+}
+
+// WithEnv returns a new [context.Context] that carries [Env].
+func WithEnv(ctx context.Context, e *Env) context.Context {
+	return context.WithValue(ctx, envKey, e)
 }
 
 // Env represents the application environment.
+//
+// You can access it by using [GetEnv] function.
 type Env struct {
 	Args   []string
 	Getenv func(string) string
@@ -124,7 +145,7 @@ func OSEnv() *Env {
 }
 
 // Run handles the command-line application startup.
-func Run(ctx context.Context, app App, env *Env) error {
+func Run(ctx context.Context, app App) error {
 	name := version.CmdName()
 
 	flags := flag.NewFlagSet(name, flag.ContinueOnError)
@@ -141,7 +162,9 @@ func Run(ctx context.Context, app App, env *Env) error {
 		flags.BoolVar(&showVersion, "version", false, "Show version.")
 	}
 
-	flags.Usage = usage(name, flags, env.Stderr)
+	env := GetEnv(ctx)
+
+	flags.Usage = usage(flags, env.Stderr)
 	flags.SetOutput(env.Stderr)
 	if err := flags.Parse(env.Args); err != nil {
 		// Already printed to stderr by flag package, so mark as an unprintable error.
@@ -165,7 +188,7 @@ func Run(ctx context.Context, app App, env *Env) error {
 	}
 	env.Args = flags.Args()
 
-	if err := app.Run(ctx, env); err != nil {
+	if err := app.Run(ctx); err != nil {
 		return err
 	}
 
@@ -184,7 +207,7 @@ func Run(ctx context.Context, app App, env *Env) error {
 	return nil
 }
 
-func usage(name string, flags *flag.FlagSet, stderr io.Writer) func() {
+func usage(flags *flag.FlagSet, stderr io.Writer) func() {
 	return func() {
 		if docSrc != nil {
 			fmt.Fprintf(stderr, "%s\n", doc.Get(parseDocComment))

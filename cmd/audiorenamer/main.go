@@ -38,7 +38,7 @@ func (a *app) Flags(fs *flag.FlagSet) {
 	fs.BoolVar(&a.verbose, "verbose", false, "Print all log messages, including those for files that are not renamed.")
 }
 
-func (a *app) Run(ctx context.Context, env *cli.Env) error {
+func (a *app) Run(ctx context.Context) error {
 	tmpl, err := template.New("main").Funcs(template.FuncMap{
 		"track": func(m tag.Metadata) int {
 			num, _ := m.Track()
@@ -48,6 +48,8 @@ func (a *app) Run(ctx context.Context, env *cli.Env) error {
 	if err != nil {
 		return fmt.Errorf("%w: %v", errInvalidFormat, err)
 	}
+
+	env := cli.GetEnv(ctx)
 
 	if len(env.Args) != 1 {
 		return fmt.Errorf("%w: missing required argument 'dir'", cli.ErrInvalidArgs)

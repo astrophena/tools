@@ -60,7 +60,7 @@ func Run[App cli.App](t *testing.T, setup func(*testing.T) App, cases map[string
 				Stderr: &stderr,
 			}
 
-			err := cli.Run(context.Background(), app, env)
+			err := cli.Run(cli.WithEnv(context.Background(), env), app)
 
 			// Don't use && because we want to trap all cases where err is
 			// nil.

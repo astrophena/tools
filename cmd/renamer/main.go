@@ -34,7 +34,9 @@ func (a *app) Flags(fs *flag.FlagSet) {
 
 var errUnknownSortMode = errors.New("unknown sort mode")
 
-func (a *app) Run(ctx context.Context, env *cli.Env) error {
+func (a *app) Run(ctx context.Context) error {
+	env := cli.GetEnv(ctx)
+
 	if len(env.Args) != 1 {
 		return fmt.Errorf("%w: exactly one directory argument is required", cli.ErrInvalidArgs)
 	}

@@ -24,7 +24,9 @@ func main() { cli.Main(cli.AppFunc(run)) }
 
 var errInvalidNum = errors.New("invalid number of commands")
 
-func run(ctx context.Context, env *cli.Env) error {
+func run(ctx context.Context) error {
+	env := cli.GetEnv(ctx)
+
 	num := int64(10)
 	if len(env.Args) > 0 {
 		var err error
