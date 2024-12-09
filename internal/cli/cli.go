@@ -186,9 +186,10 @@ func Run(ctx context.Context, app App) error {
 		fmt.Fprint(env.Stderr, version.Version())
 		return ErrExitVersion
 	}
+
 	env.Args = flags.Args()
 
-	if err := app.Run(ctx); err != nil {
+	if err := app.Run(WithEnv(ctx, env)); err != nil {
 		return err
 	}
 
