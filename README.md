@@ -19,4 +19,6 @@ $ go install go.astrophena.name/tools/cmd/...@master
 
 **Be warned**: these tools are for personal use, subject to change without notice and may gain or lose functionality at any time.
 
+The code here is... so-so.
+
 See documentation at https://go.astrophena.name/tools.
