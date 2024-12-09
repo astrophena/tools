@@ -79,7 +79,8 @@ var (
 // ListenAndServe starts the HTTP server based on the provided
 // [ListenAndServeConfig].
 func ListenAndServe(ctx context.Context, c *ListenAndServeConfig) error {
-	logf := cli.GetEnv(ctx).Logf
+	env := cli.GetEnv(ctx)
+	logf := env.Logf
 
 	if c.Addr == "" {
 		return errNoAddr
@@ -103,7 +104,7 @@ func ListenAndServe(ctx context.Context, c *ListenAndServeConfig) error {
 
 	// Redirect HTTP requests to HTTPS.
 	if isTLS {
-		go httpRedirect(ctx, c)
+		go httpRedirect(ctx)
 	}
 
 	protectDebug := func(next http.Handler) http.Handler {
@@ -136,6 +137,9 @@ func ListenAndServe(ctx context.Context, c *ListenAndServeConfig) error {
 	s := &http.Server{
 		ErrorLog: log.New(logger.Logf(logf), "", 0),
 		Handler:  setHeaders(protectDebug(c.Mux)),
+		BaseContext: func(_ net.Listener) context.Context {
+			return cli.WithEnv(context.Background(), env)
+		},
 	}
 	initInternalRoutes(c)
 
@@ -232,7 +236,7 @@ func cacheDir() string {
 
 // httpRedirect redirects HTTP requests to HTTPS and runs in a separate
 // goroutine.
-func httpRedirect(ctx context.Context, c *ListenAndServeConfig) {
+func httpRedirect(ctx context.Context) {
 	logf := cli.GetEnv(ctx).Logf
 	s := &http.Server{
 		Addr: ":80",
