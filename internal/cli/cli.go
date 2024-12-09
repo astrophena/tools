@@ -99,7 +99,7 @@ type ctxKey int
 var envKey ctxKey
 
 // GetEnv returns the [Env] value stored in ctx, returning [OSEnv] in case it
-// doesn't.
+// doesn't exist.
 func GetEnv(ctx context.Context) *Env {
 	e, ok := ctx.Value(envKey).(*Env)
 	if !ok {
