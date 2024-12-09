@@ -13,7 +13,7 @@ import (
 	"net/http"
 	"strings"
 
-	"go.astrophena.name/base/logger"
+	"go.astrophena.name/tools/internal/cli"
 )
 
 // StatusErr is a sentinel error type used to represent HTTP status code errors.
@@ -71,7 +71,8 @@ func respondJSON(w http.ResponseWriter, response any, wroteStatus bool) {
 var errorTemplate string
 
 // RespondError writes an error response in HTML format to w and logs the error
-// using provided [logger.Logf] if error is [ErrInternalServerError].
+// using [logger.Logf] from context's environment ([cli.Env]) if error is
+// [ErrInternalServerError].
 //
 // If the error is a [StatusErr] or wraps it, it extracts the HTTP status code and
 // sets the response status code accordingly. Otherwise, it sets the response
@@ -82,12 +83,13 @@ var errorTemplate string
 //
 //	// This will set the status code to 404 (Not Found).
 //	web.RespondError(w, fmt.Errorf("resource %w", web.ErrNotFound))
-func RespondError(logf logger.Logf, w http.ResponseWriter, err error) {
-	respondError(false, logf, w, err)
+func RespondError(w http.ResponseWriter, r *http.Request, err error) {
+	respondError(false, w, r, err)
 }
 
-// RespondJSONError writes an error response in JSON format to w and logs the
-// error using provided [logger.Logf].
+// RespondJSONError writes an error response in HTML format to w and logs the
+// error using [logger.Logf] from context's environment ([cli.Env]) if error is
+// [ErrInternalServerError].
 //
 // If the error is a [StatusErr] or wraps it, it extracts the HTTP status code
 // and sets the response status code accordingly. Otherwise, it sets the
@@ -98,11 +100,13 @@ func RespondError(logf logger.Logf, w http.ResponseWriter, err error) {
 //
 //	// This will set the status code to 404 (Not Found).
 //	web.RespondJSONError(w, fmt.Errorf("resource %w", web.ErrNotFound)
-func RespondJSONError(logf logger.Logf, w http.ResponseWriter, err error) {
-	respondError(true, logf, w, err)
+func RespondJSONError(w http.ResponseWriter, r *http.Request, err error) {
+	respondError(true, w, r, err)
 }
 
-func respondError(json bool, logf logger.Logf, w http.ResponseWriter, err error) {
+func respondError(json bool, w http.ResponseWriter, r *http.Request, err error) {
+	logf := cli.GetEnv(r.Context()).Logf
+
 	var se StatusErr
 	if !errors.As(err, &se) {
 		se = ErrInternalServerError

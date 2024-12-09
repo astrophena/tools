@@ -13,7 +13,6 @@ import (
 	_ "embed"
 	"fmt"
 	"html/template"
-	"log"
 	"net/http"
 	"net/http/pprof"
 	"net/url"
@@ -23,7 +22,6 @@ import (
 	"sync"
 	"time"
 
-	"go.astrophena.name/base/logger"
 	"go.astrophena.name/tools/internal/util/syncx"
 	"go.astrophena.name/tools/internal/version"
 )
@@ -49,7 +47,6 @@ type DebugHandler struct {
 	kvfuncs []kvfunc                       // output one table row each, see KV()
 	links   []link                         // one link in header
 	tpl     syncx.Lazy[*template.Template] // template that is used for rendering debug page
-	logf    logger.Logf                    // log.Printf if nil
 }
 
 // Utility types used for rendering templates.
@@ -67,15 +64,12 @@ type (
 
 // Debugger returns the [DebugHandler] registered on mux at /debug/, creating it
 // if necessary.
-func Debugger(logf logger.Logf, mux *http.ServeMux) *DebugHandler {
+func Debugger(mux *http.ServeMux) *DebugHandler {
 	h, pat := mux.Handler(&http.Request{URL: &url.URL{Path: "/debug/"}})
 	if d, ok := h.(*DebugHandler); ok && pat == "/debug/" {
 		return d
 	}
-	if logf == nil {
-		logf = log.Printf
-	}
-	ret := &DebugHandler{logf: logf, mux: mux}
+	ret := &DebugHandler{mux: mux}
 	mux.Handle("/debug/", ret)
 
 	hostname, err := os.Hostname()
@@ -112,7 +106,7 @@ func uptime() any { return time.Since(timeStart).Round(time.Second) }
 func (d *DebugHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/debug/" {
 		// Sub-handlers are handled by the parent mux directly.
-		RespondError(d.logf, w, ErrNotFound)
+		RespondError(w, r, ErrNotFound)
 		return
 	}
 
@@ -123,7 +117,7 @@ func (d *DebugHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return template.New("debug").Parse(debugTemplate)
 	})
 	if err != nil {
-		RespondError(d.logf, w, fmt.Errorf("failed to initialize template: %w", err))
+		RespondError(w, r, fmt.Errorf("failed to initialize template: %w", err))
 		return
 	}
 
@@ -149,7 +143,7 @@ func (d *DebugHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	var buf bytes.Buffer
 	if err := tpl.Execute(&buf, &data); err != nil {
-		RespondError(d.logf, w, err)
+		RespondError(w, r, err)
 		return
 	}
 	buf.WriteTo(w)

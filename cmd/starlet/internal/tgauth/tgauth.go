@@ -18,7 +18,6 @@ import (
 	"strings"
 	"time"
 
-	"go.astrophena.name/base/logger"
 	"go.astrophena.name/tools/internal/web"
 )
 
@@ -35,14 +34,8 @@ type Middleware struct {
 	// The function should return true if the user is allowed to access the
 	// resource, and false otherwise.
 	CheckFunc func(map[string]string) bool
-	// Logf is a function used for logging.
-	Logf logger.Logf
 	// Token is a Telegram bot token.
 	Token string
-}
-
-func (mw *Middleware) respondError(w http.ResponseWriter, err error) {
-	web.RespondError(mw.Logf, w, err)
 }
 
 // LoginHandler returns a handler that handles Telegram authentication.
@@ -57,7 +50,7 @@ func (mw *Middleware) LoginHandler(redirectTarget string) http.Handler {
 		data := r.URL.Query()
 		hash := data.Get("hash")
 		if hash == "" {
-			mw.respondError(w, fmt.Errorf("%w: no hash present in auth data", web.ErrBadRequest))
+			web.RespondError(w, r, fmt.Errorf("%w: no hash present in auth data", web.ErrBadRequest))
 			return
 		}
 		data.Del("hash")
@@ -79,7 +72,7 @@ func (mw *Middleware) LoginHandler(redirectTarget string) http.Handler {
 		checkString := sb.String()
 
 		if !mw.validateAuthData(checkString, hash) {
-			mw.respondError(w, fmt.Errorf("%w: hash is not valid", web.ErrBadRequest))
+			web.RespondError(w, r, fmt.Errorf("%w: hash is not valid", web.ErrBadRequest))
 			return
 		}
 
@@ -165,7 +158,7 @@ func extractAuthData(data string) map[string]string {
 func (mw *Middleware) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !mw.LoggedIn(r) {
-			mw.respondError(w, web.ErrUnauthorized)
+			web.RespondError(w, r, web.ErrUnauthorized)
 			return
 		}
 		next.ServeHTTP(w, r)

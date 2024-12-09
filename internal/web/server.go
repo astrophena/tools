@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"go.astrophena.name/base/logger"
+	"go.astrophena.name/tools/internal/cli"
 	"go.astrophena.name/tools/internal/version"
 
 	"github.com/benbjohnson/hashfs"
@@ -41,8 +42,6 @@ type ListenAndServeConfig struct {
 	Addr string
 	// Mux is a http.ServeMux to serve.
 	Mux *http.ServeMux
-	// Logf specifies a logger to use. If nil, log.Printf is used.
-	Logf logger.Logf
 	// Debuggable specifies whether to register debug handlers at /debug/.
 	Debuggable bool
 	// DebugAuth specifies an optional function that's invoked on every request to
@@ -74,14 +73,14 @@ const hstsHeader = "max-age=31536000"
 var (
 	errNoAddr = errors.New("c.Addr is empty")
 	errNilMux = errors.New("c.Mux is nil")
+	errListen = errors.New("failed to listen")
 )
 
 // ListenAndServe starts the HTTP server based on the provided
 // [ListenAndServeConfig].
 func ListenAndServe(ctx context.Context, c *ListenAndServeConfig) error {
-	if c.Logf == nil {
-		c.Logf = log.Printf
-	}
+	logf := cli.GetEnv(ctx).Logf
+
 	if c.Addr == "" {
 		return errNoAddr
 	}
@@ -91,7 +90,7 @@ func ListenAndServe(ctx context.Context, c *ListenAndServeConfig) error {
 
 	l, isTLS, err := obtainListener(c)
 	if err != nil {
-		return fmt.Errorf("failed to listen: %v", err)
+		return fmt.Errorf("%w: %v", errListen, err)
 	}
 	defer l.Close()
 
@@ -100,7 +99,7 @@ func ListenAndServe(ctx context.Context, c *ListenAndServeConfig) error {
 		scheme, host = "https", c.Addr
 	}
 
-	c.Logf("Listening on %s://%s...", scheme, host)
+	logf("Listening on %s://%s...", scheme, host)
 
 	// Redirect HTTP requests to HTTPS.
 	if isTLS {
@@ -115,7 +114,7 @@ func ListenAndServe(ctx context.Context, c *ListenAndServeConfig) error {
 			}
 			// If access denied, pretend that debug endpoints don't exist.
 			if !c.DebugAuth(r) {
-				RespondError(c.Logf, w, ErrNotFound)
+				RespondError(w, r, ErrNotFound)
 				return
 			}
 			next.ServeHTTP(w, r)
@@ -135,7 +134,7 @@ func ListenAndServe(ctx context.Context, c *ListenAndServeConfig) error {
 	}
 
 	s := &http.Server{
-		ErrorLog: log.New(c.Logf, "", 0),
+		ErrorLog: log.New(logger.Logf(logf), "", 0),
 		Handler:  setHeaders(protectDebug(c.Mux)),
 	}
 	initInternalRoutes(c)
@@ -158,7 +157,7 @@ func ListenAndServe(ctx context.Context, c *ListenAndServeConfig) error {
 	case err := <-errCh:
 		return err
 	case <-ctx.Done():
-		c.Logf("Gracefully shutting down...")
+		logf("Gracefully shutting down...")
 
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
@@ -193,7 +192,7 @@ func initInternalRoutes(c *ListenAndServeConfig) {
 	c.Mux.HandleFunc("GET /version", func(w http.ResponseWriter, r *http.Request) { RespondJSON(w, version.Version()) })
 	Health(c.Mux)
 	if c.Debuggable {
-		Debugger(c.Logf, c.Mux)
+		Debugger(c.Mux)
 	}
 }
 
@@ -234,6 +233,7 @@ func cacheDir() string {
 // httpRedirect redirects HTTP requests to HTTPS and runs in a separate
 // goroutine.
 func httpRedirect(ctx context.Context, c *ListenAndServeConfig) {
+	logf := cli.GetEnv(ctx).Logf
 	s := &http.Server{
 		Addr: ":80",
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -246,6 +246,6 @@ func httpRedirect(ctx context.Context, c *ListenAndServeConfig) {
 		s.Shutdown(ctx)
 	}()
 	if err := s.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		c.Logf("httpRedirect crashed: %v", err)
+		logf("httpRedirect crashed: %v", err)
 	}
 }

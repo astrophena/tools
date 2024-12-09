@@ -5,6 +5,8 @@
 package web
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -14,6 +16,7 @@ import (
 	"testing"
 
 	"go.astrophena.name/base/testutil"
+	"go.astrophena.name/tools/internal/cli"
 )
 
 func TestRespondError(t *testing.T) {
@@ -53,15 +56,17 @@ func TestRespondError(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			w := httptest.NewRecorder()
 
-			var logged bool
-			logf := func(format string, args ...any) {
-				logged = true
-				t.Logf(format, args...)
+			var stderr bytes.Buffer
+			env := &cli.Env{
+				Stderr: &stderr,
 			}
+			ctx := cli.WithEnv(context.Background(), env)
 
-			RespondError(logf, w, tc.err)
+			r := httptest.NewRequestWithContext(ctx, http.MethodGet, "/", nil)
 
-			if tc.wantToLog && !logged {
+			RespondError(w, r, tc.err)
+
+			if tc.wantToLog && stderr.Len() == 0 {
 				t.Fatalf("wanted to log a line, but didn't")
 			}
 
@@ -134,15 +139,17 @@ func TestRespondJSONError(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			w := httptest.NewRecorder()
 
-			var logged bool
-			logf := func(format string, args ...any) {
-				logged = true
-				t.Logf(format, args...)
+			var stderr bytes.Buffer
+			env := &cli.Env{
+				Stderr: &stderr,
 			}
+			ctx := cli.WithEnv(context.Background(), env)
 
-			RespondJSONError(logf, w, tc.err)
+			r := httptest.NewRequestWithContext(ctx, http.MethodGet, "/", nil)
 
-			if tc.wantToLog && !logged {
+			RespondJSONError(w, r, tc.err)
+
+			if tc.wantToLog && stderr.Len() == 0 {
 				t.Fatalf("wanted to log a line, but didn't")
 			}
 

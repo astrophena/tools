@@ -78,7 +78,6 @@ func (e *engine) Run(ctx context.Context) error {
 
 	return web.ListenAndServe(ctx, &web.ListenAndServeConfig{
 		Addr: e.addr,
-		Logf: e.logf,
 		Mux:  mux,
 	})
 }
@@ -116,20 +115,20 @@ func (e *engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	fi, err := fs.Stat(e.fs, p)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
-			e.respondError(w, web.ErrNotFound)
+			web.RespondError(w, r, web.ErrNotFound)
 			return
 		}
-		e.respondError(w, fmt.Errorf("reading file info: %w", err))
+		web.RespondError(w, r, fmt.Errorf("reading file info: %w", err))
 		return
 	}
 	if fi.IsDir() {
-		e.respondError(w, web.ErrNotFound)
+		web.RespondError(w, r, web.ErrNotFound)
 		return
 	}
 
 	b, err := fs.ReadFile(e.fs, p)
 	if err != nil {
-		e.respondError(w, fmt.Errorf("reading file: %w", err))
+		web.RespondError(w, r, fmt.Errorf("reading file: %w", err))
 		return
 	}
 
@@ -157,8 +156,4 @@ func parseTitle(b []byte) string {
 		return ""
 	}
 	return title
-}
-
-func (e *engine) respondError(w http.ResponseWriter, err error) {
-	web.RespondError(e.logf, w, err)
 }

@@ -30,7 +30,6 @@ func TestMiddleware(t *testing.T) {
 	t.Parallel()
 
 	mw := Middleware{
-		Logf:  t.Logf,
 		Token: tgToken,
 	}
 
@@ -75,7 +74,6 @@ func TestHandleLogin(t *testing.T) {
 	t.Parallel()
 
 	mw := Middleware{
-		Logf:  t.Logf,
 		Token: tgToken,
 	}
 
@@ -194,7 +192,6 @@ func TestLoggedIn(t *testing.T) {
 			t.Parallel()
 
 			mw := Middleware{
-				Logf:  t.Logf,
 				Token: tgToken,
 			}
 			if tc.checkFunc != nil {

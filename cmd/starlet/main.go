@@ -117,7 +117,6 @@ func (e *engine) Run(ctx context.Context) error {
 		Addr:       e.addr,
 		DebugAuth:  e.debugAuth,
 		Debuggable: true, // debug endpoints protected by Telegram auth
-		Logf:       e.logf,
 		Mux:        e.mux,
 		Ready:      e.ready,
 	})
@@ -225,7 +224,6 @@ func (e *engine) doInit() error {
 	}
 	e.tgAuth = &tgauth.Middleware{
 		CheckFunc: e.authCheck,
-		Logf:      e.logf,
 		Token:     e.tgToken,
 	}
 
@@ -298,7 +296,7 @@ func (e *engine) initRoutes() {
 
 	e.mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
-			e.respondError(w, web.ErrNotFound)
+			web.RespondError(w, r, web.ErrNotFound)
 			return
 		}
 		if e.tgAuth.LoggedIn(r) {
@@ -326,7 +324,7 @@ func (e *engine) initRoutes() {
 
 	// Debug routes.
 	web.Health(e.mux)
-	dbg := web.Debugger(e.logf, e.mux)
+	dbg := web.Debugger(e.mux)
 
 	dbg.KVFunc("Bot information", func() any {
 		me, err := e.getMe()
@@ -338,7 +336,7 @@ func (e *engine) initRoutes() {
 
 	dbg.HandleFunc("code", "Bot code", func(w http.ResponseWriter, r *http.Request) {
 		if err := e.ensureLoaded(r.Context()); err != nil {
-			e.respondError(w, err)
+			web.RespondError(w, r, err)
 			return
 		}
 		e.mu.RLock()
@@ -357,7 +355,7 @@ func (e *engine) initRoutes() {
 
 	dbg.HandleFunc("reload", "Reload from gist", func(w http.ResponseWriter, r *http.Request) {
 		if err := e.loadFromGist(r.Context()); err != nil {
-			e.respondError(w, err)
+			web.RespondError(w, r, err)
 			return
 		}
 		http.Redirect(w, r, "/debug/", http.StatusFound)
@@ -494,23 +492,23 @@ var errNoHandleFunc = errors.New("handle function not found in bot code")
 
 func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("X-Telegram-Bot-Api-Secret-Token") != e.tgSecret {
-		e.jsonErr(w, web.ErrNotFound)
+		web.RespondJSONError(w, r, web.ErrNotFound)
 		return
 	}
 
 	b, err := io.ReadAll(r.Body)
 	if err != nil {
-		e.jsonErr(w, err)
+		web.RespondJSONError(w, r, err)
 		return
 	}
 	var gu map[string]any
 	if err := json.Unmarshal(b, &gu); err != nil {
-		e.jsonErr(w, err)
+		web.RespondJSONError(w, r, err)
 		return
 	}
 	u, err := starlarkconv.ToValue(gu)
 	if err != nil {
-		e.jsonErr(w, err)
+		web.RespondJSONError(w, r, err)
 		return
 	}
 
@@ -539,8 +537,6 @@ func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w)
 }
 
-func (e *engine) jsonErr(w http.ResponseWriter, err error) { web.RespondJSONError(e.logf, w, err) }
-
 func (e *engine) lookupChatID(update map[string]any) int64 {
 	msg, ok := update["message"].(map[string]any)
 	if !ok {
@@ -568,11 +564,11 @@ func (e *engine) lookupChatID(update map[string]any) int64 {
 func (e *engine) handleReload(w http.ResponseWriter, r *http.Request) {
 	tok := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 	if tok != e.reloadToken {
-		web.RespondJSONError(e.logf, w, web.ErrUnauthorized)
+		web.RespondJSONError(w, r, web.ErrUnauthorized)
 		return
 	}
 	if err := e.loadFromGist(r.Context()); err != nil {
-		web.RespondJSONError(e.logf, w, err)
+		web.RespondJSONError(w, r, err)
 		return
 	}
 	jsonOK(w)
@@ -697,8 +693,6 @@ func (e *engine) selfPing(ctx context.Context, getenv func(string) string, inter
 // }}}
 
 // Error handling {{{
-
-func (e *engine) respondError(w http.ResponseWriter, err error) { web.RespondError(e.logf, w, err) }
 
 // https://core.telegram.org/bots/api#linkpreviewoptions
 type linkPreviewOptions struct {

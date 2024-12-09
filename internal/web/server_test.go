@@ -13,7 +13,9 @@ import (
 	"sync"
 	"testing"
 
+	"go.astrophena.name/base/logger"
 	"go.astrophena.name/base/testutil"
+	"go.astrophena.name/tools/internal/cli"
 )
 
 func TestListenAndServeConfig(t *testing.T) {
@@ -34,6 +36,13 @@ func TestListenAndServeConfig(t *testing.T) {
 				Mux:  nil,
 			},
 			wantErr: errNilMux,
+		},
+		"forbidden port": {
+			c: &ListenAndServeConfig{
+				Addr: ":80",
+				Mux:  http.NewServeMux(),
+			},
+			wantErr: errListen,
 		},
 	}
 	for _, tc := range cases {
@@ -69,13 +78,16 @@ func TestListenAndServe(t *testing.T) {
 	errCh := make(chan error, 1)
 	ctx, cancel := context.WithCancel(context.Background())
 
+	env := &cli.Env{
+		Stderr: logger.Logf(t.Logf),
+	}
+
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		if err := ListenAndServe(ctx, &ListenAndServeConfig{
+		if err := ListenAndServe(cli.WithEnv(ctx, env), &ListenAndServeConfig{
 			Addr:       addr,
 			Mux:        http.NewServeMux(),
-			Logf:       t.Logf,
 			Debuggable: true,
 			Ready:      readyFunc,
 		}); err != nil {
