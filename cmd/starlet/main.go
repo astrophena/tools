@@ -188,7 +188,6 @@ func (e *engine) doInit() error {
 	const logLineLimit = 300
 	e.logStream = logstream.New(logLineLimit)
 	e.logf = log.New(io.MultiWriter(e.stderr, &timestampWriter{e.logStream}), "", 0).Printf
-	e.initRoutes()
 
 	var scrubPairs []string
 	for _, val := range []string{
@@ -233,6 +232,8 @@ func (e *engine) doInit() error {
 	}
 	e.tgBotID = me.Result.ID
 	e.tgBotUsername = me.Result.Username
+
+	e.initRoutes()
 
 	return nil
 }

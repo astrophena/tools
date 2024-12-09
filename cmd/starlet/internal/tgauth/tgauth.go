@@ -80,7 +80,6 @@ func (mw *Middleware) LoginHandler(redirectTarget string) http.Handler {
 		setCookie(w, "auth_data_hash", hash)
 
 		http.Redirect(w, r, redirectTarget, http.StatusFound)
-
 	})
 }
 
