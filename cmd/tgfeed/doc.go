@@ -9,7 +9,7 @@ Tgfeed fetches RSS feeds and sends new articles via Telegram.
 
 	$ tgfeed [flags...]
 
-# Environment variables
+# Environment Variables
 
 The tgfeed program relies on the following environment variables:
 
@@ -65,7 +65,7 @@ and disables them after a certain threshold of consecutive failures. State
 information is stored and updated in the state.json file on GitHub Gist. You
 won't need to touch this file at all, except from very rare cases.
 
-# Stats collection
+# Stats Collection
 
 tgfeed collects and reports stats about every run to Google Sheets.
 You can specify the ID of the spreadsheet via the STATS_SPREADSHEET_ID

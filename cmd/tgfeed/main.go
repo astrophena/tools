@@ -18,6 +18,7 @@ import (
 	"io"
 	"math/rand/v2"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os"
 	"os/exec"
@@ -30,6 +31,7 @@ import (
 
 	"go.astrophena.name/base/logger"
 	"go.astrophena.name/base/request"
+	"go.astrophena.name/tools/cmd/tgfeed/internal/ghnotify"
 	"go.astrophena.name/tools/internal/api/gist"
 	"go.astrophena.name/tools/internal/api/google/serviceaccount"
 	"go.astrophena.name/tools/internal/cli"
@@ -725,11 +727,20 @@ func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *gofeed.Item
 		req.Header.Set("If-Modified-Since", state.LastModified)
 	}
 
-	res, err := f.httpc.Do(req)
-	if err != nil {
-		f.handleFetchFailure(ctx, state, fd.URL, err)
-		return
+	var res *http.Response
+	if fd.URL == "tgfeed://github-notifications" {
+		h := ghnotify.Handler(f.ghToken, f.httpc)
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, req)
+		res = w.Result()
+	} else {
+		res, err = f.httpc.Do(req)
+		if err != nil {
+			f.handleFetchFailure(ctx, state, fd.URL, err)
+			return
+		}
 	}
+
 	defer res.Body.Close()
 
 	// Ignore unmodified feeds and report an error otherwise.
