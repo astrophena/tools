@@ -55,6 +55,16 @@ keys:
   - content: The content of the item.
   - categories: A list of categories the item belongs to.
 
+# Special Feeds
+
+tgfeed supports special feed URLs for integrating with services other than
+traditional RSS/Atom feeds.
+
+You can use the special URL tgfeed://github-notifications as a feed URL to
+receive your GitHub notifications via Telegram and mark them as read on GitHub.
+This requires a GitHub personal access token with the notifications scope, which
+should be provided via the GITHUB_TOKEN environment variable.
+
 # State
 
 tgfeed stores it's state on GitHub Gist.
