@@ -14,9 +14,11 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"testing"
 	"text/template"
 
 	"github.com/dhowden/tag"
+	"github.com/landlock-lsm/go-landlock/landlock"
 
 	"go.astrophena.name/tools/internal/cli"
 )
@@ -58,6 +60,13 @@ func (a *app) Run(ctx context.Context) error {
 
 	if realdir, err := filepath.EvalSymlinks(dir); err == nil {
 		dir = realdir
+	}
+
+	// Drop privileges if not inside tests.
+	if !testing.Testing() {
+		landlock.V5.BestEffort().Restrict(
+			landlock.RWDirs(dir),
+		)
 	}
 
 	vlog := func(format string, args ...any) {

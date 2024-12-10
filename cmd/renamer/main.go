@@ -14,8 +14,11 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"testing"
 
 	"go.astrophena.name/tools/internal/cli"
+
+	"github.com/landlock-lsm/go-landlock/landlock"
 )
 
 func main() { cli.Main(new(app)) }
@@ -43,6 +46,13 @@ func (a *app) Run(ctx context.Context) error {
 	dir := env.Args[0]
 	if realdir, err := filepath.EvalSymlinks(dir); err == nil {
 		dir = realdir
+	}
+
+	// Drop privileges if not in tests.
+	if !testing.Testing() {
+		landlock.V5.BestEffort().Restrict(
+			landlock.RWDirs(dir),
+		)
 	}
 
 	files, err := os.ReadDir(dir)

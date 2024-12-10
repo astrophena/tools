@@ -5,6 +5,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"io/fs"
@@ -14,6 +15,7 @@ import (
 	"testing"
 	"testing/fstest"
 
+	"go.astrophena.name/base/logger"
 	"go.astrophena.name/tools/internal/cli"
 	"go.astrophena.name/tools/internal/cli/clitest"
 )
@@ -114,7 +116,11 @@ This is bla bla bla.
 				e.fs = &failFS{}
 			}
 
-			r := httptest.NewRequest(http.MethodGet, tc.path, nil)
+			env := &cli.Env{
+				Stderr: logger.Logf(t.Logf),
+			}
+
+			r := httptest.NewRequestWithContext(cli.WithEnv(context.Background(), env), http.MethodGet, tc.path, nil)
 			w := httptest.NewRecorder()
 			e.ServeHTTP(w, r)
 

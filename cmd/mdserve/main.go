@@ -24,6 +24,7 @@ import (
 	"go.astrophena.name/tools/internal/cli"
 	"go.astrophena.name/tools/internal/web"
 
+	"github.com/landlock-lsm/go-landlock/landlock"
 	"rsc.io/markdown"
 )
 
@@ -59,8 +60,13 @@ func (e *engine) Run(ctx context.Context) error {
 	if realdir, err := filepath.Abs(dir); err == nil {
 		dir = realdir
 	}
+
 	if e.fs == nil && dir != "" {
 		e.fs = os.DirFS(dir)
+		// Drop privileges.
+		landlock.V5.BestEffort().Restrict(
+			landlock.RODirs(dir),
+		)
 	}
 
 	e.logf = env.Logf

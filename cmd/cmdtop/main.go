@@ -16,8 +16,11 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"testing"
 
 	"go.astrophena.name/tools/internal/cli"
+
+	"github.com/landlock-lsm/go-landlock/landlock"
 )
 
 func main() { cli.Main(cli.AppFunc(run)) }
@@ -43,6 +46,13 @@ func run(ctx context.Context) error {
 			return fmt.Errorf("failed to lookup home directory: %w", err)
 		}
 		histfile = filepath.Join(home, ".bash_history")
+	}
+
+	// Drop privileges if not inside tests.
+	if !testing.Testing() {
+		landlock.V5.BestEffort().Restrict(
+			landlock.ROFiles(histfile),
+		)
 	}
 
 	f, err := os.Open(histfile)

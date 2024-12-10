@@ -7,6 +7,7 @@ require (
 	github.com/dhowden/tag v0.0.0-20240417053706-3d75831295e8
 	github.com/golang-jwt/jwt/v5 v5.2.1
 	github.com/google/go-cmp v0.6.0
+	github.com/landlock-lsm/go-landlock v0.0.0-20241014143150-479ddab4c04c
 	github.com/mmcdole/gofeed v1.3.0
 	github.com/tobischo/gokeepasslib/v3 v3.6.0
 	go.astrophena.name/base v0.1.4
@@ -34,6 +35,7 @@ require (
 	golang.org/x/text v0.21.0 // indirect
 	golang.org/x/tools v0.21.1-0.20240531212143-b6235391adb3 // indirect
 	google.golang.org/protobuf v1.34.1 // indirect
+	kernel.org/pub/linux/libs/security/libcap/psx v1.2.70 // indirect
 )
 
 // Doesn't exist in this repository.

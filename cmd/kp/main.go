@@ -13,10 +13,12 @@ import (
 	"io"
 	"os"
 	"syscall"
+	"testing"
 	"text/template"
 
 	"go.astrophena.name/tools/internal/cli"
 
+	"github.com/landlock-lsm/go-landlock/landlock"
 	"github.com/tobischo/gokeepasslib/v3"
 	"golang.org/x/term"
 )
@@ -54,6 +56,13 @@ func (a *app) Run(ctx context.Context) error {
 	}
 
 	file := env.Args[0]
+
+	// Drop privileges if not inside tests.
+	if !testing.Testing() {
+		landlock.V5.BestEffort().Restrict(
+			landlock.ROFiles(file),
+		)
+	}
 
 	f, err := os.Open(file)
 	if err != nil {
