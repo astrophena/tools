@@ -2,7 +2,11 @@
 
 package restrict
 
-import "github.com/landlock-lsm/go-landlock/landlock"
+import (
+	"context"
+
+	"github.com/landlock-lsm/go-landlock/landlock"
+)
 
 // Do does nothing.
-func Do(_ ...landlock.Rule) {}
+func Do(_ context.Context, _ ...landlock.Rule) {}
