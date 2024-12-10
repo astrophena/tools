@@ -17,6 +17,7 @@ import (
 	"testing"
 
 	"go.astrophena.name/tools/internal/cli"
+	"go.astrophena.name/tools/internal/cli/restrict"
 
 	"github.com/landlock-lsm/go-landlock/landlock"
 )
@@ -50,9 +51,7 @@ func (a *app) Run(ctx context.Context) error {
 
 	// Drop privileges if not in tests.
 	if !testing.Testing() {
-		landlock.V5.BestEffort().Restrict(
-			landlock.RWDirs(dir),
-		)
+		restrict.Do(ctx, landlock.RWDirs(dir))
 	}
 
 	files, err := os.ReadDir(dir)

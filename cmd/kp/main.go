@@ -17,6 +17,7 @@ import (
 	"text/template"
 
 	"go.astrophena.name/tools/internal/cli"
+	"go.astrophena.name/tools/internal/cli/restrict"
 
 	"github.com/landlock-lsm/go-landlock/landlock"
 	"github.com/tobischo/gokeepasslib/v3"
@@ -59,9 +60,7 @@ func (a *app) Run(ctx context.Context) error {
 
 	// Drop privileges if not inside tests.
 	if !testing.Testing() {
-		landlock.V5.BestEffort().Restrict(
-			landlock.ROFiles(file),
-		)
+		restrict.Do(ctx, landlock.ROFiles(file))
 	}
 
 	f, err := os.Open(file)
