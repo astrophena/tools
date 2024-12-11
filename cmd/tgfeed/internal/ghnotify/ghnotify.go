@@ -72,6 +72,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	req.Header.Set("Authorization", "Bearer "+h.token)
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
+	req.Header.Set("User-Agent", "ghnotify (+https://astrophena.name/bleep-bloop)")
 
 	if lastModified := r.Header.Get("If-Modified-Since"); lastModified != "" {
 		req.Header.Set("If-Modified-Since", lastModified)
@@ -134,12 +135,14 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.markAsRead(r.Context()); err != nil {
-		web.RespondJSONError(w, r, err)
+		web.RespondJSONError(w, r, fmt.Errorf("marking notifications as read failed: %v", err))
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Last-Modified", res.Header.Get("Last-Modified"))
+	// GitHub docs mention that Last-Modified header is set, but for some reason
+	// it actually doesn't.
+	w.Header().Set("Last-Modified", res.Header.Get("Date"))
 	web.RespondJSON(w, feed)
 }
 

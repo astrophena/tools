@@ -15,18 +15,21 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"go.astrophena.name/base/logger"
 	"go.astrophena.name/base/testutil"
 	"go.astrophena.name/base/txtar"
 	"go.astrophena.name/tools/internal/api/gist"
 	"go.astrophena.name/tools/internal/api/google/serviceaccount"
 	"go.astrophena.name/tools/internal/cli"
 	"go.astrophena.name/tools/internal/cli/clitest"
+	"go.astrophena.name/tools/internal/util/rr"
 	"go.astrophena.name/tools/internal/web"
 )
 
@@ -38,6 +41,9 @@ const tgToken = "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
 var (
 	//go:embed testdata/gists/default.txtar
 	defaultGistTxtar []byte
+
+	//go:embed testdata/gists/github_notifications.txtar
+	githubNotificationsTxtar []byte
 )
 
 var (
@@ -369,6 +375,43 @@ func readFile(t *testing.T, path string) []byte {
 		t.Fatal(err)
 	}
 	return b
+}
+
+func TestGitHubNotificationsFeed(t *testing.T) {
+	t.Parallel()
+
+	rec, err := rr.Open(filepath.Join("internal", "ghnotify", "testdata", "handler.httprr"), http.DefaultTransport)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rec.Close()
+
+	tm := testMux(t, nil)
+	tm.gist = txtarToGist(t, githubNotificationsTxtar)
+	f := testFetcher(t, tm)
+	f.httpc = &http.Client{
+		Transport: &roundTripper{f.httpc.Transport, rec.Client().Transport},
+	}
+
+	if err := f.run(cli.WithEnv(context.Background(), &cli.Env{
+		Stderr: logger.Logf(t.Logf),
+	})); err != nil {
+		t.Fatal(err)
+	}
+
+	state := tm.state(t)["tgfeed://github-notifications"]
+	testutil.AssertEqual(t, state.ErrorCount, 0)
+	testutil.AssertEqual(t, state.LastError, "")
+}
+
+type roundTripper struct{ main, notifications http.RoundTripper }
+
+func (rt *roundTripper) RoundTrip(r *http.Request) (*http.Response, error) {
+	if r.URL.Host == "api.github.com" && r.URL.Path == "/notifications" {
+		r.Header.Del("Authorization")
+		return rt.notifications.RoundTrip(r)
+	}
+	return rt.main.RoundTrip(r)
 }
 
 func testFetcher(t *testing.T, m *mux) *fetcher {

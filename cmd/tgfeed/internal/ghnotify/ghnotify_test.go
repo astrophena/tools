@@ -1,0 +1,50 @@
+// © 2024 Ilya Mateyko. All rights reserved.
+// Use of this source code is governed by the ISC
+// license that can be found in the LICENSE.md file.
+
+package ghnotify
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"testing"
+
+	"go.astrophena.name/base/testutil"
+	"go.astrophena.name/tools/internal/util/rr"
+)
+
+// Updating this test:
+//
+//	$ GITHUB_TOKEN="$(gh auth token)" go test -httprecord testdata/handler.httprr
+//
+
+func TestHandler(t *testing.T) {
+	rec, err := rr.Open(filepath.Join("testdata", "handler.httprr"), http.DefaultTransport)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rec.Close()
+	rec.Scrub(func(r *http.Request) error {
+		r.Header.Del("Authorization")
+		return nil
+	})
+
+	tok := "example"
+	if rec.Recording() {
+		tok = os.Getenv("GITHUB_TOKEN")
+	}
+
+	h := Handler(tok, rec.Client())
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	h.ServeHTTP(w, r)
+
+	testutil.AssertEqual(t, w.Code, http.StatusOK)
+
+	// Check that we are got valid JSON.
+	feed := testutil.UnmarshalJSON[jsonFeed](t, w.Body.Bytes())
+	t.Logf("Feed: %+v", feed)
+}
