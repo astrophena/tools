@@ -1,5 +1,5 @@
 httprr trace v1
-176 1427
+176 1428
 GET https://api.github.com/notifications HTTP/1.1
 Host: api.github.com
 User-Agent: ghnotify (+https://astrophena.name/bleep-bloop)
@@ -12,7 +12,7 @@ Access-Control-Expose-Headers: ETag, Link, Location, Retry-After, X-GitHub-OTP, 
 Cache-Control: private, max-age=60, s-maxage=60
 Content-Security-Policy: default-src 'none'
 Content-Type: application/json; charset=utf-8
-Date: Wed, 11 Dec 2024 08:13:39 GMT
+Date: Tue, 17 Dec 2024 18:00:37 GMT
 Etag: "4c97750ba147a5c4811e4c6eb8efc2cf908af275a0a33418753243e98038b5dd"
 Referrer-Policy: origin-when-cross-origin, strict-origin-when-cross-origin
 Server: github.com
@@ -23,21 +23,21 @@ X-Content-Type-Options: nosniff
 X-Frame-Options: deny
 X-Github-Api-Version-Selected: 2022-11-28
 X-Github-Media-Type: github.v3; format=json
-X-Github-Request-Id: 136F:3744D8:296F3A6:2A86C32:675949B2
+X-Github-Request-Id: 6DF0:3D6F7D:1E36493:1EA518B:6761BC45
 X-Oauth-Client-Id: 178c6fc778ccc68e1d6a
 X-Oauth-Scopes: codespace, gist, read:org, repo, workflow
 X-Poll-Interval: 60
 X-Ratelimit-Limit: 5000
-X-Ratelimit-Remaining: 4993
-X-Ratelimit-Reset: 1733906685
+X-Ratelimit-Remaining: 4985
+X-Ratelimit-Reset: 1734461127
 X-Ratelimit-Resource: core
-X-Ratelimit-Used: 7
+X-Ratelimit-Used: 15
 X-Xss-Protection: 0
 
-[]166 1241
+[]195 1242
 PUT https://api.github.com/notifications HTTP/1.1
 Host: api.github.com
-User-Agent: Go-http-client/1.1
+User-Agent: ghnotify (+https://astrophena.name/bleep-bloop)
 Content-Length: 0
 Accept: application/vnd.github.v3+json
 
@@ -47,7 +47,7 @@ Access-Control-Allow-Origin: *
 Access-Control-Expose-Headers: ETag, Link, Location, Retry-After, X-GitHub-OTP, X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Used, X-RateLimit-Resource, X-RateLimit-Reset, X-OAuth-Scopes, X-Accepted-OAuth-Scopes, X-Poll-Interval, X-GitHub-Media-Type, X-GitHub-SSO, X-GitHub-Request-Id, Deprecation, Sunset
 Content-Security-Policy: default-src 'none'
 Content-Type: text/plain;charset=utf-8
-Date: Wed, 11 Dec 2024 08:13:39 GMT
+Date: Tue, 17 Dec 2024 18:00:37 GMT
 Referrer-Policy: origin-when-cross-origin, strict-origin-when-cross-origin
 Server: github.com
 Strict-Transport-Security: max-age=31536000; includeSubdomains; preload
@@ -57,13 +57,13 @@ X-Content-Type-Options: nosniff
 X-Frame-Options: deny
 X-Github-Api-Version-Selected: 2022-11-28
 X-Github-Media-Type: github.v3; format=json
-X-Github-Request-Id: 136F:3744D8:296F4CB:2A86D64:675949B3
+X-Github-Request-Id: 6DF0:3D6F7D:1E36580:1EA526B:6761BC45
 X-Oauth-Client-Id: 178c6fc778ccc68e1d6a
 X-Oauth-Scopes: codespace, gist, read:org, repo, workflow
 X-Ratelimit-Limit: 5000
-X-Ratelimit-Remaining: 4992
-X-Ratelimit-Reset: 1733906685
+X-Ratelimit-Remaining: 4984
+X-Ratelimit-Reset: 1734461127
 X-Ratelimit-Resource: core
-X-Ratelimit-Used: 8
+X-Ratelimit-Used: 16
 X-Xss-Protection: 0
 

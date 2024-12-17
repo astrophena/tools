@@ -155,6 +155,7 @@ func (h *handler) markAsRead(ctx context.Context) error {
 
 	req.Header.Set("Authorization", "Bearer "+h.token)
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
+	req.Header.Set("User-Agent", "ghnotify (+https://astrophena.name/bleep-bloop)")
 
 	res, err := h.client.Do(req)
 	if err != nil {
