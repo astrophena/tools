@@ -12,7 +12,7 @@ require (
 	github.com/tobischo/gokeepasslib/v3 v3.6.0
 	go.astrophena.name/base v0.1.4
 	go.starlark.net v0.0.0-20240925182052-1207426daebd
-	golang.org/x/crypto v0.30.0
+	golang.org/x/crypto v0.31.0
 	golang.org/x/term v0.27.0
 	honnef.co/go/tools v0.5.1
 	rsc.io/markdown v0.0.0-20240717201619-868a055c40ae
