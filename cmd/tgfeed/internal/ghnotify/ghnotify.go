@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"go.astrophena.name/tools/internal/web"
@@ -109,7 +110,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	var items []feedItem
 	for _, n := range notifications {
-		url := n.Subject.URL
+		url := rewriteURL(n.Subject.URL)
 		if url == "" {
 			url = n.Repository.HTMLURL
 		}
@@ -120,7 +121,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			ID:            n.ID,
 			URL:           url,
 			Title:         fmt.Sprintf("%s: %s", n.Repository.FullName, n.Subject.Title),
-			ContentText:   fmt.Sprintf("%s - %s", n.Reason, n.Subject.Title),
+			ContentText:   fmt.Sprintf("%s (%s)", n.Subject.Title, n.Reason),
 			DatePublished: n.UpdatedAt,
 			ExternalURL:   n.Repository.HTMLURL,
 		}
@@ -170,4 +171,11 @@ func (h *handler) markAsRead(ctx context.Context) error {
 		return nil
 	}
 	return fmt.Errorf("want 205 or 202, got %d: %s", res.StatusCode, b)
+}
+
+func rewriteURL(url string) string {
+	if url == "" {
+		return ""
+	}
+	return strings.ReplaceAll(url, "https://api.github.com/repos/", "https://github.com/")
 }

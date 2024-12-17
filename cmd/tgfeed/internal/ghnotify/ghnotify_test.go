@@ -48,3 +48,17 @@ func TestHandler(t *testing.T) {
 	feed := testutil.UnmarshalJSON[jsonFeed](t, w.Body.Bytes())
 	t.Logf("Feed: %+v", feed)
 }
+
+func TestRewriteURL(t *testing.T) {
+	cases := map[string]string{
+		"https://github.com/actions":                              "https://github.com/actions",
+		"https://api.github.com/repos/astrophena/tools/pulls/10":  "https://github.com/astrophena/tools/pulls/10",
+		"https://api.github.com/repos/astrophena/tools/issues/10": "https://github.com/astrophena/tools/issues/10",
+	}
+
+	for got, want := range cases {
+		if rewriteURL(got) != want {
+			t.Errorf("rewriteURL(%q) != %q", got, want)
+		}
+	}
+}
