@@ -22,10 +22,8 @@ import (
 
 	"go.astrophena.name/base/logger"
 	"go.astrophena.name/tools/internal/cli"
-	"go.astrophena.name/tools/internal/cli/restrict"
 	"go.astrophena.name/tools/internal/web"
 
-	"github.com/landlock-lsm/go-landlock/landlock"
 	"rsc.io/markdown"
 )
 
@@ -64,8 +62,6 @@ func (e *engine) Run(ctx context.Context) error {
 
 	if e.fs == nil && dir != "" {
 		e.fs = os.DirFS(dir)
-		// Drop privileges.
-		restrict.Do(ctx, landlock.RODirs(dir))
 	}
 
 	e.logf = env.Logf
