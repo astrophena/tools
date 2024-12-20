@@ -4,6 +4,7 @@ This repository holds personal tools:
 
 - Audiorenamer traverses a directory and renames music tracks based on their metadata.
 - Cmdtop displays the top of most used commands in bash history.
+- Dungeon sandboxes programs so they can't fulfill their deep dark fantasies on unsuspecting users.
 - Dupfind finds duplicate files in a directory.
 - Kp retrieves passwords and other information from KeePass database files.
 - Mdserve serves Markdown files from a directory.
