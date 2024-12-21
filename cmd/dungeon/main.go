@@ -2,6 +2,8 @@
 // Use of this source code is governed by the ISC
 // license that can be found in the LICENSE.md file.
 
+//go:build linux && !android
+
 package main
 
 import (

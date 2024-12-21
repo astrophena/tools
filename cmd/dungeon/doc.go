@@ -2,6 +2,8 @@
 // Use of this source code is governed by the ISC
 // license that can be found in the LICENSE.md file.
 
+//go:build linux && !android
+
 /*
 Dungeon sandboxes programs so they can't fulfill their deep dark fantasies on
 unsuspecting users. It uses Landlock LSM to restrict program's access to the file
