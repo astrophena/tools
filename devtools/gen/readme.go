@@ -25,6 +25,7 @@ func main() {
 	const template = `{{ if eq .Name "main" }}- {{ .Doc }}{{ end }}`
 	var buf bytes.Buffer
 	cmd := exec.Command("go", "list", "-f", template, "./cmd/...")
+	cmd.Env = append(os.Environ(), "GOOS=linux")
 	cmd.Stdout = &sb
 	cmd.Stderr = &buf
 	if err := cmd.Run(); err != nil {
