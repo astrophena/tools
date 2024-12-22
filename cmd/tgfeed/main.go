@@ -35,6 +35,7 @@ import (
 	"go.astrophena.name/tools/internal/api/gist"
 	"go.astrophena.name/tools/internal/api/google/serviceaccount"
 	"go.astrophena.name/tools/internal/cli"
+	"go.astrophena.name/tools/internal/util/starlarkconv"
 	"go.astrophena.name/tools/internal/util/syncx"
 	"go.astrophena.name/tools/internal/version"
 
@@ -814,6 +815,11 @@ func (f *fetcher) applyRule(rule *starlark.Function, item *gofeed.Item) bool {
 	for _, category := range item.Categories {
 		categories = append(categories, starlark.String(category))
 	}
+	extensions, err := starlarkconv.ToValue(item.Extensions)
+	if err != nil {
+		f.logf("Error converting item extensions to Starlark value: %v", err)
+		return false
+	}
 	val, err := starlark.Call(
 		&starlark.Thread{
 			Print: func(_ *starlark.Thread, msg string) { f.logf("%s", msg) },
@@ -827,6 +833,7 @@ func (f *fetcher) applyRule(rule *starlark.Function, item *gofeed.Item) bool {
 				"description": starlark.String(item.Description),
 				"content":     starlark.String(item.Content),
 				"categories":  starlark.NewList(categories),
+				"extensions":  extensions,
 			},
 		)},
 		[]starlark.Tuple{},

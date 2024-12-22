@@ -12,4 +12,17 @@
     <updated>2024-03-10T00:00:00Z</updated>
     <link href="https://example.com/keep"/>
   </entry>
+  <entry>
+    <title>Item with extensions</title>
+    <updated>2024-03-10T00:00:00Z</updated>
+    <link href="https://example.com/extensions" />
+    <media:group>
+      <media:title>Item with extensions</media:title>
+      <media:description>Some description</media:description>
+      <media:community>
+        <media:starRating count="512314" average="5.00" min="1" max="5"/>
+        <media:statistics views="12887626"/>
+      </media:community>
+    </media:group>
+  </entry>
 </feed>

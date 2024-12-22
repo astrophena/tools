@@ -126,6 +126,30 @@ func TestToValue(t *testing.T) {
 				return dict
 			}(),
 		},
+		{
+			struct {
+				A string `starlark:"a" json:"aa"`
+				B int    `starlark:"b" json:"bb"`
+			}{"foo", 1},
+			func() starlark.Value {
+				dict := starlark.NewDict(2)
+				dict.SetKey(starlark.String("a"), starlark.String("foo"))
+				dict.SetKey(starlark.String("b"), starlark.MakeInt(1))
+				return dict
+			}(),
+		},
+		{
+			struct {
+				A string `json:"a"`
+				B int    `json:"b"`
+			}{"foo", 1},
+			func() starlark.Value {
+				dict := starlark.NewDict(2)
+				dict.SetKey(starlark.String("a"), starlark.String("foo"))
+				dict.SetKey(starlark.String("b"), starlark.MakeInt(1))
+				return dict
+			}(),
+		},
 
 		// Custom types.
 		{

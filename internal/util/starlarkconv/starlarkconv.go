@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"math"
 	"reflect"
+	"strings"
 	"time"
 
 	starlarktime "go.starlark.net/lib/time"
@@ -39,6 +40,8 @@ func ToValue(val any) (starlark.Value, error) {
 	rv := reflect.ValueOf(val)
 
 	switch rv.Kind() {
+	case reflect.Pointer:
+		return ToValue(rv.Elem())
 	case reflect.Bool:
 		return starlark.Bool(rv.Bool()), nil
 	case reflect.String:
@@ -96,7 +99,11 @@ func structToDict(val reflect.Value) (starlark.Value, error) {
 
 		fieldName, ok := field.Tag.Lookup("starlark")
 		if !ok {
-			fieldName = field.Name
+			fieldName, ok = field.Tag.Lookup("json")
+			fieldName = strings.TrimSuffix(fieldName, ",omitempty")
+			if !ok {
+				fieldName = field.Name
+			}
 		}
 
 		fieldVal, err := ToValue(fieldValue.Interface())
