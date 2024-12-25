@@ -13,17 +13,22 @@ import (
 	"flag"
 	"fmt"
 	"io/fs"
+	"net"
 	"net/http"
 	"os"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
+	"testing"
 
 	"go.astrophena.name/base/logger"
 	"go.astrophena.name/tools/internal/cli"
+	"go.astrophena.name/tools/internal/cli/restrict"
 	"go.astrophena.name/tools/internal/web"
 
+	"github.com/landlock-lsm/go-landlock/landlock"
 	"rsc.io/markdown"
 )
 
@@ -60,8 +65,30 @@ func (e *engine) Run(ctx context.Context) error {
 		dir = realdir
 	}
 
+	var rules []landlock.Rule
+
 	if e.fs == nil && dir != "" {
 		e.fs = os.DirFS(dir)
+		rules = append(rules, landlock.RODirs(dir))
+	}
+
+	_, port, err := net.SplitHostPort(e.addr)
+	if err != nil {
+		return err
+	}
+	uport, err := strconv.ParseUint(port, 10, 16)
+	if err != nil {
+		return err
+	}
+
+	rules = append(rules,
+		landlock.BindTCP(uint16(uport)),
+		// for DNS
+		landlock.ConnectTCP(53),
+		landlock.ROFiles("/etc/resolv.conf"),
+	)
+	if !testing.Testing() {
+		restrict.Do(ctx, rules...)
 	}
 
 	e.logf = env.Logf
