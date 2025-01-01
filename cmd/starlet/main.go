@@ -115,12 +115,12 @@ func (e *engine) Run(ctx context.Context) error {
 
 	return web.ListenAndServe(ctx, &web.ListenAndServeConfig{
 		Addr:       e.addr,
-		DebugAuth:  e.debugAuth,
 		Debuggable: true, // debug endpoints protected by Telegram auth
 		Mux:        e.mux,
 		Ready:      e.ready,
 		Middleware: []func(http.Handler) http.Handler{
 			e.tgAuth.Middleware(false),
+			e.debugAuth,
 		},
 	})
 }
@@ -385,11 +385,13 @@ func (e *engine) initRoutes() {
 	})
 }
 
-func (e *engine) debugAuth(r *http.Request) bool {
-	if !e.onRender || e.tgAuth.LoggedIn(r) {
-		return true
-	}
-	return false
+func (e *engine) debugAuth(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasPrefix(r.URL.Path, "/debug") || !e.onRender || e.tgAuth.LoggedIn(r) {
+			next.ServeHTTP(w, r)
+		}
+		web.RespondError(w, r, web.ErrUnauthorized)
+	})
 }
 
 func (e *engine) authCheck(ident *tgauth.Identity) bool {

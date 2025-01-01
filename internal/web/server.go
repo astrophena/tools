@@ -44,10 +44,6 @@ type ListenAndServeConfig struct {
 	Mux *http.ServeMux
 	// Debuggable specifies whether to register debug handlers at /debug/.
 	Debuggable bool
-	// DebugAuth specifies an optional function that's invoked on every request to
-	// debug handlers at /debug/ to allow or deny access to them. If not provided,
-	// all access is allowed.
-	DebugAuth func(r *http.Request) bool
 	// Ready specifies an optional function to be called when the server is ready
 	// to serve requests.
 	Ready func()
@@ -112,22 +108,6 @@ func ListenAndServe(ctx context.Context, c *ListenAndServeConfig) error {
 
 	// Default middleware.
 
-	// Must be last, because Starlet runs tgauth middleware.
-	protectDebug := func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if !strings.HasPrefix(r.URL.Path, "/debug/") || c.DebugAuth == nil {
-				next.ServeHTTP(w, r)
-				return
-			}
-			// If access denied, pretend that debug endpoints don't exist.
-			if !c.DebugAuth(r) {
-				RespondError(w, r, ErrNotFound)
-				return
-			}
-			next.ServeHTTP(w, r)
-		})
-	}
-
 	setHeaders := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("X-Content-Type-Options", "nosniff")
@@ -142,16 +122,9 @@ func ListenAndServe(ctx context.Context, c *ListenAndServeConfig) error {
 
 	// Apply middleware.
 	var handler http.Handler = c.Mux
-
-	// Reverse the user-provided middlewares.
 	mws := append([]func(http.Handler) http.Handler{
 		setHeaders,
 	}, c.Middleware...)
-	for i := len(mws)/2 - 1; i >= 0; i-- {
-		opp := len(mws) - 1 - i
-		mws[i], mws[opp] = mws[opp], mws[i]
-	}
-	mws = append(mws, protectDebug)
 	for _, middleware := range mws {
 		handler = middleware(handler)
 	}
