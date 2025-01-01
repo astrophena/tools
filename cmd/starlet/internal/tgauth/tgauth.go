@@ -113,7 +113,16 @@ func (mw *Middleware) LogoutHandler(redirectTarget string) http.Handler {
 }
 
 // LoggedIn reports if the user is logged in.
-func (mw *Middleware) LoggedIn(r *http.Request) bool { return Identify(r) != nil }
+func (mw *Middleware) LoggedIn(r *http.Request) bool {
+	ident := Identify(r)
+	if ident == nil {
+		return false
+	}
+	if mw.CheckFunc != nil {
+		return mw.CheckFunc(ident)
+	}
+	return true
+}
 
 func (mw *Middleware) setIdentity(r *http.Request) *http.Request {
 	if len(r.Cookies()) == 0 {
@@ -141,11 +150,6 @@ func (mw *Middleware) setIdentity(r *http.Request) *http.Request {
 	ident, err := authDataToIdentity(data)
 	if err != nil {
 		return r
-	}
-	if mw.CheckFunc != nil {
-		if !mw.CheckFunc(ident) {
-			return r
-		}
 	}
 	return r.WithContext(context.WithValue(r.Context(), identityKey, ident))
 }
