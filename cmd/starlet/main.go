@@ -119,6 +119,9 @@ func (e *engine) Run(ctx context.Context) error {
 		Debuggable: true, // debug endpoints protected by Telegram auth
 		Mux:        e.mux,
 		Ready:      e.ready,
+		Middleware: []func(http.Handler) http.Handler{
+			e.tgAuth.Middleware(false),
+		},
 	})
 }
 

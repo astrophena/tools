@@ -213,18 +213,23 @@ func authDataToIdentity(data string) (*Identity, error) {
 	return ident, nil
 }
 
-// Middleware returns a middleware that checks if the user is logged in.
+// Middleware returns a middleware that identifies the user and optionally
+// checks if the user is logged in.
 //
 // If the user is not logged in, it responds with an error [web.ErrUnauthorized].
 //
 // Otherwise, it calls the next handler.
-func (mw *Middleware) Middleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		r = mw.setIdentity(r)
-		if !mw.LoggedIn(r) {
-			web.RespondError(w, r, web.ErrUnauthorized)
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
+func (mw *Middleware) Middleware(enforceAuth bool) func(next http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			r = mw.setIdentity(r)
+			if enforceAuth {
+				if !mw.LoggedIn(r) {
+					web.RespondError(w, r, web.ErrUnauthorized)
+					return
+				}
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
 }

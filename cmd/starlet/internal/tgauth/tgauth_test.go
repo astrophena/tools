@@ -42,7 +42,7 @@ func TestMiddleware(t *testing.T) {
 			t.Fatal("next handler should not be called")
 		})
 
-		mw.Middleware(next).ServeHTTP(w, r)
+		mw.Middleware(true)(next).ServeHTTP(w, r)
 
 		testutil.AssertEqual(t, w.Code, http.StatusUnauthorized)
 	})
@@ -64,7 +64,7 @@ func TestMiddleware(t *testing.T) {
 			w.WriteHeader(http.StatusAccepted)
 		})
 
-		mw.Middleware(next).ServeHTTP(w, r)
+		mw.Middleware(true)(next).ServeHTTP(w, r)
 
 		testutil.AssertEqual(t, w.Code, http.StatusAccepted)
 	})

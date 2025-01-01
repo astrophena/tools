@@ -51,6 +51,9 @@ type ListenAndServeConfig struct {
 	// Ready specifies an optional function to be called when the server is ready
 	// to serve requests.
 	Ready func()
+	// Middleware specifies an optional slice of HTTP middleware that's applied to
+	// each request.
+	Middleware []func(http.Handler) http.Handler
 }
 
 // Stolen from https://github.com/tailscale/tailscale/blob/4ad3f01225745294474f1ae0de33e5a86824a744/safeweb/http.go.
@@ -107,6 +110,9 @@ func ListenAndServe(ctx context.Context, c *ListenAndServeConfig) error {
 		go httpRedirect(ctx)
 	}
 
+	// Default middleware.
+
+	// Must be last, because Starlet runs tgauth middleware.
 	protectDebug := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if !strings.HasPrefix(r.URL.Path, "/debug/") || c.DebugAuth == nil {
@@ -134,9 +140,19 @@ func ListenAndServe(ctx context.Context, c *ListenAndServeConfig) error {
 		})
 	}
 
+	// Apply middleware.
+	var handler http.Handler = c.Mux
+	mws := append(c.Middleware, []func(http.Handler) http.Handler{
+		setHeaders,
+		protectDebug,
+	}...)
+	for _, middleware := range mws {
+		handler = middleware(handler)
+	}
+
 	s := &http.Server{
 		ErrorLog: log.New(logger.Logf(logf), "", 0),
-		Handler:  setHeaders(protectDebug(c.Mux)),
+		Handler:  handler,
 		BaseContext: func(_ net.Listener) context.Context {
 			return cli.WithEnv(context.Background(), env)
 		},
