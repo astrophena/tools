@@ -322,6 +322,7 @@ func (e *engine) initRoutes() {
 
 	// Authentication.
 	e.mux.Handle("GET /login", e.tgAuth.LoginHandler("/debug/"))
+	e.mux.Handle("GET /logout", e.tgAuth.LogoutHandler("/"))
 
 	// Debug routes.
 	web.Health(e.mux)
@@ -370,17 +371,13 @@ func (e *engine) debugAuth(r *http.Request) bool {
 	return false
 }
 
-func (e *engine) authCheck(dataMap map[string]string) bool {
+func (e *engine) authCheck(ident *tgauth.Identity) bool {
 	// Check if ID of authenticated user matches the bot owner ID.
-	if dataMap["id"] != strconv.FormatInt(e.tgOwner, 10) {
+	if ident.ID != e.tgOwner {
 		return false
 	}
 	// Check if auth data was not created more that 24 hours ago.
-	authDateUnix, err := strconv.ParseInt(dataMap["auth_date"], 0, 64)
-	if err != nil {
-		return false
-	}
-	return time.Since(time.Unix(authDateUnix, 0)) < 24*time.Hour
+	return time.Since(ident.AuthDate) < 24*time.Hour
 }
 
 func (e *engine) ensureLoaded(ctx context.Context) error {

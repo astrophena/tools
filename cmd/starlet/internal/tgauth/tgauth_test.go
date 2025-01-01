@@ -138,7 +138,7 @@ func TestLoggedIn(t *testing.T) {
 
 	cases := map[string]struct {
 		cookies    []*http.Cookie
-		checkFunc  func(map[string]string) bool
+		checkFunc  func(*Identity) bool
 		wantLogged bool
 	}{
 		"no cookies": {
@@ -182,7 +182,7 @@ func TestLoggedIn(t *testing.T) {
 				{Name: "auth_data", Value: base64.URLEncoding.EncodeToString([]byte(constructAuthData(tgUser)))},
 				{Name: "auth_data_hash", Value: computeAuthHash(tgToken, tgUser)},
 			},
-			checkFunc:  func(dataMap map[string]string) bool { return true },
+			checkFunc:  func(_ *Identity) bool { return true },
 			wantLogged: true,
 		},
 	}
@@ -202,6 +202,7 @@ func TestLoggedIn(t *testing.T) {
 			for _, c := range tc.cookies {
 				r.AddCookie(c)
 			}
+			r = mw.setIdentity(r)
 			testutil.AssertEqual(t, mw.LoggedIn(r), tc.wantLogged)
 		})
 	}

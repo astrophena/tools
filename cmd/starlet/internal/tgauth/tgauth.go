@@ -8,6 +8,7 @@
 package tgauth
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
@@ -15,25 +16,43 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
 	"go.astrophena.name/tools/internal/web"
 )
 
+type ctxKey int
+
+var identityKey ctxKey
+
+// Identify returns the [Identity] value stored in ctx, returning nil in case it
+// doesn't exist.
+func Identify(r *http.Request) *Identity {
+	ident, ok := r.Context().Value(identityKey).(*Identity)
+	if !ok {
+		return nil
+	}
+	return ident
+}
+
+// Identity contains information about the logged in user.
+type Identity struct {
+	ID        int64
+	Username  string
+	FirstName string
+	LastName  string
+	PhotoURL  string
+	AuthDate  time.Time
+}
+
 // Middleware is a middleware for handling Telegram authentication.
 type Middleware struct {
 	// CheckFunc is a function that checks if the authenticated user is allowed to
 	// access the resource. If CheckFunc is nil, all authenticated users are
 	// allowed.
-	//
-	// The function receives a map of authentication data, where keys are field
-	// names and values are field values.
-	// See https://core.telegram.org/widgets/login#receiving-authorization-data for details.
-	//
-	// The function should return true if the user is allowed to access the
-	// resource, and false otherwise.
-	CheckFunc func(map[string]string) bool
+	CheckFunc func(*Identity) bool
 	// Token is a Telegram bot token.
 	Token string
 }
@@ -83,10 +102,22 @@ func (mw *Middleware) LoginHandler(redirectTarget string) http.Handler {
 	})
 }
 
+// LogoutHandler returns a handler that logs the user out. After that, the user
+// is redirected to redirectTarget.
+func (mw *Middleware) LogoutHandler(redirectTarget string) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		delCookie(w, "auth_data")
+		delCookie(w, "auth_data_hash")
+		http.Redirect(w, r, redirectTarget, http.StatusFound)
+	})
+}
+
 // LoggedIn reports if the user is logged in.
-func (mw *Middleware) LoggedIn(r *http.Request) bool {
+func (mw *Middleware) LoggedIn(r *http.Request) bool { return Identify(r) != nil }
+
+func (mw *Middleware) setIdentity(r *http.Request) *http.Request {
 	if len(r.Cookies()) == 0 {
-		return false
+		return r
 	}
 
 	var data, hash string
@@ -95,7 +126,7 @@ func (mw *Middleware) LoggedIn(r *http.Request) bool {
 		case "auth_data":
 			bdata, err := base64.URLEncoding.DecodeString(cookie.Value)
 			if err != nil {
-				return false
+				return r
 			}
 			data = string(bdata)
 		case "auth_data_hash":
@@ -104,15 +135,19 @@ func (mw *Middleware) LoggedIn(r *http.Request) bool {
 	}
 
 	if !mw.validateAuthData(data, hash) {
-		return false
+		return r
 	}
 
+	ident, err := authDataToIdentity(data)
+	if err != nil {
+		return r
+	}
 	if mw.CheckFunc != nil {
-		dataMap := extractAuthData(data)
-		return mw.CheckFunc(dataMap)
+		if !mw.CheckFunc(ident) {
+			return r
+		}
 	}
-
-	return true
+	return r.WithContext(context.WithValue(r.Context(), identityKey, ident))
 }
 
 func (mw *Middleware) validateAuthData(data, hash string) bool {
@@ -138,7 +173,16 @@ func setCookie(w http.ResponseWriter, key, val string) {
 	})
 }
 
-func extractAuthData(data string) map[string]string {
+func delCookie(w http.ResponseWriter, key string) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     key,
+		Value:    "",
+		MaxAge:   0,
+		HttpOnly: true,
+	})
+}
+
+func authDataToIdentity(data string) (*Identity, error) {
 	dataMap := make(map[string]string)
 	for _, line := range strings.Split(data, "\n") {
 		parts := strings.SplitN(line, "=", 2)
@@ -146,16 +190,37 @@ func extractAuthData(data string) map[string]string {
 			dataMap[parts[0]] = parts[1]
 		}
 	}
-	return dataMap
+
+	ident := &Identity{
+		Username:  dataMap["username"],
+		FirstName: dataMap["first_name"],
+		LastName:  dataMap["last_name"],
+		PhotoURL:  dataMap["photo_url"],
+	}
+
+	id, err := strconv.ParseInt(dataMap["id"], 10, 64)
+	if err != nil {
+		return nil, err
+	}
+	ident.ID = id
+
+	date, err := strconv.ParseInt(dataMap["auth_date"], 10, 64)
+	if err != nil {
+		return nil, err
+	}
+	ident.AuthDate = time.Unix(date, 0)
+
+	return ident, nil
 }
 
 // Middleware returns a middleware that checks if the user is logged in.
 //
-// If the user is not logged in, it responds with an error.
+// If the user is not logged in, it responds with an error [web.ErrUnauthorized].
 //
 // Otherwise, it calls the next handler.
 func (mw *Middleware) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r = mw.setIdentity(r)
 		if !mw.LoggedIn(r) {
 			web.RespondError(w, r, web.ErrUnauthorized)
 			return
