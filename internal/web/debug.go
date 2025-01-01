@@ -12,6 +12,7 @@ import (
 	"cmp"
 	_ "embed"
 	"fmt"
+	"html"
 	"html/template"
 	"net/http"
 	"net/http/pprof"
@@ -32,21 +33,23 @@ var debugTemplate string
 // DebugHandler is an [http.Handler] that serves a debugging "homepage", and
 // provides helpers to register more debug endpoints and reports.
 //
-// The rendered page consists of two sections: informational key/value pairs and
-// links to other pages.
+// The rendered page consists of three sections: header menu, informational
+// key/value pairs and links to other pages.
 //
-// Callers can add to these sections using the KV and Link helpers respectively.
+// Callers can add to these sections using the MenuFunc, KV and Link helpers
+// respectively.
 //
 // Additionally, the Handle method offers a shorthand for correctly registering
 // debug handlers and cross-linking them from /debug/.
 //
 // Methods of DebugHandler can be safely called by multiple goroutines.
 type DebugHandler struct {
-	mux     *http.ServeMux                 // where this handler is registered
-	mu      sync.RWMutex                   // covers all fields below, mux is protected by it's own mutex
-	kvfuncs []kvfunc                       // output one table row each, see KV()
-	links   []link                         // one link in header
-	tpl     syncx.Lazy[*template.Template] // template that is used for rendering debug page
+	mux      *http.ServeMux                 // where this handler is registered
+	mu       sync.RWMutex                   // covers all fields below, mux is protected by it's own mutex
+	kvfuncs  []kvfunc                       // output one table row each, see KV()
+	links    []link                         // one link in header
+	menuFunc func() []MenuItem              // function to generate the menu
+	tpl      syncx.Lazy[*template.Template] // template that is used for rendering debug page
 }
 
 // Utility types used for rendering templates.
@@ -61,6 +64,26 @@ type (
 	}
 	link struct{ URL, Desc string }
 )
+
+// MenuItem is a debug page header menu item.
+type MenuItem interface {
+	ToHTML() template.HTML
+}
+
+// HTMLItem is a [MenuItem] that can contain arbitrary HTML.
+type HTMLItem string
+
+func (hi HTMLItem) ToHTML() template.HTML { return template.HTML(hi) }
+
+// LinkItem is a [MenuItem] that is a link.
+type LinkItem struct {
+	Name   string
+	Target string
+}
+
+func (li LinkItem) ToHTML() template.HTML {
+	return template.HTML("<a href=" + li.Target + ">" + html.EscapeString(li.Name) + "</a>")
+}
 
 // Debugger returns the [DebugHandler] registered on mux at /debug/, creating it
 // if necessary.
@@ -121,6 +144,11 @@ func (d *DebugHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var menuItems []MenuItem
+	if d.menuFunc != nil {
+		menuItems = d.menuFunc()
+	}
+
 	var kvs []kv
 	for _, kvf := range d.kvfuncs {
 		kvs = append(kvs, kv{kvf.k, kvf.v()})
@@ -132,12 +160,14 @@ func (d *DebugHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		KVs        []kv
 		HasIcon    bool
 		Links      []link
+		MenuItems  []MenuItem
 		Stylesheet string
 	}{
 		CmdName:    version.CmdName(),
 		Version:    version.Version(),
 		KVs:        kvs,
 		Links:      d.links,
+		MenuItems:  menuItems,
 		Stylesheet: StaticFS.HashName("static/css/main.css"),
 	}
 
@@ -188,4 +218,12 @@ func (d *DebugHandler) Link(url, desc string) {
 	slices.SortStableFunc(d.links, func(a, b link) int {
 		return cmp.Compare(a.Desc, b.Desc)
 	})
+}
+
+// MenuFunc sets a function that generates custom menu items for /debug/ page
+// header.
+func (d *DebugHandler) MenuFunc(f func() []MenuItem) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.menuFunc = f
 }

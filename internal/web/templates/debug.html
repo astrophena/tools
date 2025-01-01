@@ -8,8 +8,17 @@
     <title>{{ .CmdName }} debug</title>
   </head>
   <body>
-    <main>
+    <header>
       <h1>{{ .CmdName }} debug</h1>
+      {{ if .MenuItems }}
+        <ul>
+          {{ range .MenuItems }}
+            {{ .ToHTML }}
+          {{ end }}
+        </ul>
+      {{ end }}
+    </header>
+    <main>
       <ul>
         {{ range .Links }}
           <li><a href="{{ .URL }}">{{ .Desc }}</a></li>
