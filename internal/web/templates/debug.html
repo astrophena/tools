@@ -11,11 +11,11 @@
     <header>
       <h1>{{ .CmdName }} debug</h1>
       {{ if .MenuItems }}
-        <ul>
+        <nav>
           {{ range .MenuItems }}
             {{ .ToHTML }}
           {{ end }}
-        </ul>
+        </nav>
       {{ end }}
     </header>
     <main>
