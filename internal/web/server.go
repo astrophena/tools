@@ -142,10 +142,16 @@ func ListenAndServe(ctx context.Context, c *ListenAndServeConfig) error {
 
 	// Apply middleware.
 	var handler http.Handler = c.Mux
-	mws := append(c.Middleware, []func(http.Handler) http.Handler{
+
+	// Reverse the user-provided middlewares.
+	mws := append([]func(http.Handler) http.Handler{
 		setHeaders,
-		protectDebug,
-	}...)
+	}, c.Middleware...)
+	for i := len(mws)/2 - 1; i >= 0; i-- {
+		opp := len(mws) - 1 - i
+		mws[i], mws[opp] = mws[opp], mws[i]
+	}
+	mws = append(mws, protectDebug)
 	for _, middleware := range mws {
 		handler = middleware(handler)
 	}
