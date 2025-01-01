@@ -328,6 +328,24 @@ func (e *engine) initRoutes() {
 	web.Health(e.mux)
 	dbg := web.Debugger(e.mux)
 
+	dbg.MenuFunc(func(r *http.Request) []web.MenuItem {
+		ident := tgauth.Identify(r)
+		if ident == nil {
+			return nil
+		}
+		fullName := ident.FirstName
+		if ident.LastName != "" {
+			fullName += " " + ident.LastName
+		}
+		return []web.MenuItem{
+			web.HTMLItem(fmt.Sprintf("Logged in %s (ID: %d).", fullName, ident.ID)),
+			web.LinkItem{
+				Name:   "Log out",
+				Target: "/logout",
+			},
+		}
+	})
+
 	dbg.KVFunc("Bot information", func() any {
 		me, err := e.getMe()
 		if err != nil {

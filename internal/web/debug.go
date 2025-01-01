@@ -48,7 +48,7 @@ type DebugHandler struct {
 	mu       sync.RWMutex                   // covers all fields below, mux is protected by it's own mutex
 	kvfuncs  []kvfunc                       // output one table row each, see KV()
 	links    []link                         // one link in header
-	menuFunc func() []MenuItem              // function to generate the menu
+	menuFunc func(*http.Request) []MenuItem // function to generate the menu
 	tpl      syncx.Lazy[*template.Template] // template that is used for rendering debug page
 }
 
@@ -146,7 +146,7 @@ func (d *DebugHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	var menuItems []MenuItem
 	if d.menuFunc != nil {
-		menuItems = d.menuFunc()
+		menuItems = d.menuFunc(r)
 	}
 
 	var kvs []kv
@@ -222,7 +222,7 @@ func (d *DebugHandler) Link(url, desc string) {
 
 // MenuFunc sets a function that generates custom menu items for /debug/ page
 // header.
-func (d *DebugHandler) MenuFunc(f func() []MenuItem) {
+func (d *DebugHandler) MenuFunc(f func(*http.Request) []MenuItem) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.menuFunc = f
