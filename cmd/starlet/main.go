@@ -387,8 +387,17 @@ func (e *engine) initRoutes() {
 
 func (e *engine) debugAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !strings.HasPrefix(r.URL.Path, "/debug") || !e.onRender || e.tgAuth.LoggedIn(r) {
+		if !strings.HasPrefix(r.URL.Path, "/debug") {
 			next.ServeHTTP(w, r)
+			return
+		}
+		if !e.onRender {
+			next.ServeHTTP(w, r)
+			return
+		}
+		if e.tgAuth.LoggedIn(r) {
+			next.ServeHTTP(w, r)
+			return
 		}
 		web.RespondError(w, r, web.ErrUnauthorized)
 	})

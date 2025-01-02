@@ -23,9 +23,9 @@ import (
 	"go.astrophena.name/tools/internal/web"
 )
 
-type ctxKey int
+type ctxKey string
 
-var identityKey ctxKey
+const identityKey ctxKey = "identity"
 
 // Identify returns the [Identity] value stored in ctx, returning nil in case it
 // doesn't exist.
