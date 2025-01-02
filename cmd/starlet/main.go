@@ -341,7 +341,11 @@ func (e *engine) initRoutes() {
 			fullName += " " + ident.LastName
 		}
 		return []web.MenuItem{
-			web.HTMLItem(fmt.Sprintf("Logged in %s (ID: %d).", fullName, ident.ID)),
+			web.HTMLItem(fmt.Sprintf("Logged in as %s (ID: %d)", fullName, ident.ID)),
+			web.LinkItem{
+				Name:   "Documentation",
+				Target: "https://go.astrophena.name/tools/cmd/starlet",
+			},
 			web.LinkItem{
 				Name:   "Log out",
 				Target: "/logout",
