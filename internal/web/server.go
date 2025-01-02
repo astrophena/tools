@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -125,7 +126,7 @@ func ListenAndServe(ctx context.Context, c *ListenAndServeConfig) error {
 	mws := append([]func(http.Handler) http.Handler{
 		setHeaders,
 	}, c.Middleware...)
-	for _, middleware := range mws {
+	for _, middleware := range slices.Backward(mws) {
 		handler = middleware(handler)
 	}
 
