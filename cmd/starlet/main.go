@@ -493,6 +493,7 @@ func (e *engine) predeclared() starlark.StringDict {
 				"go_stack": starlark.NewBuiltin("debug.go_stack", getGoStack),
 			},
 		),
+		"eval":      starlark.NewBuiltin("eval", starlarkEval),
 		"convcache": e.convCache,
 		"files": &starlarkstruct.Module{
 			Name: "files",
@@ -617,6 +618,47 @@ func jsonOK(w http.ResponseWriter) {
 }
 
 // Starlark builtins {{{
+
+// eval Starlark function. Experimental, don't beat too much.
+func starlarkEval(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	var (
+		code    string
+		environ *starlark.Dict
+	)
+	if err := starlark.UnpackArgs(
+		b.Name(),
+		args, kwargs,
+		"code", &code,
+		"environ?", &environ,
+	); err != nil {
+		return nil, err
+	}
+
+	env := make(starlark.StringDict)
+	for key, val := range environ.Entries() {
+		strk, ok := key.(starlark.String)
+		if !ok {
+			continue
+		}
+		env[string(strk)] = val
+	}
+
+	var buf bytes.Buffer
+
+	if _, err := starlark.ExecFileOptions(
+		&syntax.FileOptions{},
+		&starlark.Thread{
+			Print: func(_ *starlark.Thread, msg string) { buf.WriteString(msg) },
+		},
+		"<eval>",
+		code,
+		env,
+	); err != nil {
+		return nil, err
+	}
+
+	return starlark.String(buf.String()), nil
+}
 
 // debug.stack Starlark function.
 func getStarlarkStack(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {

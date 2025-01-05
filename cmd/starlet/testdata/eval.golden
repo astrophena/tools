@@ -1,0 +1,9 @@
+[
+  {
+    "method": "sendMessage",
+    "args": {
+      "chat_id": 123456789,
+      "text": "Hello, world!"
+    }
+  }
+]
