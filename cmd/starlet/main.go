@@ -635,12 +635,14 @@ func starlarkEval(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tu
 	}
 
 	env := make(starlark.StringDict)
-	for key, val := range environ.Entries() {
-		strk, ok := key.(starlark.String)
-		if !ok {
-			continue
+	if environ != nil {
+		for key, val := range environ.Entries() {
+			strk, ok := key.(starlark.String)
+			if !ok {
+				continue
+			}
+			env[string(strk)] = val
 		}
-		env[string(strk)] = val
 	}
 
 	var buf bytes.Buffer
