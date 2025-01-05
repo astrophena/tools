@@ -153,7 +153,7 @@ func findEntry(g gokeepasslib.Group, title string) *gokeepasslib.Entry {
 }
 
 func ask(file string, stderr io.Writer) (password string, err error) {
-	fmt.Fprintf(stderr, "Password for %s (will not shown): ", file)
+	fmt.Fprintf(stderr, "Password for %s (will not be visible on the screen): ", file)
 	b, err := term.ReadPassword(int(syscall.Stdin))
 	if err != nil {
 		return "", err
