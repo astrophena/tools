@@ -55,6 +55,9 @@ type Middleware struct {
 	CheckFunc func(*Identity) bool
 	// Token is a Telegram bot token.
 	Token string
+	// TTL is the time-to-live for a user session. If set, the session expires
+	// after this time; otherwise, it doesn't.
+	TTL time.Duration
 }
 
 // LoginHandler returns a handler that handles Telegram authentication.
@@ -95,8 +98,8 @@ func (mw *Middleware) LoginHandler(redirectTarget string) http.Handler {
 			return
 		}
 
-		setCookie(w, "auth_data", base64.URLEncoding.EncodeToString([]byte(checkString)))
-		setCookie(w, "auth_data_hash", hash)
+		mw.setCookie(w, "auth_data", base64.URLEncoding.EncodeToString([]byte(checkString)))
+		mw.setCookie(w, "auth_data_hash", hash)
 
 		http.Redirect(w, r, redirectTarget, http.StatusFound)
 	})
@@ -151,6 +154,10 @@ func (mw *Middleware) setIdentity(r *http.Request) *http.Request {
 	if err != nil {
 		return r
 	}
+	if mw.TTL > 0 && time.Since(ident.AuthDate) > mw.TTL {
+		return r
+	}
+
 	return r.WithContext(context.WithValue(r.Context(), identityKey, ident))
 }
 
@@ -168,13 +175,16 @@ func (mw *Middleware) validateAuthData(data, hash string) bool {
 	return gotHash == hash
 }
 
-func setCookie(w http.ResponseWriter, key, val string) {
-	http.SetCookie(w, &http.Cookie{
+func (mw *Middleware) setCookie(w http.ResponseWriter, key, val string) {
+	cookie := &http.Cookie{
 		Name:     key,
 		Value:    val,
-		Expires:  time.Now().Add(24 * time.Hour),
 		HttpOnly: true,
-	})
+	}
+	if mw.TTL > 0 {
+		cookie.Expires = time.Now().Add(mw.TTL)
+	}
+	http.SetCookie(w, cookie)
 }
 
 func delCookie(w http.ResponseWriter, key string) {

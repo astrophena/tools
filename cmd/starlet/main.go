@@ -59,7 +59,11 @@ var (
 	logsJS []byte
 )
 
-var selfPingInterval = 10 * time.Minute
+const (
+	selfPingInterval = 10 * time.Minute
+	authSessionTTL   = 24 * time.Hour
+	convCacheTTL     = 24 * time.Hour
+)
 
 func main() { cli.Main(new(engine)) }
 
@@ -186,7 +190,7 @@ func (e *engine) doInit() error {
 		e.stderr = os.Stderr
 	}
 
-	e.convCache = convcache.Module(24 * time.Hour)
+	e.convCache = convcache.Module(convCacheTTL)
 
 	const logLineLimit = 300
 	e.logStream = logstream.New(logLineLimit)
@@ -227,6 +231,7 @@ func (e *engine) doInit() error {
 	e.tgAuth = &tgauth.Middleware{
 		CheckFunc: e.authCheck,
 		Token:     e.tgToken,
+		TTL:       authSessionTTL,
 	}
 
 	me, err := e.getMe()
@@ -409,11 +414,7 @@ func (e *engine) debugAuth(next http.Handler) http.Handler {
 
 func (e *engine) authCheck(ident *tgauth.Identity) bool {
 	// Check if ID of authenticated user matches the bot owner ID.
-	if ident.ID != e.tgOwner {
-		return false
-	}
-	// Check if auth data was not created more that 24 hours ago.
-	return time.Since(ident.AuthDate) < 24*time.Hour
+	return ident.ID == e.tgOwner
 }
 
 func (e *engine) ensureLoaded(ctx context.Context) error {
@@ -485,7 +486,6 @@ func (e *engine) predeclared() starlark.StringDict {
 				"version":      starlark.String(version.Version().String()),
 			},
 		),
-		// Undocumented functions, mostly for debugging.
 		"debug": starlarkstruct.FromStringDict(
 			starlarkstruct.Default,
 			starlark.StringDict{
