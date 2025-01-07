@@ -25,6 +25,8 @@ const tmpl = `// © %d Ilya Mateyko. All rights reserved.
 `
 
 var exclusions = []string{
+	// Based on Go's standard library code.
+	"cmd/tgfeed/internal/diff/diff.go",
 	// Based on Tailscale code.
 	"internal/web/debug.go",
 	"internal/web/debug_test.go",

@@ -31,6 +31,7 @@ import (
 
 	"go.astrophena.name/base/logger"
 	"go.astrophena.name/base/request"
+	"go.astrophena.name/tools/cmd/tgfeed/internal/diff"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/ghnotify"
 	"go.astrophena.name/tools/internal/api/gist"
 	"go.astrophena.name/tools/internal/api/google/serviceaccount"
@@ -279,6 +280,12 @@ func (f *fetcher) edit( // {{{
 		}
 		if string(edited) == f.config {
 			f.logf("No changes made to config.star, not doing anything.")
+			return nil
+		}
+
+		f.logf("You've made these changes:")
+		f.logf(string(diff.Diff("config.star", []byte(f.config), "config.star", edited)))
+		if !f.ask("Do you want to save?", stdin) {
 			return nil
 		}
 
