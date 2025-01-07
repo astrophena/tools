@@ -1,0 +1,16 @@
+diff a b
+--- a
++++ b
+@@ -1,7 +1,8 @@
+-hello world
++hello
++world
+ 
+ foo bar
+ 
+-SAMPLE TEXT
+-sample text
+-Sample text
++SaMPLE TEXT
++saMple text
++SamPle text
