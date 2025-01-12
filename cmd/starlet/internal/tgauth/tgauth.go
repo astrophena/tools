@@ -68,6 +68,11 @@ type Middleware struct {
 // If authentication is successful, the user is redirected to redirectTarget.
 func (mw *Middleware) LoginHandler(redirectTarget string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if mw.LoggedIn(r) {
+			http.Redirect(w, r, redirectTarget, http.StatusFound)
+			return
+		}
+
 		// See https://core.telegram.org/widgets/login#receiving-authorization-data.
 		data := r.URL.Query()
 		hash := data.Get("hash")
