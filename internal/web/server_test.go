@@ -18,35 +18,28 @@ import (
 	"go.astrophena.name/tools/internal/cli"
 )
 
-func TestListenAndServeConfig(t *testing.T) {
+func TestServerConfig(t *testing.T) {
 	cases := map[string]struct {
-		c       *ListenAndServeConfig
+		s       *Server
 		wantErr error
 	}{
 		"no Addr": {
-			c: &ListenAndServeConfig{
+			s: &Server{
 				Addr: "",
 				Mux:  http.NewServeMux(),
 			},
 			wantErr: errNoAddr,
 		},
-		"nil Mux": {
-			c: &ListenAndServeConfig{
-				Addr: ":3000",
-				Mux:  nil,
-			},
-			wantErr: errNilMux,
-		},
-		"forbidden port": {
-			c: &ListenAndServeConfig{
-				Addr: ":80",
+		"invalid port": {
+			s: &Server{
+				Addr: ":100000",
 				Mux:  http.NewServeMux(),
 			},
 			wantErr: errListen,
 		},
 	}
 	for _, tc := range cases {
-		err := ListenAndServe(context.Background(), tc.c)
+		err := tc.s.ListenAndServe(context.Background())
 
 		// Don't use && because we want to trap all cases where err is nil.
 		if err == nil {
@@ -85,12 +78,13 @@ func TestListenAndServe(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		if err := ListenAndServe(cli.WithEnv(ctx, env), &ListenAndServeConfig{
+		s := &Server{
 			Addr:       addr,
 			Mux:        http.NewServeMux(),
 			Debuggable: true,
 			Ready:      readyFunc,
-		}); err != nil {
+		}
+		if err := s.ListenAndServe(cli.WithEnv(ctx, env)); err != nil {
 			errCh <- err
 		}
 	}()

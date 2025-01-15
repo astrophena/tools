@@ -20,6 +20,7 @@ import (
 
 	"go.astrophena.name/base/logger"
 	"go.astrophena.name/tools/internal/cli"
+	"go.astrophena.name/tools/internal/util/syncx"
 	"go.astrophena.name/tools/internal/version"
 
 	"github.com/benbjohnson/hashfs"
@@ -28,12 +29,20 @@ import (
 
 //go:generate curl --fail-with-body -s -o static/css/main.css https://astrophena.name/css/main.css
 
-// ListenAndServeConfig is used to configure the HTTP server started by
-// [ListenAndServe].
+// Server is used to configure the HTTP server started by
+// [Server.ListenAndServe].
 //
-// All fields of ListenAndServeConfig can't be modified after [ListenAndServe]
-// is called.
-type ListenAndServeConfig struct {
+// All fields of Server can't be modified after [Server.ListenAndServe]
+// or [Server.ServeHTTP] is called for a first time.
+type Server struct {
+	// Mux is a http.ServeMux to serve.
+	Mux *http.ServeMux
+	// Debuggable specifies whether to register debug handlers at /debug/.
+	Debuggable bool
+	// Middleware specifies an optional slice of HTTP middleware that's applied to
+	// each request.
+	Middleware []Middleware
+
 	// Addr is a network address to listen on (in the form of "host:port").
 	//
 	// If Addr is not localhost and doesn't contain a port (in example,
@@ -41,16 +50,16 @@ type ListenAndServeConfig struct {
 	// connections on :443, redirects HTTP connections to HTTPS on :80 and
 	// automatically obtains a certificate from Let's Encrypt.
 	Addr string
-	// Mux is a http.ServeMux to serve.
-	Mux *http.ServeMux
-	// Debuggable specifies whether to register debug handlers at /debug/.
-	Debuggable bool
 	// Ready specifies an optional function to be called when the server is ready
 	// to serve requests.
 	Ready func()
-	// Middleware specifies an optional slice of HTTP middleware that's applied to
-	// each request.
-	Middleware []func(http.Handler) http.Handler
+
+	handler syncx.Lazy[http.Handler]
+}
+
+// ServeHTTP implements the [http.Handler] interface.
+func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	s.handler.Get(s.initHandler).ServeHTTP(w, r)
 }
 
 // Stolen from https://github.com/tailscale/tailscale/blob/4ad3f01225745294474f1ae0de33e5a86824a744/safeweb/http.go.
@@ -72,102 +81,25 @@ const hstsHeader = "max-age=31536000"
 
 var (
 	errNoAddr = errors.New("c.Addr is empty")
-	errNilMux = errors.New("c.Mux is nil")
 	errListen = errors.New("failed to listen")
 )
 
-// ListenAndServe starts the HTTP server based on the provided
-// [ListenAndServeConfig].
-func ListenAndServe(ctx context.Context, c *ListenAndServeConfig) error {
-	env := cli.GetEnv(ctx)
-	logf := env.Logf
+type Middleware func(http.Handler) http.Handler
 
-	if c.Addr == "" {
-		return errNoAddr
-	}
-	if c.Mux == nil {
-		return errNilMux
-	}
+var defaultMiddleware = []Middleware{
+	setHeaders,
+}
 
-	l, isTLS, err := obtainListener(c)
-	if err != nil {
-		return fmt.Errorf("%w: %v", errListen, err)
-	}
-	defer l.Close()
-
-	scheme, host := "http", l.Addr().String()
-	if isTLS {
-		scheme, host = "https", c.Addr
-	}
-
-	logf("Listening on %s://%s...", scheme, host)
-
-	// Redirect HTTP requests to HTTPS.
-	if isTLS {
-		go httpRedirect(ctx)
-	}
-
-	// Default middleware.
-
-	setHeaders := func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("X-Content-Type-Options", "nosniff")
-			w.Header().Set("Referer-Policy", "same-origin")
-			w.Header().Set("Content-Security-Policy", cspHeader)
-			if isHTTPS(r) {
-				w.Header().Set("Strict-Transport-Security", hstsHeader)
-			}
-			next.ServeHTTP(w, r)
-		})
-	}
-
-	// Apply middleware.
-	var handler http.Handler = c.Mux
-	mws := append([]func(http.Handler) http.Handler{
-		setHeaders,
-	}, c.Middleware...)
-	for _, middleware := range slices.Backward(mws) {
-		handler = middleware(handler)
-	}
-
-	s := &http.Server{
-		ErrorLog: log.New(logger.Logf(logf), "", 0),
-		Handler:  handler,
-		BaseContext: func(_ net.Listener) context.Context {
-			return cli.WithEnv(context.Background(), env)
-		},
-	}
-	initInternalRoutes(c)
-
-	errCh := make(chan error, 1)
-
-	go func() {
-		if err := s.Serve(l); err != nil {
-			if err != http.ErrServerClosed {
-				errCh <- err
-			}
+func setHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("Referer-Policy", "same-origin")
+		w.Header().Set("Content-Security-Policy", cspHeader)
+		if isHTTPS(r) {
+			w.Header().Set("Strict-Transport-Security", hstsHeader)
 		}
-	}()
-
-	if c.Ready != nil {
-		c.Ready()
-	}
-
-	select {
-	case err := <-errCh:
-		return err
-	case <-ctx.Done():
-		logf("Gracefully shutting down...")
-
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-
-		if err := s.Shutdown(shutdownCtx); err != nil {
-			return err
-		}
-	}
-
-	return nil
+		next.ServeHTTP(w, r)
+	})
 }
 
 func isHTTPS(r *http.Request) bool {
@@ -180,23 +112,102 @@ func isHTTPS(r *http.Request) bool {
 	return false
 }
 
+func (s *Server) initHandler() http.Handler {
+	if s.Mux == nil {
+		panic("Server.Mux is nil")
+	}
+
+	// Initialize internal routes.
+	s.Mux.Handle("GET /static/", hashfs.FileServer(StaticFS))
+	s.Mux.HandleFunc("GET /version", func(w http.ResponseWriter, r *http.Request) { RespondJSON(w, version.Version()) })
+	Health(s.Mux)
+	if s.Debuggable {
+		Debugger(s.Mux)
+	}
+
+	// Apply middleware.
+	var handler http.Handler = s.Mux
+	mws := append(defaultMiddleware, s.Middleware...)
+	for _, middleware := range slices.Backward(mws) {
+		handler = middleware(handler)
+	}
+
+	return handler
+}
+
+// ListenAndServe starts the HTTP server that can be stopped by canceling ctx.
+func (s *Server) ListenAndServe(ctx context.Context) error {
+	if s.Addr == "" {
+		return errNoAddr
+	}
+
+	l, isTLS, err := obtainListener(s)
+	if err != nil {
+		return fmt.Errorf("%w: %v", errListen, err)
+	}
+	defer l.Close()
+
+	scheme, host := "http", l.Addr().String()
+	if isTLS {
+		scheme, host = "https", s.Addr
+	}
+
+	logf := cli.GetEnv(ctx).Logf
+
+	logf("Listening on %s://%s...", scheme, host)
+
+	// Redirect HTTP requests to HTTPS.
+	if isTLS {
+		go httpRedirect(ctx)
+	}
+
+	httpSrv := &http.Server{
+		ErrorLog: log.New(logger.Logf(logf), "", 0),
+		Handler:  s,
+		BaseContext: func(_ net.Listener) context.Context {
+			return cli.WithEnv(context.Background(), cli.GetEnv(ctx))
+		},
+	}
+
+	errCh := make(chan error, 1)
+
+	go func() {
+		if err := httpSrv.Serve(l); err != nil {
+			if err != http.ErrServerClosed {
+				errCh <- err
+			}
+		}
+	}()
+
+	if s.Ready != nil {
+		s.Ready()
+	}
+
+	select {
+	case err := <-errCh:
+		return err
+	case <-ctx.Done():
+		logf("Gracefully shutting down...")
+
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		if err := httpSrv.Shutdown(shutdownCtx); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 //go:embed static
 var staticFS embed.FS
 
 // StaticFS is an [embed.FS] that contains static resources served on /static/ path
-// prefix of [ListenAndServe] servers.
+// prefix of [Server] HTTP handlers.
 var StaticFS = hashfs.NewFS(staticFS)
 
-func initInternalRoutes(c *ListenAndServeConfig) {
-	c.Mux.Handle("GET /static/", hashfs.FileServer(StaticFS))
-	c.Mux.HandleFunc("GET /version", func(w http.ResponseWriter, r *http.Request) { RespondJSON(w, version.Version()) })
-	Health(c.Mux)
-	if c.Debuggable {
-		Debugger(c.Mux)
-	}
-}
-
-func obtainListener(c *ListenAndServeConfig) (l net.Listener, isTLS bool, err error) {
+func obtainListener(c *Server) (l net.Listener, isTLS bool, err error) {
 	host, _, hasPort := strings.Cut(c.Addr, ":")
 
 	// Accept HTTPS connections only and obtain Let's Encrypt certificate.
@@ -216,11 +227,10 @@ func obtainListener(c *ListenAndServeConfig) (l net.Listener, isTLS bool, err er
 func cacheDir() string {
 	// Three variants where we can keep certificate cache:
 	//
-	//  a. in cache directory (i.e. ~/.cache on Linux)
-	//  b. in systemd unit state directory (i.e. /var/lib/private/...)
+	//  a. in systemd unit state directory (i.e. /var/lib/private/...)
+	//  b. in cache directory (i.e. ~/.cache on Linux)
 	//  c. in OS temporary directory if everything fails
 	//
-	// Case b overrides a and c used as a last resort.
 	dir, err := os.UserCacheDir()
 	if stateDir := os.Getenv("STATE_DIRECTORY"); stateDir != "" {
 		return filepath.Join(stateDir, "certs")

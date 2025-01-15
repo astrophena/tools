@@ -104,10 +104,11 @@ func (e *engine) Run(ctx context.Context) error {
 		return nil
 	}
 
-	return web.ListenAndServe(ctx, &web.ListenAndServeConfig{
+	s := &web.Server{
 		Addr: e.addr,
 		Mux:  mux,
-	})
+	}
+	return s.ListenAndServe(ctx)
 }
 
 func (e *engine) doInit() {

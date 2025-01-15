@@ -117,16 +117,17 @@ func (e *engine) Run(ctx context.Context) error {
 		go e.selfPing(ctx, env.Getenv, selfPingInterval)
 	}
 
-	return web.ListenAndServe(ctx, &web.ListenAndServeConfig{
+	s := &web.Server{
 		Addr:       e.addr,
 		Debuggable: true, // debug endpoints protected by Telegram auth
 		Mux:        e.mux,
 		Ready:      e.ready,
-		Middleware: []func(http.Handler) http.Handler{
+		Middleware: []web.Middleware{
 			e.tgAuth.Middleware(false),
 			e.debugAuth,
 		},
-	})
+	}
+	return s.ListenAndServe(ctx)
 }
 
 func parseInt(s string) int64 {
