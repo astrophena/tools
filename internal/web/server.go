@@ -80,7 +80,7 @@ var cspHeader = strings.Join([]string{
 const hstsHeader = "max-age=31536000"
 
 var (
-	errNoAddr = errors.New("c.Addr is empty")
+	errNoAddr = errors.New("server.Addr is empty")
 	errListen = errors.New("failed to listen")
 )
 
