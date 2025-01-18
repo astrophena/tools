@@ -9,11 +9,16 @@ package restrict
 import (
 	"context"
 
-	"github.com/landlock-lsm/go-landlock/landlock"
 	"go.astrophena.name/tools/internal/cli"
+
+	"github.com/landlock-lsm/go-landlock/landlock"
 )
 
-// Do restricts all goroutines of this program to set of [landlock.Rule].
+// Do applies the provided set of [landlock.Rule] to restrict all goroutines
+// within the program.
+//
+// If sandboxing fails, a log message will be generated, but the program will
+// continue execution.
 func Do(ctx context.Context, rules ...landlock.Rule) {
 	if err := landlock.V5.BestEffort().Restrict(rules...); err != nil {
 		cli.GetEnv(ctx).Logf("Sandboxing failed: %v", err)

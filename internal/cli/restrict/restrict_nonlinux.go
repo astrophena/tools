@@ -12,5 +12,5 @@ import (
 	"github.com/landlock-lsm/go-landlock/landlock"
 )
 
-// Do does nothing.
+// Do is a no-op on non-Linux systems and Android.
 func Do(_ context.Context, _ ...landlock.Rule) {}

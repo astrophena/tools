@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
 	"reflect"
 	"strings"
 	"testing"
@@ -20,6 +21,8 @@ import (
 type Case[App cli.App] struct {
 	// Args are the command-line arguments to pass to the application.
 	Args []string
+	// Stdin is the optional standard input to pass to the application.
+	Stdin io.Reader
 	// Env are the environment variables to set before running the application.
 	Env map[string]string
 	// WantErr is the expected error to be returned by the application, checked
@@ -48,8 +51,10 @@ func Run[App cli.App](t *testing.T, setup func(*testing.T) App, cases map[string
 
 			app := setup(t)
 
-			// FIXME: Maybe make this configurable?
-			stdin := strings.NewReader("")
+			stdin := tc.Stdin
+			if stdin == nil {
+				stdin = strings.NewReader("")
+			}
 
 			var stdout, stderr bytes.Buffer
 			env := &cli.Env{
