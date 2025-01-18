@@ -20,7 +20,7 @@ continuous operation.
 
 # Starlark Environment
 
-The following modules are available to your bot code:
+The following built-in functions and modules are available to your bot code:
 
 	config: Contains bot configuration.
 		- bot_id (int): The Telegram user ID of the bot.
@@ -36,6 +36,8 @@ The following modules are available to your bot code:
 	debug: Provides debugging utilities.
 		- stack(): Returns the current Starlark call stack as a string.
 		- go_stack(): Returns the current Go call stack as a string.
+
+	eval(code: str, environ: dict, optional) -> str: Executes Starlark code with the given environment and returns the all it's output.
 
 	files: Allows retrieval of files from the GitHub Gist containing the bot code.
 		- read(name: str) -> str: Retrieves a file from the GitHub Gist. Causes an error if the file is not present.

@@ -620,7 +620,7 @@ func jsonOK(w http.ResponseWriter) {
 
 // Starlark builtins {{{
 
-// eval Starlark function. Experimental, don't beat too much.
+// eval Starlark function.
 func starlarkEval(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	var (
 		code    string
