@@ -256,6 +256,6 @@ func httpRedirect(ctx context.Context) {
 		s.Shutdown(ctx)
 	}()
 	if err := s.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		logf("httpRedirect crashed: %v", err)
+		logf("web.Server: HTTP to HTTPS redirect goroutine crashed: %v", err)
 	}
 }

@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"sync"
 	"testing"
 
@@ -54,7 +55,28 @@ func TestServerConfig(t *testing.T) {
 	}
 }
 
-func TestListenAndServe(t *testing.T) {
+func TestServerHTTPS(t *testing.T) {
+	s := &Server{
+		Mux: http.NewServeMux(),
+	}
+
+	ts := httptest.NewTLSServer(s)
+	t.Cleanup(func() {
+		ts.Close()
+	})
+
+	req, err := ts.Client().Get(ts.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer req.Body.Close()
+
+	if hstsHeader := req.Header.Get("Strict-Transport-Security"); hstsHeader == "" {
+		t.Error("Strict-Transport-Security is not set for HTTPS requests")
+	}
+}
+
+func TestServerListenAndServe(t *testing.T) {
 	// Find a free port for us.
 	port, err := getFreePort()
 	if err != nil {
@@ -104,6 +126,7 @@ func TestListenAndServe(t *testing.T) {
 		{url: "/static/css/main.css", wantStatus: http.StatusOK},
 		{url: "/static/" + StaticFS.HashName("css/main.css"), wantStatus: http.StatusOK},
 		{url: "/health", wantStatus: http.StatusOK},
+		{url: "/version", wantStatus: http.StatusOK},
 	}
 
 	for _, u := range urls {
