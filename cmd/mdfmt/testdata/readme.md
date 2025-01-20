@@ -7,7 +7,6 @@ This repository holds personal tools:
 - Dungeon sandboxes programs so they can't fulfill their deep dark fantasies on unsuspecting users.
 - Dupfind finds duplicate files in a directory.
 - Kp retrieves passwords and other information from KeePass database files.
-- Mdfmt formats Markdown files.
 - Mdserve serves Markdown files from a directory.
 - Renamer renames files in a specified directory sequentially, starting from a given number.
 - Starlet is a Telegram bot runner that uses Starlark.
