@@ -9,7 +9,7 @@ package restrict
 import (
 	"context"
 
-	"go.astrophena.name/tools/internal/cli"
+	"go.astrophena.name/base/cli"
 
 	"github.com/landlock-lsm/go-landlock/landlock"
 )

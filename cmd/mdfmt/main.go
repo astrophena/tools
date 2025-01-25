@@ -13,7 +13,7 @@ import (
 	"strings"
 	"sync"
 
-	"go.astrophena.name/tools/internal/cli"
+	"go.astrophena.name/base/cli"
 
 	"github.com/muesli/reflow/wordwrap"
 	"rsc.io/markdown"

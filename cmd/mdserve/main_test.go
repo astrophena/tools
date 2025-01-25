@@ -15,9 +15,9 @@ import (
 	"testing"
 	"testing/fstest"
 
+	"go.astrophena.name/base/cli"
+	"go.astrophena.name/base/cli/clitest"
 	"go.astrophena.name/base/logger"
-	"go.astrophena.name/tools/internal/cli"
-	"go.astrophena.name/tools/internal/cli/clitest"
 )
 
 func TestEngineMain(t *testing.T) {

@@ -13,7 +13,7 @@ import (
 	"strings"
 
 	"go.astrophena.name/base/request"
-	"go.astrophena.name/tools/internal/version"
+	"go.astrophena.name/base/version"
 
 	starlarkjson "go.starlark.net/lib/json"
 	"go.starlark.net/starlark"

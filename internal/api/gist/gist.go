@@ -16,7 +16,7 @@ import (
 	"strings"
 
 	"go.astrophena.name/base/request"
-	"go.astrophena.name/tools/internal/version"
+	"go.astrophena.name/base/version"
 )
 
 const apiURL = "https://api.github.com"

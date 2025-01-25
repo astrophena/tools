@@ -18,10 +18,10 @@ import (
 	"strings"
 	"time"
 
+	"go.astrophena.name/base/cli"
 	"go.astrophena.name/base/logger"
-	"go.astrophena.name/tools/internal/cli"
-	"go.astrophena.name/tools/internal/util/syncx"
-	"go.astrophena.name/tools/internal/version"
+	"go.astrophena.name/base/syncx"
+	"go.astrophena.name/base/version"
 
 	"github.com/benbjohnson/hashfs"
 	"golang.org/x/crypto/acme/autocert"

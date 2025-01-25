@@ -23,8 +23,8 @@ import (
 	"sync"
 	"time"
 
-	"go.astrophena.name/tools/internal/util/syncx"
-	"go.astrophena.name/tools/internal/version"
+	"go.astrophena.name/base/syncx"
+	"go.astrophena.name/base/version"
 )
 
 //go:embed templates/debug.html

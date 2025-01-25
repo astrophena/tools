@@ -26,8 +26,11 @@ import (
 	"sync"
 	"time"
 
+	"go.astrophena.name/base/cli"
 	"go.astrophena.name/base/logger"
 	"go.astrophena.name/base/request"
+	"go.astrophena.name/base/syncx"
+	"go.astrophena.name/base/version"
 	"go.astrophena.name/tools/cmd/starlet/internal/convcache"
 	"go.astrophena.name/tools/cmd/starlet/internal/starlarkgemini"
 	"go.astrophena.name/tools/cmd/starlet/internal/tgauth"
@@ -35,11 +38,8 @@ import (
 	"go.astrophena.name/tools/cmd/starlet/internal/tgstarlark"
 	"go.astrophena.name/tools/internal/api/gist"
 	"go.astrophena.name/tools/internal/api/google/gemini"
-	"go.astrophena.name/tools/internal/cli"
 	"go.astrophena.name/tools/internal/util/logstream"
 	"go.astrophena.name/tools/internal/util/starlarkconv"
-	"go.astrophena.name/tools/internal/util/syncx"
-	"go.astrophena.name/tools/internal/version"
 	"go.astrophena.name/tools/internal/web"
 
 	starlarktime "go.starlark.net/lib/time"

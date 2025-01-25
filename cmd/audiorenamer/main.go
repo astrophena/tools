@@ -20,8 +20,8 @@ import (
 	"github.com/dhowden/tag"
 	"github.com/landlock-lsm/go-landlock/landlock"
 
-	"go.astrophena.name/tools/internal/cli"
-	"go.astrophena.name/tools/internal/cli/restrict"
+	"go.astrophena.name/base/cli"
+	"go.astrophena.name/tools/internal/restrict"
 )
 
 func main() { cli.Main(new(app)) }

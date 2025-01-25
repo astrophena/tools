@@ -10,7 +10,7 @@ import (
 	"context"
 	"fmt"
 
-	"go.astrophena.name/tools/internal/cli"
+	"go.astrophena.name/base/cli"
 	"go.astrophena.name/tools/internal/util/starlarkconv"
 
 	"github.com/mmcdole/gofeed"

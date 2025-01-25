@@ -16,7 +16,7 @@ import (
 	"time"
 
 	"go.astrophena.name/base/request"
-	"go.astrophena.name/tools/internal/version"
+	"go.astrophena.name/base/version"
 
 	"github.com/golang-jwt/jwt/v5"
 )

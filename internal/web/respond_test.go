@@ -15,8 +15,8 @@ import (
 	"strings"
 	"testing"
 
+	"go.astrophena.name/base/cli"
 	"go.astrophena.name/base/testutil"
-	"go.astrophena.name/tools/internal/cli"
 )
 
 func TestRespondError(t *testing.T) {
