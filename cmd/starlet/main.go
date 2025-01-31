@@ -32,6 +32,7 @@ import (
 	"go.astrophena.name/base/syncx"
 	"go.astrophena.name/base/version"
 	"go.astrophena.name/tools/cmd/starlet/internal/convcache"
+	"go.astrophena.name/tools/cmd/starlet/internal/geminiproxy"
 	"go.astrophena.name/tools/cmd/starlet/internal/starlarkgemini"
 	"go.astrophena.name/tools/cmd/starlet/internal/tgauth"
 	"go.astrophena.name/tools/cmd/starlet/internal/tgmarkup"
@@ -71,6 +72,7 @@ func (e *engine) Flags(fs *flag.FlagSet) {
 	fs.Int64Var(&e.tgOwner, "tg-owner", 0, "Telegram user `ID` of the bot owner.")
 	fs.StringVar(&e.addr, "addr", "localhost:3000", "Listen on `host:port`.")
 	fs.StringVar(&e.geminiKey, "gemini-key", "", "Gemini API `key`.")
+	fs.StringVar(&e.geminiProxyToken, "gemini-proxy-token", "", "Gemini proxy access `token`.")
 	fs.StringVar(&e.ghToken, "gh-token", "", "GitHub API `token`.")
 	fs.StringVar(&e.gistID, "gist-id", "", "GitHub Gist `ID` to load bot code from.")
 	fs.StringVar(&e.host, "host", "", "Bot `domain` used for setting up webhook.")
@@ -84,6 +86,7 @@ func (e *engine) Run(ctx context.Context) error {
 
 	// Load configuration from environment variables or flags.
 	e.geminiKey = cmp.Or(env.Getenv("GEMINI_KEY"), e.geminiKey)
+	e.geminiProxyToken = cmp.Or(env.Getenv("GEMINI_PROXY_TOKEN"), e.geminiProxyToken)
 	e.ghToken = cmp.Or(env.Getenv("GH_TOKEN"), e.ghToken)
 	e.gistID = cmp.Or(env.Getenv("GIST_ID"), e.gistID)
 	e.host = cmp.Or(env.Getenv("HOST"), e.host)
@@ -153,20 +156,21 @@ type engine struct {
 	tgAuth    *tgauth.Middleware
 
 	// configuration, read-only after initialization
-	addr          string
-	geminiKey     string
-	ghToken       string
-	gistID        string
-	host          string
-	httpc         *http.Client
-	onRender      bool
-	reloadToken   string
-	stderr        io.Writer
-	tgBotID       int64
-	tgBotUsername string
-	tgOwner       int64
-	tgSecret      string
-	tgToken       string
+	addr             string
+	geminiKey        string
+	geminiProxyToken string
+	ghToken          string
+	gistID           string
+	host             string
+	httpc            *http.Client
+	onRender         bool
+	reloadToken      string
+	stderr           io.Writer
+	tgBotID          int64
+	tgBotUsername    string
+	tgOwner          int64
+	tgSecret         string
+	tgToken          string
 	// for tests
 	noServerStart bool
 	ready         func() // see web.ListenAndServeConfig.Ready
@@ -318,6 +322,9 @@ func (e *engine) initRoutes() {
 
 	e.mux.HandleFunc("POST /telegram", e.handleTelegramWebhook)
 	e.mux.HandleFunc("POST /reload", e.handleReload)
+	if e.geminic != nil && e.geminiProxyToken != "" {
+		e.mux.Handle("/gemini/", http.StripPrefix("/gemini", geminiproxy.Handler(e.geminiProxyToken, e.geminic)))
+	}
 
 	// Redirect from *.onrender.com to bot host.
 	if e.onRender && e.host != "" {

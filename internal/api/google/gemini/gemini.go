@@ -104,21 +104,26 @@ type Candidate struct {
 	Content *Content `json:"content"`
 }
 
+// RawRequest sends a raw request to the Gemini API.
+func RawRequest[Response any](ctx context.Context, c *Client, method string, path string, body any) (Response, error) {
+	return request.Make[Response](ctx, request.Params{
+		Method: method,
+		URL:    apiURL + path,
+		Headers: map[string]string{
+			"x-goog-api-key": c.APIKey,
+			"User-Agent":     version.UserAgent(),
+		},
+		Body:       body,
+		HTTPClient: c.HTTPClient,
+		Scrubber:   c.Scrubber,
+	})
+}
+
 // GenerateContent sends a request to the Gemini API to generate creative text
 // content.
 func (c *Client) GenerateContent(ctx context.Context, model string, params GenerateContentParams) (*GenerateContentResponse, error) {
 	if model == "" {
 		return nil, errors.New("model should't be empty")
 	}
-	return request.Make[*GenerateContentResponse](ctx, request.Params{
-		Method: http.MethodPost,
-		URL:    apiURL + "/models/" + model + ":generateContent",
-		Headers: map[string]string{
-			"x-goog-api-key": c.APIKey,
-			"User-Agent":     version.UserAgent(),
-		},
-		Body:       params,
-		HTTPClient: c.HTTPClient,
-		Scrubber:   c.Scrubber,
-	})
+	return RawRequest[*GenerateContentResponse](ctx, c, http.MethodPost, "/models/"+model+":generateContent", params)
 }
