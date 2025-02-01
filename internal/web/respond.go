@@ -51,10 +51,10 @@ type errorResponse struct {
 func RespondJSON(w http.ResponseWriter, response any) { respondJSON(w, response, false) }
 
 func respondJSON(w http.ResponseWriter, response any, wroteStatus bool) {
-	w.Header().Set("Content-Type", "application/json")
 	b, err := json.MarshalIndent(response, "", "  ")
 	if err != nil {
 		if !wroteStatus {
+			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusInternalServerError)
 		}
 		w.Write([]byte(fmt.Sprintf(`{
@@ -110,6 +110,9 @@ func respondError(json bool, w http.ResponseWriter, r *http.Request, err error) 
 	var se StatusErr
 	if !errors.As(err, &se) {
 		se = ErrInternalServerError
+	}
+	if json {
+		w.Header().Set("Content-Type", "application/json")
 	}
 	w.WriteHeader(int(se))
 	if se == ErrInternalServerError {

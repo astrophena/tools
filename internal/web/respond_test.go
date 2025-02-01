@@ -154,6 +154,7 @@ func TestRespondJSONError(t *testing.T) {
 			}
 
 			testutil.AssertEqual(t, tc.wantStatus, w.Code)
+			testutil.AssertEqual(t, w.Result().Header.Get("Content-Type"), "application/json")
 			testutil.AssertEqual(t, w.Body.String(), tc.wantBody)
 		})
 	}
