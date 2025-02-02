@@ -5,7 +5,7 @@
 /*
 Starlet is a Telegram bot runner that uses Starlark.
 
-Starlet fetches your bot code from a GitHub Gist, executes it within a Starlark
+Starlet fetches your bot code from a GitHub Gist, executes it within a [Starlark]
 interpreter, and exposes specific modules for interacting with Telegram and
 other services. When a Telegram update arrives via webhook, Starlet parses it,
 converts it to a Starlark dictionary, and calls the handle function defined in
@@ -95,6 +95,8 @@ Starlet provides a debug interface at /debug with the following endpoints:
   - /debug/reload: Reloads the bot code from the GitHub Gist.
 
 When running on Render, authentication through Telegram is required to access the debug interface. The user must be the bot owner to authenticate successfully. See https://core.telegram.org/widgets/login for guidance. Use https://<bot URL>/login as the login URL.
+
+[Starlark]: https://starlark-lang.org
 
 [Render]: https://render.com
 */
