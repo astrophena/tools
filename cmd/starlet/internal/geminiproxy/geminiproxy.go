@@ -35,16 +35,25 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	body, err := io.ReadAll(r.Body)
+	var reqBody json.RawMessage
+	if r.Method == http.MethodPost || r.Method == http.MethodPut {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			web.RespondJSONError(w, r, err)
+			return
+		}
+		reqBody = json.RawMessage(body)
+	}
+
+	resp, err := gemini.RawRequest[json.RawMessage](r.Context(), h.client, r.Method, r.URL.Path, reqBody)
 	if err != nil {
 		web.RespondJSONError(w, r, err)
 		return
 	}
 
-	resp, err := gemini.RawRequest[json.RawMessage](r.Context(), h.client, r.Method, r.URL.Path, json.RawMessage(body))
-	if err != nil {
-		web.RespondJSONError(w, r, err)
-		return
-	}
+	w.Header().Set("Content-Type", "application/json")
 	w.Write(resp)
+	if f, ok := w.(http.Flusher); ok {
+		f.Flush()
+	}
 }
