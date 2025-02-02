@@ -41,7 +41,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp, err := gemini.RawRequest[json.RawMessage](r.Context(), h.client, r.Method, r.URL.Path, body)
+	resp, err := gemini.RawRequest[json.RawMessage](r.Context(), h.client, r.Method, r.URL.Path, json.RawMessage(body))
 	if err != nil {
 		web.RespondJSONError(w, r, err)
 		return
