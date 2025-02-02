@@ -106,17 +106,20 @@ type Candidate struct {
 
 // RawRequest sends a raw request to the Gemini API.
 func RawRequest[Response any](ctx context.Context, c *Client, method string, path string, body any) (Response, error) {
-	return request.Make[Response](ctx, request.Params{
+	rp := request.Params{
 		Method: method,
 		URL:    apiURL + path,
 		Headers: map[string]string{
 			"x-goog-api-key": c.APIKey,
 			"User-Agent":     version.UserAgent(),
 		},
-		Body:       body,
 		HTTPClient: c.HTTPClient,
 		Scrubber:   c.Scrubber,
-	})
+	}
+	if body != nil {
+		rp.Body = body
+	}
+	return request.Make[Response](ctx, rp)
 }
 
 // GenerateContent sends a request to the Gemini API to generate creative text
