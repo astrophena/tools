@@ -64,6 +64,9 @@ func main() {
 			return err
 		}
 
+		if bytes.HasPrefix(content, []byte("//usr/bin/env")) {
+			return nil // Shebang
+		}
 		if bytes.HasPrefix(content, []byte("// ©")) {
 			return nil // Already has a copyright header
 		}
