@@ -3,13 +3,19 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <link rel="stylesheet" href="/%[3]s" />
-    <title>%[1]d %[2]s</title>
+    <link rel="stylesheet" href="/{{ static "static/css/main.css" }}" />
+    <title>{{ .StatusCode }} {{ .StatusText }}</title>
   </head>
   <body>
     <main>
-      <h1>%[1]d %[2]s</h1>
-      <p>That&apos;s all I know.</p>
+      <h1>{{ .StatusCode }} {{ .StatusText }}</h1>
+      {{ if eq .StatusCode 401 }}
+        <figure>
+          <img src="{{ static "static/images/gtfo.jpg" }}" alt="GTFO"></img>
+        </figure>
+      {{ else }}
+        <p>That&apos;s all I know.</p>
+      {{ end }}
     </main>
   </body>
 </html>

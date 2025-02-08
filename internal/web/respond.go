@@ -6,10 +6,12 @@
 package web
 
 import (
+	"bytes"
 	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html/template"
 	"net/http"
 	"strings"
 
@@ -67,8 +69,13 @@ func respondJSON(w http.ResponseWriter, response any, wroteStatus bool) {
 	w.Write([]byte("\n"))
 }
 
-//go:embed templates/error.html
-var errorTemplate string
+var (
+	//go:embed templates/error.html
+	errorTemplateStr string
+	errorTemplate    = template.Must(template.New("error").Funcs(template.FuncMap{
+		"static": StaticFS.HashName,
+	}).Parse(errorTemplateStr))
+)
 
 // RespondError writes an error response in HTML format to w and logs the error
 // using [logger.Logf] from context's environment ([cli.Env]) if error is
@@ -122,7 +129,21 @@ func respondError(json bool, w http.ResponseWriter, r *http.Request, err error) 
 		respondJSON(w, &errorResponse{Status: "error", Error: err.Error()}, true)
 		return
 	}
-	fmt.Fprintf(w, errorTemplate, int(se), http.StatusText(int(se)), StaticFS.HashName("static/css/main.css"))
+
+	data := struct {
+		StatusCode int
+		StatusText string
+	}{
+		StatusCode: int(se),
+		StatusText: http.StatusText(int(se)),
+	}
+	var buf bytes.Buffer
+	if err := errorTemplate.Execute(&buf, data); err != nil {
+		// Fallback, if template execution fails.
+		fmt.Fprintf(w, "%d: %s", data.StatusCode, data.StatusText)
+		return
+	}
+	buf.WriteTo(w)
 }
 
 func escapeForJSON(s string) string {
