@@ -94,7 +94,7 @@ func RespondError(w http.ResponseWriter, r *http.Request, err error) {
 	respondError(false, w, r, err)
 }
 
-// RespondJSONError writes an error response in HTML format to w and logs the
+// RespondJSONError writes an error response in JSON format to w and logs the
 // error using [logger.Logf] from context's environment ([cli.Env]) if error is
 // [ErrInternalServerError].
 //
