@@ -5,15 +5,15 @@
       "chat_id": 123456789,
       "entities": [
         {
-          "length": 104,
-          "offset": 24,
+          "length": 105,
+          "offset": 25,
           "type": "pre"
         }
       ],
       "link_preview_options": {
         "is_disabled": true
       },
-      "text": "❌ Something went wrong:\nTraceback (most recent call last):\n  bot.star:5:16: in handle\nError in debug.stack: unexpected arguments\n"
+      "text": "❌ Something went wrong:\n\nTraceback (most recent call last):\n  bot.star:5:16: in handle\nError in debug.stack: unexpected arguments\n\n"
     }
   }
 ]

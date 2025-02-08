@@ -6,7 +6,7 @@
       "entities": [
         {
           "language": "",
-          "length": 13,
+          "length": 14,
           "offset": 0,
           "type": "bold",
           "url": ""
@@ -14,13 +14,13 @@
         {
           "language": "",
           "length": 4,
-          "offset": 18,
+          "offset": 19,
           "type": "bold",
           "url": ""
         }
       ],
       "reply_markup": {},
-      "text": "Hello, world!\nI’m Ilya!\n"
+      "text": "Hello, world!\n\nI’m Ilya!\n\n"
     }
   }
 ]

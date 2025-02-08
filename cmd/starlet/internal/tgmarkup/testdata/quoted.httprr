@@ -1,19 +1,19 @@
 httprr trace v1
-300 835
+408 998
 POST https://api.telegram.org/botEXPUNGED/sendMessage HTTP/1.1
 Host: api.telegram.org
 User-Agent: Go-http-client/1.1
-Content-Length: 125
+Content-Length: 233
 Content-Type: application/json
 
-{"chat_id":"-3735928559","text":"This is a quote.\nThis is not.\n","entities":[{"type":"blockquote","offset":0,"length":17}]}HTTP/2.0 200 OK
-Content-Length: 466
+{"chat_id":"-3735928559","text":"This is a quote.\nThis is a multi-line quote.\n\nSecond line.\n\nThird line.\nThis is not.\n\n","entities":[{"type":"blockquote","offset":0,"length":17},{"type":"blockquote","offset":17,"length":55}]}HTTP/2.0 200 OK
+Content-Length: 629
 Access-Control-Allow-Methods: GET, POST, OPTIONS
 Access-Control-Allow-Origin: *
 Access-Control-Expose-Headers: Content-Length,Content-Type,Date,Server,Connection
 Content-Type: application/json
-Date: Thu, 28 Nov 2024 17:59:24 GMT
+Date: Sat, 08 Feb 2025 16:15:44 GMT
 Server: nginx/1.18.0
 Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
 
-{"ok":true,"result":{"message_id":5375,"from":{"id":6643668647,"is_bot":true,"first_name":"\u0413\u043b\u0443\u043f\u0430\u044f \u0431\u0435\u0437\u0434\u0443\u0448\u043d\u0430\u044f \u043c\u0430\u0448\u0438\u043d\u0430","username":"astrophena_bot"},"chat":{"id":-4534574288,"title":"test chat","type":"group","all_members_are_administrators":true},"date":1732816764,"text":"This is a quote.\nThis is not.","entities":[{"offset":0,"length":17,"type":"blockquote"}]}}
+{"ok":true,"result":{"message_id":1701,"author_signature":"\u0413\u043b\u0443\u043f\u0430\u044f \u0431\u0435\u0437\u0434\u0443\u0448\u043d\u0430\u044f \u043c\u0430\u0448\u0438\u043d\u0430","sender_chat":{"id":-1002246904803,"title":"\u0418\u043d\u0444\u043e\u043f\u043e\u043b\u0435","type":"channel"},"chat":{"id":-1002246904803,"title":"\u0418\u043d\u0444\u043e\u043f\u043e\u043b\u0435","type":"channel"},"date":1739031344,"text":"This is a quote.\nThis is a multi-line quote.\n\nSecond line.\n\nThird line.\nThis is not.","entities":[{"offset":0,"length":17,"type":"blockquote"},{"offset":17,"length":55,"type":"blockquote"}]}}

@@ -1,0 +1,19 @@
+httprr trace v1
+1407 2074
+POST https://api.telegram.org/botEXPUNGED/sendMessage HTTP/1.1
+Host: api.telegram.org
+User-Agent: Go-http-client/1.1
+Content-Length: 1231
+Content-Type: application/json
+
+{"chat_id":"-3735928559","text":"This repository holds personal tools:\n\n• Audiorenamer traverses a directory and renames music tracks based on their metadata.\n• Cmdtop displays the top of most used commands in bash history.\n• Dungeon sandboxes programs so they can’t fulfill their deep dark fantasies on unsuspecting users.\n• Dupfind finds duplicate files in a directory.\n• Kp retrieves passwords and other information from KeePass database files.\n• Mdserve serves Markdown files from a directory.\n• Renamer renames files in a specified directory sequentially, starting from a given number.\n• Starlet is a Telegram bot runner that uses Starlark.\n• Tgfeed fetches RSS feeds and sends new articles via Telegram.\n\nInstall them:\n\n$ go install go.astrophena.name/tools/cmd/...@master\n\nBe warned: these tools are for personal use, subject to change without notice and may gain or lose functionality at any time.\n\nThe code here is… so-so.\n\nSee documentation at https://go.astrophena.name/tools.\n\n","entities":[{"type":"pre","offset":693,"length":53,"language":"sh"},{"type":"bold","offset":747,"length":9},{"type":"text_link","offset":921,"length":32,"url":"https://go.astrophena.name/tools"}]}HTTP/2.0 200 OK
+Content-Length: 1704
+Access-Control-Allow-Methods: GET, POST, OPTIONS
+Access-Control-Allow-Origin: *
+Access-Control-Expose-Headers: Content-Length,Content-Type,Date,Server,Connection
+Content-Type: application/json
+Date: Sat, 08 Feb 2025 16:23:35 GMT
+Server: nginx/1.18.0
+Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
+
+{"ok":true,"result":{"message_id":1706,"author_signature":"\u0413\u043b\u0443\u043f\u0430\u044f \u0431\u0435\u0437\u0434\u0443\u0448\u043d\u0430\u044f \u043c\u0430\u0448\u0438\u043d\u0430","sender_chat":{"id":-1002246904803,"title":"\u0418\u043d\u0444\u043e\u043f\u043e\u043b\u0435","type":"channel"},"chat":{"id":-1002246904803,"title":"\u0418\u043d\u0444\u043e\u043f\u043e\u043b\u0435","type":"channel"},"date":1739031815,"text":"This repository holds personal tools:\n\n\u2022 Audiorenamer traverses a directory and renames music tracks based on their metadata.\n\u2022 Cmdtop displays the top of most used commands in bash history.\n\u2022 Dungeon sandboxes programs so they can\u2019t fulfill their deep dark fantasies on unsuspecting users.\n\u2022 Dupfind finds duplicate files in a directory.\n\u2022 Kp retrieves passwords and other information from KeePass database files.\n\u2022 Mdserve serves Markdown files from a directory.\n\u2022 Renamer renames files in a specified directory sequentially, starting from a given number.\n\u2022 Starlet is a Telegram bot runner that uses Starlark.\n\u2022 Tgfeed fetches RSS feeds and sends new articles via Telegram.\n\nInstall them:\n\n$ go install go.astrophena.name/tools/cmd/...@master\n\nBe warned: these tools are for personal use, subject to change without notice and may gain or lose functionality at any time.\n\nThe code here is\u2026 so-so.\n\nSee documentation at https://go.astrophena.name/tools.","entities":[{"offset":693,"length":53,"type":"pre","language":"sh"},{"offset":747,"length":9,"type":"bold"},{"offset":921,"length":32,"type":"text_link","url":"https://go.astrophena.name/tools"}],"link_preview_options":{"is_disabled":true}}}

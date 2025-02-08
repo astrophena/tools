@@ -20,7 +20,7 @@ import (
 // See https://core.telegram.org/bots/api#message for more information.
 type Message struct {
 	Text     string   `json:"text" starlark:"text"`
-	Entities []Entity `json:"entities" starlark:"entities"`
+	Entities []Entity `json:"entities,omitempty" starlark:"entities"`
 }
 
 // Type represents a Telegram message entity type.
@@ -87,7 +87,7 @@ func FromMarkdown(text string) Message {
 	var entities []Entity
 
 	for _, b := range md.Blocks {
-		convertBlock(b, &sb, &entities)
+		convertBlock(b, &sb, &entities, false)
 	}
 
 	return Message{
@@ -104,20 +104,33 @@ func cleanWhitespace(text string) string {
 	return whiteSpaceRe().ReplaceAllString(text, " ")
 }
 
-func convertBlock(b markdown.Block, sb *strings.Builder, entities *[]Entity) {
+func convertBlock(b markdown.Block, sb *strings.Builder, entities *[]Entity, last bool) {
 	switch block := b.(type) {
 	case *markdown.Paragraph:
 		convertInlines(block.Text.Inline, sb, entities)
-		sb.WriteString("\n")
+		if last {
+			sb.WriteString("\n")
+			return
+		}
+		sb.WriteString("\n\n")
 	case *markdown.Text:
 		// This is a Block for tight list items.
 		sb.WriteString("• ")
 		convertInlines(block.Inline, sb, entities)
+		if last {
+			sb.WriteString("\n\n")
+			return
+		}
 		sb.WriteString("\n")
 	case *markdown.Quote:
 		offset := utf16len(sb.String())
-		for _, block := range block.Blocks {
-			convertBlock(block, sb, entities)
+		blockLen := len(block.Blocks)
+		for i, block := range block.Blocks {
+			last := false
+			if blockLen == i+1 {
+				last = true
+			}
+			convertBlock(block, sb, entities, last)
 		}
 		*entities = append(*entities, Entity{
 			Type:   Blockquote,
@@ -130,6 +143,7 @@ func convertBlock(b markdown.Block, sb *strings.Builder, entities *[]Entity) {
 			sb.WriteString(line)
 			sb.WriteString("\n")
 		}
+		sb.WriteString("\n")
 
 		entity := Entity{
 			Type:   Pre,
@@ -140,21 +154,25 @@ func convertBlock(b markdown.Block, sb *strings.Builder, entities *[]Entity) {
 			entity.Language = block.Info
 		}
 		*entities = append(*entities, entity)
-
 	case *markdown.Heading:
 		offset := utf16len(sb.String())
 		convertInlines(block.Text.Inline, sb, entities)
-		sb.WriteString("\n")
+		sb.WriteString("\n\n")
 		*entities = append(*entities, Entity{
 			Type:   Bold,
 			Offset: offset,
 			Length: utf16len(sb.String()) - offset - 1,
 		})
 	case *markdown.List:
-		for _, itemBlock := range block.Items {
+		blockLen := len(block.Items)
+		for i, itemBlock := range block.Items {
 			item := itemBlock.(*markdown.Item)
 			for _, b := range item.Blocks {
-				convertBlock(b, sb, entities)
+				convertBlock(b, sb, entities, false)
+			}
+			// Write the newline for the last list item.
+			if blockLen == i+1 {
+				sb.WriteString("\n")
 			}
 		}
 	case *markdown.ThematicBreak:

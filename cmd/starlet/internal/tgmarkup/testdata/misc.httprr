@@ -1,19 +1,19 @@
 httprr trace v1
-623 1162
+635 1273
 POST https://api.telegram.org/botEXPUNGED/sendMessage HTTP/1.1
 Host: api.telegram.org
 User-Agent: Go-http-client/1.1
-Content-Length: 448
+Content-Length: 460
 Content-Type: application/json
 
-{"chat_id":"-3735928559","text":"Heading\nhttps://example.com\nhttps://example.com\npre\nfmt.Println(\"Hello, world!\")\n⸻\nstrikethrough\n","entities":[{"type":"bold","offset":0,"length":7},{"type":"url","offset":8,"length":19},{"type":"text_link","offset":28,"length":19,"url":"https://example.com"},{"type":"code","offset":48,"length":3},{"type":"pre","offset":52,"length":28,"language":"go"},{"type":"strikethrough","offset":83,"length":13}]}HTTP/2.0 200 OK
-Content-Length: 793
+{"chat_id":"-3735928559","text":"Heading\n\nhttps://example.com\n\nhttps://example.com\n\npre\n\nfmt.Println(\"Hello, world!\")\n\n⸻\nstrikethrough\n\n","entities":[{"type":"bold","offset":0,"length":8},{"type":"url","offset":9,"length":19},{"type":"text_link","offset":30,"length":19,"url":"https://example.com"},{"type":"code","offset":51,"length":3},{"type":"pre","offset":56,"length":29,"language":"go"},{"type":"strikethrough","offset":88,"length":13}]}HTTP/2.0 200 OK
+Content-Length: 904
 Access-Control-Allow-Methods: GET, POST, OPTIONS
 Access-Control-Allow-Origin: *
 Access-Control-Expose-Headers: Content-Length,Content-Type,Date,Server,Connection
 Content-Type: application/json
-Date: Thu, 28 Nov 2024 18:09:12 GMT
+Date: Sat, 08 Feb 2025 16:23:49 GMT
 Server: nginx/1.18.0
 Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
 
-{"ok":true,"result":{"message_id":5386,"from":{"id":6643668647,"is_bot":true,"first_name":"\u0413\u043b\u0443\u043f\u0430\u044f \u0431\u0435\u0437\u0434\u0443\u0448\u043d\u0430\u044f \u043c\u0430\u0448\u0438\u043d\u0430","username":"astrophena_bot"},"chat":{"id":-4534574288,"title":"test chat","type":"group","all_members_are_administrators":true},"date":1732817352,"text":"Heading\nhttps://example.com\nhttps://example.com\npre\nfmt.Println(\"Hello, world!\")\n\u2e3b\nstrikethrough","entities":[{"offset":0,"length":7,"type":"bold"},{"offset":8,"length":19,"type":"url"},{"offset":28,"length":19,"type":"text_link","url":"https://example.com/"},{"offset":48,"length":3,"type":"code"},{"offset":52,"length":28,"type":"pre","language":"go"},{"offset":83,"length":13,"type":"strikethrough"}]}}
+{"ok":true,"result":{"message_id":1707,"author_signature":"\u0413\u043b\u0443\u043f\u0430\u044f \u0431\u0435\u0437\u0434\u0443\u0448\u043d\u0430\u044f \u043c\u0430\u0448\u0438\u043d\u0430","sender_chat":{"id":-1002246904803,"title":"\u0418\u043d\u0444\u043e\u043f\u043e\u043b\u0435","type":"channel"},"chat":{"id":-1002246904803,"title":"\u0418\u043d\u0444\u043e\u043f\u043e\u043b\u0435","type":"channel"},"date":1739031829,"text":"Heading\n\nhttps://example.com\n\nhttps://example.com\n\npre\n\nfmt.Println(\"Hello, world!\")\n\n\u2e3b\nstrikethrough","entities":[{"offset":0,"length":8,"type":"bold"},{"offset":9,"length":19,"type":"url"},{"offset":30,"length":19,"type":"text_link","url":"https://example.com/"},{"offset":51,"length":3,"type":"code"},{"offset":56,"length":29,"type":"pre","language":"go"},{"offset":88,"length":13,"type":"strikethrough"}],"link_preview_options":{"is_disabled":true}}}
