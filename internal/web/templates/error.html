@@ -11,7 +11,7 @@
       <h1>{{ .StatusCode }} {{ .StatusText }}</h1>
       {{ if eq .StatusCode 401 }}
         <figure>
-          <img src="{{ static "static/images/gtfo.jpg" }}" alt="GTFO"></img>
+          <img src="/{{ static "static/images/gtfo.jpg" }}" alt="GTFO"></img>
         </figure>
       {{ else }}
         <p>That&apos;s all I know.</p>
