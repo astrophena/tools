@@ -35,19 +35,17 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var reqBody []byte
+	var body any
 	if r.Method == http.MethodPost || r.Method == http.MethodPut {
-		body, err := io.ReadAll(r.Body)
+		b, err := io.ReadAll(r.Body)
 		if err != nil {
 			web.RespondJSONError(w, r, err)
 			return
 		}
-		reqBody = json.RawMessage(body)
-	}
-
-	var body any
-	if reqBody != nil {
-		body = reqBody
+		if err := json.Unmarshal(b, &body); err != nil {
+			web.RespondJSONError(w, r, err)
+			return
+		}
 	}
 
 	resp, err := gemini.RawRequest[any](r.Context(), h.client, r.Method, r.URL.Path, body)
