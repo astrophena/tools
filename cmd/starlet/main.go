@@ -744,9 +744,6 @@ func (e *engine) selfPing(ctx context.Context, getenv func(string) string, inter
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
-	e.logf("selfPing: started")
-	defer e.logf("selfPing: stopped")
-
 	for {
 		select {
 		case <-ticker.C:

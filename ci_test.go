@@ -33,7 +33,7 @@ func TestGofmt(t *testing.T) {
 
 func TestStaticcheck(t *testing.T) {
 	var w bytes.Buffer
-	run(t, &w, "go", "run", "honnef.co/go/tools/cmd/staticcheck", "./...")
+	run(t, &w, "go", "tool", "staticcheck", "./...")
 }
 
 func run(t *testing.T, buf *bytes.Buffer, cmd string, args ...string) {
