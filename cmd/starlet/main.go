@@ -110,6 +110,7 @@ func (e *engine) Run(ctx context.Context) error {
 	// If running on Render, try to look up port to listen on, activate webhook
 	// and start goroutine that prevents Starlet from sleeping.
 	if e.onRender {
+		env.Logf("Running on Render: starting self-ping goroutine.")
 		// https://docs.render.com/environment-variables#all-runtimes-1
 		if port := env.Getenv("PORT"); port != "" {
 			e.addr = ":" + port
