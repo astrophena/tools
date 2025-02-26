@@ -130,7 +130,7 @@ func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *gofeed.Item
 					}
 				}
 				f.logf("Feed %q got rate-limited by tg.i-c-a.su; can be retried in %s", fd.URL, t)
-				return false, t
+				return true, t
 			}
 		}
 
