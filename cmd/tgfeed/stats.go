@@ -30,7 +30,7 @@ type stats struct {
 	MemoryUsage uint64 `json:"memory_usage"`
 }
 
-func (f *fetcher) reportStats(ctx context.Context, s *stats) error {
+func (f *fetcher) uploadStatsToSheets(ctx context.Context, s *stats) error {
 	sheetRange := f.statsSpreadsheetRange
 	if sheetRange == "" {
 		sheetRange = "Stats"

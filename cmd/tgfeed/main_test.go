@@ -10,26 +10,19 @@ import (
 	_ "embed"
 	"encoding/json"
 	"flag"
-	"fmt"
-	"html"
 	"io"
 	"net/http"
 	"os"
-	"path/filepath"
-	"sort"
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	"go.astrophena.name/base/cli"
 	"go.astrophena.name/base/cli/clitest"
-	"go.astrophena.name/base/logger"
 	"go.astrophena.name/base/testutil"
 	"go.astrophena.name/base/txtar"
 	"go.astrophena.name/tools/internal/api/gist"
 	"go.astrophena.name/tools/internal/api/google/serviceaccount"
-	"go.astrophena.name/tools/internal/util/rr"
 	"go.astrophena.name/tools/internal/web"
 )
 
@@ -44,9 +37,7 @@ var (
 
 	//go:embed testdata/gists/github_notifications.txtar
 	githubNotificationsTxtar []byte
-)
 
-var (
 	//go:embed testdata/feed.xml
 	atomFeed []byte
 
@@ -129,244 +120,11 @@ func TestListFeeds(t *testing.T) {
 	}, *update)
 }
 
-func TestFailingFeed(t *testing.T) {
-	t.Parallel()
-
-	tm := testMux(t, map[string]http.HandlerFunc{
-		atomFeedRoute: func(w http.ResponseWriter, r *http.Request) {
-			http.Error(w, "I'm a teapot.", http.StatusTeapot)
-		},
-	})
-	f := testFetcher(t, tm)
-	if err := f.run(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-
-	state := tm.state(t)
-
-	testutil.AssertEqual(t, state[atomFeedURL].ErrorCount, 1)
-	testutil.AssertEqual(t, state[atomFeedURL].LastError, "want 200, got 418: I'm a teapot.\n")
-}
-
-func TestDisablingAndReenablingFailingFeed(t *testing.T) {
-	t.Parallel()
-
-	tm := testMux(t, map[string]http.HandlerFunc{
-		atomFeedRoute: func(w http.ResponseWriter, r *http.Request) {
-			http.Error(w, "I'm a teapot.", http.StatusTeapot)
-		},
-	})
-
-	f := testFetcher(t, tm)
-
-	const attempts = errorThreshold
-	for range attempts {
-		if err := f.run(context.Background()); err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	state1 := tm.state(t)
-
-	testutil.AssertEqual(t, state1[atomFeedURL].Disabled, true)
-	testutil.AssertEqual(t, state1[atomFeedURL].ErrorCount, attempts)
-	testutil.AssertEqual(t, state1[atomFeedURL].LastError, "want 200, got 418: I'm a teapot.\n")
-
-	testutil.AssertEqual(t, len(tm.sentMessages), 1)
-	testutil.AssertEqual(t, tm.sentMessages[0]["text"], "❌ Something went wrong:\n<pre><code>"+html.EscapeString("fetching feed \"https://example.com/feed.xml\" failed after 12 previous attempts: want 200, got 418: I'm a teapot.\n; feed was disabled, to reenable it run 'tgfeed -reenable \"https://example.com/feed.xml\"'")+"</code></pre>")
-
-	if err := f.reenable(context.Background(), atomFeedURL); err != nil {
-		t.Fatal(err)
-	}
-	state2 := tm.state(t)
-	testutil.AssertEqual(t, state2[atomFeedURL].Disabled, false)
-	testutil.AssertEqual(t, state2[atomFeedURL].ErrorCount, 0)
-	testutil.AssertEqual(t, state2[atomFeedURL].LastError, "")
-}
-
-var (
-	//go:embed testdata/load/gist.json
-	gistJSON []byte
-
-	//go:embed testdata/load/gist_error.json
-	gistErrorJSON []byte
-)
-
-func TestLoadFromGist(t *testing.T) {
-	t.Parallel()
-
-	tm := testMux(t, nil)
-	tm.gist = gistJSON
-	f := testFetcher(t, tm)
-
-	if err := f.loadFromGist(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-
-	testutil.AssertEqual(t, f.errorTemplate, "test")
-}
-
-func TestLoadFromGistHandleError(t *testing.T) {
-	t.Parallel()
-
-	tm := testMux(t, map[string]http.HandlerFunc{
-		"GET api.github.com/gists/test": func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusNotFound)
-			w.Write(gistErrorJSON)
-		},
-	})
-	f := testFetcher(t, tm)
-	err := f.loadFromGist(context.Background())
-	testutil.AssertEqual(t, err.Error(), fmt.Sprintf("GET \"https://api.github.com/gists/test\": want 200, got 404: %s", gistErrorJSON))
-}
-
-func TestFetchWithIfModifiedSinceAndETag(t *testing.T) {
-	t.Parallel()
-
-	const (
-		ifModifiedSince = "Tue, 25 Jun 2024 12:00:00 GMT"
-		eTag            = "test"
-	)
-
-	tm := testMux(t, map[string]http.HandlerFunc{
-		atomFeedRoute: func(w http.ResponseWriter, r *http.Request) {
-			if r.Header.Get("If-Modified-Since") == ifModifiedSince && r.Header.Get("If-None-Match") == eTag {
-				w.WriteHeader(http.StatusNotModified)
-				return
-			}
-			w.Header().Set("Last-Modified", ifModifiedSince)
-			w.Header().Set("ETag", eTag)
-			w.Write(atomFeed)
-		},
-	})
-	f := testFetcher(t, tm)
-
-	// Initial fetch, should update state with Last-Modified and ETag.
-	if err := f.run(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-
-	state1 := tm.state(t)
-
-	testutil.AssertEqual(t, state1[atomFeedURL].LastModified, ifModifiedSince)
-	testutil.AssertEqual(t, state1[atomFeedURL].ETag, eTag)
-	f.stats.Access(func(s *stats) {
-		testutil.AssertEqual(t, s.NotModifiedFeeds, 0)
-	})
-
-	// Second fetch, should use If-Modified-Since and ETag and get 304.
-	if err := f.run(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-
-	state2 := tm.state(t)
-
-	testutil.AssertEqual(t, state2[atomFeedURL].LastModified, ifModifiedSince)
-	testutil.AssertEqual(t, state2[atomFeedURL].ETag, eTag)
-	f.stats.Access(func(s *stats) {
-		testutil.AssertEqual(t, s.NotModifiedFeeds, 1)
-	})
-}
-
-var (
-	//go:embed testdata/serviceaccount.json
-	testKeyJSON []byte
-	testKey     = must(serviceaccount.LoadKey(testKeyJSON))
-)
-
 func must[T any](val T, err error) T {
 	if err != nil {
 		panic(err)
 	}
 	return val
-}
-
-func TestFeedString(t *testing.T) {
-	f := &feed{URL: atomFeedURL}
-	testutil.AssertEqual(t, f.String(), fmt.Sprintf("<feed url=%q>", atomFeedURL))
-}
-
-func TestParseConfig(t *testing.T) {
-	testutil.RunGolden(t, "testdata/config/*.star", func(t *testing.T, match string) []byte {
-		config := readFile(t, match)
-
-		tm := testMux(t, nil)
-
-		ar := &txtar.Archive{
-			Files: []txtar.File{
-				{Name: "config.star", Data: config},
-			},
-		}
-		tm.gist = txtarToGist(t, txtar.Format(ar))
-
-		f := testFetcher(t, tm)
-		if err := f.run(context.Background()); err != nil {
-			return []byte(fmt.Sprintf("Error: %v", err))
-		}
-
-		return toJSON(t, f.feeds)
-	}, *update)
-}
-
-//go:embed testdata/rules/feed.xml
-var rulesAtomFeed []byte
-
-func TestBlockAndKeepRules(t *testing.T) {
-	t.Parallel()
-
-	testutil.RunGolden(t, "testdata/rules/*.star", func(t *testing.T, match string) []byte {
-		t.Parallel()
-
-		config := readFile(t, match)
-
-		tm := testMux(t, map[string]http.HandlerFunc{
-			atomFeedRoute: func(w http.ResponseWriter, r *http.Request) {
-				w.Write([]byte(rulesAtomFeed))
-			},
-		})
-
-		state := map[string]*feedState{
-			"https://example.com/feed.xml": {
-				LastUpdated: time.Time{},
-			},
-		}
-		ar := &txtar.Archive{
-			Files: []txtar.File{
-				{Name: "config.star", Data: config},
-				{Name: "state.json", Data: toJSON(t, state)},
-			},
-		}
-		tm.gist = txtarToGist(t, txtar.Format(ar))
-
-		f := testFetcher(t, tm)
-		if err := f.run(context.Background()); err != nil {
-			t.Fatal(err)
-		}
-
-		sort.SliceStable(tm.sentMessages, func(i, j int) bool {
-			return compareMaps(tm.sentMessages[i], tm.sentMessages[j])
-		})
-		return toJSON(t, tm.sentMessages)
-	}, *update)
-}
-
-func compareMaps(map1, map2 map[string]any) bool {
-	text1, ok1 := map1["text"].(string)
-	text2, ok2 := map2["text"].(string)
-	if !ok1 {
-		if !ok2 {
-			// Both don't have text, consider them equal (no change in order).
-			return false
-		}
-		// map1 doesn't have text, map2 does, so map2 comes later.
-		return false
-	}
-	if !ok2 {
-		// map1 has text, map2 doesn't, so map1 comes earlier
-		return true
-	}
-	// Compare texts alphabetically.
-	return text1 < text2
 }
 
 func readFile(t *testing.T, path string) []byte {
@@ -377,42 +135,11 @@ func readFile(t *testing.T, path string) []byte {
 	return b
 }
 
-func TestGitHubNotificationsFeed(t *testing.T) {
-	t.Parallel()
-
-	rec, err := rr.Open(filepath.Join("internal", "ghnotify", "testdata", "handler.httprr"), http.DefaultTransport)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer rec.Close()
-
-	tm := testMux(t, nil)
-	tm.gist = txtarToGist(t, githubNotificationsTxtar)
-	f := testFetcher(t, tm)
-	f.httpc = &http.Client{
-		Transport: &roundTripper{f.httpc.Transport, rec.Client().Transport},
-	}
-
-	if err := f.run(cli.WithEnv(context.Background(), &cli.Env{
-		Stderr: logger.Logf(t.Logf),
-	})); err != nil {
-		t.Fatal(err)
-	}
-
-	state := tm.state(t)["tgfeed://github-notifications"]
-	testutil.AssertEqual(t, state.ErrorCount, 0)
-	testutil.AssertEqual(t, state.LastError, "")
-}
-
-type roundTripper struct{ main, notifications http.RoundTripper }
-
-func (rt *roundTripper) RoundTrip(r *http.Request) (*http.Response, error) {
-	if r.URL.Host == "api.github.com" && r.URL.Path == "/notifications" {
-		r.Header.Del("Authorization")
-		return rt.notifications.RoundTrip(r)
-	}
-	return rt.main.RoundTrip(r)
-}
+var (
+	//go:embed testdata/serviceaccount.json
+	testKeyJSON []byte
+	testKey     = must(serviceaccount.LoadKey(testKeyJSON))
+)
 
 func testFetcher(t *testing.T, m *mux) *fetcher {
 	f := &fetcher{

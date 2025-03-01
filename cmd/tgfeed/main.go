@@ -409,8 +409,8 @@ func (f *fetcher) run(ctx context.Context) error {
 
 	if f.serviceAccountKey != nil && f.statsSpreadsheetID != "" {
 		f.stats.Access(func(s *stats) {
-			if err := f.reportStats(ctx, s); err != nil {
-				f.logf("Failed to report stats: %v", err)
+			if err := f.uploadStatsToSheets(ctx, s); err != nil {
+				f.logf("Failed to upload stats to Google Sheets: %v", err)
 			}
 		})
 	}

@@ -11,13 +11,11 @@ import (
 	"html"
 	"io"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"time"
 
 	"go.astrophena.name/base/request"
 	"go.astrophena.name/base/version"
-	"go.astrophena.name/tools/cmd/tgfeed/internal/ghnotify"
 	"go.astrophena.name/tools/internal/util/starlarkconv"
 
 	"github.com/mmcdole/gofeed"
@@ -70,20 +68,11 @@ func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *gofeed.Item
 		req.Header.Set("If-Modified-Since", state.LastModified)
 	}
 
-	var res *http.Response
-	if fd.URL == "tgfeed://github-notifications" {
-		h := ghnotify.Handler(f.ghToken, f.httpc)
-		w := httptest.NewRecorder()
-		h.ServeHTTP(w, req)
-		res = w.Result()
-	} else {
-		res, err = f.httpc.Do(req)
-		if err != nil {
-			f.handleFetchFailure(ctx, state, fd.URL, err)
-			return false, 0
-		}
+	res, err := f.makeFeedRequest(req)
+	if err != nil {
+		f.handleFetchFailure(ctx, state, fd.URL, err)
+		return false, 0
 	}
-
 	defer res.Body.Close()
 
 	// Ignore unmodified feeds and report an error otherwise.
@@ -182,6 +171,13 @@ func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *gofeed.Item
 	})
 
 	return false, 0
+}
+
+func (f *fetcher) makeFeedRequest(req *http.Request) (*http.Response, error) {
+	if isSpecialFeed(req.URL.String()) {
+		return f.handleSpecialFeed(req)
+	}
+	return f.httpc.Do(req)
 }
 
 func (f *fetcher) applyRule(rule *starlark.Function, item *gofeed.Item) bool {
