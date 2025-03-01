@@ -136,12 +136,10 @@ func (f *fetcher) parseConfig(config string) ([]*feed, error) {
 		if !ok {
 			continue
 		}
-
 		_, err := url.Parse(feed.URL)
 		if err != nil {
 			return nil, fmt.Errorf("invalid URL %q of feed %q", feed.URL, feed.Title)
 		}
-
 		feeds = append(feeds, feed)
 	}
 

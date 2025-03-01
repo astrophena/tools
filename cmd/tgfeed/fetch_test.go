@@ -120,7 +120,7 @@ func TestFetchWithIfModifiedSinceAndETag(t *testing.T) {
 	})
 }
 
-//go:embed testdata/rules/feed.xml
+//go:embed testdata/feeds/atom_rules.xml
 var rulesAtomFeed []byte
 
 func TestBlockAndKeepRules(t *testing.T) {

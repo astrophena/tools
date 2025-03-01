@@ -22,7 +22,6 @@ import (
 	"go.astrophena.name/base/testutil"
 	"go.astrophena.name/base/txtar"
 	"go.astrophena.name/tools/internal/api/gist"
-	"go.astrophena.name/tools/internal/api/google/serviceaccount"
 	"go.astrophena.name/tools/internal/web"
 )
 
@@ -34,13 +33,11 @@ const tgToken = "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
 var (
 	//go:embed testdata/gists/default.txtar
 	defaultGistTxtar []byte
-
 	//go:embed testdata/gists/github_notifications.txtar
 	githubNotificationsTxtar []byte
 
-	//go:embed testdata/feed.xml
-	atomFeed []byte
-
+	//go:embed testdata/feeds/atom.xml
+	atomFeed      []byte
 	atomFeedRoute = "GET example.com/feed.xml"
 	atomFeedURL   = "https://example.com/feed.xml"
 )
@@ -120,13 +117,6 @@ func TestListFeeds(t *testing.T) {
 	}, *update)
 }
 
-func must[T any](val T, err error) T {
-	if err != nil {
-		panic(err)
-	}
-	return val
-}
-
 func readFile(t *testing.T, path string) []byte {
 	b, err := os.ReadFile(path)
 	if err != nil {
@@ -134,12 +124,6 @@ func readFile(t *testing.T, path string) []byte {
 	}
 	return b
 }
-
-var (
-	//go:embed testdata/serviceaccount.json
-	testKeyJSON []byte
-	testKey     = must(serviceaccount.LoadKey(testKeyJSON))
-)
 
 func testFetcher(t *testing.T, m *mux) *fetcher {
 	f := &fetcher{
@@ -150,7 +134,6 @@ func testFetcher(t *testing.T, m *mux) *fetcher {
 		tgToken:            tgToken,
 		chatID:             "test",
 		statsSpreadsheetID: "test",
-		serviceAccountKey:  testKey,
 	}
 	f.init.Do(f.doInit)
 	return f

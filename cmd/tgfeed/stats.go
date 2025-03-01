@@ -14,6 +14,11 @@ import (
 	"go.astrophena.name/base/version"
 )
 
+const (
+	defaultSheetRange = "Stats"
+	spreadsheetsScope = "https://www.googleapis.com/auth/spreadsheets"
+)
+
 type stats struct {
 	TotalFeeds       int `json:"total_feeds"`
 	SuccessFeeds     int `json:"success_feeds"`
@@ -33,10 +38,10 @@ type stats struct {
 func (f *fetcher) uploadStatsToSheets(ctx context.Context, s *stats) error {
 	sheetRange := f.statsSpreadsheetRange
 	if sheetRange == "" {
-		sheetRange = "Stats"
+		sheetRange = defaultSheetRange
 	}
 
-	tok, err := f.serviceAccountKey.AccessToken(ctx, f.httpc, "https://www.googleapis.com/auth/spreadsheets")
+	tok, err := f.serviceAccountKey.AccessToken(ctx, f.httpc, spreadsheetsScope)
 	if err != nil {
 		return err
 	}
@@ -69,7 +74,11 @@ func (f *fetcher) uploadStatsToSheets(ctx context.Context, s *stats) error {
 	_, err = request.Make[any](ctx, request.Params{
 		Method: http.MethodPost,
 		// https://developers.google.com/sheets/api/reference/rest/v4/ValueInputOption
-		URL:  "https://sheets.googleapis.com/v4/spreadsheets/" + f.statsSpreadsheetID + "/values/" + sheetRange + ":append?valueInputOption=USER_ENTERED",
+		URL: fmt.Sprintf(
+			"https://sheets.googleapis.com/v4/spreadsheets/%s/values/%s:append?valueInputOption=USER_ENTERED",
+			f.statsSpreadsheetID,
+			sheetRange,
+		),
 		Body: req,
 		Headers: map[string]string{
 			"Authorization": "Bearer " + tok,
