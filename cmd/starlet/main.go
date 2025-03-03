@@ -15,6 +15,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"html"
 	"io"
 	"log"
 	"net/http"
@@ -386,7 +387,7 @@ func (e *engine) initRoutes() {
 	})
 
 	dbg.HandleFunc("logs", "Logs", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintf(w, logsTmpl, strings.Join(e.logStream.Lines(), ""), web.StaticFS.HashName("static/css/main.css"))
+		fmt.Fprintf(w, logsTmpl, html.EscapeString(strings.Join(e.logStream.Lines(), "")), web.StaticFS.HashName("static/css/main.css"))
 	})
 	e.mux.HandleFunc("/debug/logs.js", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
