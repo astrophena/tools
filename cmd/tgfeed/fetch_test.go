@@ -5,7 +5,6 @@
 package main
 
 import (
-	"context"
 	_ "embed"
 	"html"
 	"net/http"
@@ -26,7 +25,7 @@ func TestFailingFeed(t *testing.T) {
 		},
 	})
 	f := testFetcher(t, tm)
-	if err := f.run(context.Background()); err != nil {
+	if err := f.run(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -49,7 +48,7 @@ func TestDisablingAndReenablingFailingFeed(t *testing.T) {
 
 	const attempts = errorThreshold
 	for range attempts {
-		if err := f.run(context.Background()); err != nil {
+		if err := f.run(t.Context()); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -63,7 +62,7 @@ func TestDisablingAndReenablingFailingFeed(t *testing.T) {
 	testutil.AssertEqual(t, len(tm.sentMessages), 1)
 	testutil.AssertEqual(t, tm.sentMessages[0]["text"], "❌ Something went wrong:\n<pre><code>"+html.EscapeString("fetching feed \"https://example.com/feed.xml\" failed after 12 previous attempts: want 200, got 418: I'm a teapot.\n; feed was disabled, to reenable it run 'tgfeed -reenable \"https://example.com/feed.xml\"'")+"</code></pre>")
 
-	if err := f.reenable(context.Background(), atomFeedURL); err != nil {
+	if err := f.reenable(t.Context(), atomFeedURL); err != nil {
 		t.Fatal(err)
 	}
 	state2 := tm.state(t)
@@ -94,7 +93,7 @@ func TestFetchWithIfModifiedSinceAndETag(t *testing.T) {
 	f := testFetcher(t, tm)
 
 	// Initial fetch, should update state with Last-Modified and ETag.
-	if err := f.run(context.Background()); err != nil {
+	if err := f.run(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -107,7 +106,7 @@ func TestFetchWithIfModifiedSinceAndETag(t *testing.T) {
 	})
 
 	// Second fetch, should use If-Modified-Since and ETag and get 304.
-	if err := f.run(context.Background()); err != nil {
+	if err := f.run(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -151,7 +150,7 @@ func TestBlockAndKeepRules(t *testing.T) {
 		tm.gist = txtarToGist(t, txtar.Format(ar))
 
 		f := testFetcher(t, tm)
-		if err := f.run(context.Background()); err != nil {
+		if err := f.run(t.Context()); err != nil {
 			t.Fatal(err)
 		}
 

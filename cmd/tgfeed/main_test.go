@@ -6,7 +6,6 @@ package main
 
 import (
 	"bytes"
-	"context"
 	_ "embed"
 	"encoding/json"
 	"flag"
@@ -109,7 +108,7 @@ func TestListFeeds(t *testing.T) {
 		f := testFetcher(t, tm)
 
 		var buf bytes.Buffer
-		if err := f.listFeeds(context.Background(), &buf); err != nil {
+		if err := f.listFeeds(t.Context(), &buf); err != nil {
 			t.Fatal(err)
 		}
 

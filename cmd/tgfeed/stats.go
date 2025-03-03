@@ -14,9 +14,12 @@ import (
 	"go.astrophena.name/base/version"
 )
 
+// Uploading stats to Google Sheets.
+
 const (
-	defaultSheetRange = "Stats"
 	spreadsheetsScope = "https://www.googleapis.com/auth/spreadsheets"
+	sheetsAPI         = "https://sheets.googleapis.com/v4/"
+	defaultSheet      = "Stats"
 )
 
 type stats struct {
@@ -35,24 +38,19 @@ type stats struct {
 	MemoryUsage uint64 `json:"memory_usage"`
 }
 
-func (f *fetcher) uploadStatsToSheets(ctx context.Context, s *stats) error {
-	sheetRange := f.statsSpreadsheetRange
-	if sheetRange == "" {
-		sheetRange = defaultSheetRange
-	}
-
-	tok, err := f.serviceAccountKey.AccessToken(ctx, f.httpc, spreadsheetsScope)
-	if err != nil {
-		return err
+func (f *fetcher) uploadStatsToSheets(ctx context.Context, token string, s *stats) error {
+	sheet := f.statsSpreadsheetSheet
+	if sheet == "" {
+		sheet = defaultSheet
 	}
 
 	// https://developers.google.com/sheets/api/reference/rest/v4/spreadsheets.values/append
-	req := struct {
+	append := struct {
 		Range          string     `json:"range"`
 		MajorDimension string     `json:"majorDimension"`
 		Values         [][]string `json:"values"`
 	}{
-		Range: sheetRange,
+		Range: sheet,
 		// https://developers.google.com/sheets/api/reference/rest/v4/Dimension
 		MajorDimension: "ROWS",
 		Values: [][]string{
@@ -70,18 +68,23 @@ func (f *fetcher) uploadStatsToSheets(ctx context.Context, s *stats) error {
 			},
 		},
 	}
-
-	_, err = request.Make[any](ctx, request.Params{
-		Method: http.MethodPost,
+	return f.makeSheetsRequest(
+		ctx,
+		http.MethodPost,
 		// https://developers.google.com/sheets/api/reference/rest/v4/ValueInputOption
-		URL: fmt.Sprintf(
-			"https://sheets.googleapis.com/v4/spreadsheets/%s/values/%s:append?valueInputOption=USER_ENTERED",
-			f.statsSpreadsheetID,
-			sheetRange,
-		),
-		Body: req,
+		fmt.Sprintf("spreadsheets/%s/values/%s:append?valueInputOption=USER_ENTERED", f.statsSpreadsheetID, sheet),
+		token,
+		append,
+	)
+}
+
+func (f *fetcher) makeSheetsRequest(ctx context.Context, method, path, token string, body any) error {
+	_, err := request.Make[any](ctx, request.Params{
+		Method: method,
+		URL:    sheetsAPI + path,
+		Body:   body,
 		Headers: map[string]string{
-			"Authorization": "Bearer " + tok,
+			"Authorization": "Bearer " + token,
 			"User-Agent":    version.UserAgent(),
 		},
 		HTTPClient: f.httpc,

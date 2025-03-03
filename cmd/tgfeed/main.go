@@ -69,7 +69,7 @@ func (f *fetcher) Run(ctx context.Context) error {
 	f.ghToken = cmp.Or(f.ghToken, env.Getenv("GITHUB_TOKEN"))
 	f.gistID = cmp.Or(f.gistID, env.Getenv("GIST_ID"))
 	f.statsSpreadsheetID = cmp.Or(f.statsSpreadsheetID, env.Getenv("STATS_SPREADSHEET_ID"))
-	f.statsSpreadsheetRange = cmp.Or(f.statsSpreadsheetRange, env.Getenv("STATS_SPREADSHEET_RANGE"), "Stats")
+	f.statsSpreadsheetSheet = cmp.Or(f.statsSpreadsheetSheet, env.Getenv("STATS_SPREADSHEET_SHEET"), "Stats")
 	f.tgToken = cmp.Or(f.tgToken, env.Getenv("TELEGRAM_TOKEN"))
 
 	// Load Google service account key from SERVICE_ACCOUNT_KEY environment
@@ -122,7 +122,7 @@ type fetcher struct {
 	logf                  logger.Logf
 	serviceAccountKey     *serviceaccount.Key
 	statsSpreadsheetID    string
-	statsSpreadsheetRange string
+	statsSpreadsheetSheet string
 	tgToken               string
 
 	// initialized by doInit
@@ -262,7 +262,7 @@ func (f *fetcher) edit(ctx context.Context) error {
 		}
 
 		f.logf("You've made these changes:")
-		f.logf(string(diff.Diff("config.star", []byte(f.config), "config.star", edited)))
+		f.logf(string(diff.Diff("old", []byte(f.config), "new", edited)))
 		if !f.ask("Do you want to save?", env.Stdin) {
 			return nil
 		}
@@ -408,8 +408,12 @@ func (f *fetcher) run(ctx context.Context) error {
 	}
 
 	if f.serviceAccountKey != nil && f.statsSpreadsheetID != "" {
+		token, err := f.serviceAccountKey.AccessToken(ctx, f.httpc, spreadsheetsScope)
+		if err != nil {
+			return err
+		}
 		f.stats.Access(func(s *stats) {
-			if err := f.uploadStatsToSheets(ctx, s); err != nil {
+			if err := f.uploadStatsToSheets(ctx, token, s); err != nil {
 				f.logf("Failed to upload stats to Google Sheets: %v", err)
 			}
 		})

@@ -1,0 +1,33 @@
+httprr trace v1
+429 630
+POST https://sheets.googleapis.com/v4/spreadsheets/123456789_ABCDEFGHIMgy0tHXlXy/values/Stats:append?valueInputOption=USER_ENTERED HTTP/1.1
+Host: sheets.googleapis.com
+User-Agent: tgfeed/ (+https://astrophena.name/bleep-bloop)
+Content-Length: 116
+Authorization: Bearer test
+Content-Type: application/json
+
+{"range":"Stats","majorDimension":"ROWS","values":[["1","2","3","4","2023-12-08T00:00:00Z","5s","6","7s","8s","9"]]}HTTP/2.0 200 OK
+Alt-Svc: h3=":443"; ma=2592000,h3-29=":443"; ma=2592000
+Content-Type: application/json; charset=UTF-8
+Date: Mon, 03 Mar 2025 21:21:42 GMT
+Server: ESF
+Vary: Origin
+Vary: X-Origin
+Vary: Referer
+X-Content-Type-Options: nosniff
+X-Frame-Options: SAMEORIGIN
+X-L2-Request-Path: l2-managed-6
+X-Xss-Protection: 0
+
+{
+  "spreadsheetId": "1tXhYPHZMmdMq9jiOYJvlllSGNNVWlNvTu_vMpKAyWBY",
+  "tableRange": "Stats!A1:J6",
+  "updates": {
+    "spreadsheetId": "1tXhYPHZMmdMq9jiOYJvlllSGNNVWlNvTu_vMpKAyWBY",
+    "updatedRange": "Stats!A7:J7",
+    "updatedRows": 1,
+    "updatedColumns": 10,
+    "updatedCells": 10
+  }
+}

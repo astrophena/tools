@@ -5,7 +5,6 @@
 package main
 
 import (
-	"context"
 	_ "embed"
 	"fmt"
 	"net/http"
@@ -30,7 +29,7 @@ func TestLoadFromGist(t *testing.T) {
 	tm.gist = gistJSON
 	f := testFetcher(t, tm)
 
-	if err := f.loadFromGist(context.Background()); err != nil {
+	if err := f.loadFromGist(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -47,7 +46,7 @@ func TestLoadFromGistHandleError(t *testing.T) {
 		},
 	})
 	f := testFetcher(t, tm)
-	err := f.loadFromGist(context.Background())
+	err := f.loadFromGist(t.Context())
 	testutil.AssertEqual(t, err.Error(), fmt.Sprintf("GET \"https://api.github.com/gists/test\": want 200, got 404: %s", gistErrorJSON))
 }
 
@@ -70,7 +69,7 @@ func TestParseConfig(t *testing.T) {
 		tm.gist = txtarToGist(t, txtar.Format(ar))
 
 		f := testFetcher(t, tm)
-		if err := f.run(context.Background()); err != nil {
+		if err := f.run(t.Context()); err != nil {
 			return []byte(fmt.Sprintf("Error: %v", err))
 		}
 

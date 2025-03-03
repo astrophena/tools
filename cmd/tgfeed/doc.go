@@ -13,18 +13,21 @@ Tgfeed fetches RSS feeds and sends new articles via Telegram.
 
 The tgfeed program relies on the following environment variables:
 
+Required:
+
   - CHAT_ID: Telegram chat ID where the program sends new articles.
   - GIST_ID: GitHub Gist ID where the program stores its state.
   - GITHUB_TOKEN: GitHub personal access token for accessing the GitHub API.
   - TELEGRAM_TOKEN: Telegram bot token for accessing the Telegram Bot API.
+
+Required for uploading stats to the Google Spreadsheet:
+
   - STATS_SPREADSHEET_ID: ID of the Google Spreadsheet to which the program uploads
-    statistics for every run. This is required if the SERVICE_ACCOUNT_KEY is
-    provided.
-  - STATS_SPREADSHEET_RANGE: Range of the Google Spreadsheet to which the
+    statistics for every run.
+  - STATS_SPREADSHEET_SHEET: Sheet of the Google Spreadsheet to which the
     program uploads statistics for every run. Defaults to "Stats".
-  - SERVICE_ACCOUNT_KEY: JSON string representing the service account key for
-    accessing the Google API. It's not required, and stats won't be uploaded to a
-    spreadsheet if this variable is not set.
+  - SERVICE_ACCOUNT_KEY: JSON object string representing the service account key
+    for accessing the Google API.
 
 # Configuration
 
