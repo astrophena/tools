@@ -174,7 +174,7 @@ type engine struct {
 	tgToken          string
 	// for tests
 	noServerStart bool
-	ready         func() // see web.ListenAndServeConfig.Ready
+	ready         func() // see web.Server.Ready
 
 	mu sync.RWMutex
 	// loaded from gist
