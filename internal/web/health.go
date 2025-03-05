@@ -27,7 +27,7 @@ func Health(mux *http.ServeMux) *HealthHandler {
 
 // HealthHandler is an HTTP handler that returns information about the health
 // status of the running service.
-type HealthHandler struct { checks *syncx.Protected[checksMap] }
+type HealthHandler struct{ checks *syncx.Protected[checksMap] }
 
 type checksMap = map[string]HealthFunc
 
