@@ -1,12 +1,8 @@
-//usr/bin/env go run $0 $@; exit $?
-
 // © 2025 Ilya Mateyko. All rights reserved.
 // Use of this source code is governed by the ISC
 // license that can be found in the LICENSE file.
 
-//go:build ignore
-
-// new.go generates a scaffold of the new application.
+// New generates a scaffold of the new application.
 
 package main
 
@@ -23,14 +19,14 @@ import (
 	"go.astrophena.name/base/txtar"
 )
 
-//go:embed app.txtar
+//go:embed template.txtar
 var templateTxtar []byte
 
 func main() {
 	log.SetFlags(0)
 
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: ./devtools/new.go [flags] [name]\n")
+		fmt.Fprintf(os.Stderr, "Usage: go tool new [flags] [name]\n")
 	}
 	flag.Parse()
 

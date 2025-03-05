@@ -45,3 +45,9 @@ require (
 retract [v0.0.1, v0.2.0]
 
 tool honnef.co/go/tools/cmd/staticcheck
+
+tool (
+	go.astrophena.name/tools/internal/devtools/new
+	go.astrophena.name/tools/internal/devtools/addcopyright
+	go.astrophena.name/tools/internal/devtools/genreadme
+)

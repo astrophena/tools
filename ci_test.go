@@ -4,8 +4,8 @@
 
 package tools
 
-//go:generate go run devtools/gen/copyright.go
-//go:generate go run devtools/gen/readme.go
+//go:generate go tool addcopyright
+//go:generate go tool genreadme
 
 import (
 	"bytes"
