@@ -38,10 +38,11 @@ import (
 	"go.astrophena.name/tools/cmd/starlet/internal/tgauth"
 	"go.astrophena.name/tools/cmd/starlet/internal/tgmarkup"
 	"go.astrophena.name/tools/cmd/starlet/internal/tgstarlark"
-	"go.astrophena.name/tools/internal/api/gist"
+	"go.astrophena.name/tools/internal/api/github/gist"
 	"go.astrophena.name/tools/internal/api/google/gemini"
+	"go.astrophena.name/tools/internal/starlark/go2star"
+	"go.astrophena.name/tools/internal/starlark/interpreter"
 	"go.astrophena.name/tools/internal/util/logstream"
-	"go.astrophena.name/tools/internal/util/starlarkconv"
 	"go.astrophena.name/tools/internal/web"
 
 	starlarktime "go.starlark.net/lib/time"
@@ -180,9 +181,8 @@ type engine struct {
 	mu sync.RWMutex
 	// loaded from gist
 	loadGistErr   error
-	bot           []byte
 	files         map[string]string
-	botProg       starlark.StringDict
+	interp        *interpreter.Interpreter
 	errorTemplate string
 }
 
@@ -376,16 +376,6 @@ func (e *engine) initRoutes() {
 		return fmt.Sprintf("%+v", me)
 	})
 
-	dbg.HandleFunc("code", "Bot code", func(w http.ResponseWriter, r *http.Request) {
-		if err := e.ensureLoaded(r.Context()); err != nil {
-			web.RespondError(w, r, err)
-			return
-		}
-		e.mu.RLock()
-		defer e.mu.RUnlock()
-		w.Write(e.bot)
-	})
-
 	dbg.HandleFunc("logs", "Logs", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, logsTmpl, html.EscapeString(strings.Join(e.logStream.Lines(), "")), web.StaticFS.HashName("static/css/main.css"))
 	})
@@ -448,25 +438,30 @@ func (e *engine) loadFromGist(ctx context.Context) error {
 
 // e.mu must be held for writing.
 func (e *engine) loadCode(ctx context.Context, files map[string]string) error {
-	bot, exists := files["bot.star"]
+	_, exists := files["bot.star"]
 	if !exists {
 		return errors.New("bot.star should contain bot code")
 	}
-	botCode := []byte(bot)
 
-	botProg, err := starlark.ExecFileOptions(
-		&syntax.FileOptions{},
-		e.newStarlarkThread(context.Background()),
-		"bot.star",
-		botCode,
-		e.predeclared(),
-	)
+	interp := &interpreter.Interpreter{
+		Predeclared: e.predeclared(),
+		Logger: func(file string, line int, message string) {
+			e.logf("%s:%d: %s", file, line, message)
+		},
+		Packages: map[string]interpreter.Loader{
+			interpreter.MainPkg: interpreter.MemoryLoader(files),
+		},
+	}
+	if err := interp.Init(ctx); err != nil {
+		return err
+	}
+	dict, err := interp.LoadModule(ctx, interpreter.MainPkg, "bot.star")
 	if err != nil {
 		return err
 	}
 
-	if hook, ok := botProg["on_load"]; ok {
-		_, err = starlark.Call(e.newStarlarkThread(ctx), hook, starlark.Tuple{}, nil)
+	if hook, ok := dict["on_load"]; ok {
+		_, err = starlark.Call(interp.Thread(ctx), hook, starlark.Tuple{}, nil)
 		if err != nil {
 			return err
 		}
@@ -477,9 +472,8 @@ func (e *engine) loadCode(ctx context.Context, files map[string]string) error {
 	} else {
 		e.errorTemplate = defaultErrorTemplate
 	}
-	e.bot = botCode
-	e.botProg = botProg
 	e.files = files
+	e.interp = interp
 	e.loadGistErr = nil
 
 	return nil
@@ -523,16 +517,6 @@ func (e *engine) predeclared() starlark.StringDict {
 	}
 }
 
-func (e *engine) newStarlarkThread(ctx context.Context) *starlark.Thread {
-	thread := &starlark.Thread{
-		Print: func(thread *starlark.Thread, msg string) { e.logf("%s", msg) },
-	}
-	if ctx != nil {
-		thread.SetLocal("context", ctx)
-	}
-	return thread
-}
-
 var errNoHandleFunc = errors.New("handle function not found in bot code")
 
 func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
@@ -551,7 +535,7 @@ func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 		web.RespondJSONError(w, r, err)
 		return
 	}
-	u, err := starlarkconv.ToValue(gu)
+	u, err := go2star.To(gu)
 	if err != nil {
 		web.RespondJSONError(w, r, err)
 		return
@@ -567,13 +551,19 @@ func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
-	f, ok := e.botProg["handle"]
+	dict, err := e.interp.LoadModule(r.Context(), interpreter.MainPkg, "bot.star")
+	if err != nil {
+		e.reportError(r.Context(), chatID, w, errNoHandleFunc)
+		return
+	}
+
+	f, ok := dict["handle"]
 	if !ok {
 		e.reportError(r.Context(), chatID, w, errNoHandleFunc)
 		return
 	}
 
-	_, err = starlark.Call(e.newStarlarkThread(r.Context()), f, starlark.Tuple{u}, nil)
+	_, err = starlark.Call(e.interp.Thread(r.Context()), f, starlark.Tuple{u}, nil)
 	if err != nil {
 		e.reportError(r.Context(), chatID, w, err)
 		return
@@ -694,7 +684,7 @@ func convertMarkdown(thread *starlark.Thread, b *starlark.Builtin, args starlark
 	if err := starlark.UnpackArgs(b.Name(), args, kwargs, "s", &s); err != nil {
 		return starlark.None, err
 	}
-	return starlarkconv.ToValue(tgmarkup.FromMarkdown(s))
+	return go2star.To(tgmarkup.FromMarkdown(s))
 }
 
 // files.read Starlark function. e.mu must be held for reading.

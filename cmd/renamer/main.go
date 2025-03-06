@@ -17,7 +17,7 @@ import (
 	"testing"
 
 	"go.astrophena.name/base/cli"
-	"go.astrophena.name/tools/internal/restrict"
+	"go.astrophena.name/tools/internal/util/restrict"
 
 	"github.com/landlock-lsm/go-landlock/landlock"
 )

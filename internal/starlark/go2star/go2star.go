@@ -2,8 +2,8 @@
 // Use of this source code is governed by the ISC
 // license that can be found in the LICENSE.md file.
 
-// Package starlarkconv implements Starlark value conversion.
-package starlarkconv
+// Package go2star converts Go values to [starlark.Value].
+package go2star
 
 import (
 	"fmt"
@@ -16,7 +16,7 @@ import (
 	"go.starlark.net/starlark"
 )
 
-// ToValue converts a Go value to a Starlark value.
+// To converts a Go value to a Starlark value.
 //
 // It supports the following Go types:
 //
@@ -32,7 +32,7 @@ import (
 //   - struct: converted to [starlark.Dict] (field names are used as keys, and field values are recursively converted). Unexported fields are ignored.
 //
 // If the Go value cannot be converted, an error is returned.
-func ToValue(val any) (starlark.Value, error) {
+func To(val any) (starlark.Value, error) {
 	if val == nil {
 		return starlark.None, nil
 	}
@@ -41,7 +41,7 @@ func ToValue(val any) (starlark.Value, error) {
 
 	switch rv.Kind() {
 	case reflect.Pointer:
-		return ToValue(rv.Elem())
+		return To(rv.Elem())
 	case reflect.Bool:
 		return starlark.Bool(rv.Bool()), nil
 	case reflect.String:
@@ -63,7 +63,7 @@ func ToValue(val any) (starlark.Value, error) {
 	case reflect.Slice:
 		var list []starlark.Value
 		for i := range rv.Len() {
-			conv, err := ToValue(rv.Index(i).Interface())
+			conv, err := To(rv.Index(i).Interface())
 			if err != nil {
 				return nil, err
 			}
@@ -106,7 +106,7 @@ func structToDict(val reflect.Value) (starlark.Value, error) {
 			}
 		}
 
-		fieldVal, err := ToValue(fieldValue.Interface())
+		fieldVal, err := To(fieldValue.Interface())
 		if err != nil {
 			return nil, fmt.Errorf("error converting field %s: %w", fieldName, err)
 		}
@@ -137,12 +137,12 @@ func mapToDict(rv reflect.Value) (starlark.Value, error) {
 	dict := starlark.NewDict(rv.Len())
 	iter := rv.MapRange()
 	for iter.Next() {
-		key, err := ToValue(iter.Key().Interface())
+		key, err := To(iter.Key().Interface())
 		if err != nil {
 			return nil, fmt.Errorf("error converting map key: %w", err)
 		}
 
-		val, err := ToValue(iter.Value().Interface())
+		val, err := To(iter.Value().Interface())
 		if err != nil {
 			return nil, fmt.Errorf("error converting map value: %w", err)
 		}

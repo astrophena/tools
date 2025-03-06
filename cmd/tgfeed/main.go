@@ -28,7 +28,7 @@ import (
 	"go.astrophena.name/base/request"
 	"go.astrophena.name/base/syncx"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/diff"
-	"go.astrophena.name/tools/internal/api/gist"
+	"go.astrophena.name/tools/internal/api/github/gist"
 	"go.astrophena.name/tools/internal/api/google/serviceaccount"
 
 	"github.com/mmcdole/gofeed"

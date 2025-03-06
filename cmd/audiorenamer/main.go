@@ -21,7 +21,7 @@ import (
 	"github.com/landlock-lsm/go-landlock/landlock"
 
 	"go.astrophena.name/base/cli"
-	"go.astrophena.name/tools/internal/restrict"
+	"go.astrophena.name/tools/internal/util/restrict"
 )
 
 func main() { cli.Main(new(app)) }

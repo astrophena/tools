@@ -28,7 +28,7 @@ import (
 	"go.astrophena.name/base/request"
 	"go.astrophena.name/base/testutil"
 	"go.astrophena.name/base/txtar"
-	"go.astrophena.name/tools/internal/api/gist"
+	"go.astrophena.name/tools/internal/api/github/gist"
 	"go.astrophena.name/tools/internal/web"
 )
 

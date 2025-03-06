@@ -30,6 +30,15 @@ var exclusions = []string{
 	// Based on Oscar (golang.org/x/oscar) code.
 	"internal/util/rr/rr.go",
 	"internal/util/rr/rr_test.go",
+	// Based on LUCI code.
+	"internal/starlark/docgen/docstring/docstring.go",
+	"internal/starlark/docgen/ast/parser.go",
+	"internal/starlark/docgen/docgen.go",
+	"internal/starlark/docgen/symbols/loader.go",
+	"internal/starlark/docgen/symbols/symbols.go",
+	"internal/starlark/interpreter/interpreter.go",
+	"internal/starlark/interpreter/loaders.go",
+	"internal/util/set/set.go",
 }
 
 func isExcluded(path string) bool {

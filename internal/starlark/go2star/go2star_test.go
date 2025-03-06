@@ -2,7 +2,7 @@
 // Use of this source code is governed by the ISC
 // license that can be found in the LICENSE.md file.
 
-package starlarkconv
+package go2star
 
 import (
 	"fmt"
@@ -176,7 +176,7 @@ func TestToValue(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(fmt.Sprintf("%T", tc.in), func(t *testing.T) {
-			got, err := ToValue(tc.in)
+			got, err := To(tc.in)
 			if err != nil {
 				t.Fatalf("ToValue(%v) returned error: %v", tc.in, err)
 			}

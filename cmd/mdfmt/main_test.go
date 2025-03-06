@@ -17,7 +17,7 @@ import (
 var update = flag.Bool("update", false, "update golden files in testdata")
 
 func TestRun(t *testing.T) {
-	clitest.Run[*app](t, func(t *testing.T) *app {
+	clitest.Run(t, func(t *testing.T) *app {
 		return &app{}
 	}, map[string]clitest.Case[*app]{
 		"prints usage with help flag": {

@@ -16,7 +16,7 @@ import (
 
 	"go.astrophena.name/base/request"
 	"go.astrophena.name/base/version"
-	"go.astrophena.name/tools/internal/util/starlarkconv"
+	"go.astrophena.name/tools/internal/starlark/go2star"
 
 	"github.com/mmcdole/gofeed"
 	"go.starlark.net/starlark"
@@ -185,7 +185,7 @@ func (f *fetcher) applyRule(rule *starlark.Function, item *gofeed.Item) bool {
 	for _, category := range item.Categories {
 		categories = append(categories, starlark.String(category))
 	}
-	extensions, err := starlarkconv.ToValue(item.Extensions)
+	extensions, err := go2star.To(item.Extensions)
 	if err != nil {
 		f.logf("Error converting item extensions to Starlark value: %v", err)
 		return false
