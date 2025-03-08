@@ -389,8 +389,12 @@ const (
 	postTelegram  = "POST api.telegram.org/{token}/{method}"
 )
 
+//go:embed testdata/message.txtar
+var defaultGistTxtar []byte
+
 func testMux(t *testing.T, overrides map[string]http.HandlerFunc) *mux {
 	m := &mux{mux: http.NewServeMux()}
+	m.gist = txtarToGist(t, defaultGistTxtar)
 	m.mux.HandleFunc(getGist, orHandler(overrides[getGist], func(w http.ResponseWriter, r *http.Request) {
 		testutil.AssertEqual(t, r.Header.Get("Authorization"), "Bearer test")
 		m.mu.Lock()

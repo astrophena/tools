@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package interpreter contains customized Starlark interpreter.
+// Package interpreter contains customized [Starlark] interpreter.
 //
 // It is an opinionated wrapper around the basic single-file interpreter
-// provided by go.starlark.net library. It implements 'load' and a new built-in
+// provided by [starlark-go] library. It implements 'load' and a new built-in
 // 'exec' in a specific way to support running Starlark programs that consist of
 // many files that reference each other, thus allowing decomposing code into
 // small logical chunks and enabling code reuse.
@@ -71,14 +71,15 @@
 // 'load', except it doesn't import any symbols into the caller's namespace, and
 // it is not idempotent: calling 'exec' on already executed module is an error.
 //
-// Each module is executed with its own instance of starlark.Thread. Modules
-// are either loaded as libraries (via 'load' call or LoadModule) or executed
-// as scripts (via 'exec' or ExecModule), but not both. Attempting to load
-// a module that was previous exec'ed (and vice versa) is an error.
+// Each module is executed with its own instance of [starlark.Thread]. Modules
+// are either loaded as libraries (via 'load' call or [Interpreter.LoadModule])
+// or executed as scripts (via 'exec' or [Interpreter.ExecModule]), but not
+// both. Attempting to load a module that was previous exec'ed (and vice versa)
+// is an error.
 //
 // Consequently, each Starlark thread created by the nterpreter is either
 // executing some 'load' or some 'exec'. This distinction is available to
-// builtins through GetThreadKind function. Some builtins may check it. For
+// builtins through [GetThreadKind] function. Some builtins may check it. For
 // example, a builtin that mutates a global state may return an error when it is
 // called from a 'load' thread.
 //
@@ -99,6 +100,9 @@
 // to be available in the global scope of all modules. Predeclared symbols and
 // '@stdlib//builtins.star' module explained above, are the primary mechanisms
 // of making the interpreter do something useful.
+//
+// [starlark-go]: https://github.com/google/starlark-go
+// [Starlark]: https://starlark-lang.org
 package interpreter
 
 import (
@@ -107,7 +111,10 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"slices"
 	"strings"
+	"sync"
+	"sync/atomic"
 
 	"go.starlark.net/starlark"
 	"go.starlark.net/starlarkstruct"
@@ -159,9 +166,9 @@ const (
 	threadModKey = "interpreter.ModuleKey"
 )
 
-// Context returns a context of the thread created through Interpreter.
+// Context returns a context of the thread created through [Interpreter].
 //
-// Panics if the Starlark thread wasn't created through Interpreter.Thread().
+// Panics if the Starlark thread wasn't created through [Interpreter.Thread].
 func Context(th *starlark.Thread) context.Context {
 	if ctx := th.Local(threadCtxKey); ctx != nil {
 		return ctx.(context.Context)
@@ -171,7 +178,7 @@ func Context(th *starlark.Thread) context.Context {
 
 // GetThreadInterpreter returns Interpreter that created the Starlark thread.
 //
-// Panics if the Starlark thread wasn't created through Interpreter.Thread().
+// Panics if the Starlark thread wasn't created through [Interpreter.Thread].
 func GetThreadInterpreter(th *starlark.Thread) *Interpreter {
 	if intr := th.Local(threadIntrKey); intr != nil {
 		return intr.(*Interpreter)
@@ -183,7 +190,7 @@ func GetThreadInterpreter(th *starlark.Thread) *Interpreter {
 // load(...), some exec(...) or some custom call (probably a callback called
 // from native code).
 //
-// Panics if the Starlark thread wasn't created through Interpreter.Thread().
+// Panics if the Starlark thread wasn't created through [Interpreter.Thread].
 func GetThreadKind(th *starlark.Thread) ThreadKind {
 	if k := th.Local(threadKindKey); k != nil {
 		return k.(ThreadKind)
@@ -213,14 +220,15 @@ func GetThreadModuleKey(th *starlark.Thread) *ModuleKey {
 // It takes a module path relative to the package and returns either module's
 // dict (e.g. for go native modules) or module's source code, to be interpreted.
 //
-// Returns ErrNoModule if there's no such module in the package.
+// Returns [ErrNoModule] if there's no such module in the package.
 //
-// The source code is returned as 'string' to guarantee immutability and
-// allowing efficient use of string Go constants.
+// The source code is returned as string to guarantee immutability and allowing
+// efficient use of string Go constants.
 type Loader func(path string) (dict starlark.StringDict, src string, err error)
 
 // Interpreter knows how to execute Starlark modules that can load or execute
-// other Starlark modules.
+// other Starlark modules. An Interpreter is safe for concurrent use by multiple
+// goroutines, except from modifying exported fields.
 type Interpreter struct {
 	// Predeclared is a dict with predeclared symbols that are available globally.
 	//
@@ -236,7 +244,7 @@ type Interpreter struct {
 
 	// Logger is called by Starlark's print(...) function.
 	//
-	// The callback takes the position in the starlark source code where
+	// The callback takes the position in the Starlark source code where
 	// print(...) was called and the message it received.
 	//
 	// The default implementation just prints the message to stderr.
@@ -244,8 +252,7 @@ type Interpreter struct {
 
 	// ThreadModifier is called whenever interpreter makes a new starlark.Thread.
 	//
-	// It can inject additional state into thread locals. Useful when hooking up
-	// a thread to starlarktest's reporter in unit tests.
+	// It can inject additional state into thread locals.
 	ThreadModifier func(th *starlark.Thread)
 
 	// PreExec is called before launching code through some 'exec' or ExecModule.
@@ -266,6 +273,8 @@ type Interpreter struct {
 	// 'load' calls do not trigger PreExec/PostExec hooks.
 	PostExec func(th *starlark.Thread, module ModuleKey)
 
+	init    atomic.Bool                 // prevents calling Init again
+	mu      sync.RWMutex                // protects all above
 	modules map[ModuleKey]*loadedModule // cache of the loaded modules
 	execed  map[ModuleKey]struct{}      // a set of modules that were ever exec'ed
 	visited []ModuleKey                 // all modules, in order of visits
@@ -373,8 +382,15 @@ type loadedModule struct {
 // dict of '@stdlib//builtins.star' module will become available as global
 // symbols in all modules.
 //
-// The context ends up available to builtins through Context(...).
+// The context ends up available to builtins through [Context].
+//
+// Init could be called only once, the next calls will return an error.
 func (intr *Interpreter) Init(ctx context.Context) error {
+	if intr.init.Load() {
+		return errors.New("already initialized")
+	}
+	defer intr.init.Store(true)
+
 	intr.modules = map[ModuleKey]*loadedModule{}
 	intr.execed = map[ModuleKey]struct{}{}
 
@@ -397,7 +413,7 @@ func (intr *Interpreter) Init(ctx context.Context) error {
 	return nil
 }
 
-// LoadModule finds and loads a starlark module, returning its dict.
+// LoadModule finds and loads a Starlark module, returning its dict.
 //
 // This is similar to load(...) statement: caches the result of the execution.
 // Modules are always loaded only once.
@@ -406,8 +422,11 @@ func (intr *Interpreter) Init(ctx context.Context) error {
 // intr.Packages. 'path' is a module path (without leading '//') within
 // the package.
 //
-// The context ends up available to builtins through Context(...).
+// The context ends up available to builtins through [Context].
 func (intr *Interpreter) LoadModule(ctx context.Context, pkg, path string) (starlark.StringDict, error) {
+	intr.mu.Lock()
+	defer intr.mu.Unlock()
+
 	key, err := MakeModuleKey(nil, fmt.Sprintf("@%s//%s", pkg, path))
 	if err != nil {
 		return nil, err
@@ -440,7 +459,7 @@ func (intr *Interpreter) LoadModule(ctx context.Context, pkg, path string) (star
 	return m.dict, m.err
 }
 
-// ExecModule finds and executes a starlark module, returning its dict.
+// ExecModule finds and executes a Starlark module, returning its dict.
 //
 // This is similar to exec(...) statement: always executes the module.
 //
@@ -448,8 +467,11 @@ func (intr *Interpreter) LoadModule(ctx context.Context, pkg, path string) (star
 // intr.Packages. 'path' is a module path (without leading '//') within
 // the package.
 //
-// The context ends up available to builtins through Context(...).
+// The context ends up available to builtins through [Context].
 func (intr *Interpreter) ExecModule(ctx context.Context, pkg, path string) (starlark.StringDict, error) {
+	intr.mu.Lock()
+	defer intr.mu.Unlock()
+
 	key, err := MakeModuleKey(nil, fmt.Sprintf("@%s//%s", pkg, path))
 	if err != nil {
 		return nil, err
@@ -475,7 +497,9 @@ func (intr *Interpreter) ExecModule(ctx context.Context, pkg, path string) (star
 //
 // Includes both loaded and execed modules, successfully or not.
 func (intr *Interpreter) Visited() []ModuleKey {
-	return intr.visited
+	intr.mu.Lock()
+	defer intr.mu.Unlock()
+	return slices.Clone(intr.visited)
 }
 
 // LoadSource returns a body of a file inside a package.
@@ -491,6 +515,9 @@ func (intr *Interpreter) Visited() []ModuleKey {
 // this function. Other threads don't have enough context to resolve paths
 // correctly.
 func (intr *Interpreter) LoadSource(th *starlark.Thread, ref string) (string, error) {
+	intr.mu.Lock()
+	defer intr.mu.Unlock()
+
 	if kind := GetThreadKind(th); kind != ThreadLoading && kind != ThreadExecing {
 		return "", errors.New("wrong kind of thread (not enough information to " +
 			"resolve the file reference), only threads that do 'load' and 'exec' can call this function")
@@ -518,14 +545,15 @@ func (intr *Interpreter) LoadSource(th *starlark.Thread, ref string) (string, er
 
 // Thread creates a new Starlark thread associated with the given context.
 //
-// Thread() can be used, for example, to invoke callbacks registered by the
+// Thread can be used, for example, to invoke callbacks registered by the
 // loaded Starlark code.
 //
-// The context ends up available to builtins through Context(...).
+// The context ends up available to builtins through [Context].
 //
 // The returned thread has no implementation of load(...) or exec(...). Use
-// LoadModule or ExecModule to load top-level Starlark code instead. Note that
-// load(...) statements are forbidden inside Starlark functions anyway.
+// [Interpreter.LoadModule] or [interpreter.ExecModule] to load top-level
+// Starlark code instead. Note that load(...) statements are forbidden inside
+// Starlark functions anyway.
 func (intr *Interpreter) Thread(ctx context.Context) *starlark.Thread {
 	th := &starlark.Thread{
 		Print: func(th *starlark.Thread, msg string) {

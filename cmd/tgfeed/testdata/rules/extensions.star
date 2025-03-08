@@ -1,3 +1,7 @@
+# © 2024 Ilya Mateyko. All rights reserved.
+# Use of this source code is governed by the ISC
+# license that can be found in the LICENSE.md file.
+
 def filter_description(item):
     if not "media" in item.extensions:
         return False
