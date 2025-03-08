@@ -6,7 +6,6 @@
 package tgstarlark
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -14,6 +13,7 @@ import (
 
 	"go.astrophena.name/base/request"
 	"go.astrophena.name/base/version"
+	"go.astrophena.name/tools/internal/starlark/interpreter"
 
 	starlarkjson "go.starlark.net/lib/json"
 	"go.starlark.net/starlark"
@@ -61,11 +61,6 @@ type module struct {
 }
 
 func (m *module) call(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	ctx, ok := thread.Local("context").(context.Context)
-	if !ok {
-		ctx = context.Background()
-	}
-
 	if len(args) > 0 {
 		return starlark.None, fmt.Errorf("%s: unexpected positional arguments", b.Name())
 	}
@@ -86,6 +81,7 @@ func (m *module) call(thread *starlark.Thread, b *starlark.Builtin, args starlar
 		return nil, fmt.Errorf("%s: unexpected return type of json.encode Starlark function", b.Name())
 	}
 
+	ctx := interpreter.Context(thread)
 	rawResp, err := request.Make[json.RawMessage](ctx, request.Params{
 		Method: http.MethodPost,
 		URL:    "https://api.telegram.org/bot" + m.token + "/" + string(method),

@@ -6,10 +6,10 @@
 package starlarkgemini
 
 import (
-	"context"
 	"fmt"
 
 	"go.astrophena.name/tools/internal/api/google/gemini"
+	"go.astrophena.name/tools/internal/starlark/interpreter"
 
 	"go.starlark.net/starlark"
 	"go.starlark.net/starlarkstruct"
@@ -73,10 +73,7 @@ type module struct {
 }
 
 func (m *module) generateContent(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	ctx, ok := thread.Local("context").(context.Context)
-	if !ok {
-		ctx = context.Background()
-	}
+	ctx := interpreter.Context(thread)
 
 	if m.c == nil {
 		return starlark.None, fmt.Errorf("%s: Gemini API is not available", b.Name())

@@ -16,10 +16,11 @@ import (
 
 	"go.astrophena.name/base/testutil"
 	"go.astrophena.name/tools/internal/api/google/gemini"
+	"go.astrophena.name/tools/internal/starlark/interpreter"
+	"go.astrophena.name/tools/internal/starlark/stdlib"
 	"go.astrophena.name/tools/internal/util/rr"
 
 	"go.starlark.net/starlark"
-	"go.starlark.net/syntax"
 )
 
 var update = flag.Bool("update", false, "update golden files in testdata")
@@ -54,27 +55,29 @@ func TestModule(t *testing.T) {
 
 		var buf bytes.Buffer
 
-		thread := &starlark.Thread{
-			Name:  "test",
-			Print: func(_ *starlark.Thread, msg string) { fmt.Fprint(&buf, msg) },
-		}
-
-		predecl := starlark.StringDict{
-			"gemini": Module(c),
-		}
-
 		script, err := os.ReadFile(match)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		if _, err = starlark.ExecFileOptions(
-			&syntax.FileOptions{},
-			thread,
-			"test.star",
-			script,
-			predecl,
-		); err != nil {
+		intr := &interpreter.Interpreter{
+			Predeclared: starlark.StringDict{
+				"gemini": Module(c),
+			},
+			Packages: map[string]interpreter.Loader{
+				interpreter.MainPkg: interpreter.MemoryLoader(map[string]string{
+					"test.star": string(script),
+				}),
+				interpreter.StdlibPkg: stdlib.Loader(),
+			},
+			Logger: func(file string, line int, message string) {
+				fmt.Fprint(&buf, message)
+			},
+		}
+		if err := intr.Init(t.Context()); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := intr.ExecModule(t.Context(), interpreter.MainPkg, "test.star"); err != nil {
 			t.Fatal(err)
 		}
 

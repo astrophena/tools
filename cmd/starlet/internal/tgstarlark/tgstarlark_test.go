@@ -6,16 +6,16 @@ package tgstarlark
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"net/http"
 	"strings"
 	"testing"
 
 	"go.starlark.net/starlark"
-	"go.starlark.net/syntax"
 
 	"go.astrophena.name/base/testutil"
+	"go.astrophena.name/tools/internal/starlark/interpreter"
+	"go.astrophena.name/tools/internal/starlark/stdlib"
 )
 
 func TestTelegramModule(t *testing.T) {
@@ -98,17 +98,25 @@ print(result)
 
 			var buf bytes.Buffer
 
-			thread := &starlark.Thread{
-				Name:  "test",
-				Print: func(_ *starlark.Thread, msg string) { fmt.Fprint(&buf, msg) },
+			intr := &interpreter.Interpreter{
+				Predeclared: starlark.StringDict{
+					"telegram": Module("123:456", httpc),
+				},
+				Packages: map[string]interpreter.Loader{
+					interpreter.MainPkg: interpreter.MemoryLoader(map[string]string{
+						"test.star": string(tc.script),
+					}),
+					interpreter.StdlibPkg: stdlib.Loader(),
+				},
+				Logger: func(file string, line int, message string) {
+					fmt.Fprint(&buf, message)
+				},
 			}
-			thread.SetLocal("context", context.Background())
-
-			predecl := starlark.StringDict{
-				"telegram": Module("123:456", httpc),
+			if err := intr.Init(t.Context()); err != nil {
+				t.Fatal(err)
 			}
 
-			_, err := starlark.ExecFileOptions(&syntax.FileOptions{}, thread, "test.star", tc.script, predecl)
+			_, err := intr.ExecModule(t.Context(), interpreter.MainPkg, "test.star")
 
 			if tc.wantErr != "" {
 				if err == nil {
