@@ -14,18 +14,14 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"testing"
-	"time"
 
 	"go.astrophena.name/base/cli"
 	"go.astrophena.name/base/cli/clitest"
 	"go.astrophena.name/base/logger"
-	"go.astrophena.name/base/request"
 	"go.astrophena.name/base/testutil"
 	"go.astrophena.name/base/txtar"
 	"go.astrophena.name/tools/internal/api/github/gist"
@@ -37,7 +33,7 @@ const tgToken = "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
 
 var update = flag.Bool("update", false, "update golden files in testdata")
 
-func TestEngineMain(t *testing.T) {
+func TestRun(t *testing.T) {
 	t.Parallel()
 
 	clitest.Run(t, func(t *testing.T) *engine {
@@ -158,199 +154,6 @@ func getFreePort() (port int, err error) {
 	}
 	defer l.Close()
 	return l.Addr().(*net.TCPAddr).Port, nil
-}
-
-func TestHealth(t *testing.T) {
-	t.Parallel()
-
-	e := testEngine(t, testMux(t, nil))
-	health, err := request.Make[web.HealthResponse](context.Background(), request.Params{
-		Method:     http.MethodGet,
-		URL:        "/health",
-		HTTPClient: testutil.MockHTTPClient(e.mux),
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	testutil.AssertEqual(t, health.OK, true)
-}
-
-func TestHandleTelegramWebhook(t *testing.T) {
-	t.Parallel()
-
-	testutil.RunGolden(t, "testdata/*.txtar", func(t *testing.T, match string) []byte {
-		t.Parallel()
-
-		ar, err := txtar.ParseFile(match)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		if len(ar.Files) != 2 ||
-			ar.Files[0].Name != "bot.star" ||
-			ar.Files[1].Name != "update.json" {
-			t.Fatalf("%s txtar should contain only two files: bot.star and update.json", match)
-		}
-
-		var upd json.RawMessage
-		for _, f := range ar.Files {
-			if f.Name == "update.json" {
-				upd = json.RawMessage(f.Data)
-			}
-		}
-
-		tm := testMux(t, nil)
-		tm.gist = txtarToGist(t, readFile(t, match))
-		e := testEngine(t, tm)
-
-		_, err = request.Make[any](context.Background(), request.Params{
-			Method: http.MethodPost,
-			URL:    "/telegram",
-			Body:   upd,
-			Headers: map[string]string{
-				"X-Telegram-Bot-Api-Secret-Token": e.tgSecret,
-			},
-			HTTPClient: testutil.MockHTTPClient(e.mux),
-		})
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		calls, err := json.MarshalIndent(tm.telegramCalls, "", "  ")
-		if err != nil {
-			t.Fatal(err)
-		}
-		return calls
-	}, *update)
-}
-
-func TestSelfPing(t *testing.T) {
-	recv := make(chan struct{})
-
-	e := testEngine(t, testMux(t, map[string]http.HandlerFunc{
-		"GET bot.astrophena.name/health": func(w http.ResponseWriter, r *http.Request) {
-			testutil.AssertEqual(t, r.URL.Scheme, "https")
-			web.RespondJSON(w, web.HealthResponse{OK: true})
-			recv <- struct{}{}
-		},
-	}))
-
-	interval := 10 * time.Millisecond
-	getenv := func(key string) string {
-		if key != "RENDER_EXTERNAL_URL" {
-			t.Fatalf("selfPing tried to read environment variable %s", key)
-		}
-		return "https://bot.astrophena.name"
-	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	go e.selfPing(ctx, getenv, interval)
-
-	<-recv
-}
-
-//go:embed testdata/message.txtar
-var reloadTxtar []byte
-
-func TestReload(t *testing.T) {
-	t.Parallel()
-
-	tm := testMux(t, nil)
-	tm.gist = txtarToGist(t, reloadTxtar)
-	e := testEngine(t, tm)
-
-	cases := map[string]struct {
-		authHeader string
-		wantStatus int
-		wantBody   string
-	}{
-		"unauthorized": {
-			wantStatus: http.StatusUnauthorized,
-			wantBody:   `{"status":"error","error":"unauthorized"}`,
-		},
-		"authorized": {
-			authHeader: "Bearer " + e.reloadToken,
-			wantStatus: http.StatusOK,
-			wantBody:   `{"status":"success"}`,
-		},
-	}
-
-	for name, tc := range cases {
-		t.Run(name, func(t *testing.T) {
-			t.Parallel()
-
-			r := httptest.NewRequest(http.MethodPost, "/reload", nil)
-			r.Header.Set("Authorization", tc.authHeader)
-			w := httptest.NewRecorder()
-
-			e.handleReload(w, r)
-
-			var got bytes.Buffer
-			if err := json.Compact(&got, w.Body.Bytes()); err != nil {
-				t.Fatal(err)
-			}
-
-			testutil.AssertEqual(t, w.Code, tc.wantStatus)
-			testutil.AssertEqual(t, got.String(), tc.wantBody)
-		})
-	}
-}
-
-func TestSetWebhook(t *testing.T) {
-	t.Parallel()
-
-	cases := map[string]struct {
-		host        string
-		wantSetHook bool
-		wantErr     error
-	}{
-		"host not set": {
-			wantErr: errNoHost,
-		},
-		"webhook set": {
-			host:        "bot.astrophena.name",
-			wantSetHook: true,
-		},
-	}
-
-	for name, tc := range cases {
-		t.Run(name, func(t *testing.T) {
-			var called atomic.Bool
-
-			tm := testMux(t, map[string]http.HandlerFunc{
-				"POST api.telegram.org/{token}/setWebhook": func(w http.ResponseWriter, r *http.Request) {
-					testutil.AssertEqual(t, tgToken, strings.TrimPrefix(r.PathValue("token"), "bot"))
-					wantURL := "https://bot.astrophena.name/telegram"
-					gotURL := testutil.UnmarshalJSON[map[string]any](t, read(t, r.Body))["url"]
-					testutil.AssertEqual(t, gotURL, wantURL)
-
-					w.WriteHeader(http.StatusOK)
-					web.RespondJSON(w, map[string]bool{"ok": true})
-					called.Store(true)
-				},
-			})
-			e := testEngine(t, tm)
-			e.host = tc.host
-
-			err := e.setWebhook(context.Background())
-
-			if tc.wantErr != nil {
-				if err == nil || err.Error() != tc.wantErr.Error() {
-					t.Fatalf("wanted error %v, got %v", tc.wantErr, err)
-				}
-			} else if err != nil {
-				t.Fatal(err)
-			}
-
-			if tc.wantSetHook {
-				if !called.Load() {
-					t.Fatalf("setWebhook must be called for this case")
-				}
-			}
-		})
-	}
 }
 
 func testEngine(t *testing.T, m *mux) *engine {

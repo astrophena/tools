@@ -1,3 +1,4 @@
+update: forwarded
 -- bot.star --
 def send_message(to, text, reply_markup = {}):
     return telegram.call(
@@ -14,31 +15,3 @@ def on_load():
 
 def handle(update):
     send_message(config.owner_id, "Hello!")
--- update.json --
-{
-  "update_id": 10000,
-  "message": {
-    "date": 1441645532,
-    "chat": {
-      "last_name": "Test Lastname",
-      "id": 123456789,
-      "type": "private",
-      "first_name": "Test Firstname",
-      "username": "Testusername"
-    },
-    "message_id": 1365,
-    "from": {
-      "last_name": "Test Lastname",
-      "id": 123456789,
-      "first_name": "Test Firstname",
-      "username": "Testusername"
-    },
-    "forward_from": {
-      "last_name": "Forward Lastname",
-      "id": 222222,
-      "first_name": "Forward Firstname"
-    },
-    "forward_date": 1441645550,
-    "text": "/start"
-  }
-}

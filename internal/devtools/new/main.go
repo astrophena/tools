@@ -3,7 +3,6 @@
 // license that can be found in the LICENSE file.
 
 // New generates a scaffold of the new application.
-
 package main
 
 import (

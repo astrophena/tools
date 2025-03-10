@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package set is an exceedingly simple 'set' implementation.
+// Package set is an exceedingly simple set implementation.
 //
 // It's not threadsafe, but can be used in place of a simple
 // map[T]struct{}.
@@ -20,19 +20,17 @@ package set
 
 import (
 	"cmp"
+	"iter"
 	"slices"
 )
 
-// Set is the base type. make(Set) can be used too.
+// Set is the base type.
 type Set[T cmp.Ordered] map[T]struct{}
 
-// New returns a new Set implementation.
-func New[T cmp.Ordered](sizeHint int) Set[T] {
-	return make(Set[T], sizeHint)
-}
+// New returns a new [Set].
+func New[T cmp.Ordered](hint int) Set[T] { return make(Set[T], hint) }
 
-// NewFromSlice returns a new Set implementation,
-// initialized with the values in the provided slice.
+// NewFromSlice returns a new [Set], initialized with the values in the provided slice.
 func NewFromSlice[T cmp.Ordered](vals ...T) Set[T] {
 	ret := make(Set[T], len(vals))
 	for _, k := range vals {
@@ -41,13 +39,13 @@ func NewFromSlice[T cmp.Ordered](vals ...T) Set[T] {
 	return ret
 }
 
-// Has returns true iff the Set contains value.
+// Has returns true iff the [Set] contains value.
 func (s Set[T]) Has(value T) bool {
 	_, ret := s[value]
 	return ret
 }
 
-// HasAll returns true iff the Set contains all the given values.
+// HasAll returns true iff the [Set] contains all the given values.
 func (s Set[T]) HasAll(values ...T) bool {
 	for _, v := range values {
 		if !s.Has(v) {
@@ -57,8 +55,8 @@ func (s Set[T]) HasAll(values ...T) bool {
 	return true
 }
 
-// Add ensures that Set contains value, and returns true if it was added (i.e.
-// it returns false if the Set already contained the value).
+// Add ensures that [Set] contains value, and returns true if it was added (i.e.
+// it returns false if the [Set] already contained the value).
 func (s Set[T]) Add(value T) bool {
 	if _, ok := s[value]; ok {
 		return false
@@ -67,7 +65,7 @@ func (s Set[T]) Add(value T) bool {
 	return true
 }
 
-// AddAll ensures that Set contains all values.
+// AddAll ensures that [Set] contains all values.
 func (s Set[T]) AddAll(values []T) {
 	for _, value := range values {
 		s[value] = struct{}{}
@@ -75,7 +73,7 @@ func (s Set[T]) AddAll(values []T) {
 }
 
 // Del removes value from the set, and returns true if it was deleted (i.e. it
-// returns false if the Set did not already contain the value).
+// returns false if the [Set] did not already contain the value).
 func (s Set[T]) Del(value T) bool {
 	if _, ok := s[value]; !ok {
 		return false
@@ -84,14 +82,14 @@ func (s Set[T]) Del(value T) bool {
 	return true
 }
 
-// DelAll ensures that Set contains none of values.
+// DelAll ensures that [Set] contains none of values.
 func (s Set[T]) DelAll(values []T) {
 	for _, value := range values {
 		delete(s, value)
 	}
 }
 
-// Peek returns an arbitrary element from the set. If the set was empty, this
+// Peek returns an arbitrary element from the [Set]. If the set was empty, this
 // returns (<zero value>, false).
 func (s Set[T]) Peek() (T, bool) {
 	for k := range s {
@@ -102,7 +100,7 @@ func (s Set[T]) Peek() (T, bool) {
 }
 
 // Pop removes and returns an arbitrary element from the set and removes it from the
-// set. If the set was empty, this returns (<zero value>, false).
+// [Set]. If the set was empty, this returns (<zero value>, false).
 func (s Set[T]) Pop() (T, bool) {
 	for k := range s {
 		delete(s, k)
@@ -112,22 +110,23 @@ func (s Set[T]) Pop() (T, bool) {
 	return zero, false
 }
 
-// Iter calls cb for each item in the set. If cb returns false, the
-// iteration stops.
-func (s Set[T]) Iter(cb func(T) bool) {
-	for k := range s {
-		if !cb(k) {
-			break
+// Iter returns an iterator over values in the [Set].
+func (s Set[T]) Iter() iter.Seq[T] {
+	return func(yield func(T) bool) {
+		for k := range s {
+			if !yield(k) {
+				return
+			}
 		}
 	}
 }
 
-// Len returns the number of items in this set.
+// Len returns the number of items in this [Set].
 func (s Set[T]) Len() int {
 	return len(s)
 }
 
-// Dup returns a duplicate set.
+// Dup returns a duplicate [Set].
 func (s Set[T]) Dup() Set[T] {
 	ret := make(Set[T], len(s))
 	for k := range s {
@@ -136,7 +135,7 @@ func (s Set[T]) Dup() Set[T] {
 	return ret
 }
 
-// ToSlice renders this set to a slice of all values.
+// ToSlice renders this [Set] to a slice of all values.
 func (s Set[T]) ToSlice() []T {
 	ret := make([]T, 0, len(s))
 	for k := range s {
@@ -145,15 +144,15 @@ func (s Set[T]) ToSlice() []T {
 	return ret
 }
 
-// ToSortedSlice renders this set to a sorted slice of all values, ascending.
+// ToSortedSlice renders this [Set] to a sorted slice of all values, ascending.
 func (s Set[T]) ToSortedSlice() []T {
 	ret := s.ToSlice()
 	slices.Sort(ret)
 	return ret
 }
 
-// Intersect returns a new Set which is the intersection of this set with the
-// other set.
+// Intersect returns a new [Set] which is the intersection of this [Set] with the
+// other [Set].
 func (s Set[T]) Intersect(other Set[T]) Set[T] {
 	smallLen := len(s)
 	if lo := len(other); lo < smallLen {
@@ -168,8 +167,8 @@ func (s Set[T]) Intersect(other Set[T]) Set[T] {
 	return ret
 }
 
-// Difference returns a new Set which is this set with all elements from other
-// removed (i.e. `self - other`).
+// Difference returns a new [Set] which is this set with all elements from other
+// removed (i.e. 'self - other').
 func (s Set[T]) Difference(other Set[T]) Set[T] {
 	ret := make(Set[T])
 	for k := range s {
@@ -180,8 +179,8 @@ func (s Set[T]) Difference(other Set[T]) Set[T] {
 	return ret
 }
 
-// Union returns a new Set which contains all element from this set, as well
-// as all elements from the other set.
+// Union returns a new [Set] which contains all element from this [Set], as well
+// as all elements from the other [Set].
 func (s Set[T]) Union(other Set[T]) Set[T] {
 	ret := make(Set[T], len(s))
 	for k := range s {
@@ -193,7 +192,7 @@ func (s Set[T]) Union(other Set[T]) Set[T] {
 	return ret
 }
 
-// Contains returns true iff the given set contains all elements from the other set.
+// Contains returns true iff the given [Set] contains all elements from the other [Set].
 func (s Set[T]) Contains(other Set[T]) bool {
 	for k := range other {
 		if !s.Has(k) {

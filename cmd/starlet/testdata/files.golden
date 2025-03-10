@@ -5,7 +5,7 @@
       "chat_id": 123456789,
       "entities": [
         {
-          "length": 114,
+          "length": 111,
           "offset": 25,
           "type": "pre"
         }
@@ -13,7 +13,7 @@
       "link_preview_options": {
         "is_disabled": true
       },
-      "text": "❌ Something went wrong:\n\nTraceback (most recent call last):\n  //bot.star:5:29: in handle\nError in files.read: nonexistent.md: no such file\n\n"
+      "text": "❌ Something went wrong:\n\nTraceback (most recent call last):\n  //bot.star:3:22: in handle\nError in files.read: update.json: no such file\n\n"
     }
   }
 ]

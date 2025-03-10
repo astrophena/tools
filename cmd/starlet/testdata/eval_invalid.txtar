@@ -1,0 +1,7 @@
+update: start
+-- bot.star --
+def handle(update):
+    # Should be an error (invalid code).
+    res = eval("prnt(greeting", environ = {
+        "greeting": "Hello, world!",
+    })

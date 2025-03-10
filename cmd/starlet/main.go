@@ -11,12 +11,10 @@ import (
 	"cmp"
 	"context"
 	_ "embed"
-	"errors"
 	"flag"
 	"io"
 	"log"
 	"net/http"
-	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -44,16 +42,6 @@ const tgAPI = "https://api.telegram.org"
 var (
 	//go:embed resources/error.tmpl
 	defaultErrorTemplate string
-	//go:embed resources/logs.html
-	logsTmpl string
-	//go:embed resources/logs.js
-	logsJS []byte
-)
-
-const (
-	selfPingInterval = 10 * time.Minute
-	authSessionTTL   = 24 * time.Hour
-	convCacheTTL     = 24 * time.Hour
 )
 
 func main() { cli.Main(new(engine)) }
@@ -108,7 +96,7 @@ func (e *engine) Run(ctx context.Context) error {
 		if err := e.setWebhook(ctx); err != nil {
 			return err
 		}
-		go e.selfPing(ctx, env.Getenv, selfPingInterval)
+		go e.selfPing(ctx, selfPingInterval)
 	}
 
 	s := &web.Server{
@@ -168,12 +156,18 @@ type engine struct {
 	bot atomic.Pointer[bot] // loaded from Gist
 }
 
-// bot represents a currently running instance. It's immutable.
+// bot represents a currently running instance of the bot. It's immutable.
 type bot struct {
 	errorTemplate string                   // error.tmpl from Gist or default one
 	files         map[string]string        // Gist files
 	intr          *interpreter.Interpreter // holds and executes Starlark code
 }
+
+const (
+	authSessionTTL   = 24 * time.Hour
+	convCacheTTL     = 24 * time.Hour
+	selfPingInterval = 10 * time.Minute
+)
 
 func (e *engine) doInit() error {
 	if e.httpc == nil {
@@ -315,64 +309,3 @@ func (e *engine) debugAuth(next http.Handler) http.Handler {
 }
 
 func (e *engine) authCheck(ident *tgauth.Identity) bool { return ident.ID == e.tgOwner }
-
-var errNoHost = errors.New("host hasn't set; pass it with -host flag or HOST environment variable")
-
-func (e *engine) setWebhook(ctx context.Context) error {
-	if e.host == "" {
-		return errNoHost
-	}
-	u := &url.URL{
-		Scheme: "https",
-		Host:   e.host,
-		Path:   "/telegram",
-	}
-	_, err := request.Make[any](ctx, request.Params{
-		Method: http.MethodPost,
-		URL:    "https://api.telegram.org/bot" + e.tgToken + "/setWebhook",
-		Body: map[string]string{
-			"url":          u.String(),
-			"secret_token": e.tgSecret,
-		},
-		Headers: map[string]string{
-			"User-Agent": version.UserAgent(),
-		},
-		HTTPClient: e.httpc,
-		Scrubber:   e.scrubber,
-	})
-	return err
-}
-
-// selfPing continusly pings Starlet every 10 minutes in production to prevent it's Render app from sleeping.
-func (e *engine) selfPing(ctx context.Context, getenv func(string) string, interval time.Duration) {
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-			url := getenv("RENDER_EXTERNAL_URL")
-			if url == "" {
-				e.logf("selfPing: RENDER_EXTERNAL_URL is not set; are you really on Render?")
-				return
-			}
-			health, err := request.Make[web.HealthResponse](ctx, request.Params{
-				Method: http.MethodGet,
-				URL:    url + "/health",
-				Headers: map[string]string{
-					"User-Agent": version.UserAgent(),
-				},
-				HTTPClient: e.httpc,
-				Scrubber:   e.scrubber,
-			})
-			if err != nil {
-				e.logf("selfPing: %v", err)
-			}
-			if !health.OK {
-				e.logf("selfPing: unhealthy: %+v", health)
-			}
-		case <-ctx.Done():
-			return
-		}
-	}
-}

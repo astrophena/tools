@@ -1,3 +1,4 @@
+update: start
 -- bot.star --
 def send_message(to, text, reply_markup = {}):
     doc = markdown.convert(text)
@@ -11,24 +12,5 @@ def send_message(to, text, reply_markup = {}):
 
 def handle(update):
     send_message(config.owner_id, "# Hello, world!\nI'm **Ilya**!")
--- update.json --
-{
-  "update_id": 10000,
-  "message": {
-    "date": 1441645532,
-    "chat": {
-      "last_name": "Test Lastname",
-      "id": 123456789,
-      "first_name": "Test",
-      "username": "Test"
-    },
-    "message_id": 1365,
-    "from": {
-      "last_name": "Test Lastname",
-      "id": 123456789,
-      "first_name": "Test",
-      "username": "Test"
-    },
-    "text": "/start"
-  }
-}
+    # Should be an error (invalid arguments).
+    markdown.convert()

@@ -38,8 +38,8 @@ func (e *engine) predeclared() starlark.StringDict {
 		"debug": starlarkstruct.FromStringDict(
 			starlarkstruct.Default,
 			starlark.StringDict{
-				"stack":    starlark.NewBuiltin("debug.stack", getStarlarkStack),
-				"go_stack": starlark.NewBuiltin("debug.go_stack", getGoStack),
+				"stack":    starlark.NewBuiltin("debug.stack", starlarkDebugStack),
+				"go_stack": starlark.NewBuiltin("debug.go_stack", starlarkDebugGoStack),
 			},
 		),
 		"eval":      starlark.NewBuiltin("eval", starlarkEval),
@@ -47,14 +47,14 @@ func (e *engine) predeclared() starlark.StringDict {
 		"files": &starlarkstruct.Module{
 			Name: "files",
 			Members: starlark.StringDict{
-				"read": starlark.NewBuiltin("files.read", e.readFile),
+				"read": starlark.NewBuiltin("files.read", e.starlarkFilesRead),
 			},
 		},
 		"gemini": starlarkgemini.Module(e.geminic),
 		"markdown": &starlarkstruct.Module{
 			Name: "markdown",
 			Members: starlark.StringDict{
-				"convert": starlark.NewBuiltin("markdown.convert", convertMarkdown),
+				"convert": starlark.NewBuiltin("markdown.convert", starlarkMarkdownConvert),
 			},
 		},
 		"module":   starlark.NewBuiltin("struct", starlarkstruct.MakeModule),
@@ -108,7 +108,7 @@ func starlarkEval(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tu
 }
 
 // debug.stack Starlark function.
-func getStarlarkStack(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+func starlarkDebugStack(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	if len(args) > 0 || len(kwargs) > 0 {
 		return nil, errors.New("unexpected arguments")
 	}
@@ -116,24 +116,15 @@ func getStarlarkStack(thread *starlark.Thread, b *starlark.Builtin, args starlar
 }
 
 // debug.go_stack Starlark function.
-func getGoStack(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+func starlarkDebugGoStack(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	if len(args) > 0 || len(kwargs) > 0 {
 		return nil, errors.New("unexpected arguments")
 	}
 	return starlark.String(string(debug.Stack())), nil
 }
 
-// markdown.convert Starlark function.
-func convertMarkdown(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	var s string
-	if err := starlark.UnpackArgs(b.Name(), args, kwargs, "s", &s); err != nil {
-		return nil, err
-	}
-	return go2star.To(tgmarkup.FromMarkdown(s))
-}
-
 // files.read Starlark function.
-func (e *engine) readFile(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+func (e *engine) starlarkFilesRead(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	var name string
 	if err := starlark.UnpackArgs(b.Name(), args, kwargs, "name", &name); err != nil {
 		return nil, err
@@ -143,4 +134,13 @@ func (e *engine) readFile(thread *starlark.Thread, b *starlark.Builtin, args sta
 		return nil, fmt.Errorf("%s: no such file", name)
 	}
 	return starlark.String(file), nil
+}
+
+// markdown.convert Starlark function.
+func starlarkMarkdownConvert(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	var s string
+	if err := starlark.UnpackArgs(b.Name(), args, kwargs, "s", &s); err != nil {
+		return nil, err
+	}
+	return go2star.To(tgmarkup.FromMarkdown(s))
 }

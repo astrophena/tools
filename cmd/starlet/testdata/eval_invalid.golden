@@ -5,7 +5,7 @@
       "chat_id": 123456789,
       "entities": [
         {
-          "length": 155,
+          "length": 118,
           "offset": 25,
           "type": "pre"
         }
@@ -13,7 +13,7 @@
       "link_preview_options": {
         "is_disabled": true
       },
-      "text": "❌ Something went wrong:\n\nTraceback (most recent call last):\n  //bot.star:13:17: in handle\n  //bot.star:2:12: in send_message\nError: function send_message missing 1 argument (text)\n\n"
+      "text": "❌ Something went wrong:\n\nTraceback (most recent call last):\n  //bot.star:3:15: in handle\nError in eval: \u003ceval\u003e:1:14: got end of file, want ')'\n\n"
     }
   }
 ]
