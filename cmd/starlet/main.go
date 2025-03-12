@@ -39,11 +39,6 @@ import (
 
 const tgAPI = "https://api.telegram.org"
 
-var (
-	//go:embed resources/error.tmpl
-	defaultErrorTemplate string
-)
-
 func main() { cli.Main(new(engine)) }
 
 func (e *engine) Flags(fs *flag.FlagSet) {

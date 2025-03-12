@@ -1,16 +1,13 @@
 update: start
 -- bot.star --
+load("@starlet//tg.star", "tg")
+
 def handle(update):
+    # Must succeed.
     res = eval("print(greeting)", environ = {
         "greeting": "Hello, world!",
     })
-    telegram.call(
-        method = "sendMessage",
-        args = {
-            "chat_id": update["message"]["chat"]["id"],
-            "text": res,
-        }
-    )
+    tg.send_message(update["message"]["chat"]["id"], res)
     # Must ignore non-string environ keys.
     res2 = eval("print(greeting)", environ = {
         "greeting": "Hello, world!",

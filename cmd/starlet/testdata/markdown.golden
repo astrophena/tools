@@ -19,6 +19,9 @@
           "url": ""
         }
       ],
+      "link_preview_options": {
+        "is_disabled": true
+      },
       "reply_markup": {},
       "text": "Hello, world!\n\nI’m Ilya!\n\n"
     }
@@ -29,7 +32,7 @@
       "chat_id": 123456789,
       "entities": [
         {
-          "length": 133,
+          "length": 132,
           "offset": 25,
           "type": "pre"
         }
@@ -37,7 +40,7 @@
       "link_preview_options": {
         "is_disabled": true
       },
-      "text": "❌ Something went wrong:\n\nTraceback (most recent call last):\n  //bot.star:14:21: in handle\nError in markdown.convert: markdown.convert: missing argument for s\n\n"
+      "text": "❌ Something went wrong:\n\nTraceback (most recent call last):\n  //bot.star:6:21: in handle\nError in markdown.convert: markdown.convert: missing argument for s\n\n"
     }
   }
 ]

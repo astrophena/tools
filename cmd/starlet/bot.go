@@ -6,10 +6,12 @@ package main
 
 import (
 	"context"
+	"embed"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 
 	"go.astrophena.name/base/request"
@@ -32,6 +34,21 @@ var (
 	errNoHandleFunc = errors.New("handle function not found in bot code")
 	errNoMainFile   = errors.New(mainFile + " should contain bot code")
 )
+
+var (
+	//go:embed assets/error.tmpl
+	defaultErrorTemplate string
+	//go:embed stdlib/*.star
+	stdlibRawFS embed.FS
+	stdlibFS    = must(fs.Sub(stdlibRawFS, "stdlib"))
+)
+
+func must[T any](val T, err error) T {
+	if err != nil {
+		panic(err)
+	}
+	return val
+}
 
 func (e *engine) loadFromGist(ctx context.Context) error {
 	g, err := e.gistc.Get(ctx, e.gistID)
@@ -59,6 +76,7 @@ func (e *engine) loadCode(ctx context.Context, files map[string]string) error {
 		Packages: map[string]interpreter.Loader{
 			interpreter.MainPkg:   interpreter.MemoryLoader(files),
 			interpreter.StdlibPkg: stdlib.Loader(),
+			"starlet":             interpreter.FSLoader(stdlibFS),
 		},
 	}
 	if err := intr.Init(ctx); err != nil {

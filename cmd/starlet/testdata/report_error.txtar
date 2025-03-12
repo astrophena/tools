@@ -1,15 +1,7 @@
 update: forwarded
 -- bot.star --
-def send_message(to, text, reply_markup = {}):
-    return telegram.call(
-        method = "sendMessage",
-        args = {
-            "chat_id": to,
-            "text": text,
-            "reply_markup": reply_markup
-        }
-    )
+load("@starlet//tg.star", "tg")
 
 def handle(update):
     # Invalid arguments, should cause and report an error.
-    send_message(config.owner_id)
+    tg.send_message(config.owner_id)

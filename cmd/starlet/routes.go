@@ -18,9 +18,9 @@ import (
 )
 
 var (
-	//go:embed resources/logs.html
+	//go:embed assets/logs.html
 	logsTmpl string
-	//go:embed resources/logs.js
+	//go:embed assets/logs.js
 	logsJS []byte
 )
 

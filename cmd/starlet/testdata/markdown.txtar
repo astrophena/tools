@@ -1,16 +1,8 @@
 update: start
 -- bot.star --
-def send_message(to, text, reply_markup = {}):
-    doc = markdown.convert(text)
-    return telegram.call(
-        method = "sendMessage",
-        args = doc | {
-            "chat_id": to,
-            "reply_markup": reply_markup
-        }
-    )
+load("@starlet//tg.star", "tg")
 
 def handle(update):
-    send_message(config.owner_id, "# Hello, world!\nI'm **Ilya**!")
+    tg.send_message(config.owner_id, "# Hello, world!\nI'm **Ilya**!")
     # Should be an error (invalid arguments).
     markdown.convert()

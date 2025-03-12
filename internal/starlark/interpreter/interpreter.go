@@ -116,6 +116,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"go.astrophena.name/tools/internal/util/syncmap"
 	"go.starlark.net/starlark"
 	"go.starlark.net/starlarkstruct"
 	"go.starlark.net/syntax"
@@ -273,12 +274,12 @@ type Interpreter struct {
 	// 'load' calls do not trigger PreExec/PostExec hooks.
 	PostExec func(th *starlark.Thread, module ModuleKey)
 
-	init    atomic.Bool                 // prevents calling Init again
-	mu      sync.RWMutex                // protects all above
-	modules map[ModuleKey]*loadedModule // cache of the loaded modules
-	execed  map[ModuleKey]struct{}      // a set of modules that were ever exec'ed
-	visited []ModuleKey                 // all modules, in order of visits
-	globals starlark.StringDict         // global symbols exposed to all modules
+	init      atomic.Bool                            // prevents calling Init again
+	modules   *syncmap.Map[ModuleKey, *loadedModule] // cache of the loaded modules
+	execed    *syncmap.Map[ModuleKey, struct{}]      // a set of modules that were ever exec'ed
+	visitedMu sync.Mutex                             // protects visited
+	visited   []ModuleKey                            // all modules, in order of visits
+	globals   starlark.StringDict                    // global symbols exposed to all modules
 }
 
 // ModuleKey is a key of a module within a cache of loaded modules.
@@ -391,8 +392,8 @@ func (intr *Interpreter) Init(ctx context.Context) error {
 	}
 	defer intr.init.Store(true)
 
-	intr.modules = map[ModuleKey]*loadedModule{}
-	intr.execed = map[ModuleKey]struct{}{}
+	intr.modules = syncmap.NewMap[ModuleKey, *loadedModule]()
+	intr.execed = syncmap.NewMap[ModuleKey, struct{}]()
 
 	intr.globals = make(starlark.StringDict, len(intr.Predeclared)+1)
 	for k, v := range intr.Predeclared {
@@ -424,9 +425,6 @@ func (intr *Interpreter) Init(ctx context.Context) error {
 //
 // The context ends up available to builtins through [Context].
 func (intr *Interpreter) LoadModule(ctx context.Context, pkg, path string) (starlark.StringDict, error) {
-	intr.mu.Lock()
-	defer intr.mu.Unlock()
-
 	key, err := MakeModuleKey(nil, fmt.Sprintf("@%s//%s", pkg, path))
 	if err != nil {
 		return nil, err
@@ -434,11 +432,11 @@ func (intr *Interpreter) LoadModule(ctx context.Context, pkg, path string) (star
 
 	// If the module has been 'exec'-ed previously it is not allowed to be loaded.
 	// Modules are either 'library-like' or 'script-like', not both.
-	if _, yes := intr.execed[key]; yes {
+	if _, yes := intr.execed.Load(key); yes {
 		return nil, errors.New("the module has been exec'ed before and therefore is not loadable")
 	}
 
-	switch m, ok := intr.modules[key]; {
+	switch m, ok := intr.modules.Load(key); {
 	case m != nil: // already loaded or attempted and failed
 		return m.dict, m.err
 	case ok:
@@ -448,12 +446,12 @@ func (intr *Interpreter) LoadModule(ctx context.Context, pkg, path string) (star
 	}
 
 	// Add a placeholder to indicate we are loading this module to detect cycles.
-	intr.modules[key] = nil
+	intr.modules.Store(key, nil)
 
 	m := &loadedModule{
 		err: fmt.Errorf("panic when loading %q", key), // overwritten on non-panic
 	}
-	defer func() { intr.modules[key] = m }()
+	defer func() { intr.modules.Store(key, m) }()
 
 	m.dict, m.err = intr.runModule(ctx, key, ThreadLoading)
 	return m.dict, m.err
@@ -469,9 +467,6 @@ func (intr *Interpreter) LoadModule(ctx context.Context, pkg, path string) (star
 //
 // The context ends up available to builtins through [Context].
 func (intr *Interpreter) ExecModule(ctx context.Context, pkg, path string) (starlark.StringDict, error) {
-	intr.mu.Lock()
-	defer intr.mu.Unlock()
-
 	key, err := MakeModuleKey(nil, fmt.Sprintf("@%s//%s", pkg, path))
 	if err != nil {
 		return nil, err
@@ -479,15 +474,15 @@ func (intr *Interpreter) ExecModule(ctx context.Context, pkg, path string) (star
 
 	// If the module has been loaded previously it is not allowed to be 'exec'-ed.
 	// Modules are either 'library-like' or 'script-like', not both.
-	if _, yes := intr.modules[key]; yes {
+	if _, yes := intr.modules.Load(key); yes {
 		return nil, errors.New("the module has been loaded before and therefore is not executable")
 	}
 
 	// Reexecing a module is forbidden.
-	if _, yes := intr.execed[key]; yes {
+	if _, yes := intr.execed.Load(key); yes {
 		return nil, errors.New("the module has already been executed, 'exec'-ing same code twice is forbidden")
 	}
-	intr.execed[key] = struct{}{}
+	intr.execed.Store(key, struct{}{})
 
 	// Actually execute the code.
 	return intr.runModule(ctx, key, ThreadExecing)
@@ -497,8 +492,8 @@ func (intr *Interpreter) ExecModule(ctx context.Context, pkg, path string) (star
 //
 // Includes both loaded and execed modules, successfully or not.
 func (intr *Interpreter) Visited() []ModuleKey {
-	intr.mu.Lock()
-	defer intr.mu.Unlock()
+	intr.visitedMu.Lock()
+	defer intr.visitedMu.Unlock()
 	return slices.Clone(intr.visited)
 }
 
@@ -515,9 +510,6 @@ func (intr *Interpreter) Visited() []ModuleKey {
 // this function. Other threads don't have enough context to resolve paths
 // correctly.
 func (intr *Interpreter) LoadSource(th *starlark.Thread, ref string) (string, error) {
-	intr.mu.Lock()
-	defer intr.mu.Unlock()
-
 	if kind := GetThreadKind(th); kind != ThreadLoading && kind != ThreadExecing {
 		return "", errors.New("wrong kind of thread (not enough information to " +
 			"resolve the file reference), only threads that do 'load' and 'exec' can call this function")
@@ -674,7 +666,9 @@ func (intr *Interpreter) runModule(ctx context.Context, key ModuleKey, kind Thre
 	}
 
 	// Record we've been here.
+	intr.visitedMu.Lock()
 	intr.visited = append(intr.visited, key)
+	intr.visitedMu.Unlock()
 
 	// Execute the module. It may 'load' or 'exec' other modules inside, which
 	// will either call LoadModule or ExecModule.

@@ -1,17 +1,9 @@
 update: forwarded
 -- bot.star --
-def send_message(to, text, reply_markup = {}):
-    return telegram.call(
-        method = "sendMessage",
-        args = {
-            "chat_id": to,
-            "text": text,
-            "reply_markup": reply_markup
-        }
-    )
+load("@starlet//tg.star", "tg")
 
 def on_load():
-    send_message(config.owner_id, "Loaded!")
+    tg.send_message(config.owner_id, "Loaded!")
 
 def handle(update):
-    send_message(config.owner_id, "Hello!")
+    tg.send_message(config.owner_id, "Hello!")
