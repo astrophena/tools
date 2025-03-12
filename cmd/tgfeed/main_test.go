@@ -93,6 +93,10 @@ func TestFetcherMain(t *testing.T) {
 			Args:    []string{"-reenable", "https://example.com/non-existent.xml"},
 			WantErr: errNoFeed,
 		},
+		"obtaining Google token fails without service account key": {
+			Args:    []string{"-google-token", "https://www.googleapis.com/auth/drive"},
+			WantErr: errNoServiceAccountKey,
+		},
 	},
 	)
 }

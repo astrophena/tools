@@ -43,9 +43,10 @@ const (
 
 // Some types of errors that can happen during tgfeed execution.
 var (
-	errAlreadyRunning = errors.New("already running")
-	errNoFeed         = errors.New("no such feed")
-	errNoEditor       = errors.New("environment variable EDITOR is not defined")
+	errAlreadyRunning      = errors.New("already running")
+	errNoFeed              = errors.New("no such feed")
+	errNoEditor            = errors.New("environment variable EDITOR is not defined")
+	errNoServiceAccountKey = errors.New("no service account key")
 )
 
 func main() { cli.Main(new(fetcher)) }
@@ -56,6 +57,7 @@ func (f *fetcher) Flags(fs *flag.FlagSet) {
 	fs.BoolVar(&f.mode.edit, "edit", false, "Edit config.star file in your EDITOR.")
 	fs.StringVar(&f.mode.reenable, "reenable", "", "Reenable disabled `feed`.")
 	fs.BoolVar(&f.mode.run, "run", false, "Fetch feeds and send updates.")
+	fs.StringVar(&f.mode.googleToken, "google-token", "", "Obtain a Google account token limited by `scope`.")
 }
 
 func (f *fetcher) Run(ctx context.Context) error {
@@ -99,6 +101,16 @@ func (f *fetcher) Run(ctx context.Context) error {
 		return nil
 	case f.mode.reenable != "":
 		return f.reenable(ctx, f.mode.reenable)
+	case f.mode.googleToken != "":
+		if f.serviceAccountKey == nil {
+			return errNoServiceAccountKey
+		}
+		tok, err := f.serviceAccountKey.AccessToken(ctx, f.httpc, f.mode.googleToken)
+		if err != nil {
+			return err
+		}
+		fmt.Println(tok)
+		return nil
 	default:
 		return fmt.Errorf("%w: pick a mode", cli.ErrInvalidArgs)
 	}
@@ -110,10 +122,11 @@ type fetcher struct {
 
 	// configuration
 	mode struct {
-		feeds    bool
-		edit     bool
-		reenable string
-		run      bool
+		feeds       bool
+		edit        bool
+		reenable    string
+		run         bool
+		googleToken string
 	}
 	chatID                string
 	dry                   bool
