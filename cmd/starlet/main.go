@@ -136,6 +136,7 @@ type engine struct {
 	gistID           string
 	host             string
 	httpc            *http.Client
+	me               *getMeResponse // obtained from Telegram Bot API
 	onRender         bool
 	reloadToken      string
 	stderr           io.Writer
@@ -223,6 +224,7 @@ func (e *engine) doInit() error {
 	if err != nil {
 		return err
 	}
+	e.me = &me
 	e.tgBotID = me.Result.ID
 	e.tgBotUsername = me.Result.Username
 

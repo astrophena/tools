@@ -42,12 +42,9 @@ func (e *engine) initRoutes() {
 	web.Health(e.mux)
 	dbg := web.Debugger(e.mux)
 	dbg.MenuFunc(e.debugMenu)
-	dbg.KVFunc("Bot information", func() any {
-		me, err := e.getMe()
-		if err != nil {
-			return err
-		}
-		return fmt.Sprintf("%+v", me)
+	dbg.KVFunc("Bot information", func() any { return fmt.Sprintf("%+v", e.me) })
+	dbg.KVFunc("Loaded Starlark modules", func() any {
+		return fmt.Sprintf("%+v", e.bot.Load().intr.Visited())
 	})
 	// Log streaming.
 	dbg.HandleFunc("logs", "Logs", func(w http.ResponseWriter, r *http.Request) {
