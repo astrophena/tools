@@ -64,7 +64,7 @@
 // '@stdlib//builtins.star' itself). This allows to implement in Starlark
 // built-in global functions exposed by the interpreter.
 //
-// Exec'ing modules
+// # Exec'ing modules
 //
 // The built-in function 'exec' can be used to execute a module for its side
 // effects and get its global dict as a return value. It works similarly to
@@ -77,7 +77,7 @@
 // both. Attempting to load a module that was previous exec'ed (and vice versa)
 // is an error.
 //
-// Consequently, each Starlark thread created by the nterpreter is either
+// Consequently, each Starlark thread created by the interpreter is either
 // executing some 'load' or some 'exec'. This distinction is available to
 // builtins through [GetThreadKind] function. Some builtins may check it. For
 // example, a builtin that mutates a global state may return an error when it is
@@ -117,6 +117,7 @@ import (
 	"sync/atomic"
 
 	"go.astrophena.name/tools/internal/util/syncmap"
+
 	"go.starlark.net/starlark"
 	"go.starlark.net/starlarkstruct"
 	"go.starlark.net/syntax"
@@ -199,8 +200,8 @@ func GetThreadKind(th *starlark.Thread) ThreadKind {
 	panic("not an Interpreter thread, no ThreadKind in its locals")
 }
 
-// GetThreadModuleKey returns a ModuleKey with the location of the module being
-// processed by a current load(...) or exec(...) statement.
+// GetThreadModuleKey returns a [ModuleKey] with the location of the module
+// being processed by a current load(...) or exec(...) statement.
 //
 // It has no relation to the module that holds the top-level stack frame. For
 // example, if a currently loading module 'A' calls a function in module 'B' and
@@ -208,7 +209,7 @@ func GetThreadKind(th *starlark.Thread) ThreadKind {
 // even though the call goes through code in module 'B'.
 //
 // Returns nil if the current thread is not executing any load(...) or
-// exec(...), i.e. it has ThreadUnknown kind.
+// exec(...), i.e. it has [ThreadUnknown] kind.
 func GetThreadModuleKey(th *starlark.Thread) *ModuleKey {
 	if modKey, ok := th.Local(threadModKey).(ModuleKey); ok {
 		return &modKey
@@ -219,7 +220,7 @@ func GetThreadModuleKey(th *starlark.Thread) *ModuleKey {
 // Loader knows how to load modules of some concrete package.
 //
 // It takes a module path relative to the package and returns either module's
-// dict (e.g. for go native modules) or module's source code, to be interpreted.
+// dict (e.g. for Go native modules) or module's source code, to be interpreted.
 //
 // Returns [ErrNoModule] if there's no such module in the package.
 //
