@@ -3,7 +3,8 @@
 // license that can be found in the LICENSE.md file.
 
 /*
-Tgfeed fetches RSS feeds and sends new articles via Telegram.
+Tgfeed fetches RSS feeds and sends updates to Telegram. It's designed to be run
+as a periodic job.
 
 # Usage
 
@@ -25,7 +26,10 @@ Required for uploading stats to the Google Spreadsheet:
   - STATS_SPREADSHEET_ID: ID of the Google Spreadsheet to which the program uploads
     statistics for every run.
   - STATS_SPREADSHEET_SHEET: Sheet of the Google Spreadsheet to which the
-    program uploads statistics for every run. Defaults to "Stats".
+    program uploads statistics for every run. Defaults to "Stats". You need to
+    create a sheet with this name (or another name, and set the
+    STATS_SPREADSHEET_SHEET environment variable accordingly) in your Google
+    Spreadsheet for stats collection to work.
   - SERVICE_ACCOUNT_KEY: JSON object string representing the service account key
     for accessing the Google API.
 
@@ -84,7 +88,10 @@ tgfeed collects and reports stats about every run to Google Sheets.
 You can specify the ID of the spreadsheet via the STATS_SPREADSHEET_ID
 environment variable. To collect stats, you must provide the SERVICE_ACCOUNT_KEY
 environment variable with JSON string representing the service account key for
-accessing the Google API. Stats include:
+accessing the Google API. You also need to create a sheet named "Stats" (or
+the name specified by STATS_SPREADSHEET_SHEET) in your spreadsheet.
+
+Stats include:
 
   - Total number of feeds fetched
   - Number of successfully fetched feeds
@@ -118,6 +125,15 @@ To view the list of feeds, you can use the -feeds flag. This will also print the
 URLs of feeds that have encountered errors during fetching. For example:
 
 	$ tgfeed -feeds
+
+# Scheduling
+
+tgfeed is intended to be run periodically. You can use a task scheduler like:
+
+  - cron (on Linux/macOS)
+  - systemd timer (on systemd-based Linux distributions)
+  - GitHub Actions (using a scheduled workflow)
+  - Task Scheduler (on Windows)
 */
 package main
 

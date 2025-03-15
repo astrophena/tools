@@ -41,7 +41,7 @@ func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *gofeed.Item
 	// date to current so we don't get a lot of unread articles and trigger
 	// Telegram Bot API rate limit.
 	if !exists {
-		f.dlogf("State for feed %q doesn't exist, creating it.", fd.URL)
+		f.slog.Debug("initializing state", "feed", fd.URL)
 		f.state.Access(func(s map[string]*feedState) {
 			s[fd.URL] = new(feedState)
 			state = s[fd.URL]
@@ -50,7 +50,7 @@ func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *gofeed.Item
 	}
 
 	if state.Disabled {
-		f.dlogf("Skipping disabled feed %q.", fd.URL)
+		f.slog.Debug("skipping, feed is disabled", "feed", fd.URL)
 		return false, 0
 	}
 
@@ -77,7 +77,7 @@ func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *gofeed.Item
 
 	// Ignore unmodified feeds and report an error otherwise.
 	if res.StatusCode == http.StatusNotModified {
-		f.dlogf("Feed %q was unmodified since last fetch.", fd.URL)
+		f.slog.Debug("unmodified feed", "feed", fd.URL)
 		f.stats.Access(func(s *stats) {
 			s.NotModifiedFeeds += 1
 		})
@@ -118,7 +118,7 @@ func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *gofeed.Item
 						continue
 					}
 				}
-				f.logf("Feed %q got rate-limited by tg.i-c-a.su; can be retried in %s", fd.URL, t)
+				f.slog.Warn("rate-limited by tg.i-c-a.su", "feed", fd.URL, "retry_in", t)
 				return true, t
 			}
 		}
@@ -145,14 +145,14 @@ func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *gofeed.Item
 
 		if fd.BlockRule != nil {
 			if blocked := f.applyRule(fd.BlockRule, item); blocked {
-				f.dlogf("Item %q was blocked due to block rule.", item.Link)
+				f.slog.Debug("blocked by block rule", "item", item.Link)
 				continue
 			}
 		}
 
 		if fd.KeepRule != nil {
 			if keep := f.applyRule(fd.KeepRule, item); !keep {
-				f.dlogf("Item %q was not kept due to keep rule.", item.Link)
+				f.slog.Debug("skipped by keep rule", "item", item.Link)
 				continue
 			}
 		}
@@ -187,7 +187,7 @@ func (f *fetcher) applyRule(rule *starlark.Function, item *gofeed.Item) bool {
 	}
 	extensions, err := go2star.To(item.Extensions)
 	if err != nil {
-		f.logf("Error converting item extensions to Starlark value: %v", err)
+		f.slog.Warn("failed to convert item extensions to Starlark", "item", item.Link, "error", err)
 		return false
 	}
 	val, err := starlark.Call(
@@ -209,13 +209,13 @@ func (f *fetcher) applyRule(rule *starlark.Function, item *gofeed.Item) bool {
 		[]starlark.Tuple{},
 	)
 	if err != nil {
-		f.logf("Error applying rule for item %q: %v", item.Link, err)
+		f.slog.Warn("applying rule for item", "item", item.Link, "error", err)
 		return false
 	}
 
 	ret, ok := val.(starlark.Bool)
 	if !ok {
-		f.logf("Rule for item %q returned not a boolean value.", item.Link)
+		f.slog.Warn("rule returned non-boolean value", "item", item.Link)
 		return false
 	}
 	return bool(ret)
@@ -230,14 +230,14 @@ func (f *fetcher) handleFetchFailure(ctx context.Context, state *feedState, url 
 	state.ErrorCount += 1
 	state.LastError = err.Error()
 
-	f.dlogf("Feed %q failed with an error: %v", url, err)
+	f.slog.Debug("fetch failed", "feed", url, "error", err)
 
 	// Complain loudly and disable feed, if we failed previously enough.
 	if state.ErrorCount >= errorThreshold {
 		err = fmt.Errorf("fetching feed %q failed after %d previous attempts: %v; feed was disabled, to reenable it run 'tgfeed -reenable %q'", url, state.ErrorCount, err, url)
 		state.Disabled = true
 		if err := f.errNotify(ctx, err); err != nil {
-			f.logf("Notifying about a disabled feed failed: %v", err)
+			f.slog.Warn("failed to send error notification", "error", err)
 		}
 	}
 }
@@ -256,8 +256,6 @@ func (f *fetcher) sendUpdate(ctx context.Context, item *gofeed.Item) {
 
 	inlineKeyboardButtons := []inlineKeyboardButton{}
 
-	// hnrss.org feeds have Hacker News entry URL set as GUID. Also send it
-	// because I often read comments on Hacker News entries.
 	if strings.HasPrefix(item.GUID, "https://news.ycombinator.com/item?id=") {
 		inlineKeyboardButtons = append(inlineKeyboardButtons, inlineKeyboardButton{
 			Text: "↪ Hacker News",
@@ -265,9 +263,8 @@ func (f *fetcher) sendUpdate(ctx context.Context, item *gofeed.Item) {
 		})
 	}
 
-	// If in dry mode, simply log the message, but don't send it.
+	f.slog.Debug("sending message", "item", item.Link, "message", msg)
 	if f.dry {
-		f.logf("Will send message:\n\t%s\n", msg)
 		return
 	}
 
@@ -276,7 +273,7 @@ func (f *fetcher) sendUpdate(ctx context.Context, item *gofeed.Item) {
 			"inline_keyboard": [][]inlineKeyboardButton{inlineKeyboardButtons},
 		}
 	}); err != nil {
-		f.logf("Sending %q to %q failed: %v", msg, f.chatID, err)
+		f.slog.Warn("failed to send message", "chat_id", f.chatID, "error", err)
 	}
 }
 

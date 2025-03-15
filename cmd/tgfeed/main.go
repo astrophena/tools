@@ -12,6 +12,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log/slog"
 	"math/rand/v2"
 	"net/http"
 	"os"
@@ -31,6 +32,7 @@ import (
 	"go.astrophena.name/tools/internal/api/github/gist"
 	"go.astrophena.name/tools/internal/api/google/serviceaccount"
 
+	"github.com/lmittmann/tint"
 	"github.com/mmcdole/gofeed"
 )
 
@@ -52,12 +54,13 @@ var (
 func main() { cli.Main(new(fetcher)) }
 
 func (f *fetcher) Flags(fs *flag.FlagSet) {
-	fs.BoolVar(&f.dry, "dry", false, "Don't send updates and update state when running, log everything instead.")
-	fs.BoolVar(&f.mode.feeds, "feeds", false, "List available feeds.")
-	fs.BoolVar(&f.mode.edit, "edit", false, "Edit config.star file in your EDITOR.")
-	fs.StringVar(&f.mode.reenable, "reenable", "", "Reenable disabled `feed`.")
-	fs.BoolVar(&f.mode.run, "run", false, "Fetch feeds and send updates.")
-	fs.StringVar(&f.mode.googleToken, "google-token", "", "Obtain a Google account token limited by `scope`.")
+	fs.BoolVar(&f.dry, "dry", false, "Enable dry-run mode: log actions, but don't send updates or save state.")
+	fs.BoolVar(&f.jsonLog, "json-log", false, "Emit logs in JSON format.")
+	fs.BoolVar(&f.mode.edit, "edit", false, "Open the config.star configuration file in your $EDITOR.")
+	fs.BoolVar(&f.mode.feeds, "feeds", false, "List all configured feeds and their status.")
+	fs.BoolVar(&f.mode.run, "run", false, "Fetch feeds and send updates to Telegram.")
+	fs.StringVar(&f.mode.googleToken, "google-token", "", "Get a Google access token for the given `scope`.")
+	fs.StringVar(&f.mode.reenable, "reenable", "", "Re-enable a previously disabled feed by its `URL`.")
 }
 
 func (f *fetcher) Run(ctx context.Context) error {
@@ -87,6 +90,11 @@ func (f *fetcher) Run(ctx context.Context) error {
 
 	// Initialize internal state.
 	f.init.Do(f.doInit)
+
+	// Enable debug logging in dry-run mode.
+	if f.dry {
+		f.slogLevel.Set(slog.LevelDebug)
+	}
 
 	// Choose a mode based on passed flags and run it.
 	switch {
@@ -132,6 +140,7 @@ type fetcher struct {
 	dry                   bool
 	ghToken               string
 	gistID                string
+	jsonLog               bool
 	logf                  logger.Logf
 	serviceAccountKey     *serviceaccount.Key
 	statsSpreadsheetID    string
@@ -139,10 +148,12 @@ type fetcher struct {
 	tgToken               string
 
 	// initialized by doInit
-	fp       *gofeed.Parser
-	httpc    *http.Client
-	scrubber *strings.Replacer
-	gistc    *gist.Client
+	fp        *gofeed.Parser
+	httpc     *http.Client
+	scrubber  *strings.Replacer
+	gistc     *gist.Client
+	slog      *slog.Logger
+	slogLevel *slog.LevelVar
 
 	// loaded from Gist
 	config        string
@@ -151,13 +162,6 @@ type fetcher struct {
 	state         *syncx.Protected[map[string]*feedState]
 
 	stats *syncx.Protected[*stats]
-}
-
-func (f *fetcher) dlogf(format string, args ...any) {
-	if !f.dry {
-		return
-	}
-	f.logf(format, args...)
 }
 
 func (f *fetcher) doInit() {
@@ -182,6 +186,17 @@ func (f *fetcher) doInit() {
 		Token:      f.ghToken,
 		HTTPClient: f.httpc,
 		Scrubber:   f.scrubber,
+	}
+
+	f.slogLevel = new(slog.LevelVar)
+	if f.jsonLog {
+		f.slog = slog.New(slog.NewJSONHandler(f.logf, &slog.HandlerOptions{
+			Level: f.slogLevel,
+		}))
+	} else {
+		f.slog = slog.New(tint.NewHandler(f.logf, &tint.Options{
+			Level: f.slogLevel,
+		}))
 	}
 }
 
@@ -270,7 +285,7 @@ func (f *fetcher) edit(ctx context.Context) error {
 			return err
 		}
 		if string(edited) == f.config {
-			f.logf("No changes made to config.star, not doing anything.")
+			f.logf("No changes made to config.star, exiting.")
 			return nil
 		}
 
@@ -282,7 +297,7 @@ func (f *fetcher) edit(ctx context.Context) error {
 
 		_, err = f.parseConfig(string(edited))
 		if err != nil {
-			f.logf("Edited file is invalid: %v.", err)
+			f.logf("Invalid config.star: %v", err)
 			if f.ask("Do you want to try editing again?", env.Stdin) {
 				continue
 			}
@@ -303,7 +318,7 @@ func (f *fetcher) ask(prompt string, stdin io.Reader) bool {
 		fmt.Printf("%s (y/n): ", prompt)
 		input, err := r.ReadString('\n')
 		if err != nil {
-			f.logf("Error reading input, please try again.")
+			f.logf("Error reading input.")
 			continue
 		}
 
@@ -314,7 +329,7 @@ func (f *fetcher) ask(prompt string, stdin io.Reader) bool {
 		} else if input == "n" || input == "no" {
 			return false
 		}
-		f.logf("Invalid input. Please enter 'y' or 'n'.")
+		f.logf("Invalid input (y/n).")
 	}
 }
 
@@ -381,7 +396,12 @@ func (f *fetcher) run(ctx context.Context) error {
 
 			for {
 				if retry, retryIn := f.fetch(ctx, feed, updates); retry && retries < retryLimit {
-					f.logf("Retrying feed %q in %s (attempt %d/%d)", feed.URL, retryIn, retries, retryLimit)
+					f.slog.Warn("retrying feed",
+						"feed", feed.URL,
+						"retry_in", retryIn,
+						"retries", retries+1,
+						"retry_limit", retryLimit,
+					)
 					time.Sleep(retryIn)
 					retries += 1
 					continue
@@ -414,9 +434,9 @@ func (f *fetcher) run(ctx context.Context) error {
 
 	f.state.Access(f.cleanState)
 
+	f.slog.Debug("fetch finished", "fetched_count", fetchedFeeds.Load(), "all_count", len(f.feeds))
+
 	if f.dry {
-		f.logf("Fetched feeds: %d.\nAll feeds: %d.", fetchedFeeds.Load(), len(f.feeds))
-		f.logf("Not reporting stats or saving state.")
 		return nil
 	}
 
@@ -427,7 +447,7 @@ func (f *fetcher) run(ctx context.Context) error {
 		}
 		f.stats.Access(func(s *stats) {
 			if err := f.uploadStatsToSheets(ctx, token, s); err != nil {
-				f.logf("Failed to upload stats to Google Sheets: %v", err)
+				f.slog.Warn("failed to upload stats", "error", err)
 			}
 		})
 	}
@@ -445,7 +465,7 @@ func (f *fetcher) cleanState(s map[string]*feedState) {
 			}
 		}
 		if !found {
-			f.dlogf("Removing state for non-existent feed %q.", url)
+			f.slog.Debug("removing state, feed no longer exists", "feed", url)
 			delete(s, url)
 		}
 	}

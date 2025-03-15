@@ -71,7 +71,7 @@ func TestFetcherMain(t *testing.T) {
 			Env: map[string]string{
 				"EDITOR": "true",
 			},
-			WantInStderr: "No changes made to config.star, not doing anything.",
+			WantInStderr: "No changes made to config.star, exiting.",
 		},
 		"edit without defined editor": {
 			Args:    []string{"-edit"},
