@@ -42,7 +42,7 @@ func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *gofeed.Item
 	// Telegram Bot API rate limit.
 	if !exists {
 		f.slog.Debug("initializing state", "feed", fd.URL)
-		f.state.Access(func(s map[string]*feedState) {
+		f.state.WriteAccess(func(s map[string]*feedState) {
 			s[fd.URL] = new(feedState)
 			state = s[fd.URL]
 		})
@@ -78,7 +78,7 @@ func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *gofeed.Item
 	// Ignore unmodified feeds and report an error otherwise.
 	if res.StatusCode == http.StatusNotModified {
 		f.slog.Debug("unmodified feed", "feed", fd.URL)
-		f.stats.Access(func(s *stats) {
+		f.stats.WriteAccess(func(s *stats) {
 			s.NotModifiedFeeds += 1
 		})
 		state.LastUpdated = time.Now()
@@ -164,7 +164,7 @@ func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *gofeed.Item
 	state.LastError = ""
 	state.FetchCount += 1
 
-	f.stats.Access(func(s *stats) {
+	f.stats.WriteAccess(func(s *stats) {
 		s.TotalItemsParsed += len(feed.Items)
 		s.SuccessFeeds += 1
 		s.TotalFetchTime += time.Since(startTime)
@@ -222,7 +222,7 @@ func (f *fetcher) applyRule(rule *starlark.Function, item *gofeed.Item) bool {
 }
 
 func (f *fetcher) handleFetchFailure(ctx context.Context, state *feedState, url string, err error) {
-	f.stats.Access(func(s *stats) {
+	f.stats.WriteAccess(func(s *stats) {
 		s.FailedFeeds += 1
 	})
 

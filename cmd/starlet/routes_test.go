@@ -15,7 +15,7 @@ import (
 
 	"go.astrophena.name/base/request"
 	"go.astrophena.name/base/testutil"
-	"go.astrophena.name/tools/internal/web"
+	"go.astrophena.name/base/web"
 )
 
 func TestHealth(t *testing.T) {

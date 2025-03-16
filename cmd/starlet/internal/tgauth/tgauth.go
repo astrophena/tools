@@ -20,7 +20,7 @@ import (
 	"strings"
 	"time"
 
-	"go.astrophena.name/tools/internal/web"
+	"go.astrophena.name/base/web"
 )
 
 type ctxKey string

@@ -101,7 +101,7 @@ func TestFetchWithIfModifiedSinceAndETag(t *testing.T) {
 
 	testutil.AssertEqual(t, state1[atomFeedURL].LastModified, ifModifiedSince)
 	testutil.AssertEqual(t, state1[atomFeedURL].ETag, eTag)
-	f.stats.Access(func(s *stats) {
+	f.stats.ReadAccess(func(s *stats) {
 		testutil.AssertEqual(t, s.NotModifiedFeeds, 0)
 	})
 
@@ -114,7 +114,7 @@ func TestFetchWithIfModifiedSinceAndETag(t *testing.T) {
 
 	testutil.AssertEqual(t, state2[atomFeedURL].LastModified, ifModifiedSince)
 	testutil.AssertEqual(t, state2[atomFeedURL].ETag, eTag)
-	f.stats.Access(func(s *stats) {
+	f.stats.ReadAccess(func(s *stats) {
 		testutil.AssertEqual(t, s.NotModifiedFeeds, 1)
 	})
 }

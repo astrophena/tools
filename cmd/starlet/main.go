@@ -26,13 +26,13 @@ import (
 	"go.astrophena.name/base/request"
 	"go.astrophena.name/base/syncx"
 	"go.astrophena.name/base/version"
+	"go.astrophena.name/base/web"
 	"go.astrophena.name/tools/cmd/starlet/internal/convcache"
 	"go.astrophena.name/tools/cmd/starlet/internal/tgauth"
 	"go.astrophena.name/tools/internal/api/github/gist"
 	"go.astrophena.name/tools/internal/api/google/gemini"
 	"go.astrophena.name/tools/internal/starlark/interpreter"
 	"go.astrophena.name/tools/internal/util/logstream"
-	"go.astrophena.name/tools/internal/web"
 
 	"go.starlark.net/starlarkstruct"
 )

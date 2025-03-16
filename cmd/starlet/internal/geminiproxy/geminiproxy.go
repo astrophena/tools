@@ -11,8 +11,8 @@ import (
 	"net/http"
 	"strings"
 
+	"go.astrophena.name/base/web"
 	"go.astrophena.name/tools/internal/api/google/gemini"
-	"go.astrophena.name/tools/internal/web"
 )
 
 // Handler returns a HTTP handler to proxy Gemini API requests.

@@ -14,7 +14,7 @@ import (
 	"go.astrophena.name/base/cli"
 	"go.astrophena.name/base/request"
 	"go.astrophena.name/base/version"
-	"go.astrophena.name/tools/internal/web"
+	"go.astrophena.name/base/web"
 )
 
 var errNoHost = errors.New("host hasn't set; pass it with -host flag or HOST environment variable")

@@ -12,9 +12,9 @@ import (
 	"os"
 	"strings"
 
+	"go.astrophena.name/base/web"
 	"go.astrophena.name/tools/cmd/starlet/internal/geminiproxy"
 	"go.astrophena.name/tools/cmd/starlet/internal/tgauth"
-	"go.astrophena.name/tools/internal/web"
 )
 
 var (

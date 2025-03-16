@@ -14,7 +14,7 @@ import (
 
 	"go.astrophena.name/base/cli"
 	"go.astrophena.name/base/testutil"
-	"go.astrophena.name/tools/internal/web"
+	"go.astrophena.name/base/web"
 )
 
 func TestSetWebhook(t *testing.T) {

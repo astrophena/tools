@@ -20,8 +20,8 @@ import (
 	"go.astrophena.name/base/cli/clitest"
 	"go.astrophena.name/base/testutil"
 	"go.astrophena.name/base/txtar"
+	"go.astrophena.name/base/web"
 	"go.astrophena.name/tools/internal/api/github/gist"
-	"go.astrophena.name/tools/internal/web"
 )
 
 var update = flag.Bool("update", false, "update golden files in testdata")
@@ -84,7 +84,7 @@ func TestFetcherMain(t *testing.T) {
 			Args:               []string{"-reenable", "https://example.com/disabled.xml"},
 			WantNothingPrinted: true,
 			CheckFunc: func(t *testing.T, f *fetcher) {
-				f.state.RAccess(func(s map[string]*feedState) {
+				f.state.ReadAccess(func(s map[string]*feedState) {
 					testutil.AssertEqual(t, s["https://example.com/disabled.xml"].Disabled, false)
 				})
 			},

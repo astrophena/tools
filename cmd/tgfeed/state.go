@@ -64,7 +64,7 @@ type feedState struct {
 }
 
 func (f *fetcher) getState(url string) (state *feedState, exists bool) {
-	f.state.RAccess(func(s map[string]*feedState) {
+	f.state.ReadAccess(func(s map[string]*feedState) {
 		state, exists = s[url]
 	})
 	return
@@ -151,7 +151,7 @@ func (f *fetcher) saveToGist(ctx context.Context) error {
 		state []byte
 		err   error
 	)
-	f.state.RAccess(func(s map[string]*feedState) {
+	f.state.ReadAccess(func(s map[string]*feedState) {
 		state, err = json.MarshalIndent(s, "", "  ")
 	})
 	if err != nil {

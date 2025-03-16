@@ -423,7 +423,7 @@ func (f *fetcher) run(ctx context.Context) error {
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
 
-	f.stats.Access(func(s *stats) {
+	f.stats.WriteAccess(func(s *stats) {
 		s.Duration = time.Since(s.StartTime)
 		s.TotalFeeds = len(f.feeds)
 		if s.SuccessFeeds > 0 {
@@ -432,7 +432,7 @@ func (f *fetcher) run(ctx context.Context) error {
 		s.MemoryUsage = m.Alloc
 	})
 
-	f.state.Access(f.cleanState)
+	f.state.WriteAccess(f.cleanState)
 
 	f.slog.Debug("fetch finished", "fetched_count", fetchedFeeds.Load(), "all_count", len(f.feeds))
 
@@ -445,7 +445,7 @@ func (f *fetcher) run(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		f.stats.Access(func(s *stats) {
+		f.stats.ReadAccess(func(s *stats) {
 			if err := f.uploadStatsToSheets(ctx, token, s); err != nil {
 				f.slog.Warn("failed to upload stats", "error", err)
 			}

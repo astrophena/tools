@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"go.astrophena.name/tools/internal/web"
+	"go.astrophena.name/base/web"
 )
 
 // Handler returns an HTTP handler that serves a JSON Feed of GitHub
