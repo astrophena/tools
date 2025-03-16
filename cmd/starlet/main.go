@@ -69,9 +69,12 @@ func (e *engine) Run(ctx context.Context) error {
 	e.tgSecret = cmp.Or(env.Getenv("TG_SECRET"), e.tgSecret)
 	e.tgToken = cmp.Or(env.Getenv("TG_TOKEN"), e.tgToken)
 
-	// Initialize internal state.
 	e.stderr = env.Stderr
-	if err := e.init.Get(e.doInit); err != nil {
+
+	// Initialize internal state.
+	if err := e.init.Get(func() error {
+		return e.doInit(ctx)
+	}); err != nil {
 		return err
 	}
 
@@ -165,7 +168,7 @@ const (
 	selfPingInterval = 10 * time.Minute
 )
 
-func (e *engine) doInit() error {
+func (e *engine) doInit(ctx context.Context) error {
 	if e.httpc == nil {
 		e.httpc = &http.Client{
 			// Increase timeout to properly handle Gemini API response times.
@@ -216,11 +219,11 @@ func (e *engine) doInit() error {
 		TTL:       authSessionTTL,
 	}
 
-	if err := e.loadFromGist(context.Background()); err != nil {
+	if err := e.loadFromGist(ctx); err != nil {
 		return err
 	}
 
-	me, err := e.getMe()
+	me, err := e.getMe(ctx)
 	if err != nil {
 		return err
 	}
@@ -233,8 +236,8 @@ func (e *engine) doInit() error {
 	return nil
 }
 
-func (e *engine) getMe() (getMeResponse, error) {
-	return request.Make[getMeResponse](context.Background(), request.Params{
+func (e *engine) getMe(ctx context.Context) (getMeResponse, error) {
+	return request.Make[getMeResponse](ctx, request.Params{
 		Method:     http.MethodGet,
 		URL:        tgAPI + "/bot" + e.tgToken + "/getMe",
 		HTTPClient: e.httpc,
