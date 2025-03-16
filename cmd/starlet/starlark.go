@@ -57,7 +57,7 @@ func (e *engine) predeclared() starlark.StringDict {
 				"convert": starlark.NewBuiltin("markdown.convert", starlarkMarkdownConvert),
 			},
 		},
-		"module":   starlark.NewBuiltin("struct", starlarkstruct.MakeModule),
+		"module":   starlark.NewBuiltin("module", starlarkstruct.MakeModule),
 		"struct":   starlark.NewBuiltin("struct", starlarkstruct.Make),
 		"telegram": tgstarlark.Module(e.tgToken, e.httpc),
 		"time":     starlarktime.Module,
