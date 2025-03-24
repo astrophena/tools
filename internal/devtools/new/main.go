@@ -7,34 +7,28 @@ package main
 
 import (
 	_ "embed"
-	"errors"
 	"flag"
 	"fmt"
-	"io/fs"
 	"log"
 	"os"
 	"path/filepath"
 
 	"go.astrophena.name/base/txtar"
+	"go.astrophena.name/tools/internal/devtools"
 )
 
 //go:embed template.txtar
 var templateTxtar []byte
 
 func main() {
+	devtools.EnsureRoot()
+
 	log.SetFlags(0)
 
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: go tool new [flags] [name]\n")
 	}
 	flag.Parse()
-
-	wd := try(os.Getwd())
-	if _, err := os.Stat(filepath.Join(wd, "go.mod")); errors.Is(err, fs.ErrNotExist) {
-		log.Fatal("Are you at repo root?")
-	} else if err != nil {
-		log.Fatal(err)
-	}
 
 	if len(flag.Args()) == 0 {
 		flag.Usage()
@@ -47,19 +41,12 @@ func main() {
 		log.Fatalf("%s already does exist", name)
 	}
 
-	must(os.MkdirAll(path, 0o755))
-	ar := txtar.Parse(templateTxtar)
-	must(txtar.Extract(ar, path))
-	log.Printf("%s successfully created.", name)
-}
-
-func try[T any](val T, err error) T {
-	must(err)
-	return val
-}
-
-func must(err error) {
-	if err != nil {
+	if err := os.MkdirAll(path, 0o755); err != nil {
 		log.Fatal(err)
 	}
+	ar := txtar.Parse(templateTxtar)
+	if err := txtar.Extract(ar, path); err != nil {
+		log.Fatal(err)
+	}
+	log.Printf("%s successfully created.", name)
 }

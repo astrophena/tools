@@ -13,6 +13,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"go.astrophena.name/tools/internal/devtools"
 )
 
 var templates = map[string]string{
@@ -64,6 +66,8 @@ func isExcluded(path string) bool {
 }
 
 func main() {
+	devtools.EnsureRoot()
+
 	if err := filepath.WalkDir(".", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
