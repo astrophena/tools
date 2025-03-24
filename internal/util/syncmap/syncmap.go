@@ -56,7 +56,7 @@ func (m *Map[K, V]) LoadOrStore(key K, value V) (actual V, loaded bool) {
 }
 
 // LoadAndDelete deletes the value for a key, returning the previous value if
-// any.  The loaded result reports whether the key was present.
+// any. The loaded result reports whether the key was present.
 func (m *Map[K, V]) LoadAndDelete(key K) (value V, loaded bool) {
 	actualInterface, loaded := m.m.LoadAndDelete(key)
 	if !loaded {
