@@ -12,10 +12,10 @@ as a periodic job.
 
 Where <mode flag> is one of the following commands:
 
-- -run: Fetch feeds and send updates to Telegram.
-- -edit: Open the config.star configuration file in your $EDITOR for editing.
-- -feeds: List all configured feeds and their status.
-- -reenable: Re-enable a previously disabled feed by its URL.
+  - -run: Fetch feeds and send updates to Telegram.
+  - -edit: Open the config.star configuration file in your $EDITOR for editing.
+  - -feeds: List all configured feeds and their status.
+  - -reenable: Re-enable a previously disabled feed by its URL.
 
 # Environment Variables
 
