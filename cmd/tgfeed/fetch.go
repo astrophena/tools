@@ -12,7 +12,9 @@ import (
 	"io"
 	"net/http"
 	urlpkg "net/url"
+	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"go.astrophena.name/base/request"
@@ -244,6 +246,10 @@ func (f *fetcher) handleFetchFailure(ctx context.Context, state *feedState, url 
 	}
 }
 
+var nonAlphaNumRe = sync.OnceValue(func() *regexp.Regexp {
+	return regexp.MustCompile("[^a-zA-Z0-9/]+")
+})
+
 func (f *fetcher) sendUpdate(ctx context.Context, item *gofeed.Item) {
 	title := item.Title
 	if item.Title == "" {
@@ -263,7 +269,7 @@ func (f *fetcher) sendUpdate(ctx context.Context, item *gofeed.Item) {
 		case "www.youtube.com":
 			msg += " #youtube" // YouTube
 		default:
-			msg += " #" + u.Hostname()
+			msg += " #" + nonAlphaNumRe().ReplaceAllString(u.Hostname(), "")
 		}
 	}
 
