@@ -258,7 +258,7 @@ func (f *fetcher) sendUpdate(ctx context.Context, item *gofeed.Item) {
 
 	if u, err := urlpkg.Parse(item.Link); err == nil {
 		switch u.Hostname() {
-		case "tg.i-c-a.su":
+		case "t.me":
 			msg += " #tg" // Telegram
 		case "www.youtube.com":
 			msg += " #youtube" // YouTube
