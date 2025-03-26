@@ -7,7 +7,7 @@
         []
       ]
     },
-    "text": "🔗 \u003ca href=\"https://example.com/extensions\"\u003eItem with extensions\u003c/a\u003e"
+    "text": "🔗 \u003ca href=\"https://example.com/extensions\"\u003eItem with extensions\u003c/a\u003e #example.com"
   },
   {
     "chat_id": "test",
@@ -17,6 +17,6 @@
         []
       ]
     },
-    "text": "🔗 \u003ca href=\"https://example.com/keep\"\u003eKeep this item\u003c/a\u003e"
+    "text": "🔗 \u003ca href=\"https://example.com/keep\"\u003eKeep this item\u003c/a\u003e #example.com"
   }
 ]

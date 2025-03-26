@@ -11,6 +11,7 @@ import (
 	"html"
 	"io"
 	"net/http"
+	urlpkg "net/url"
 	"strings"
 	"time"
 
@@ -236,6 +237,7 @@ func (f *fetcher) handleFetchFailure(ctx context.Context, state *feedState, url 
 	if state.ErrorCount >= errorThreshold {
 		err = fmt.Errorf("fetching feed %q failed after %d previous attempts: %v; feed was disabled, to reenable it run 'tgfeed -reenable %q'", url, state.ErrorCount, err, url)
 		state.Disabled = true
+
 		if err := f.errNotify(ctx, err); err != nil {
 			f.slog.Warn("failed to send error notification", "error", err)
 		}
@@ -253,6 +255,17 @@ func (f *fetcher) sendUpdate(ctx context.Context, item *gofeed.Item) {
 		item.Link,
 		html.EscapeString(title),
 	)
+
+	if u, err := urlpkg.Parse(item.Link); err == nil {
+		switch u.Hostname() {
+		case "tg.i-c-a.su":
+			msg += " #tg" // Telegram
+		case "www.youtube.com":
+			msg += " #youtube" // YouTube
+		default:
+			msg += " #" + u.Hostname()
+		}
+	}
 
 	inlineKeyboardButtons := []inlineKeyboardButton{}
 
