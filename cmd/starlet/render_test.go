@@ -5,7 +5,6 @@
 package main
 
 import (
-	"context"
 	"net/http"
 	"strings"
 	"sync/atomic"
@@ -53,7 +52,7 @@ func TestSetWebhook(t *testing.T) {
 			e := testEngine(t, tm)
 			e.host = tc.host
 
-			err := e.setWebhook(context.Background())
+			err := e.setWebhook(t.Context())
 
 			if tc.wantErr != nil {
 				if err == nil || err.Error() != tc.wantErr.Error() {

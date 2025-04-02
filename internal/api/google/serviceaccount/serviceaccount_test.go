@@ -5,7 +5,6 @@
 package serviceaccount
 
 import (
-	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
@@ -133,7 +132,7 @@ func TestAccessToken(t *testing.T) {
 	}
 
 	// Obtain an access token using the mock server.
-	token, err := key.AccessToken(context.Background(), ts.Client(), "scope1", "scope2")
+	token, err := key.AccessToken(t.Context(), ts.Client(), "scope1", "scope2")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,7 +163,7 @@ func TestAccessToken_HTTPError(t *testing.T) {
 	}
 
 	// Try to obtain an access token, expecting an error.
-	_, err = key.AccessToken(context.Background(), http.DefaultClient, "scope1", "scope2")
+	_, err = key.AccessToken(t.Context(), http.DefaultClient, "scope1", "scope2")
 	if err == nil {
 		t.Fatal("Expected an error, but got nil")
 	}

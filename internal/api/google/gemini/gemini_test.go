@@ -5,7 +5,6 @@
 package gemini
 
 import (
-	"context"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -43,7 +42,7 @@ func TestGenerateContent(t *testing.T) {
 
 	const prompt = "Write a poem about broken door handle."
 
-	content, err := c.GenerateContent(context.Background(), "gemini-1.5-flash", GenerateContentParams{
+	content, err := c.GenerateContent(t.Context(), "gemini-1.5-flash", GenerateContentParams{
 		Contents: []*Content{{Parts: []*Part{{Text: prompt}}}},
 	})
 	if err != nil {
@@ -55,7 +54,7 @@ func TestGenerateContent(t *testing.T) {
 
 func TestEmptyModel(t *testing.T) {
 	c := &Client{}
-	_, err := c.GenerateContent(context.Background(), "", GenerateContentParams{})
+	_, err := c.GenerateContent(t.Context(), "", GenerateContentParams{})
 	if err == nil {
 		t.Fatalf("GenerateContent should fail when called with empty model")
 	}

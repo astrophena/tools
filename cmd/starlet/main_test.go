@@ -82,7 +82,7 @@ func TestListenAndServe(t *testing.T) {
 		ready <- struct{}{}
 	}
 	errCh := make(chan error, 1)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 
 	var stdout, stderr bytes.Buffer
 

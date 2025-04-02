@@ -6,7 +6,6 @@ package main
 
 import (
 	"bytes"
-	"context"
 	_ "embed"
 	"encoding/json"
 	"net/http"
@@ -22,7 +21,7 @@ func TestHealth(t *testing.T) {
 	t.Parallel()
 
 	e := testEngine(t, testMux(t, nil))
-	health, err := request.Make[web.HealthResponse](context.Background(), request.Params{
+	health, err := request.Make[web.HealthResponse](t.Context(), request.Params{
 		Method:     http.MethodGet,
 		URL:        "/health",
 		HTTPClient: testutil.MockHTTPClient(e.mux),

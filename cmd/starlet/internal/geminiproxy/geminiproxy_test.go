@@ -6,7 +6,6 @@ package geminiproxy
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -104,7 +103,7 @@ func TestHandler(t *testing.T) {
 				body = bytes.NewReader(b)
 			}
 
-			ctx := cli.WithEnv(context.Background(), &cli.Env{
+			ctx := cli.WithEnv(t.Context(), &cli.Env{
 				Stderr: logger.Logf(t.Logf),
 			})
 

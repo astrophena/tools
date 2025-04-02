@@ -5,7 +5,6 @@
 package main
 
 import (
-	"context"
 	"errors"
 	"flag"
 	"io/fs"
@@ -120,7 +119,7 @@ This is bla bla bla.
 				Stderr: logger.Logf(t.Logf),
 			}
 
-			r := httptest.NewRequestWithContext(cli.WithEnv(context.Background(), env), http.MethodGet, tc.path, nil)
+			r := httptest.NewRequestWithContext(cli.WithEnv(t.Context(), env), http.MethodGet, tc.path, nil)
 			w := httptest.NewRecorder()
 			e.ServeHTTP(w, r)
 

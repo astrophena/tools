@@ -6,7 +6,6 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -80,7 +79,7 @@ func TestRun(t *testing.T) {
 				Stdout: &stdout,
 				Stderr: &stderr,
 			}
-			err := cli.Run(cli.WithEnv(context.Background(), env), cli.AppFunc(run))
+			err := cli.Run(cli.WithEnv(t.Context(), env), cli.AppFunc(run))
 
 			// Don't use && because we want to trap all cases where err is
 			// nil.

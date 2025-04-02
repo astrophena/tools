@@ -5,7 +5,6 @@
 package gist
 
 import (
-	"context"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -31,7 +30,7 @@ func TestGet(t *testing.T) {
 	// See https://gist.github.com/astrophena/98c0eeb72ee0bdba33c24d1e19780081 for
 	// the gist we are testing against.
 
-	gist, err := c.Get(context.Background(), "98c0eeb72ee0bdba33c24d1e19780081")
+	gist, err := c.Get(t.Context(), "98c0eeb72ee0bdba33c24d1e19780081")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,7 +71,7 @@ func TestUpdate(t *testing.T) {
 		c.Token = os.Getenv("GITHUB_TOKEN")
 	}
 
-	gist, err := c.Get(context.Background(), id)
+	gist, err := c.Get(t.Context(), id)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +84,7 @@ func TestUpdate(t *testing.T) {
 
 	// Add a file and update our gist.
 	gist.Files["bar.txt"] = File{Content: "foo\n"}
-	gist, err = c.Update(context.Background(), id, gist)
+	gist, err = c.Update(t.Context(), id, gist)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -5,7 +5,6 @@
 package main
 
 import (
-	"context"
 	"net/http"
 	"path/filepath"
 	"testing"
@@ -32,7 +31,7 @@ func TestGitHubNotificationsFeed(t *testing.T) {
 		Transport: &roundTripper{f.httpc.Transport, rec.Client().Transport},
 	}
 
-	if err := f.run(cli.WithEnv(context.Background(), &cli.Env{
+	if err := f.run(cli.WithEnv(t.Context(), &cli.Env{
 		Stderr: logger.Logf(t.Logf),
 	})); err != nil {
 		t.Fatal(err)
