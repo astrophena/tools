@@ -5,7 +5,6 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"os"
@@ -50,7 +49,7 @@ func TestHandleTelegramWebhook(t *testing.T) {
 		tm.gist = txtarToGist(t, readFile(t, match))
 		e := testEngine(t, tm)
 
-		_, err = request.Make[any](context.Background(), request.Params{
+		_, err = request.Make[request.IgnoreResponse](t.Context(), request.Params{
 			Method: http.MethodPost,
 			URL:    "/telegram",
 			Body:   upd,

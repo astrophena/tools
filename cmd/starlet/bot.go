@@ -212,7 +212,7 @@ func (e *engine) reportError(ctx context.Context, chatID int64, w http.ResponseW
 	}
 	msg.Message = tgmarkup.FromMarkdown(fmt.Sprintf(errTmpl, errMsg))
 
-	_, sendErr := request.Make[any](ctx, request.Params{
+	_, sendErr := request.Make[request.IgnoreResponse](ctx, request.Params{
 		Method:     http.MethodPost,
 		URL:        "https://api.telegram.org/bot" + e.tgToken + "/sendMessage",
 		Body:       msg,

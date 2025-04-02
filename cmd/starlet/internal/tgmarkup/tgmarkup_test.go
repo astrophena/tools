@@ -6,8 +6,6 @@ package tgmarkup
 
 import (
 	"bytes"
-	"context"
-	"encoding/json"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -62,7 +60,7 @@ func TestFromMarkdown(t *testing.T) {
 		msg := message{ChatID: chatID}
 		msg.Message = FromMarkdown(string(b))
 
-		_, err = request.Make[json.RawMessage](context.Background(), request.Params{
+		_, err = request.Make[request.IgnoreResponse](t.Context(), request.Params{
 			Method:     http.MethodPost,
 			URL:        "https://api.telegram.org/bot" + token + "/sendMessage",
 			Body:       msg,

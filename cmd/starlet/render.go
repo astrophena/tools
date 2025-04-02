@@ -28,7 +28,7 @@ func (e *engine) setWebhook(ctx context.Context) error {
 		Host:   e.host,
 		Path:   "/telegram",
 	}
-	_, err := request.Make[any](ctx, request.Params{
+	_, err := request.Make[request.IgnoreResponse](ctx, request.Params{
 		Method: http.MethodPost,
 		URL:    "https://api.telegram.org/bot" + e.tgToken + "/setWebhook",
 		Body: map[string]string{

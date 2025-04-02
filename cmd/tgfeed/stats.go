@@ -79,7 +79,7 @@ func (f *fetcher) uploadStatsToSheets(ctx context.Context, token string, s *stat
 }
 
 func (f *fetcher) makeSheetsRequest(ctx context.Context, method, path, token string, body any) error {
-	_, err := request.Make[any](ctx, request.Params{
+	_, err := request.Make[request.IgnoreResponse](ctx, request.Params{
 		Method: method,
 		URL:    sheetsAPI + path,
 		Body:   body,

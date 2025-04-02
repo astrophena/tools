@@ -330,7 +330,7 @@ type inlineKeyboardButton struct {
 }
 
 func (f *fetcher) makeTelegramRequest(ctx context.Context, method string, args any) error {
-	if _, err := request.Make[any](ctx, request.Params{
+	if _, err := request.Make[request.IgnoreResponse](ctx, request.Params{
 		Method: http.MethodPost,
 		URL:    tgAPI + "/bot" + f.tgToken + "/" + method,
 		Body:   args,
