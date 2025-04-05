@@ -295,7 +295,7 @@ func (f *fetcher) edit(ctx context.Context) error {
 			return nil
 		}
 
-		_, err = f.parseConfig(string(edited))
+		_, err = f.parseConfig(ctx, string(edited))
 		if err != nil {
 			f.logf("Invalid config.star: %v", err)
 			if f.ask("Do you want to try editing again?", env.Stdin) {

@@ -14,9 +14,9 @@ import (
 
 	"go.astrophena.name/base/syncx"
 	"go.astrophena.name/tools/internal/api/github/gist"
+	"go.astrophena.name/tools/internal/starlark/interpreter"
 
 	"go.starlark.net/starlark"
-	"go.starlark.net/syntax"
 )
 
 // Feed state.
@@ -89,7 +89,7 @@ func (f *fetcher) loadFromGist(ctx context.Context) error {
 	}
 	f.config = config.Content
 
-	f.feeds, err = f.parseConfig(f.config)
+	f.feeds, err = f.parseConfig(ctx, f.config)
 	if err != nil {
 		return err
 	}
@@ -106,20 +106,25 @@ func (f *fetcher) loadFromGist(ctx context.Context) error {
 	return nil
 }
 
-func (f *fetcher) parseConfig(config string) ([]*feed, error) {
-	globals, err := starlark.ExecFileOptions(
-		&syntax.FileOptions{
-			TopLevelControl: true,
-		},
-		&starlark.Thread{
-			Print: func(_ *starlark.Thread, msg string) { f.logf("%s", msg) },
-		},
-		"config.star",
-		config,
-		starlark.StringDict{
+func (f *fetcher) parseConfig(ctx context.Context, config string) ([]*feed, error) {
+	intr := &interpreter.Interpreter{
+		Predeclared: starlark.StringDict{
 			"feed": starlark.NewBuiltin("feed", feedBuiltin),
 		},
-	)
+		Packages: map[string]interpreter.Loader{
+			interpreter.MainPkg: interpreter.MemoryLoader(map[string]string{
+				"config.star": config,
+			}),
+		},
+		Logger: func(file string, line int, message string) {
+			f.slog.Info(message, "file", file, "line", line)
+		},
+	}
+	if err := intr.Init(ctx); err != nil {
+		return nil, err
+	}
+
+	globals, err := intr.LoadModule(ctx, interpreter.MainPkg, "config.star")
 	if err != nil {
 		return nil, err
 	}
