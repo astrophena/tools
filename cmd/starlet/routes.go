@@ -5,6 +5,7 @@
 package main
 
 import (
+	"crypto/subtle"
 	_ "embed"
 	"fmt"
 	"html"
@@ -89,7 +90,7 @@ func (e *engine) handleRoot(w http.ResponseWriter, r *http.Request) {
 
 func (e *engine) handleReload(w http.ResponseWriter, r *http.Request) {
 	tok := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-	if tok != e.reloadToken {
+	if subtle.ConstantTimeCompare([]byte(tok), []byte(e.reloadToken)) != 1 {
 		web.RespondJSONError(w, r, web.ErrUnauthorized)
 		return
 	}
