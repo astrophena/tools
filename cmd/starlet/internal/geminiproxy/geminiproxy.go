@@ -6,6 +6,7 @@
 package geminiproxy
 
 import (
+	"crypto/subtle"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -30,7 +31,7 @@ type handler struct {
 
 func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	tok := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-	if tok != h.token {
+	if subtle.ConstantTimeCompare([]byte(tok), []byte(h.token)) != 1 {
 		web.RespondJSONError(w, r, web.ErrUnauthorized)
 		return
 	}
