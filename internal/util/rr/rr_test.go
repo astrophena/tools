@@ -5,6 +5,7 @@
 package rr
 
 import (
+	"bytes"
 	"errors"
 	"io"
 	"net/http"
@@ -63,6 +64,17 @@ func hideSecretBody(r *http.Request) error {
 	return nil
 }
 
+func doNothing(b *bytes.Buffer) error {
+	return nil
+}
+
+func doRefresh(b *bytes.Buffer) error {
+	s := b.String()
+	b.Reset()
+	_, _ = b.WriteString(s)
+	return nil
+}
+
 func TestRecordReplay(t *testing.T) {
 	dir := t.TempDir()
 	file := dir + "/rr"
@@ -96,8 +108,9 @@ func TestRecordReplay(t *testing.T) {
 		} else {
 			t.Log("REPLAYING")
 		}
-		rr.Scrub(dropPort, dropSecretHeader)
-		rr.Scrub(hideSecretBody)
+		rr.ScrubReq(dropPort, dropSecretHeader)
+		rr.ScrubReq(hideSecretBody)
+		rr.ScrubResp(doNothing, doRefresh)
 
 		mustNewRequest := func(method, url string, body io.Reader) *http.Request {
 			req, err := http.NewRequest(method, url, body)
@@ -170,22 +183,34 @@ var badResponseTrace = []byte("httprr trace v1\n" +
 	"\r\n")
 
 func TestErrors(t *testing.T) {
+	dir := t.TempDir()
+
+	makeTmpFile := func() string {
+		f, err := os.CreateTemp(dir, "TestErrors")
+		if err != nil {
+			t.Fatalf("failed to create tmp file for test: %v", err)
+		}
+		name := f.Name()
+		f.Close()
+		return name
+	}
+
 	// -httprecord regexp parsing
 	*record = "+"
-	if _, err := Open(os.DevNull, nil); err == nil || !strings.Contains(err.Error(), "invalid -httprecord flag") {
+	if _, err := Open(makeTmpFile(), nil); err == nil || !strings.Contains(err.Error(), "invalid -httprecord flag") {
 		t.Errorf("did not diagnose bad -httprecord: err = %v", err)
 	}
 	*record = ""
 
 	// invalid httprr trace
-	if _, err := Open(os.DevNull, nil); err == nil || !strings.Contains(err.Error(), "not an httprr trace") {
+	if _, err := Open(makeTmpFile(), nil); err == nil || !strings.Contains(err.Error(), "not an httprr trace") {
 		t.Errorf("did not diagnose invalid httprr trace: err = %v", err)
 	}
 
 	// corrupt httprr trace
-	dir := t.TempDir()
-	os.WriteFile(dir+"/rr", []byte("httprr trace v1\ngarbage\n"), 0666)
-	if _, err := Open(dir+"/rr", nil); err == nil || !strings.Contains(err.Error(), "corrupt httprr trace") {
+	corruptTraceFile := makeTmpFile()
+	os.WriteFile(corruptTraceFile, []byte("httprr trace v1\ngarbage\n"), 0666)
+	if _, err := Open(corruptTraceFile, nil); err == nil || !strings.Contains(err.Error(), "corrupt httprr trace") {
 		t.Errorf("did not diagnose invalid httprr trace: err = %v", err)
 	}
 
@@ -200,7 +225,7 @@ func TestErrors(t *testing.T) {
 	}
 
 	// error reading body
-	rr, err := create(os.DevNull, nil)
+	rr, err := create(makeTmpFile(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -208,21 +233,32 @@ func TestErrors(t *testing.T) {
 		t.Errorf("did not report failure from io.ReadAll(body): err = %v", err)
 	}
 
-	// error during scrub
-	rr.Scrub(func(*http.Request) error { return errors.New("SCRUB ERROR") })
+	// error during request scrub
+	rr.ScrubReq(func(*http.Request) error { return errors.New("SCRUB ERROR") })
+	if _, err := rr.Client().Get("http://127.0.0.1/nonexist"); err == nil || !strings.Contains(err.Error(), "SCRUB ERROR") {
+		t.Errorf("did not report failure from scrub: err = %v", err)
+	}
+	rr.Close()
+
+	// error during response scrub
+	rr.ScrubResp(func(*bytes.Buffer) error { return errors.New("SCRUB ERROR") })
 	if _, err := rr.Client().Get("http://127.0.0.1/nonexist"); err == nil || !strings.Contains(err.Error(), "SCRUB ERROR") {
 		t.Errorf("did not report failure from scrub: err = %v", err)
 	}
 	rr.Close()
 
 	// error during rkey.WriteProxy
-	rr, err = create(os.DevNull, nil)
+	rr, err = create(makeTmpFile(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	rr.Scrub(func(req *http.Request) error {
+	rr.ScrubReq(func(req *http.Request) error {
 		req.URL = nil
 		req.Host = ""
+		return nil
+	})
+	rr.ScrubResp(func(b *bytes.Buffer) error {
+		b.Reset()
 		return nil
 	})
 	if _, err := rr.Client().Get("http://127.0.0.1/nonexist"); err == nil || !strings.Contains(err.Error(), "no Host or URL set") {
@@ -231,7 +267,7 @@ func TestErrors(t *testing.T) {
 	rr.Close()
 
 	// error during resp.Write
-	rr, err = create(os.DevNull, badRespTransport{})
+	rr, err = create(makeTmpFile(), badRespTransport{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -243,16 +279,16 @@ func TestErrors(t *testing.T) {
 	// error during Write logging request
 	srv := httptest.NewServer(http.HandlerFunc(always555))
 	defer srv.Close()
-	rr, err = create(os.DevNull, http.DefaultTransport)
+	rr, err = create(makeTmpFile(), http.DefaultTransport)
 	if err != nil {
 		t.Fatal(err)
 	}
-	rr.Scrub(dropPort)
+	rr.ScrubReq(dropPort)
 	rr.record.Close() // cause write error
 	if _, err := rr.Client().Get(srv.URL + "/redirect"); err == nil || !strings.Contains(err.Error(), "file already closed") {
 		t.Errorf("did not report failure from record write: err = %v", err)
 	}
-	rr.broken = errors.New("BROKEN ERROR")
+	rr.writeErr = errors.New("BROKEN ERROR")
 	if _, err := rr.Client().Get(srv.URL + "/redirect"); err == nil || !strings.Contains(err.Error(), "BROKEN ERROR") {
 		t.Errorf("did not report previous write failure: err = %v", err)
 	}
@@ -261,25 +297,28 @@ func TestErrors(t *testing.T) {
 	}
 
 	// error during RoundTrip
-	rr, err = create(os.DevNull, errTransport{errors.New("TRANSPORT ERROR")})
+	rr, err = create(makeTmpFile(), errTransport{errors.New("TRANSPORT ERROR")})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := rr.Client().Get(srv.URL); err == nil || !strings.Contains(err.Error(), "TRANSPORT ERROR") {
 		t.Errorf("did not report failure from transport: err = %v", err)
 	}
+	rr.Close()
 
 	// error during http.ReadResponse: trace is structurally okay but has malformed response inside
-	if err := os.WriteFile(dir+"/rr", badResponseTrace, 0666); err != nil {
+	tmpFile := makeTmpFile()
+	if err := os.WriteFile(tmpFile, badResponseTrace, 0666); err != nil {
 		t.Fatal(err)
 	}
-	rr, err = Open(dir+"/rr", nil)
+	rr, err = Open(tmpFile, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := rr.Client().Get("http://127.0.0.1/myrequest"); err == nil || !strings.Contains(err.Error(), "corrupt httprr trace:") {
 		t.Errorf("did not diagnose invalid httprr trace: err = %v", err)
 	}
+	rr.Close()
 }
 
 type errTransport struct{ err error }

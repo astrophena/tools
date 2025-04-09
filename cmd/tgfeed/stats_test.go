@@ -34,7 +34,7 @@ func TestUploadStatsToSheets(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer rec.Close()
-	rec.Scrub(func(r *http.Request) error {
+	rec.ScrubReq(func(r *http.Request) error {
 		r.URL.Path = strings.ReplaceAll(r.URL.Path, spreadsheetID, defaultSpreadsheetID)
 		r.Header.Del("Authorization")
 		r.Header.Set("Authorization", "Bearer test")
