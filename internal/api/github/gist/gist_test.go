@@ -27,10 +27,10 @@ func TestGet(t *testing.T) {
 		HTTPClient: rec.Client(),
 	}
 
-	// See https://gist.github.com/astrophena/98c0eeb72ee0bdba33c24d1e19780081 for
+	// See https://gist.github.com/astrophena/f32522138ef3493c11301cd020a5fca7 for
 	// the gist we are testing against.
 
-	gist, err := c.Get(t.Context(), "98c0eeb72ee0bdba33c24d1e19780081")
+	gist, err := c.Get(t.Context(), "f32522138ef3493c11301cd020a5fca7")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -38,8 +38,8 @@ func TestGet(t *testing.T) {
 	testutil.AssertEqual(t, len(gist.Files), 1)
 
 	name, file := getFirstFile(gist)
-	testutil.AssertEqual(t, name, "site.go")
-	testutil.AssertEqual(t, strings.HasPrefix(file.Content, "package main"), true)
+	testutil.AssertEqual(t, name, "proxy.go")
+	testutil.AssertEqual(t, strings.HasPrefix(file.Content, "// The proxy binary"), true)
 }
 
 // Updating this test:
@@ -53,7 +53,7 @@ func TestUpdate(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer rec.Close()
-	rec.Scrub(func(r *http.Request) error {
+	rec.ScrubReq(func(r *http.Request) error {
 		r.Header.Del("Authorization")
 		return nil
 	})
@@ -63,9 +63,9 @@ func TestUpdate(t *testing.T) {
 		Token:      "example",
 	}
 
-	// See https://gist.github.com/astrophena/a91d766ec189326040f0a491243a86b1 for
+	// See https://gist.github.com/42263b384c3af501bdace095928345da for
 	// the gist we are testing against.
-	const id = "a91d766ec189326040f0a491243a86b1"
+	const id = "42263b384c3af501bdace095928345da"
 
 	if rec.Recording() {
 		c.Token = os.Getenv("GITHUB_TOKEN")
@@ -76,13 +76,11 @@ func TestUpdate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Initial gist contents.
-	testutil.AssertEqual(t, len(gist.Files), 1)
+	testutil.AssertEqual(t, len(gist.Files), 2)
 	name, file := getFirstFile(gist)
 	testutil.AssertEqual(t, name, "foo.txt")
-	testutil.AssertEqual(t, file.Content, "bar\n")
+	testutil.AssertEqual(t, file.Content, "bar")
 
-	// Add a file and update our gist.
 	gist.Files["bar.txt"] = File{Content: "foo\n"}
 	gist, err = c.Update(t.Context(), id, gist)
 	if err != nil {

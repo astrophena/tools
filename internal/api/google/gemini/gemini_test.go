@@ -28,7 +28,7 @@ func TestGenerateContent(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer rec.Close()
-	rec.Scrub(func(r *http.Request) error {
+	rec.ScrubReq(func(r *http.Request) error {
 		r.Header.Del("x-goog-api-key")
 		return nil
 	})

@@ -44,9 +44,11 @@ func (c *Client) makeRequest(ctx context.Context, method string, id string, gist
 			"X-GitHub-Api-Version": "2022-11-28",
 			"User-Agent":           version.UserAgent(),
 		},
-		Body:       gist,
 		HTTPClient: c.HTTPClient,
 		Scrubber:   c.Scrubber,
+	}
+	if gist != nil {
+		rp.Body = gist
 	}
 	if c.Token != "" {
 		rp.Headers["Authorization"] = "Bearer " + c.Token

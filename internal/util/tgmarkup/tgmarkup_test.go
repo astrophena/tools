@@ -45,10 +45,14 @@ func TestFromMarkdown(t *testing.T) {
 			chatID = os.Getenv("TELEGRAM_CHAT_ID")
 		}
 
-		rec.Scrub(func(r *http.Request) error {
+		rec.ScrubReq(func(r *http.Request) error {
 			r.URL.Path = strings.ReplaceAll(r.URL.Path, token, expunged)
-			body := r.Body.(*rr.Body)
-			body.Data = bytes.ReplaceAll(body.Data, []byte(chatID), []byte(expungedChatID))
+			return nil
+		})
+		rec.ScrubResp(func(b *bytes.Buffer) error {
+			bu := bytes.ReplaceAll(b.Bytes(), []byte(chatID), []byte(expungedChatID))
+			b.Reset()
+			b.Write(bu)
 			return nil
 		})
 
