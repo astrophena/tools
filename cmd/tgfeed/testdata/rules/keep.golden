@@ -1,12 +1,22 @@
 [
   {
     "chat_id": "test",
-    "parse_mode": "HTML",
+    "entities": [
+      {
+        "length": 14,
+        "offset": 3,
+        "type": "text_link",
+        "url": "https://example.com/keep"
+      }
+    ],
+    "link_preview_options": {
+      "is_disabled": false
+    },
     "reply_markup": {
       "inline_keyboard": [
         []
       ]
     },
-    "text": "🔗 \u003ca href=\"https://example.com/keep\"\u003eKeep this item\u003c/a\u003e #examplecom"
+    "text": "🔗 Keep this item\n#examplecom\n\n"
   }
 ]

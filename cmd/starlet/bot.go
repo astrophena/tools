@@ -17,10 +17,10 @@ import (
 	"go.astrophena.name/base/request"
 	"go.astrophena.name/base/version"
 	"go.astrophena.name/base/web"
-	"go.astrophena.name/tools/cmd/starlet/internal/tgmarkup"
 	"go.astrophena.name/tools/internal/starlark/go2star"
 	"go.astrophena.name/tools/internal/starlark/interpreter"
 	"go.astrophena.name/tools/internal/starlark/stdlib"
+	"go.astrophena.name/tools/internal/util/tgmarkup"
 
 	"go.starlark.net/starlark"
 )

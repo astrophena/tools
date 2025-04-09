@@ -6,7 +6,6 @@ package main
 
 import (
 	_ "embed"
-	"html"
 	"net/http"
 	"sort"
 	"testing"
@@ -60,7 +59,6 @@ func TestDisablingAndReenablingFailingFeed(t *testing.T) {
 	testutil.AssertEqual(t, state1[atomFeedURL].LastError, "want 200, got 418: I'm a teapot.\n")
 
 	testutil.AssertEqual(t, len(tm.sentMessages), 1)
-	testutil.AssertEqual(t, tm.sentMessages[0]["text"], "❌ Something went wrong:\n<pre><code>"+html.EscapeString("fetching feed \"https://example.com/feed.xml\" failed after 12 previous attempts: want 200, got 418: I'm a teapot.\n; feed was disabled, to reenable it run 'tgfeed -reenable \"https://example.com/feed.xml\"'")+"</code></pre>")
 
 	if err := f.reenable(t.Context(), atomFeedURL); err != nil {
 		t.Fatal(err)

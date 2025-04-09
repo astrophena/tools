@@ -8,6 +8,7 @@ import (
 	"bufio"
 	"cmp"
 	"context"
+	_ "embed"
 	"errors"
 	"flag"
 	"fmt"
@@ -37,11 +38,12 @@ import (
 )
 
 const (
-	defaultErrorTemplate = `❌ Something went wrong:
-<pre><code>%v</code></pre>`
 	ghAPI = "https://api.github.com"
 	tgAPI = "https://api.telegram.org"
 )
+
+//go:embed error.tmpl
+var defaultErrorTemplate string
 
 // Some types of errors that can happen during tgfeed execution.
 var (

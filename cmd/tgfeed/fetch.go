@@ -6,9 +6,9 @@ package main
 
 import (
 	"context"
+	_ "embed"
 	"encoding/json"
 	"fmt"
-	"html"
 	"io"
 	"net/http"
 	urlpkg "net/url"
@@ -20,6 +20,7 @@ import (
 	"go.astrophena.name/base/request"
 	"go.astrophena.name/base/version"
 	"go.astrophena.name/tools/internal/starlark/go2star"
+	"go.astrophena.name/tools/internal/util/tgmarkup"
 
 	"github.com/mmcdole/gofeed"
 	"go.starlark.net/starlark"
@@ -34,6 +35,9 @@ const (
 	sendConcurrencyLimit  = 2  // N sends that can run at the same time
 	retryLimit            = 3  // N attempts to retry feed fetching
 )
+
+//go:embed message.tmpl
+var messageTemplate string
 
 // fetch fetches a single feed. Each fetch runs in it's own goroutine.
 func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *gofeed.Item) (retry bool, retryIn time.Duration) {
@@ -256,11 +260,7 @@ func (f *fetcher) sendUpdate(ctx context.Context, item *gofeed.Item) {
 		title = item.Link
 	}
 
-	msg := fmt.Sprintf(
-		`🔗 <a href="%[1]s">%[2]s</a>`,
-		item.Link,
-		html.EscapeString(title),
-	)
+	msg := fmt.Sprintf(messageTemplate, title, item.Link)
 
 	if u, err := urlpkg.Parse(item.Link); err == nil {
 		switch u.Hostname() {
@@ -287,46 +287,44 @@ func (f *fetcher) sendUpdate(ctx context.Context, item *gofeed.Item) {
 		return
 	}
 
-	if err := f.send(ctx, strings.TrimSpace(msg), func(args map[string]any) {
-		args["reply_markup"] = map[string]any{
-			"inline_keyboard": [][]inlineKeyboardButton{inlineKeyboardButtons},
-		}
-	}); err != nil {
+	if err := f.send(ctx, strings.TrimSpace(msg), false, &inlineKeyboard{inlineKeyboardButtons}); err != nil {
 		f.slog.Warn("failed to send message", "chat_id", f.chatID, "error", err)
 	}
 }
 
-func (f *fetcher) send(ctx context.Context, message string, modify func(args map[string]any)) error {
-	args := map[string]any{
-		"chat_id":    f.chatID,
-		"parse_mode": "HTML",
-		"text":       message,
-	}
-	if modify != nil {
-		modify(args)
-	}
-	return f.makeTelegramRequest(ctx, "sendMessage", args)
+type message struct {
+	ChatID             string `json:"chat_id"`
+	LinkPreviewOptions struct {
+		IsDisabled bool `json:"is_disabled"`
+	} `json:"link_preview_options,omitempty"`
+	ReplyMarkup struct {
+		InlineKeyboard inlineKeyboard `json:"inline_keyboard"`
+	} `json:"reply_markup,omitempty"`
+	tgmarkup.Message
 }
 
-func (f *fetcher) errNotify(ctx context.Context, err error) error {
-	return f.send(ctx, fmt.Sprintf(f.errorTemplate, html.EscapeString(err.Error())), disableLinkPreview)
-}
-
-// https://core.telegram.org/bots/api#linkpreviewoptions
-type linkPreviewOptions struct {
-	IsDisabled bool `json:"is_disabled"`
-}
-
-func disableLinkPreview(args map[string]any) {
-	args["link_preview_options"] = linkPreviewOptions{
-		IsDisabled: true,
-	}
-}
+type inlineKeyboard = [][]inlineKeyboardButton
 
 // https://core.telegram.org/bots/api#inlinekeyboardbutton
 type inlineKeyboardButton struct {
 	Text string `json:"text"`
 	URL  string `json:"url"`
+}
+
+func (f *fetcher) send(ctx context.Context, text string, disableLinkPreview bool, inlineKeyboard *inlineKeyboard) error {
+	msg := &message{
+		ChatID: f.chatID,
+	}
+	if inlineKeyboard != nil {
+		msg.ReplyMarkup.InlineKeyboard = *inlineKeyboard
+	}
+	msg.LinkPreviewOptions.IsDisabled = disableLinkPreview
+	msg.Message = tgmarkup.FromMarkdown(text)
+	return f.makeTelegramRequest(ctx, "sendMessage", msg)
+}
+
+func (f *fetcher) errNotify(ctx context.Context, err error) error {
+	return f.send(ctx, fmt.Sprintf(f.errorTemplate, err), true, nil)
 }
 
 func (f *fetcher) makeTelegramRequest(ctx context.Context, method string, args any) error {
