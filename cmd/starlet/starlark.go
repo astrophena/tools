@@ -12,9 +12,9 @@ import (
 
 	"go.astrophena.name/base/version"
 	"go.astrophena.name/tools/cmd/starlet/internal/starlarkgemini"
-	"go.astrophena.name/tools/cmd/starlet/internal/tgmarkup"
 	"go.astrophena.name/tools/cmd/starlet/internal/tgstarlark"
 	"go.astrophena.name/tools/internal/starlark/go2star"
+	"go.astrophena.name/tools/internal/util/tgmarkup"
 
 	starlarktime "go.starlark.net/lib/time"
 	"go.starlark.net/starlark"
