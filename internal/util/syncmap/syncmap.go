@@ -88,7 +88,7 @@ func (m *Map[K, V]) Delete(key K) {
 // is stored or deleted concurrently, Range may reflect any mapping for that key
 // from any point during the Range call.
 func (m *Map[K, V]) Range(f func(key K, value V) bool) {
-	m.m.Range(func(key, value interface{}) bool {
+	m.m.Range(func(key, value any) bool {
 		k, ok := key.(K)
 		if !ok {
 			// This should technically never happen, as we only store K type
