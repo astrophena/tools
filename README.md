@@ -6,6 +6,7 @@ This repository holds personal tools:
 - Cmdtop displays the top of most used commands in bash history.
 - Dungeon sandboxes programs so they can't fulfill their deep dark fantasies on unsuspecting users.
 - Dupfind finds duplicate files in a directory.
+- Gox is like 'go run', but caches compiled binaries based on hash of the program.
 - Kp retrieves passwords and other information from KeePass database files.
 - Mdfmt formats Markdown files.
 - Mdserve serves Markdown files from a directory.
