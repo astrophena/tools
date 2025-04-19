@@ -275,12 +275,12 @@ type Interpreter struct {
 	// 'load' calls do not trigger PreExec/PostExec hooks.
 	PostExec func(th *starlark.Thread, module ModuleKey)
 
-	init      atomic.Bool                            // prevents calling Init again
-	modules   *syncmap.Map[ModuleKey, *loadedModule] // cache of the loaded modules
-	execed    *syncmap.Map[ModuleKey, struct{}]      // a set of modules that were ever exec'ed
-	visitedMu sync.Mutex                             // protects visited
-	visited   []ModuleKey                            // all modules, in order of visits
-	globals   starlark.StringDict                    // global symbols exposed to all modules
+	init      atomic.Bool                           // prevents calling Init again
+	modules   syncmap.Map[ModuleKey, *loadedModule] // cache of the loaded modules
+	execed    syncmap.Map[ModuleKey, struct{}]      // a set of modules that were ever exec'ed
+	visitedMu sync.Mutex                            // protects visited
+	visited   []ModuleKey                           // all modules, in order of visits
+	globals   starlark.StringDict                   // global symbols exposed to all modules
 }
 
 // ModuleKey is a key of a module within a cache of loaded modules.
@@ -392,9 +392,6 @@ func (intr *Interpreter) Init(ctx context.Context) error {
 		return errors.New("already initialized")
 	}
 	defer intr.init.Store(true)
-
-	intr.modules = syncmap.NewMap[ModuleKey, *loadedModule]()
-	intr.execed = syncmap.NewMap[ModuleKey, struct{}]()
 
 	intr.globals = make(starlark.StringDict, len(intr.Predeclared)+1)
 	for k, v := range intr.Predeclared {
