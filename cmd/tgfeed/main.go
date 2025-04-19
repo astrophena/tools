@@ -161,9 +161,9 @@ type fetcher struct {
 	config        string
 	feeds         []*feed
 	errorTemplate string
-	state         *syncx.Protected[map[string]*feedState]
+	state         syncx.Protected[map[string]*feedState]
 
-	stats *syncx.Protected[*stats]
+	stats syncx.Protected[*stats]
 }
 
 func (f *fetcher) doInit() {
@@ -369,12 +369,7 @@ func (f *fetcher) run(ctx context.Context) error {
 				if !valid {
 					break loop
 				}
-
-				sendWg.Add(1)
-				go func() {
-					defer sendWg.Done()
-					f.sendUpdate(ctx, item)
-				}()
+				sendWg.Go(func() { f.sendUpdate(ctx, item) })
 			case <-ctx.Done():
 				break loop
 			}
@@ -389,9 +384,7 @@ func (f *fetcher) run(ctx context.Context) error {
 	// Enqueue fetches.
 	fetchWg := syncx.NewLimitedWaitGroup(fetchConcurrencyLimit)
 	for _, feed := range shuffle(f.feeds) {
-		fetchWg.Add(1)
-		go func() {
-			defer fetchWg.Done()
+		fetchWg.Go(func() {
 			defer fetchedFeeds.Add(1)
 
 			var retries int
@@ -410,7 +403,7 @@ func (f *fetcher) run(ctx context.Context) error {
 				}
 				break
 			}
-		}()
+		})
 	}
 
 	// Wait for all fetches to complete.
