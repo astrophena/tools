@@ -10,10 +10,7 @@ import (
 )
 
 // Map is a generic version of [sync.Map].
-type Map[K, V comparable] struct{ m *sync.Map }
-
-// NewMap returns a new [Map].
-func NewMap[K, V comparable]() *Map[K, V] { return &Map[K, V]{m: &sync.Map{}} }
+type Map[K, V comparable] struct{ m sync.Map }
 
 // Load is [sync.Map.Load].
 func (m *Map[K, V]) Load(key K) (value V, ok bool) {
