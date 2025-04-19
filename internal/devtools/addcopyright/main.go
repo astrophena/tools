@@ -38,9 +38,6 @@ var headers = map[string]string{
 var exclusions = []string{
 	// Based on Go's standard library code.
 	"cmd/tgfeed/internal/diff/diff.go",
-	// Based on Tailscale code.
-	"internal/web/debug.go",
-	"internal/web/debug_test.go",
 	// Based on Oscar (golang.org/x/oscar) code.
 	"internal/util/rr/rr.go",
 	"internal/util/rr/rr_test.go",
