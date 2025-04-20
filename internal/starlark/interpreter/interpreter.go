@@ -116,8 +116,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"go.astrophena.name/tools/internal/util/syncmap"
-
+	"go.astrophena.name/base/syncx"
 	"go.starlark.net/starlark"
 	"go.starlark.net/starlarkstruct"
 	"go.starlark.net/syntax"
@@ -275,12 +274,12 @@ type Interpreter struct {
 	// 'load' calls do not trigger PreExec/PostExec hooks.
 	PostExec func(th *starlark.Thread, module ModuleKey)
 
-	init      atomic.Bool                           // prevents calling Init again
-	modules   syncmap.Map[ModuleKey, *loadedModule] // cache of the loaded modules
-	execed    syncmap.Map[ModuleKey, struct{}]      // a set of modules that were ever exec'ed
-	visitedMu sync.Mutex                            // protects visited
-	visited   []ModuleKey                           // all modules, in order of visits
-	globals   starlark.StringDict                   // global symbols exposed to all modules
+	init      atomic.Bool                         // prevents calling Init again
+	modules   syncx.Map[ModuleKey, *loadedModule] // cache of the loaded modules
+	execed    syncx.Map[ModuleKey, struct{}]      // a set of modules that were ever exec'ed
+	visitedMu sync.Mutex                          // protects visited
+	visited   []ModuleKey                         // all modules, in order of visits
+	globals   starlark.StringDict                 // global symbols exposed to all modules
 }
 
 // ModuleKey is a key of a module within a cache of loaded modules.

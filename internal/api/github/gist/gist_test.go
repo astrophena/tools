@@ -5,9 +5,11 @@
 package gist
 
 import (
+	"maps"
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -78,8 +80,8 @@ func TestUpdate(t *testing.T) {
 
 	testutil.AssertEqual(t, len(gist.Files), 2)
 	name, file := getFirstFile(gist)
-	testutil.AssertEqual(t, name, "foo.txt")
-	testutil.AssertEqual(t, file.Content, "bar")
+	testutil.AssertEqual(t, name, "bar.txt")
+	testutil.AssertEqual(t, file.Content, "foo\n")
 
 	gist.Files["bar.txt"] = File{Content: "foo\n"}
 	gist, err = c.Update(t.Context(), id, gist)
@@ -90,8 +92,6 @@ func TestUpdate(t *testing.T) {
 }
 
 func getFirstFile(g *Gist) (name string, file File) {
-	for n, f := range g.Files {
-		name, file = n, f
-	}
-	return
+	keys := slices.Sorted(maps.Keys(g.Files))
+	return keys[0], g.Files[keys[0]]
 }
