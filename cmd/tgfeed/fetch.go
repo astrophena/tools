@@ -8,6 +8,7 @@ import (
 	"context"
 	_ "embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -34,6 +35,7 @@ const (
 	fetchConcurrencyLimit = 10 // N fetches that can run at the same time
 	sendConcurrencyLimit  = 2  // N sends that can run at the same time
 	retryLimit            = 3  // N attempts to retry feed fetching
+	sendRetryLimit        = 5  // N attempts to retry message sending
 )
 
 //go:embed message.tmpl
@@ -320,7 +322,38 @@ func (f *fetcher) send(ctx context.Context, text string, disableLinkPreview bool
 	}
 	msg.LinkPreviewOptions.IsDisabled = disableLinkPreview
 	msg.Message = tgmarkup.FromMarkdown(text)
-	return f.makeTelegramRequest(ctx, "sendMessage", msg)
+	var err error
+	for range sendRetryLimit {
+		err = f.makeTelegramRequest(ctx, "sendMessage", msg)
+		if err == nil {
+			break
+		}
+		retryable, wait := isSendingRateLimited(err)
+		if !retryable {
+			break
+		}
+		f.slog.Warn("sending rate limited, waiting", "chat_id", f.chatID, "message", text, "wait", wait)
+		time.Sleep(wait)
+	}
+	return err
+}
+
+func isSendingRateLimited(err error) (retryable bool, wait time.Duration) {
+	var statusErr *request.StatusError
+	if !errors.As(err, &statusErr) || statusErr.StatusCode != http.StatusTooManyRequests {
+		return false, 0
+	}
+
+	var errorResponse struct {
+		Parameters struct {
+			RetryAfter int `json:"retry_after"`
+		} `json:"parameters"`
+	}
+	if err := json.Unmarshal(statusErr.Body, &errorResponse); err != nil {
+		return false, 0
+	}
+
+	return true, time.Duration(errorResponse.Parameters.RetryAfter) * time.Second
 }
 
 func (f *fetcher) errNotify(ctx context.Context, err error) error {
