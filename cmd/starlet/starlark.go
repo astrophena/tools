@@ -44,6 +44,7 @@ func (e *engine) predeclared() starlark.StringDict {
 		),
 		"eval":      starlark.NewBuiltin("eval", starlarkEval),
 		"convcache": e.convCache,
+		"kvcache":   e.kvCache,
 		"files": &starlarkstruct.Module{
 			Name: "files",
 			Members: starlark.StringDict{
