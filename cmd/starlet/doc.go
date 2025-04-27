@@ -33,6 +33,10 @@ The following built-in functions and modules are available to your bot code:
 		- append(chat_id: int, message: str): Appends a message to the conversation history for the given chat ID.
 		- reset(chat_id: int): Clears the conversation history for the given chat ID.
 
+	kvcache: Provides a simple key-value cache.
+		- get(key: str) -> value | None: Retrieves the value for the key. Returns None if not found or expired. Resets TTL on access.
+		- set(key: str, value: any) -> None: Stores the value under the key. Resets TTL on set.
+
 	debug: Provides debugging utilities.
 		- stack(): Returns the current Starlark call stack as a string.
 		- go_stack(): Returns the current Go call stack as a string.

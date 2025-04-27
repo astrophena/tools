@@ -28,6 +28,7 @@ import (
 	"go.astrophena.name/base/version"
 	"go.astrophena.name/base/web"
 	"go.astrophena.name/tools/cmd/starlet/internal/convcache"
+	"go.astrophena.name/tools/cmd/starlet/internal/kvcache"
 	"go.astrophena.name/tools/cmd/starlet/internal/tgauth"
 	"go.astrophena.name/tools/internal/api/github/gist"
 	"go.astrophena.name/tools/internal/api/google/gemini"
@@ -125,10 +126,11 @@ type engine struct {
 	convCache *starlarkstruct.Module
 	geminic   *gemini.Client
 	gistc     *gist.Client
-	scrubber  *strings.Replacer
+	kvCache   *starlarkstruct.Module
 	logStream logstream.Streamer
 	logf      logger.Logf
 	mux       *http.ServeMux
+	scrubber  *strings.Replacer
 	tgAuth    *tgauth.Middleware
 
 	// configuration, read-only after initialization
@@ -165,6 +167,7 @@ type bot struct {
 const (
 	authSessionTTL   = 24 * time.Hour
 	convCacheTTL     = 24 * time.Hour
+	kvCacheTTL       = 3 * time.Hour
 	selfPingInterval = 10 * time.Minute
 )
 
@@ -180,6 +183,7 @@ func (e *engine) doInit(ctx context.Context) error {
 	}
 
 	e.convCache = convcache.Module(convCacheTTL)
+	e.kvCache = kvcache.Module(kvCacheTTL)
 
 	const logLineLimit = 300
 	e.logStream = logstream.New(logLineLimit)
