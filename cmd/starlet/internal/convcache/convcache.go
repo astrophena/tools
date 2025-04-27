@@ -6,8 +6,9 @@
 package convcache
 
 import (
-	"sync"
 	"time"
+
+	"go.astrophena.name/base/syncx"
 
 	"go.starlark.net/starlark"
 	"go.starlark.net/starlarkstruct"
@@ -26,8 +27,7 @@ import (
 // The ttl argument specifies the time-to-live duration after which a cache entry will expire.
 func Module(ttl time.Duration) *starlarkstruct.Module {
 	m := &module{
-		cache: make(map[int64]*cacheEntry),
-		ttl:   ttl,
+		ttl: ttl,
 	}
 	return &starlarkstruct.Module{
 		Name: "convcache",
@@ -40,9 +40,8 @@ func Module(ttl time.Duration) *starlarkstruct.Module {
 }
 
 type module struct {
-	mu    sync.Mutex
-	cache map[int64]*cacheEntry
 	ttl   time.Duration
+	cache syncx.Map[int64, *cacheEntry]
 }
 
 type cacheEntry struct {
@@ -56,22 +55,19 @@ func (m *module) get(thread *starlark.Thread, b *starlark.Builtin, args starlark
 		return nil, err
 	}
 
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	entry, ok := m.cache[chatID]
+	entry, ok := m.cache.Load(chatID)
 	if !ok {
 		return starlark.NewList([]starlark.Value{}), nil
 	}
 
 	// Check if the entry has expired.
 	if time.Since(entry.lastAccessed) > m.ttl {
-		delete(m.cache, chatID)
+		m.cache.Delete(chatID)
 		return starlark.NewList([]starlark.Value{}), nil
 	}
 
 	entry.lastAccessed = time.Now()
-	m.cache[chatID] = entry
+	m.cache.Store(chatID, entry)
 
 	var values []starlark.Value
 	for _, val := range entry.value {
@@ -88,10 +84,7 @@ func (m *module) append(thread *starlark.Thread, b *starlark.Builtin, args starl
 		return nil, err
 	}
 
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	entry, ok := m.cache[chatID]
+	entry, ok := m.cache.Load(chatID)
 	if ok {
 		entry.value = append(entry.value, message)
 	} else {
@@ -101,7 +94,7 @@ func (m *module) append(thread *starlark.Thread, b *starlark.Builtin, args starl
 		}
 	}
 
-	m.cache[chatID] = entry
+	m.cache.Store(chatID, entry)
 
 	return starlark.None, nil
 }
@@ -112,10 +105,7 @@ func (m *module) reset(thread *starlark.Thread, b *starlark.Builtin, args starla
 		return nil, err
 	}
 
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	delete(m.cache, chatID)
+	m.cache.Delete(chatID)
 
 	return starlark.None, nil
 }
