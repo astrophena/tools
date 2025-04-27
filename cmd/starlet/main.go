@@ -123,15 +123,16 @@ type engine struct {
 	init syncx.Lazy[error] // main initialization
 
 	// initialized by doInit
-	convCache *starlarkstruct.Module
-	geminic   *gemini.Client
-	gistc     *gist.Client
-	kvCache   *starlarkstruct.Module
-	logStream logstream.Streamer
-	logf      logger.Logf
-	mux       *http.ServeMux
-	scrubber  *strings.Replacer
-	tgAuth    *tgauth.Middleware
+	convCache    *starlarkstruct.Module
+	geminic      *gemini.Client
+	gistc        *gist.Client
+	kvCache      *starlarkstruct.Module
+	kvCacheDebug http.Handler
+	logStream    logstream.Streamer
+	logf         logger.Logf
+	mux          *http.ServeMux
+	scrubber     *strings.Replacer
+	tgAuth       *tgauth.Middleware
 
 	// configuration, read-only after initialization
 	addr             string
@@ -183,7 +184,7 @@ func (e *engine) doInit(ctx context.Context) error {
 	}
 
 	e.convCache = convcache.Module(convCacheTTL)
-	e.kvCache = kvcache.Module(kvCacheTTL)
+	e.kvCache, e.kvCacheDebug = kvcache.Module(kvCacheTTL)
 
 	const logLineLimit = 300
 	e.logStream = logstream.New(logLineLimit)
