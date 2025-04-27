@@ -47,6 +47,7 @@ func (e *engine) initRoutes() {
 	dbg.KVFunc("Loaded Starlark modules", func() any {
 		return fmt.Sprintf("%+v", e.bot.Load().intr.Visited())
 	})
+	dbg.Handle("kvcache", "KV Cache", e.kvCacheDebug)
 	// Log streaming.
 	dbg.HandleFunc("logs", "Logs", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, logsTmpl, html.EscapeString(strings.Join(e.logStream.Lines(), "")), web.StaticFS.HashName("static/css/main.css"))

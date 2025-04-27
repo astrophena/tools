@@ -7,9 +7,16 @@
 package kvcache
 
 import (
+	"bytes"
+	_ "embed"
+	"net/http"
+	"sort"
+	"sync"
+	"text/template"
 	"time"
 
 	"go.astrophena.name/base/syncx"
+	"go.astrophena.name/base/web"
 
 	"go.starlark.net/starlark"
 	"go.starlark.net/starlarkstruct"
@@ -30,7 +37,7 @@ import (
 // The ttl argument specifies the time-to-live duration. A cache entry will
 // expire if it hasn't been accessed (via get) or updated (via set) for
 // longer than this duration.
-func Module(ttl time.Duration) *starlarkstruct.Module {
+func Module(ttl time.Duration) (mod *starlarkstruct.Module, debugHandler http.Handler) {
 	m := &module{
 		ttl: ttl,
 	}
@@ -40,7 +47,7 @@ func Module(ttl time.Duration) *starlarkstruct.Module {
 			"get": starlark.NewBuiltin("kvcache.get", m.get),
 			"set": starlark.NewBuiltin("kvcache.set", m.set),
 		},
-	}
+	}, http.HandlerFunc(m.serveDebug)
 }
 
 type module struct {
@@ -92,4 +99,67 @@ func (m *module) set(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tupl
 	m.cache.Store(key, entry)
 
 	return starlark.None, nil
+}
+
+var (
+	//go:embed debug.html
+	debugTmplBytes []byte
+	debugTmpl      = sync.OnceValue(func() *template.Template {
+		return template.Must(template.New("debug").Parse(string(debugTmplBytes)))
+	})
+)
+
+type debugData struct {
+	Entries    []debugEntry
+	Stylesheet string
+	TTL        time.Duration
+}
+
+type debugEntry struct {
+	Key        string
+	Value      string
+	LastAccess time.Time
+	Expires    time.Time
+}
+
+func (m *module) serveDebug(w http.ResponseWriter, r *http.Request) {
+	entries := make([]debugEntry, 0)
+	now := time.Now()
+
+	m.cache.Range(func(key string, entry *cacheEntry) bool {
+		// Check for expiration here as well, so the debug view is accurate
+		// even if a 'get' hasn't recently cleaned up expired entries.
+		if now.Sub(entry.lastAccessed) > m.ttl {
+			m.cache.Delete(key)
+			return true
+		}
+
+		expires := entry.lastAccessed.Add(m.ttl)
+		entries = append(entries, debugEntry{
+			Key:        key,
+			Value:      entry.value.String(),
+			LastAccess: entry.lastAccessed,
+			Expires:    expires,
+		})
+		return true
+	})
+
+	// Sort entries by key for predictable order.
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].Key < entries[j].Key
+	})
+
+	data := debugData{
+		Entries:    entries,
+		TTL:        m.ttl,
+		Stylesheet: web.StaticFS.HashName("static/css/main.css"),
+	}
+
+	var buf bytes.Buffer
+	if err := debugTmpl().Execute(&buf, data); err != nil {
+		web.RespondError(w, r, err)
+		return
+	}
+
+	buf.WriteTo(w)
 }

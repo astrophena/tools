@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="/{{ .Stylesheet }}">
+  <title>KV Cache Debug</title>
+</head>
+<body>
+  <main>
+    <h1>KV Cache Contents</h1>
+    <p><strong>TTL:</strong> {{ .TTL }}</p>
+    {{ if .Entries }}
+    <table>
+      <thead>
+        <tr>
+          <th>Key</th>
+          <th>Value</th>
+          <th>Last Accessed</th>
+          <th>Expires</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{ range .Entries }}
+        <tr>
+          <td><code>{{ .Key }}</code></td>
+          <td><code>{{ .Value }}</code></td>
+          <td>{{ .LastAccess.Format "2006-01-02 15:04:05 MST" }}</td>
+          <td>{{ .Expires.Format "2006-01-02 15:04:05 MST" }}</td>
+        </tr>
+        {{ end }}
+      </tbody>
+    </table>
+    {{ else }}
+    <p>Cache is empty.</p>
+    {{ end }}
+  </main>
+</body>
+</html>
