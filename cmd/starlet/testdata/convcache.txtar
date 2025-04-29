@@ -1,0 +1,13 @@
+update: start
+-- bot.star --
+load("@starlet//convcache.star", "convcache")
+
+def handle(update):
+    chat_id = update["message"]["chat"]["id"]
+    conv = convcache.get(chat_id)
+    if conv == None:
+        fail("conv must be None")
+    convcache.append(chat_id, "testing!")
+    conv2 = convcache.get(chat_id)
+    if len(conv2) != 1:
+        fail("conv2 must contain one message")
