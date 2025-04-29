@@ -13,7 +13,7 @@
       "link_preview_options": {
         "is_disabled": true
       },
-      "text": "❌ Something went wrong:\n\nTraceback (most recent call last):\n  //bot.star:5:20: in handle\n  @starlet//tg.star:33:1: in _send_message\nError: function _send_message missing 1 argument (text)\n\n"
+      "text": "❌ Something went wrong:\n\nTraceback (most recent call last):\n  //bot.star:5:20: in handle\n  @starlet//tg.star:35:1: in _send_message\nError: function _send_message missing 1 argument (text)\n\n"
     }
   }
 ]

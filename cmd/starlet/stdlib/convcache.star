@@ -15,6 +15,7 @@ Attributes:
         given chat ID.
 """
 
+
 def _get(chat_id):
     """Retrieves the conversation history for a chat ID."""
     cache_key = _cache_key(chat_id)
@@ -23,22 +24,26 @@ def _get(chat_id):
         cur = []
     return cur
 
+
 def _append(chat_id, message):
     """Appends a message to the conversation history for a chat ID."""
     cur = _get(chat_id)
     cur.append(message)
     kvcache.set(_cache_key(chat_id), cur)
 
+
 def _reset(chat_id):
     """Resets the conversation history for a chat ID."""
     kvcache.set(_cache_key(chat_id), [])
 
+
 def _cache_key(chat_id):
     return "convcache_%d" % chat_id
 
+
 convcache = module(
     "convcache",
-    get = _get,
-    append = _append,
-    reset = _reset,
+    get=_get,
+    append=_append,
+    reset=_reset,
 )
