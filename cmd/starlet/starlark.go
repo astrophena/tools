@@ -22,6 +22,8 @@ import (
 	"go.starlark.net/syntax"
 )
 
+//go:generate ruff format --config stdlib/.ruff.toml --no-cache stdlib
+
 // Starlark environment.
 
 func (e *engine) predeclared() starlark.StringDict {

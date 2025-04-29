@@ -8,6 +8,7 @@
 Module tg contains helper methods for calling the Telegram Bot API.
 """
 
+
 def _forward_message(to, from_chat_id, message_id):
     """Forwards a message from one chat to another.
 
@@ -22,15 +23,16 @@ def _forward_message(to, from_chat_id, message_id):
         The result of the 'forwardMessage' Telegram Bot API call.
     """
     return telegram.call(
-        method = "forwardMessage",
-        args = {
+        method="forwardMessage",
+        args={
             "chat_id": to,
             "from_chat_id": from_chat_id,
             "message_id": message_id,
         },
     )
 
-def _send_message(to, text, reply_markup = {}, link_preview = False):
+
+def _send_message(to, text, reply_markup={}, link_preview=False):
     """Sends a text message to a Telegram chat.
 
     This function handles message splitting for messages exceeding Telegram's
@@ -62,9 +64,10 @@ def _send_message(to, text, reply_markup = {}, link_preview = False):
         msg = markdown.convert(chunk)
         args |= msg
         telegram.call(
-            method = "sendMessage",
-            args = args,
+            method="sendMessage",
+            args=args,
         )
+
 
 def _split_message(message):
     """Splits a message into chunks if it exceeds Telegram's message length limit.
@@ -98,9 +101,10 @@ def _split_message(message):
     chunks.append(current_chunk.strip())
     return chunks
 
+
 tg = module(
     "tg",
-    call = telegram.call,
-    forward_message = _forward_message,
-    send_message = _send_message,
+    call=telegram.call,
+    forward_message=_forward_message,
+    send_message=_send_message,
 )
