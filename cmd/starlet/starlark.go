@@ -42,9 +42,9 @@ func (e *engine) predeclared() starlark.StringDict {
 				"go_stack": starlark.NewBuiltin("debug.go_stack", starlarkDebugGoStack),
 			},
 		),
-		"eval":      starlark.NewBuiltin("eval", starlarkEval),
-		"convcache": e.convCache,
-		"kvcache":   e.kvCache,
+		"eval":    starlark.NewBuiltin("eval", starlarkEval),
+		"fail":    starlark.NewBuiltin("fail", starlarkFail),
+		"kvcache": e.kvCache,
 		"files": &starlarkstruct.Module{
 			Name: "files",
 			Members: starlark.StringDict{
@@ -106,6 +106,19 @@ func starlarkEval(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tu
 	}
 
 	return starlark.String(buf.String()), nil
+}
+
+// fail Starlark function.
+func starlarkFail(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	var errStr string
+	if err := starlark.UnpackArgs(
+		b.Name(),
+		args, kwargs,
+		"err", &errStr,
+	); err != nil {
+		return nil, err
+	}
+	return nil, errors.New(errStr)
 }
 
 // debug.stack Starlark function.

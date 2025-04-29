@@ -27,7 +27,6 @@ import (
 	"go.astrophena.name/base/syncx"
 	"go.astrophena.name/base/version"
 	"go.astrophena.name/base/web"
-	"go.astrophena.name/tools/cmd/starlet/internal/convcache"
 	"go.astrophena.name/tools/cmd/starlet/internal/kvcache"
 	"go.astrophena.name/tools/cmd/starlet/internal/tgauth"
 	"go.astrophena.name/tools/internal/api/github/gist"
@@ -123,7 +122,6 @@ type engine struct {
 	init syncx.Lazy[error] // main initialization
 
 	// initialized by doInit
-	convCache    *starlarkstruct.Module
 	geminic      *gemini.Client
 	gistc        *gist.Client
 	kvCache      *starlarkstruct.Module
@@ -167,8 +165,7 @@ type bot struct {
 
 const (
 	authSessionTTL   = 24 * time.Hour
-	convCacheTTL     = 24 * time.Hour
-	kvCacheTTL       = 3 * time.Hour
+	kvCacheTTL       = 24 * time.Hour
 	selfPingInterval = 10 * time.Minute
 )
 
@@ -183,7 +180,6 @@ func (e *engine) doInit(ctx context.Context) error {
 		e.stderr = os.Stderr
 	}
 
-	e.convCache = convcache.Module(convCacheTTL)
 	e.kvCache, e.kvCacheDebug = kvcache.Module(kvCacheTTL)
 
 	const logLineLimit = 300
