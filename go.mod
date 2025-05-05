@@ -1,20 +1,20 @@
 module go.astrophena.name/tools
 
-go 1.24
+go 1.24.2
 
 require (
 	github.com/dhowden/tag v0.0.0-20240417053706-3d75831295e8
 	github.com/golang-jwt/jwt/v5 v5.2.2
 	github.com/google/go-cmp v0.7.0
-	github.com/landlock-lsm/go-landlock v0.0.0-20241014143150-479ddab4c04c
+	github.com/landlock-lsm/go-landlock v0.0.0-20250303204525-1544bccde3a3
 	github.com/lmittmann/tint v1.0.7
 	github.com/mmcdole/gofeed v1.3.0
 	github.com/muesli/reflow v0.3.0
 	github.com/tobischo/gokeepasslib/v3 v3.6.1
-	go.astrophena.name/base v0.5.1-0.20250423182032-0edbfca092f6
-	go.starlark.net v0.0.0-20240925182052-1207426daebd
+	go.astrophena.name/base v0.6.0
+	go.starlark.net v0.0.0-20250417143717-f57e51f710eb
 	golang.org/x/term v0.31.0
-	rsc.io/markdown v0.0.0-20240717201619-868a055c40ae
+	rsc.io/markdown v0.0.0-20241212154241-6bf72452917f
 )
 
 require (
@@ -33,9 +33,9 @@ require (
 	golang.org/x/exp/typeparams v0.0.0-20231108232855-2478ac86f678 // indirect
 	golang.org/x/mod v0.24.0 // indirect
 	golang.org/x/net v0.38.0 // indirect
-	golang.org/x/sync v0.13.0 // indirect
+	golang.org/x/sync v0.14.0 // indirect
 	golang.org/x/sys v0.32.0 // indirect
-	golang.org/x/text v0.23.0 // indirect
+	golang.org/x/text v0.25.0 // indirect
 	golang.org/x/tools v0.31.0 // indirect
 	google.golang.org/protobuf v1.34.1 // indirect
 	honnef.co/go/tools v0.6.0 // indirect

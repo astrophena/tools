@@ -19,7 +19,6 @@ import (
 	"go.astrophena.name/base/web"
 	"go.astrophena.name/tools/internal/starlark/go2star"
 	"go.astrophena.name/tools/internal/starlark/interpreter"
-	"go.astrophena.name/tools/internal/starlark/stdlib"
 	"go.astrophena.name/tools/internal/util/tgmarkup"
 
 	"go.starlark.net/starlark"
@@ -74,9 +73,8 @@ func (e *engine) loadCode(ctx context.Context, files map[string]string) error {
 			e.logf("%s:%d: %s", file, line, message)
 		},
 		Packages: map[string]interpreter.Loader{
-			interpreter.MainPkg:   interpreter.MemoryLoader(files),
-			interpreter.StdlibPkg: stdlib.Loader(),
-			"starlet":             interpreter.FSLoader(stdlibFS),
+			interpreter.MainPkg: interpreter.MemoryLoader(files),
+			"starlet":           interpreter.FSLoader(stdlibFS),
 		},
 	}
 	if err := intr.Init(ctx); err != nil {
