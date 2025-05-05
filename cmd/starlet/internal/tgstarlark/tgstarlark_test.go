@@ -15,7 +15,6 @@ import (
 
 	"go.astrophena.name/base/testutil"
 	"go.astrophena.name/tools/internal/starlark/interpreter"
-	"go.astrophena.name/tools/internal/starlark/stdlib"
 )
 
 func TestTelegramModule(t *testing.T) {
@@ -106,7 +105,6 @@ print(result)
 					interpreter.MainPkg: interpreter.MemoryLoader(map[string]string{
 						"test.star": string(tc.script),
 					}),
-					interpreter.StdlibPkg: stdlib.Loader(),
 				},
 				Logger: func(file string, line int, message string) {
 					fmt.Fprint(&buf, message)

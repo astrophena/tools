@@ -17,7 +17,6 @@ import (
 	"go.astrophena.name/base/testutil"
 	"go.astrophena.name/tools/internal/api/google/gemini"
 	"go.astrophena.name/tools/internal/starlark/interpreter"
-	"go.astrophena.name/tools/internal/starlark/stdlib"
 	"go.astrophena.name/tools/internal/util/rr"
 
 	"go.starlark.net/starlark"
@@ -68,7 +67,6 @@ func TestModule(t *testing.T) {
 				interpreter.MainPkg: interpreter.MemoryLoader(map[string]string{
 					"test.star": string(script),
 				}),
-				interpreter.StdlibPkg: stdlib.Loader(),
 			},
 			Logger: func(file string, line int, message string) {
 				fmt.Fprint(&buf, message)

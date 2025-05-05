@@ -10,22 +10,19 @@ import (
 	"log"
 
 	"go.astrophena.name/tools/internal/starlark/interpreter"
-	"go.astrophena.name/tools/internal/starlark/stdlib"
 )
 
 func ExampleInterpreter() {
 	files := map[string]string{
-		"hello.star": `hello()
-`,
+		"hello.star": `print("Hello, world!")`,
 	}
 
 	intr := &interpreter.Interpreter{
 		Packages: map[string]interpreter.Loader{
-			interpreter.MainPkg:   interpreter.MemoryLoader(files),
-			interpreter.StdlibPkg: stdlib.Loader(),
+			interpreter.MainPkg: interpreter.MemoryLoader(files),
 		},
-		Logger: func(file string, line int, message string) {
-			fmt.Printf("[%s:%d] %s\n", file, line, message)
+		Logger: func(_ string, _ int, message string) {
+			fmt.Printf("%s\n", message)
 		},
 	}
 	if err := intr.Init(context.Background()); err != nil {
@@ -35,5 +32,5 @@ func ExampleInterpreter() {
 		log.Fatal(err)
 	}
 
-	// Output: [@stdlib//builtins.star:11] Hello, world!
+	// Output: Hello, world!
 }
