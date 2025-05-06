@@ -13,7 +13,7 @@ require (
 	github.com/tobischo/gokeepasslib/v3 v3.6.1
 	go.astrophena.name/base v0.6.0
 	go.starlark.net v0.0.0-20250417143717-f57e51f710eb
-	golang.org/x/term v0.31.0
+	golang.org/x/term v0.32.0
 	rsc.io/markdown v0.0.0-20241212154241-6bf72452917f
 )
 
@@ -34,7 +34,7 @@ require (
 	golang.org/x/mod v0.24.0 // indirect
 	golang.org/x/net v0.38.0 // indirect
 	golang.org/x/sync v0.14.0 // indirect
-	golang.org/x/sys v0.32.0 // indirect
+	golang.org/x/sys v0.33.0 // indirect
 	golang.org/x/text v0.25.0 // indirect
 	golang.org/x/tools v0.31.0 // indirect
 	google.golang.org/protobuf v1.34.1 // indirect
