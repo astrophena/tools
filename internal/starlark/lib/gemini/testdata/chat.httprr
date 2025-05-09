@@ -1,0 +1,64 @@
+httprr trace v1
+449 1893
+POST https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent HTTP/1.1
+Host: generativelanguage.googleapis.com
+User-Agent: gemini.test/ (+https://astrophena.name/bleep-bloop)
+Content-Length: 184
+Content-Type: application/json
+
+{"contents":[{"parts":[{"text":"How are you?"}],"role":"user"},{"parts":[{"text":"I'm fine, thank you!"}],"role":"model"},{"parts":[{"text":"Tell me about yourself."}],"role":"user"}]}HTTP/2.0 200 OK
+Alt-Svc: h3=":443"; ma=2592000,h3-29=":443"; ma=2592000
+Content-Type: application/json; charset=UTF-8
+Date: Fri, 09 May 2025 07:44:05 GMT
+Server: scaffolding on HTTPServer2
+Server-Timing: gfet4t7; dur=1136
+Vary: Origin
+Vary: X-Origin
+Vary: Referer
+X-Content-Type-Options: nosniff
+X-Frame-Options: SAMEORIGIN
+X-Xss-Protection: 0
+
+{
+  "candidates": [
+    {
+      "content": {
+        "parts": [
+          {
+            "text": "I am a large language model, trained by Google.  I don't have personal experiences, feelings, or a physical body like a human does.  My purpose is to process information and respond to a wide range of prompts and questions in a comprehensive and informative way.  I can access and process information from the real world through Google Search and keep my response consistent with search results.  I'm still under development, but I'm constantly learning and improving my abilities to understand and generate human-like text.  Essentially, I'm a sophisticated computer program designed to assist users with information and creative text generation.\n"
+          }
+        ],
+        "role": "model"
+      },
+      "finishReason": "STOP",
+      "citationMetadata": {
+        "citationSources": [
+          {
+            "startIndex": 264,
+            "endIndex": 390,
+            "uri": "https://indianexpress.com/article/technology/google-bard-what-is-it-and-how-does-it-work-8609881/"
+          }
+        ]
+      },
+      "avgLogprobs": -0.083372686791607711
+    }
+  ],
+  "usageMetadata": {
+    "promptTokenCount": 17,
+    "candidatesTokenCount": 127,
+    "totalTokenCount": 144,
+    "promptTokensDetails": [
+      {
+        "modality": "TEXT",
+        "tokenCount": 17
+      }
+    ],
+    "candidatesTokensDetails": [
+      {
+        "modality": "TEXT",
+        "tokenCount": 127
+      }
+    ]
+  },
+  "modelVersion": "gemini-1.5-flash"
+}

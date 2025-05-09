@@ -17,6 +17,26 @@ import (
 	"go.astrophena.name/base/web"
 )
 
+func TestStatic(t *testing.T) {
+	t.Parallel()
+
+	e := testEngine(t, testMux(t, nil))
+
+	for _, path := range []string{
+		"static/css/main.css",
+		"static/js/logs.js",
+	} {
+		_, err := request.Make[request.IgnoreResponse](t.Context(), request.Params{
+			Method:     http.MethodGet,
+			URL:        "/" + e.srv.StaticHashName(path),
+			HTTPClient: testutil.MockHTTPClient(e.mux),
+		})
+		if err != nil {
+			t.Errorf("%s: %v", path, err)
+		}
+	}
+}
+
 func TestHealth(t *testing.T) {
 	t.Parallel()
 

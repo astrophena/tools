@@ -25,13 +25,13 @@ import (
 	"go.astrophena.name/base/logger"
 	"go.astrophena.name/base/request"
 	"go.astrophena.name/base/syncx"
+	"go.astrophena.name/base/tgauth"
 	"go.astrophena.name/base/version"
 	"go.astrophena.name/base/web"
-	"go.astrophena.name/tools/cmd/starlet/internal/kvcache"
-	"go.astrophena.name/tools/cmd/starlet/internal/tgauth"
 	"go.astrophena.name/tools/internal/api/github/gist"
 	"go.astrophena.name/tools/internal/api/google/gemini"
 	"go.astrophena.name/tools/internal/starlark/interpreter"
+	"go.astrophena.name/tools/internal/starlark/lib/kvcache"
 	"go.astrophena.name/tools/internal/util/logstream"
 
 	"go.starlark.net/starlarkstruct"
@@ -45,7 +45,6 @@ func (e *engine) Flags(fs *flag.FlagSet) {
 	fs.Int64Var(&e.tgOwner, "tg-owner", 0, "Telegram user `ID` of the bot owner.")
 	fs.StringVar(&e.addr, "addr", "localhost:3000", "Listen on `host:port`.")
 	fs.StringVar(&e.geminiKey, "gemini-key", "", "Gemini API `key`.")
-	fs.StringVar(&e.geminiProxyToken, "gemini-proxy-token", "", "Gemini proxy access `token`.")
 	fs.StringVar(&e.ghToken, "gh-token", "", "GitHub API `token`.")
 	fs.StringVar(&e.gistID, "gist-id", "", "GitHub Gist `ID` to load bot code from.")
 	fs.StringVar(&e.host, "host", "", "Bot `domain` used for setting up webhook.")
@@ -59,7 +58,6 @@ func (e *engine) Run(ctx context.Context) error {
 
 	// Load configuration from environment variables or flags.
 	e.geminiKey = cmp.Or(env.Getenv("GEMINI_KEY"), e.geminiKey)
-	e.geminiProxyToken = cmp.Or(env.Getenv("GEMINI_PROXY_TOKEN"), e.geminiProxyToken)
 	e.ghToken = cmp.Or(env.Getenv("GH_TOKEN"), e.ghToken)
 	e.gistID = cmp.Or(env.Getenv("GIST_ID"), e.gistID)
 	e.host = cmp.Or(env.Getenv("HOST"), e.host)
@@ -97,17 +95,7 @@ func (e *engine) Run(ctx context.Context) error {
 		go e.selfPing(ctx, selfPingInterval)
 	}
 
-	s := &web.Server{
-		Addr:       e.addr,
-		Debuggable: true, // debug endpoints protected by Telegram auth
-		Mux:        e.mux,
-		Ready:      e.ready,
-		Middleware: []web.Middleware{
-			e.tgAuth.Middleware(false),
-			e.debugAuth,
-		},
-	}
-	return s.ListenAndServe(ctx)
+	return e.srv.ListenAndServe(ctx)
 }
 
 func parseInt(s string) int64 {
@@ -122,33 +110,32 @@ type engine struct {
 	init syncx.Lazy[error] // main initialization
 
 	// initialized by doInit
-	geminic      *gemini.Client
-	gistc        *gist.Client
-	kvCache      *starlarkstruct.Module
-	kvCacheDebug http.Handler
-	logStream    logstream.Streamer
-	logf         logger.Logf
-	mux          *http.ServeMux
-	scrubber     *strings.Replacer
-	tgAuth       *tgauth.Middleware
+	geminic   *gemini.Client
+	gistc     *gist.Client
+	kvCache   *starlarkstruct.Module
+	logStream logstream.Streamer
+	logf      logger.Logf
+	mux       *http.ServeMux
+	scrubber  *strings.Replacer
+	srv       *web.Server
+	tgAuth    *tgauth.Middleware
 
 	// configuration, read-only after initialization
-	addr             string
-	geminiKey        string
-	geminiProxyToken string
-	ghToken          string
-	gistID           string
-	host             string
-	httpc            *http.Client
-	me               *getMeResponse // obtained from Telegram Bot API
-	onRender         bool
-	reloadToken      string
-	stderr           io.Writer
-	tgBotID          int64
-	tgBotUsername    string
-	tgOwner          int64
-	tgSecret         string
-	tgToken          string
+	addr          string
+	geminiKey     string
+	ghToken       string
+	gistID        string
+	host          string
+	httpc         *http.Client
+	me            *getMeResponse // obtained from Telegram Bot API
+	onRender      bool
+	reloadToken   string
+	stderr        io.Writer
+	tgBotID       int64
+	tgBotUsername string
+	tgOwner       int64
+	tgSecret      string
+	tgToken       string
 	// for tests
 	noServerStart bool
 	ready         func() // see web.Server.Ready
@@ -180,7 +167,7 @@ func (e *engine) doInit(ctx context.Context) error {
 		e.stderr = os.Stderr
 	}
 
-	e.kvCache, e.kvCacheDebug = kvcache.Module(kvCacheTTL)
+	e.kvCache = kvcache.Module(kvCacheTTL)
 
 	const logLineLimit = 300
 	e.logStream = logstream.New(logLineLimit)
@@ -220,6 +207,19 @@ func (e *engine) doInit(ctx context.Context) error {
 		TTL:       authSessionTTL,
 	}
 
+	e.initRoutes()
+	e.srv = &web.Server{
+		Addr:       e.addr,
+		Debuggable: true, // debug endpoints protected by Telegram auth
+		Mux:        e.mux,
+		Ready:      e.ready,
+		StaticFS:   staticFS,
+		Middleware: []web.Middleware{
+			e.tgAuth.Middleware(false),
+			e.debugAuth,
+		},
+	}
+
 	if err := e.loadFromGist(ctx); err != nil {
 		return err
 	}
@@ -231,8 +231,6 @@ func (e *engine) doInit(ctx context.Context) error {
 	e.me = &me
 	e.tgBotID = me.Result.ID
 	e.tgBotUsername = me.Result.Username
-
-	e.initRoutes()
 
 	return nil
 }
@@ -293,20 +291,21 @@ func (tw *timestampWriter) Write(p []byte) (n int, err error) {
 
 func (e *engine) debugAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !strings.HasPrefix(r.URL.Path, "/debug") {
-			next.ServeHTTP(w, r)
-			return
-		}
-		if !e.onRender {
-			next.ServeHTTP(w, r)
-			return
-		}
 		if e.tgAuth.LoggedIn(r) {
+			r = web.TrustRequest(r)
 			next.ServeHTTP(w, r)
 			return
 		}
+
+		if !strings.HasPrefix(r.URL.Path, "/debug") || e.onRender {
+			next.ServeHTTP(w, r)
+			return
+		}
+
 		web.RespondError(w, r, web.ErrUnauthorized)
 	})
 }
 
-func (e *engine) authCheck(ident *tgauth.Identity) bool { return ident.ID == e.tgOwner }
+func (e *engine) authCheck(_ *http.Request, ident *tgauth.Identity) bool {
+	return ident.ID == e.tgOwner
+}
