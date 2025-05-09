@@ -6,6 +6,7 @@ package tools
 
 //go:generate go tool addcopyright
 //go:generate go tool genreadme
+//go:generate ruff format --no-cache --config "extend-include = ['*.star']"
 
 import (
 	"bytes"

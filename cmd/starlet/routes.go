@@ -6,23 +6,22 @@ package main
 
 import (
 	"crypto/subtle"
-	_ "embed"
+	"embed"
 	"fmt"
 	"html"
 	"net/http"
 	"os"
 	"strings"
 
+	"go.astrophena.name/base/tgauth"
 	"go.astrophena.name/base/web"
-	"go.astrophena.name/tools/cmd/starlet/internal/geminiproxy"
-	"go.astrophena.name/tools/cmd/starlet/internal/tgauth"
 )
 
 var (
-	//go:embed assets/logs.html
+	//go:embed static/templates/logs.tmpl
 	logsTmpl string
-	//go:embed assets/logs.js
-	logsJS []byte
+	//go:embed static/js/*
+	staticFS embed.FS
 )
 
 func (e *engine) initRoutes() {
@@ -31,30 +30,30 @@ func (e *engine) initRoutes() {
 	e.mux.HandleFunc("/", e.handleRoot)
 	e.mux.HandleFunc("POST /telegram", e.handleTelegramWebhook)
 	e.mux.HandleFunc("POST /reload", e.handleReload)
-	if e.geminic != nil && e.geminiProxyToken != "" {
-		e.mux.Handle("/gemini/", http.StripPrefix("/gemini", geminiproxy.Handler(e.geminiProxyToken, e.geminic)))
-	}
 
 	// Authentication.
 	e.mux.Handle("GET /login", e.tgAuth.LoginHandler("/debug/"))
 	e.mux.Handle("GET /logout", e.tgAuth.LogoutHandler("/"))
 
-	// Debug routes.
+	// Health check.
 	web.Health(e.mux)
+
+	// Debug routes.
 	dbg := web.Debugger(e.mux)
 	dbg.MenuFunc(e.debugMenu)
 	dbg.KVFunc("Bot information", func() any { return fmt.Sprintf("%+v", e.me) })
 	dbg.KVFunc("Loaded Starlark modules", func() any {
 		return fmt.Sprintf("%+v", e.bot.Load().intr.Visited())
 	})
-	dbg.Handle("kvcache", "KV Cache", e.kvCacheDebug)
 	// Log streaming.
 	dbg.HandleFunc("logs", "Logs", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintf(w, logsTmpl, html.EscapeString(strings.Join(e.logStream.Lines(), "")), web.StaticFS.HashName("static/css/main.css"))
-	})
-	e.mux.HandleFunc("/debug/logs.js", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
-		w.Write(logsJS)
+		fmt.Fprintf(
+			w,
+			logsTmpl,
+			html.EscapeString(strings.Join(e.logStream.Lines(), "")),
+			e.srv.StaticHashName("static/css/main.css"),
+			e.srv.StaticHashName("static/js/logs.js"),
+		)
 	})
 	e.mux.Handle("/debug/log", e.logStream)
 	dbg.HandleFunc("reload", "Reload from gist", func(w http.ResponseWriter, r *http.Request) {
@@ -107,12 +106,17 @@ func (e *engine) debugMenu(r *http.Request) []web.MenuItem {
 	if ident == nil {
 		return nil
 	}
-	fullName := ident.FirstName
-	if ident.LastName != "" {
-		fullName += " " + ident.LastName
+
+	nameLink := web.LinkItem{
+		Name:   ident.FirstName,
+		Target: "https://t.me/" + ident.Username,
 	}
+	if ident.LastName != "" {
+		nameLink.Name += " " + ident.LastName
+	}
+
 	return []web.MenuItem{
-		web.HTMLItem(fmt.Sprintf("Logged in as %s (ID: %d)", fullName, ident.ID)),
+		nameLink,
 		web.LinkItem{
 			Name:   "Documentation",
 			Target: "https://go.astrophena.name/tools/cmd/starlet",

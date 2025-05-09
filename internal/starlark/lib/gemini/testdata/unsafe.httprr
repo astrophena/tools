@@ -1,0 +1,73 @@
+httprr trace v1
+662 4654
+POST https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent HTTP/1.1
+Host: generativelanguage.googleapis.com
+User-Agent: gemini.test/ (+https://astrophena.name/bleep-bloop)
+Content-Length: 397
+Content-Type: application/json
+
+{"contents":[{"parts":[{"text":"Write a story about very kind heiress and her maid."}],"role":"user"}],"safetySettings":[{"category":"HARM_CATEGORY_DANGEROUS_CONTENT","threshold":"BLOCK_NONE"},{"category":"HARM_CATEGORY_HARASSMENT","threshold":"BLOCK_NONE"},{"category":"HARM_CATEGORY_HATE_SPEECH","threshold":"BLOCK_NONE"},{"category":"HARM_CATEGORY_SEXUALLY_EXPLICIT","threshold":"BLOCK_NONE"}]}HTTP/2.0 200 OK
+Alt-Svc: h3=":443"; ma=2592000,h3-29=":443"; ma=2592000
+Content-Type: application/json; charset=UTF-8
+Date: Fri, 09 May 2025 07:45:06 GMT
+Server: scaffolding on HTTPServer2
+Server-Timing: gfet4t7; dur=4653
+Vary: Origin
+Vary: X-Origin
+Vary: Referer
+X-Content-Type-Options: nosniff
+X-Frame-Options: SAMEORIGIN
+X-Xss-Protection: 0
+
+{
+  "candidates": [
+    {
+      "content": {
+        "parts": [
+          {
+            "text": "Lady Annelise Tremaine, heiress to the Tremaine fortune and a name whispered in hushed tones across society circles, was known for two things: her breathtaking beauty, and her astonishing kindness.  This wasn't the saccharine, performative kindness of debutantes; it was a deep well of empathy that spilled over into every aspect of her life.  And nowhere was this more evident than in her relationship with Elara, her maid.\n\nElara, a young woman with eyes the colour of storm clouds and a spirit as resilient as the wildflowers that bloomed on the Tremaine estates, had been with Annelise since she was a girl.  Unlike other maids in grand houses, Elara wasn't treated as invisible staff. Annelise saw her not as a servant, but as a friend, a confidante, a sister.\n\nOne crisp autumn afternoon, while Annelise was poring over architectural plans for a new hospital wing she was funding (a project whispered about with equal parts awe and disbelief in high society), Elara found her staring, a single tear tracing a path down her cheek.\n\n\"Something troubles you, my lady?\" Elara asked softly, her voice a gentle counterpoint to the rustling leaves outside the window.\n\nAnnelise sighed, wiping her eyes. \"The reports from the orphanage… the children are suffering.  The funding is… insufficient.  And I… I feel helpless.\"\n\nElara, ever practical, placed a comforting hand on her mistress's shoulder. \"My lady, you have already done more than most. But perhaps… perhaps we could find a way to supplement the funds ourselves.\"\n\nAnnelise looked at her, surprised. \"Elara, you know I could easily cover the shortfall. It's not about the money.\"\n\n\"It's about the feeling of helplessness, my lady,\" Elara said, her voice firm.  \"Allow me to help you fight it.\"\n\nAnd so began a clandestine operation.  Elara, with her innate shrewdness and Annelise’s quiet generosity, crafted a plan.  They quietly organized a bake sale, using the Tremaine kitchen and Annelise’s exquisite china. They didn’t announce it; they simply left baskets of delectable pastries and cakes at the local market, with a small note indicating donations would go to the orphanage.\n\nWord spread like wildfire.  The Tremaine name, synonymous with luxury, was now associated with quiet charity.  People, charmed by the anonymity and the quality of the treats, contributed generously.  The bake sale far exceeded their wildest expectations, raising enough money not only to supplement the orphanage's funding but also to provide them with new toys, books, and winter clothing.\n\nNews of their secret endeavor eventually reached the ears of Lord Ashford, a notorious gossip and rival of the Tremaine family.  He, expecting to find scandal, instead found a story of genuine kindness and collaboration, a bond between a lady and her maid that transcended social boundaries.\n\nThe story spread further, revealing the true heart of Annelise Tremaine: a woman whose wealth did not define her, but amplified her compassionate nature, magnified by the loyalty and ingenuity of her maid, Elara.  They were a reminder that true nobility lay not in titles or fortune, but in the kindness shared between two souls.\n"
+          }
+        ],
+        "role": "model"
+      },
+      "finishReason": "STOP",
+      "safetyRatings": [
+        {
+          "category": "HARM_CATEGORY_HATE_SPEECH",
+          "probability": "NEGLIGIBLE"
+        },
+        {
+          "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+          "probability": "NEGLIGIBLE"
+        },
+        {
+          "category": "HARM_CATEGORY_HARASSMENT",
+          "probability": "NEGLIGIBLE"
+        },
+        {
+          "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+          "probability": "NEGLIGIBLE"
+        }
+      ],
+      "avgLogprobs": -0.55451635957289369
+    }
+  ],
+  "usageMetadata": {
+    "promptTokenCount": 11,
+    "candidatesTokenCount": 681,
+    "totalTokenCount": 692,
+    "promptTokensDetails": [
+      {
+        "modality": "TEXT",
+        "tokenCount": 11
+      }
+    ],
+    "candidatesTokensDetails": [
+      {
+        "modality": "TEXT",
+        "tokenCount": 681
+      }
+    ]
+  },
+  "modelVersion": "gemini-1.5-flash"
+}

@@ -1,0 +1,55 @@
+httprr trace v1
+368 3679
+POST https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent HTTP/1.1
+Host: generativelanguage.googleapis.com
+User-Agent: gemini.test/ (+https://astrophena.name/bleep-bloop)
+Content-Length: 103
+Content-Type: application/json
+
+{"contents":[{"parts":[{"text":"Write a story about very kind heiress and her maid."}],"role":"user"}]}HTTP/2.0 200 OK
+Alt-Svc: h3=":443"; ma=2592000,h3-29=":443"; ma=2592000
+Content-Type: application/json; charset=UTF-8
+Date: Fri, 09 May 2025 07:44:42 GMT
+Server: scaffolding on HTTPServer2
+Server-Timing: gfet4t7; dur=4083
+Vary: Origin
+Vary: X-Origin
+Vary: Referer
+X-Content-Type-Options: nosniff
+X-Frame-Options: SAMEORIGIN
+X-Xss-Protection: 0
+
+{
+  "candidates": [
+    {
+      "content": {
+        "parts": [
+          {
+            "text": "Lady Annelise Tremaine, heiress to the Tremaine fortune, possessed a kindness so profound it bordered on the miraculous.  Not the saccharine sweetness of a debutante, but a genuine empathy that saw the worth in everyone, from the stable boy to the duchess.  This was particularly evident in her relationship with Elara, her maid.\n\nElara, a wisp of a woman with eyes the color of a stormy sea and hands permanently stained from years of scrubbing, had arrived at Tremaine Manor a trembling, penniless orphan.  Most mistresses would have seen only a scullery maid in her; Annelise saw a woman burdened by sorrow, deserving of kindness and respect.\n\nAnnelise refused to treat Elara like staff.  Instead of barking orders, she engaged in polite conversation, inquiring about Elara's day, her family (what little she remembered), and her dreams.  She'd often find Elara mending a tear in her worn dress, and instead of reprimanding her for using her own time, she’d join her, sharing stories and laughter.\n\nAnnelise’s kindness extended beyond pleasantries.  She noticed Elara’s yearning for literacy and commissioned a tutor, secretly paying for the lessons.  She saw Elara sketching in charcoal during her downtime and gifted her a box of professional art supplies.  When Elara mentioned her ailing grandmother, Annelise discreetly arranged for the best physician in the county to visit her, all expenses covered.\n\nThe contrast between Annelise’s opulent life and Elara's humble background was stark, yet their friendship transcended class.  Annelise never flaunted her wealth, preferring to share it discreetly, often slipping Elara extra coins for \"emergencies\" – a term Elara used to purchase books or better food for her grandmother.\n\nOne day, a renowned artist arrived at Tremaine Manor, seeking a model.  Annelise, known for her beauty, was his first choice, but she insisted on Elara.  The artist was initially hesitant, but Annelise’s unwavering belief in Elara’s beauty and grace swayed him.  The resulting portrait, a stunning depiction of Elara in a simple gown, became a sensation.  Elara’s artistic talent, honed by Annelise’s support, blossomed, leading to commissions and a future she never could have imagined.\n\nYears later, Elara, now a successful artist, stood beside Annelise at a charity gala, their shared laughter echoing through the elegant hall.  Elara looked at Annelise, her eyes brimming with gratitude, not just for the material gifts, but for the invaluable gift of belief and kindness that had transformed her life.  The true wealth, they both knew, lay not in the Tremaine fortune, but in the unbreakable bond forged by a kind heart and a generous spirit.\n"
+          }
+        ],
+        "role": "model"
+      },
+      "finishReason": "STOP",
+      "avgLogprobs": -0.4959243230382534
+    }
+  ],
+  "usageMetadata": {
+    "promptTokenCount": 11,
+    "candidatesTokenCount": 589,
+    "totalTokenCount": 600,
+    "promptTokensDetails": [
+      {
+        "modality": "TEXT",
+        "tokenCount": 11
+      }
+    ],
+    "candidatesTokensDetails": [
+      {
+        "modality": "TEXT",
+        "tokenCount": 589
+      }
+    ]
+  },
+  "modelVersion": "gemini-1.5-flash"
+}

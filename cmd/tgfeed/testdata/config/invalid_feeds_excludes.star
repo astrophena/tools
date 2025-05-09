@@ -3,6 +3,6 @@
 # license that can be found in the LICENSE.md file.
 
 feeds = [
-    feed(url = "https://example.com/feed.xml"),
+    feed(url="https://example.com/feed.xml"),
     "foobar",
 ]

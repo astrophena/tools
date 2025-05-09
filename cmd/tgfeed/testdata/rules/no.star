@@ -4,6 +4,6 @@
 
 feeds = [
     feed(
-        url = "https://example.com/feed.xml",
+        url="https://example.com/feed.xml",
     )
 ]

@@ -13,15 +13,21 @@ import (
 	"io"
 	"io/fs"
 	"net/http"
+	"runtime/debug"
 
 	"go.astrophena.name/base/request"
 	"go.astrophena.name/base/version"
 	"go.astrophena.name/base/web"
+	"go.astrophena.name/tools/internal/devtools"
 	"go.astrophena.name/tools/internal/starlark/go2star"
 	"go.astrophena.name/tools/internal/starlark/interpreter"
+	"go.astrophena.name/tools/internal/starlark/lib/gemini"
+	"go.astrophena.name/tools/internal/starlark/lib/telegram"
 	"go.astrophena.name/tools/internal/util/tgmarkup"
 
+	starlarktime "go.starlark.net/lib/time"
 	"go.starlark.net/starlark"
+	"go.starlark.net/starlarkstruct"
 )
 
 const (
@@ -35,19 +41,12 @@ var (
 )
 
 var (
-	//go:embed assets/error.tmpl
+	//go:embed static/templates/error.tmpl
 	defaultErrorTemplate string
-	//go:embed stdlib/*.star
-	stdlibRawFS embed.FS
-	stdlibFS    = must(fs.Sub(stdlibRawFS, "stdlib"))
+	//go:embed lib/*.star
+	libRawFS embed.FS
+	libFS    = devtools.Must(fs.Sub(libRawFS, "lib"))
 )
-
-func must[T any](val T, err error) T {
-	if err != nil {
-		panic(err)
-	}
-	return val
-}
 
 func (e *engine) loadFromGist(ctx context.Context) error {
 	g, err := e.gistc.Get(ctx, e.gistID)
@@ -74,7 +73,7 @@ func (e *engine) loadCode(ctx context.Context, files map[string]string) error {
 		},
 		Packages: map[string]interpreter.Loader{
 			interpreter.MainPkg: interpreter.MemoryLoader(files),
-			"starlet":           interpreter.FSLoader(stdlibFS),
+			"starlet":           interpreter.FSLoader(libFS),
 		},
 	}
 	if err := intr.Init(ctx); err != nil {
@@ -117,19 +116,20 @@ func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 		web.RespondJSONError(w, r, err)
 		return
 	}
-	var gu map[string]any
-	if err := json.Unmarshal(b, &gu); err != nil {
+
+	var rawUpdate map[string]any
+	if err := json.Unmarshal(b, &rawUpdate); err != nil {
 		web.RespondJSONError(w, r, err)
 		return
 	}
-	u, err := go2star.To(gu)
+	update, err := go2star.To(rawUpdate)
 	if err != nil {
 		web.RespondJSONError(w, r, err)
 		return
 	}
 
 	var (
-		chatID = e.lookupChatID(gu) // for error reports
+		chatID = e.lookupChatID(rawUpdate) // for error reports
 		bot    = e.bot.Load()
 	)
 	mod, err := bot.intr.LoadModule(r.Context(), interpreter.MainPkg, mainFile)
@@ -142,7 +142,7 @@ func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 		e.reportError(r.Context(), chatID, w, errNoHandleFunc)
 		return
 	}
-	_, err = starlark.Call(bot.intr.Thread(r.Context()), f, starlark.Tuple{u}, nil)
+	_, err = starlark.Call(bot.intr.Thread(r.Context()), f, starlark.Tuple{update}, nil)
 	if err != nil {
 		e.reportError(r.Context(), chatID, w, err)
 		return
@@ -227,4 +227,97 @@ func (e *engine) reportError(ctx context.Context, chatID int64, w http.ResponseW
 	// Don't respond with an error because Telegram will go mad and start retrying
 	// updates until my Telegram chat is filled with lots of error messages.
 	jsonOK(w)
+}
+
+// Starlark environment.
+
+func (e *engine) predeclared() starlark.StringDict {
+	return starlark.StringDict{
+		"config": starlarkstruct.FromStringDict(
+			starlarkstruct.Default,
+			starlark.StringDict{
+				"bot_id":       starlark.MakeInt64(e.tgBotID),
+				"bot_username": starlark.String(e.tgBotUsername),
+				"owner_id":     starlark.MakeInt64(e.tgOwner),
+				"version":      starlark.String(version.Version().String()),
+			},
+		),
+		"debug": starlarkstruct.FromStringDict(
+			starlarkstruct.Default,
+			starlark.StringDict{
+				"stack":    starlark.NewBuiltin("debug.stack", starlarkDebugStack),
+				"go_stack": starlark.NewBuiltin("debug.go_stack", starlarkDebugGoStack),
+			},
+		),
+		"fail": starlark.NewBuiltin("fail", starlarkFail),
+		"files": &starlarkstruct.Module{
+			Name: "files",
+			Members: starlark.StringDict{
+				"read": starlark.NewBuiltin("files.read", e.starlarkFilesRead),
+			},
+		},
+		"gemini":  gemini.Module(e.geminic),
+		"kvcache": e.kvCache,
+		"markdown": &starlarkstruct.Module{
+			Name: "markdown",
+			Members: starlark.StringDict{
+				"convert": starlark.NewBuiltin("markdown.convert", starlarkMarkdownConvert),
+			},
+		},
+		"module":   starlark.NewBuiltin("module", starlarkstruct.MakeModule),
+		"struct":   starlark.NewBuiltin("struct", starlarkstruct.Make),
+		"telegram": telegram.Module(e.tgToken, e.httpc),
+		"time":     starlarktime.Module,
+	}
+}
+
+// debug.stack Starlark function.
+func starlarkDebugStack(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	if len(args) > 0 || len(kwargs) > 0 {
+		return nil, errors.New("unexpected arguments")
+	}
+	return starlark.String(thread.CallStack().String()), nil
+}
+
+// debug.go_stack Starlark function.
+func starlarkDebugGoStack(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	if len(args) > 0 || len(kwargs) > 0 {
+		return nil, errors.New("unexpected arguments")
+	}
+	return starlark.String(string(debug.Stack())), nil
+}
+
+// fail Starlark function.
+func starlarkFail(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	var errStr string
+	if err := starlark.UnpackArgs(
+		b.Name(),
+		args, kwargs,
+		"err", &errStr,
+	); err != nil {
+		return nil, err
+	}
+	return nil, errors.New(errStr)
+}
+
+// files.read Starlark function.
+func (e *engine) starlarkFilesRead(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	var name string
+	if err := starlark.UnpackArgs(b.Name(), args, kwargs, "name", &name); err != nil {
+		return nil, err
+	}
+	file, ok := e.bot.Load().files[name]
+	if !ok {
+		return nil, fmt.Errorf("%s: no such file", name)
+	}
+	return starlark.String(file), nil
+}
+
+// markdown.convert Starlark function.
+func starlarkMarkdownConvert(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	var s string
+	if err := starlark.UnpackArgs(b.Name(), args, kwargs, "s", &s); err != nil {
+		return nil, err
+	}
+	return go2star.To(tgmarkup.FromMarkdown(s))
 }
