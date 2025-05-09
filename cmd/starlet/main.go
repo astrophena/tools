@@ -87,7 +87,7 @@ func (e *engine) Run(ctx context.Context) error {
 		env.Logf("Running on Render: starting self-ping goroutine.")
 		// https://docs.render.com/environment-variables#all-runtimes-1
 		if port := env.Getenv("PORT"); port != "" {
-			e.addr = ":" + port
+			e.srv.Addr = ":" + port
 		}
 		if err := e.setWebhook(ctx); err != nil {
 			return err
