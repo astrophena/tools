@@ -297,7 +297,7 @@ func (e *engine) debugAuth(next http.Handler) http.Handler {
 			return
 		}
 
-		if !strings.HasPrefix(r.URL.Path, "/debug") || e.onRender {
+		if !strings.HasPrefix(r.URL.Path, "/debug") || !e.onRender {
 			next.ServeHTTP(w, r)
 			return
 		}
