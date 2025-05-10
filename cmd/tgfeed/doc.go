@@ -8,14 +8,14 @@ as a periodic job.
 
 # Usage
 
-	$ tgfeed <mode flag> [additional flags...]
+	$ tgfeed [flags...] <command>
 
-Where <mode flag> is one of the following commands:
+Where <command> is one of the following commands:
 
-  - -run: Fetch feeds and send updates to Telegram.
-  - -edit: Open the config.star configuration file in your $EDITOR for editing.
-  - -feeds: List all configured feeds and their status.
-  - -reenable: Re-enable a previously disabled feed by its URL.
+  - run: Fetch feeds and send updates to Telegram.
+  - edit: Open the config.star configuration file in your $EDITOR for editing.
+  - feeds: List all configured feeds and their status.
+  - reenable: Re-enable a previously disabled feed by its URL.
 
 # Environment Variables
 
@@ -116,22 +116,22 @@ feeds are causing problems.
 
 # Administration
 
-To edit the config.star file, you can use the -edit flag. This will open the
+To edit the config.star file, you can use the edit command. This will open the
 file in your default editor (specified by the $EDITOR environment variable).
 After you save the changes and close the editor, the updated config.star will
 be saved back to the Gist. For example:
 
-	$ tgfeed -edit
+	$ tgfeed edit
 
 To reenable a failing feed that has been disabled due to consecutive failures,
-you can use the -reenable flag followed by the URL of the feed. For example:
+you can use the reenable command followed by the URL of the feed. For example:
 
-	$ tgfeed -reenable https://example.com/feed
+	$ tgfeed reenable https://example.com/feed
 
-To view the list of feeds, you can use the -feeds flag. This will also print the
+To view the list of feeds, you can use the feeds command. This will also print the
 URLs of feeds that have encountered errors during fetching. For example:
 
-	$ tgfeed -feeds
+	$ tgfeed feeds
 
 # Scheduling
 

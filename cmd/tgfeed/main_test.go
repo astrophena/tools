@@ -56,32 +56,36 @@ func TestFetcherMain(t *testing.T) {
 			WantErr: cli.ErrInvalidArgs,
 		},
 		"run": {
-			Args:               []string{"-run"},
+			Args:               []string{"run"},
 			WantNothingPrinted: true,
 		},
 		"run (dry)": {
-			Args: []string{"-run", "-dry"},
+			Args: []string{"-dry", "run"},
 		},
 		"version": {
 			Args:    []string{"-version"},
 			WantErr: cli.ErrExitVersion,
 		},
 		"edit without any changes": {
-			Args: []string{"-edit"},
+			Args: []string{"edit"},
 			Env: map[string]string{
 				"EDITOR": "true",
 			},
 			WantInStderr: "No changes made to config.star, exiting.",
 		},
 		"edit without defined editor": {
-			Args:    []string{"-edit"},
+			Args:    []string{"edit"},
 			WantErr: errNoEditor,
 		},
 		"list feeds": {
-			Args: []string{"-feeds"},
+			Args: []string{"feeds"},
+		},
+		"reenable command without arguments": {
+			Args:    []string{"reenable"},
+			WantErr: cli.ErrInvalidArgs,
 		},
 		"reenable disabled feed": {
-			Args:               []string{"-reenable", "https://example.com/disabled.xml"},
+			Args:               []string{"reenable", "https://example.com/disabled.xml"},
 			WantNothingPrinted: true,
 			CheckFunc: func(t *testing.T, f *fetcher) {
 				f.state.ReadAccess(func(s map[string]*feedState) {
@@ -90,11 +94,15 @@ func TestFetcherMain(t *testing.T) {
 			},
 		},
 		"reenable non-existent feed": {
-			Args:    []string{"-reenable", "https://example.com/non-existent.xml"},
+			Args:    []string{"reenable", "https://example.com/non-existent.xml"},
 			WantErr: errNoFeed,
 		},
+		"google-token command without arguments": {
+			Args:    []string{"google-token"},
+			WantErr: cli.ErrInvalidArgs,
+		},
 		"obtaining Google token fails without service account key": {
-			Args:    []string{"-google-token", "https://www.googleapis.com/auth/drive"},
+			Args:    []string{"google-token", "https://www.googleapis.com/auth/drive"},
 			WantErr: errNoServiceAccountKey,
 		},
 	},
