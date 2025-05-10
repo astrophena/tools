@@ -243,7 +243,7 @@ func (f *fetcher) handleFetchFailure(ctx context.Context, state *feedState, url 
 
 	// Complain loudly and disable feed, if we failed previously enough.
 	if state.ErrorCount >= errorThreshold {
-		err = fmt.Errorf("fetching feed %q failed after %d previous attempts: %v; feed was disabled, to reenable it run 'tgfeed -reenable %q'", url, state.ErrorCount, err, url)
+		err = fmt.Errorf("fetching feed %q failed after %d previous attempts: %v; feed was disabled, to reenable it run 'tgfeed reenable %q'", url, state.ErrorCount, err, url)
 		state.Disabled = true
 
 		if err := f.errNotify(ctx, err); err != nil {

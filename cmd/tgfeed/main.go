@@ -58,17 +58,10 @@ func main() { cli.Main(new(fetcher)) }
 func (f *fetcher) Flags(fs *flag.FlagSet) {
 	fs.BoolVar(&f.dry, "dry", false, "Enable dry-run mode: log actions, but don't send updates or save state.")
 	fs.BoolVar(&f.jsonLog, "json-log", false, "Emit logs in JSON format.")
-	fs.BoolVar(&f.mode.edit, "edit", false, "Open the config.star configuration file in your $EDITOR.")
-	fs.BoolVar(&f.mode.feeds, "feeds", false, "List all configured feeds and their status.")
-	fs.BoolVar(&f.mode.run, "run", false, "Fetch feeds and send updates to Telegram.")
-	fs.StringVar(&f.mode.googleToken, "google-token", "", "Get a Google access token for the given `scope`.")
-	fs.StringVar(&f.mode.reenable, "reenable", "", "Re-enable a previously disabled feed by its `URL`.")
 }
 
 func (f *fetcher) Run(ctx context.Context) error {
 	env := cli.GetEnv(ctx)
-
-	// Initialize logger.
 	f.logf = env.Logf
 
 	// Load configuration from environment variables.
@@ -98,31 +91,42 @@ func (f *fetcher) Run(ctx context.Context) error {
 		f.slogLevel.Set(slog.LevelDebug)
 	}
 
-	// Choose a mode based on passed flags and run it.
-	switch {
-	case f.mode.feeds:
+	if len(env.Args) == 0 {
+		return fmt.Errorf("%w: command is required, see -help for usage", cli.ErrInvalidArgs)
+	}
+	command := env.Args[0]
+
+	switch command {
+	case "feeds":
 		return f.listFeeds(ctx, env.Stdout)
-	case f.mode.edit:
+	case "edit":
 		return f.edit(ctx)
-	case f.mode.run:
+	case "run":
 		if err := f.run(ctx); err != nil {
 			return f.errNotify(ctx, err)
 		}
 		return nil
-	case f.mode.reenable != "":
-		return f.reenable(ctx, f.mode.reenable)
-	case f.mode.googleToken != "":
+	case "reenable":
+		if len(env.Args) != 2 {
+			return fmt.Errorf("%w: reenable command expects a feed URL", cli.ErrInvalidArgs)
+		}
+		return f.reenable(ctx, env.Args[1])
+	// Internal command, used in jobs/tgfeed/pprof-upload.bash.
+	case "google-token":
+		if len(env.Args) != 2 {
+			return fmt.Errorf("%w: google-token command expects a scope", cli.ErrInvalidArgs)
+		}
 		if f.serviceAccountKey == nil {
 			return errNoServiceAccountKey
 		}
-		tok, err := f.serviceAccountKey.AccessToken(ctx, f.httpc, f.mode.googleToken)
+		tok, err := f.serviceAccountKey.AccessToken(ctx, f.httpc, env.Args[1])
 		if err != nil {
 			return err
 		}
 		fmt.Println(tok)
 		return nil
 	default:
-		return fmt.Errorf("%w: pick a mode", cli.ErrInvalidArgs)
+		return fmt.Errorf("%w: no such command %q", cli.ErrInvalidArgs, command)
 	}
 }
 
@@ -131,13 +135,6 @@ type fetcher struct {
 	init    sync.Once
 
 	// configuration
-	mode struct {
-		feeds       bool
-		edit        bool
-		reenable    string
-		run         bool
-		googleToken string
-	}
 	chatID                string
 	dry                   bool
 	ghToken               string
