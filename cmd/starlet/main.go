@@ -42,30 +42,22 @@ const tgAPI = "https://api.telegram.org"
 func main() { cli.Main(new(engine)) }
 
 func (e *engine) Flags(fs *flag.FlagSet) {
-	fs.Int64Var(&e.tgOwner, "tg-owner", 0, "Telegram user `ID` of the bot owner.")
-	fs.StringVar(&e.addr, "addr", "localhost:3000", "Listen on `host:port`.")
-	fs.StringVar(&e.geminiKey, "gemini-key", "", "Gemini API `key`.")
-	fs.StringVar(&e.ghToken, "gh-token", "", "GitHub API `token`.")
-	fs.StringVar(&e.gistID, "gist-id", "", "GitHub Gist `ID` to load bot code from.")
-	fs.StringVar(&e.host, "host", "", "Bot `domain` used for setting up webhook.")
-	fs.StringVar(&e.reloadToken, "reload-token", "", "Secret `token` used for calling /reload endpoint.")
-	fs.StringVar(&e.tgSecret, "tg-secret", "", "Secret `token` used to validate Telegram Bot API updates.")
-	fs.StringVar(&e.tgToken, "tg-token", "", "Telegram Bot API `token`.")
+	fs.BoolVar(&e.prod, "prod", false, "Run in production mode.")
 }
 
 func (e *engine) Run(ctx context.Context) error {
 	env := cli.GetEnv(ctx)
 
-	// Load configuration from environment variables or flags.
-	e.geminiKey = cmp.Or(env.Getenv("GEMINI_KEY"), e.geminiKey)
-	e.ghToken = cmp.Or(env.Getenv("GH_TOKEN"), e.ghToken)
-	e.gistID = cmp.Or(env.Getenv("GIST_ID"), e.gistID)
-	e.host = cmp.Or(env.Getenv("HOST"), e.host)
+	// Load configuration from environment variables.
+	e.geminiKey = cmp.Or(e.geminiKey, env.Getenv("GEMINI_KEY"))
+	e.ghToken = cmp.Or(e.ghToken, env.Getenv("GH_TOKEN"))
+	e.gistID = cmp.Or(e.gistID, env.Getenv("GIST_ID"))
+	e.host = cmp.Or(e.host, env.Getenv("HOST"))
 	e.onRender = env.Getenv("RENDER") == "true"
-	e.reloadToken = cmp.Or(env.Getenv("RELOAD_TOKEN"), e.reloadToken)
-	e.tgOwner = cmp.Or(parseInt(env.Getenv("TG_OWNER")), e.tgOwner)
-	e.tgSecret = cmp.Or(env.Getenv("TG_SECRET"), e.tgSecret)
-	e.tgToken = cmp.Or(env.Getenv("TG_TOKEN"), e.tgToken)
+	e.reloadToken = cmp.Or(e.reloadToken, env.Getenv("RELOAD_TOKEN"))
+	e.tgOwner = cmp.Or(e.tgOwner, parseInt(env.Getenv("TG_OWNER")))
+	e.tgSecret = cmp.Or(e.tgSecret, env.Getenv("TG_SECRET"))
+	e.tgToken = cmp.Or(e.tgToken, env.Getenv("TG_TOKEN"))
 
 	e.stderr = env.Stderr
 
@@ -81,19 +73,25 @@ func (e *engine) Run(ctx context.Context) error {
 		return nil
 	}
 
-	// If running on Render, try to look up port to listen on, activate webhook
-	// and start goroutine that prevents Starlet from sleeping.
+	// If running on Render, try to look up port to listen on and start goroutine that prevents Starlet from sleeping.
 	if e.onRender {
-		env.Logf("Running on Render: starting self-ping goroutine.")
+		e.logf("Running on Render: enabling production mode and starting self-ping goroutine.")
+		e.prod = true
 		// https://docs.render.com/environment-variables#all-runtimes-1
 		if port := env.Getenv("PORT"); port != "" {
 			e.srv.Addr = ":" + port
 		}
+		go e.renderSelfPing(ctx, selfPingInterval)
+	}
+
+	// If running in production mode, set the webhook in Telegram Bot API.
+	if e.prod {
 		if err := e.setWebhook(ctx); err != nil {
 			return err
 		}
-		go e.selfPing(ctx, selfPingInterval)
+		e.logf("Running in production mode.")
 	}
+	e.logf("Running in development mode.")
 
 	return e.srv.ListenAndServe(ctx)
 }
@@ -129,6 +127,7 @@ type engine struct {
 	httpc         *http.Client
 	me            *getMeResponse // obtained from Telegram Bot API
 	onRender      bool
+	prod          bool
 	reloadToken   string
 	stderr        io.Writer
 	tgBotID       int64
@@ -267,7 +266,6 @@ type timestampWriter struct {
 	w io.Writer
 }
 
-// Write implements the [io.Writer] interface.
 func (tw *timestampWriter) Write(p []byte) (n int, err error) {
 	lines := bytes.SplitAfter(p, []byte{'\n'})
 
@@ -297,7 +295,7 @@ func (e *engine) debugAuth(next http.Handler) http.Handler {
 			return
 		}
 
-		if !strings.HasPrefix(r.URL.Path, "/debug") || !e.onRender {
+		if !strings.HasPrefix(r.URL.Path, "/debug") || !e.prod {
 			next.ServeHTTP(w, r)
 			return
 		}

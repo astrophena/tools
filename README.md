@@ -10,7 +10,7 @@ This repository holds personal tools:
 - Mdfmt formats Markdown files.
 - Mdserve serves Markdown files from a directory.
 - Renamer renames files in a specified directory sequentially, starting from a given number.
-- Starlet is a Telegram bot runner that uses Starlark.
+- Starlet is a Telegram bot runner powered by Starlark.
 - Tgfeed fetches RSS feeds and sends updates to Telegram.
 
 Install them:

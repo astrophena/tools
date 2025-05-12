@@ -42,8 +42,8 @@ func TestRun(t *testing.T) {
 			Args:    []string{"-h"},
 			WantErr: flag.ErrHelp,
 		},
-		"overrides telegram token passed from flag by env": {
-			Args: []string{"-tg-token", "blablabla"},
+		"sets telegram token passed by env": {
+			Args: []string{},
 			Env: map[string]string{
 				"TG_TOKEN": tgToken,
 			},

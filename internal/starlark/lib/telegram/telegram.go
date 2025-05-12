@@ -31,7 +31,7 @@ import (
 //
 // For example, to send a message to a chat:
 //
-//	result = telegram.call(
+//	response = telegram.call(
 //	    method = "sendMessage",
 //	    args = {
 //	        "chat_id": 123456789,
@@ -39,7 +39,7 @@ import (
 //	    }
 //	)
 //
-// The result variable will contain the response from the Telegram Bot API.
+// The response variable will contain the response from the Telegram Bot API.
 func Module(token string, client *http.Client) *starlarkstruct.Module {
 	m := &module{
 		httpc:    client,
