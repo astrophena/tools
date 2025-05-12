@@ -71,7 +71,7 @@ func TestSetWebhook(t *testing.T) {
 	}
 }
 
-func TestSelfPing(t *testing.T) {
+func TestRenderSelfPing(t *testing.T) {
 	recv := make(chan struct{})
 
 	e := testEngine(t, testMux(t, map[string]http.HandlerFunc{
@@ -91,7 +91,7 @@ func TestSelfPing(t *testing.T) {
 		},
 	}
 
-	go e.selfPing(cli.WithEnv(t.Context(), env), 10*time.Millisecond)
+	go e.renderSelfPing(cli.WithEnv(t.Context(), env), 10*time.Millisecond)
 
 	<-recv
 }

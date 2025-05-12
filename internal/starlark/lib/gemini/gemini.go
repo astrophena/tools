@@ -20,7 +20,7 @@ import (
 // This module provides a single function, generate_content, which uses the
 // Gemini API to generate text.
 //
-// It accepts four keyword arguments:
+// It accepts three keyword arguments:
 //
 //   - model (str): The name of the model to use for generation.
 //   - contents (list of strings): The text to be provided to Gemini for generation.
@@ -31,13 +31,13 @@ import (
 //
 // For example:
 //
-//	candidates = gemini.generate_content(
+//	responses = gemini.generate_content(
 //	    model="gemini-1.5-flash",
 //	    contents=["Once upon a time,"],
 //	    system_instructions="You are a creative story writer. Write a short story based on the provided prompt."
 //	)
 //
-// The candidates variable will contain a list of generated responses.
+// The responses variable will contain a list of generated responses.
 func Module(client *gemini.Client) *starlarkstruct.Module {
 	m := &module{client: client}
 	return &starlarkstruct.Module{

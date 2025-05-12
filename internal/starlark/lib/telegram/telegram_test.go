@@ -27,31 +27,31 @@ func TestTelegramModule(t *testing.T) {
 	}{
 		"success": {
 			script: `
-result = telegram.call(
-    method = "sendMessage",
-    args = {
+response = telegram.call(
+    method="sendMessage",
+    args={
         "chat_id": 123456789,
         "text": "Hello, world!"
     }
 )
 
-print(result)
+print(response)
 `,
 			mockStatusCode: http.StatusOK,
-			mockResponse:   `{"ok":true,"result":{"message_id":123}}`,
-			wantOutput:     `{"ok": True, "result": {"message_id": 123}}`,
+			mockResponse:   `{"ok":true,"response":{"message_id":123}}`,
+			wantOutput:     `{"ok": True, "response": {"message_id": 123}}`,
 		},
 		"error": {
 			script: `
-result = telegram.call(
-    method = "sendMessage",
-    args = {
+response = telegram.call(
+    method="sendMessage",
+    args={
         "chat_id": 123456789,
         "text": "Hello, world!"
     }
 )
 
-print(result)
+print(response)
 `,
 			mockStatusCode: http.StatusBadRequest,
 			mockResponse:   `{"ok": false, "error_code": 400, "description": "Bad Request: chat not found"}`,
@@ -59,7 +59,7 @@ print(result)
 		},
 		"invalid args": {
 			script: `
-result = telegram.call(
+response = telegram.call(
     "sendMessage",
     {
         "chat_id": 123456789,
@@ -67,18 +67,18 @@ result = telegram.call(
     }
 )
 
-print(result)
+print(response)
 `,
 			wantErr: `telegram.call: unexpected positional arguments`,
 		},
 		"invalid JSON": {
 			script: `
-result = telegram.call(
+response = telegram.call(
 	method="sendMessage", 
 	args={"chat_id": 123456789, "text": lambda x: x}
 )
 
-print(result)
+print(response)
 `,
 			wantErr: "telegram.call: failed to encode received args to JSON",
 		},

@@ -44,8 +44,8 @@ func (e *engine) setWebhook(ctx context.Context) error {
 	return err
 }
 
-// selfPing continusly pings Starlet to prevent it's Render app from sleeping.
-func (e *engine) selfPing(ctx context.Context, interval time.Duration) {
+// renderSelfPing continusly pings Starlet to prevent it's Render app from sleeping.
+func (e *engine) renderSelfPing(ctx context.Context, interval time.Duration) {
 	env := cli.GetEnv(ctx)
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
