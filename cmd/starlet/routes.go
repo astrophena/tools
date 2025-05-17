@@ -113,7 +113,7 @@ func (e *engine) debugMenu(r *http.Request) []web.MenuItem {
 			name:       name,
 			icon:       icon,
 			target:     target,
-			spritePath: e.srv.StaticHashName("/static/icons/sprite.svg"),
+			spritePath: e.srv.StaticHashName("static/icons/sprite.svg"),
 		}
 	}
 
@@ -143,7 +143,7 @@ func (hi headerItem) ToHTML() template.HTML {
 	sb.WriteString(">")
 	sb.WriteString(fmt.Sprintf(`
 <svg class="icon" aria-hidden="true">
-  <use xlink:href="%s#icon-%s"/>
+  <use xlink:href="/%s#icon-%s"/>
 </svg>`, hi.spritePath, hi.icon))
 	sb.WriteString(html.EscapeString(hi.name))
 	sb.WriteString("</a>")
