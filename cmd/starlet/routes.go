@@ -138,13 +138,13 @@ type headerItem struct {
 
 func (hi headerItem) ToHTML() template.HTML {
 	var sb strings.Builder
+	sb.WriteString("<a href=")
+	sb.WriteString(fmt.Sprintf("%q", hi.target))
+	sb.WriteString(">")
 	sb.WriteString(fmt.Sprintf(`
 <svg class="icon" aria-hidden="true">
   <use xlink:href="%s#icon-%s"/>
 </svg>`, hi.spritePath, hi.icon))
-	sb.WriteString("<a href=")
-	sb.WriteString(fmt.Sprintf("%q", hi.target))
-	sb.WriteString(">")
 	sb.WriteString(html.EscapeString(hi.name))
 	sb.WriteString("</a>")
 	return template.HTML(sb.String())
