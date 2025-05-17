@@ -90,8 +90,9 @@ func (e *engine) Run(ctx context.Context) error {
 			return err
 		}
 		e.logf("Running in production mode.")
+	} else {
+		e.logf("Running in development mode.")
 	}
-	e.logf("Running in development mode.")
 
 	return e.srv.ListenAndServe(ctx)
 }
