@@ -9,6 +9,7 @@ import (
 	"embed"
 	"fmt"
 	"html"
+	"html/template"
 	"net/http"
 	"os"
 	"strings"
@@ -20,7 +21,7 @@ import (
 var (
 	//go:embed static/templates/logs.tmpl
 	logsTmpl string
-	//go:embed static/js/*
+	//go:embed static/js/* static/icons/*
 	staticFS embed.FS
 )
 
@@ -107,25 +108,46 @@ func (e *engine) debugMenu(r *http.Request) []web.MenuItem {
 		return nil
 	}
 
-	nameLink := web.LinkItem{
-		Name:   ident.FirstName,
-		Target: "https://t.me/" + ident.Username,
+	item := func(name, icon, target string) headerItem {
+		return headerItem{
+			name:       name,
+			icon:       icon,
+			target:     target,
+			spritePath: e.srv.StaticHashName("/static/icons/sprite.svg"),
+		}
 	}
+
+	nameLink := item(ident.FirstName, "user", "https://t.me/"+ident.Username)
 	if ident.LastName != "" {
-		nameLink.Name += " " + ident.LastName
+		nameLink.name += " " + ident.LastName
 	}
 
 	return []web.MenuItem{
 		nameLink,
-		web.LinkItem{
-			Name:   "Documentation",
-			Target: "https://go.astrophena.name/tools/cmd/starlet",
-		},
-		web.LinkItem{
-			Name:   "Log out",
-			Target: "/logout",
-		},
+		item("Documentation", "docs", "https://go.astrophena.name/tools/cmd/starlet"),
+		item("Log out", "logout", "/logout"),
 	}
+}
+
+type headerItem struct {
+	name       string
+	icon       string
+	spritePath string
+	target     string
+}
+
+func (hi headerItem) ToHTML() template.HTML {
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf(`
+<svg class="icon" aria-hidden="true">
+  <use xlink:href="%s#icon-%s"/>
+</svg>`, hi.spritePath, hi.icon))
+	sb.WriteString("<a href=")
+	sb.WriteString(fmt.Sprintf("%q", hi.target))
+	sb.WriteString(">")
+	sb.WriteString(html.EscapeString(hi.name))
+	sb.WriteString("</a>")
+	return template.HTML(sb.String())
 }
 
 func jsonOK(w http.ResponseWriter) {
