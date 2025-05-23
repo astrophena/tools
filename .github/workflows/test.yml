@@ -17,7 +17,7 @@ jobs:
       - name: 'Set up ruff'
         run: 'pip install ruff'
       - name: 'Test'
-        run: 'go test -race ./... -count=1'
+        run: 'go tool pre-commit'
       - name: 'Trigger vanity deploy'
         if: "github.ref == 'refs/heads/master'"
         env:

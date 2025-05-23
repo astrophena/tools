@@ -51,4 +51,5 @@ tool (
 	go.astrophena.name/tools/internal/devtools/addcopyright
 	go.astrophena.name/tools/internal/devtools/genreadme
 	go.astrophena.name/tools/internal/devtools/new
+	go.astrophena.name/tools/internal/devtools/pre-commit
 )
