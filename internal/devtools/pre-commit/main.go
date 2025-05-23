@@ -21,6 +21,8 @@ func main() {
 
 	var w bytes.Buffer
 
+	run(&w, "git", "config", "core.hooksPath", "internal/devtools/githooks")
+
 	run(&w, "gofmt", "-d", ".")
 	if diff := w.String(); diff != "" {
 		log.Fatalf("Run gofmt on these files:\n\t%v", diff)
