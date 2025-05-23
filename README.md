@@ -19,6 +19,12 @@ Install them:
 $ go install go.astrophena.name/tools/cmd/...@master
 ```
 
+Setting up Git pre-commit hook for development:
+
+```sh
+$ go tool pre-commit
+```
+
 **Be warned**: these tools are for personal use, subject to change without notice and may gain or lose functionality at any time.
 
 The code here is... so-so.
