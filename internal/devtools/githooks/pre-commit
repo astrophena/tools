@@ -1,10 +1,4 @@
 #!/bin/sh
 
 echo "==> Running pre-commit check..."
-go generate      # update copyrights and README.md
-go test -count=1 # to invalidate test cache
-go test ./cmd/... ./internal/...
-go mod tidy --diff || {
-	echo "run 'go mod tidy' before committing"
-	exit 1
-}
+go tool pre-commit
