@@ -48,7 +48,7 @@ func Module(ctx context.Context, ttl time.Duration) *starlarkstruct.Module {
 
 type module struct {
 	ttl   time.Duration
-	cache syncx.Map[string, *cacheEntry]
+	cache syncx.Map[string, cacheEntry]
 }
 
 func (m *module) cleanup(ctx context.Context) {
@@ -58,7 +58,7 @@ func (m *module) cleanup(ctx context.Context) {
 	for {
 		select {
 		case <-ticker.C:
-			m.cache.Range(func(key string, entry *cacheEntry) bool {
+			m.cache.Range(func(key string, entry cacheEntry) bool {
 				if time.Since(entry.lastAccessed) > m.ttl {
 					m.cache.Delete(key)
 				}
@@ -107,11 +107,9 @@ func (m *module) set(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tupl
 	if err := starlark.UnpackArgs(b.Name(), args, kwargs, "key", &key, "value", &value); err != nil {
 		return nil, err
 	}
-	entry := &cacheEntry{
+	m.cache.Store(key, cacheEntry{
 		value:        value,
 		lastAccessed: time.Now(),
-	}
-	m.cache.Store(key, entry)
-
+	})
 	return starlark.None, nil
 }
