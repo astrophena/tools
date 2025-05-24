@@ -167,7 +167,7 @@ func (e *engine) doInit(ctx context.Context) error {
 		e.stderr = os.Stderr
 	}
 
-	e.kvCache = kvcache.Module(kvCacheTTL)
+	e.kvCache = kvcache.Module(ctx, kvCacheTTL)
 
 	const logLineLimit = 300
 	e.logStream = logstream.New(logLineLimit)
