@@ -44,11 +44,11 @@ The following built-in functions and modules are available within the bot.star s
 		  Raises an error if the file does not exist in the Gist.
 
 	gemini: A module for interacting with Google's Gemini API (requires GEMINI_KEY env var).
-		- generate_content(model: str, contents: list[str], system_instructions: str | None = None, unsafe: bool = False) -> list[list[str]]:
+		- generate_content(model: str, contents: list[tuple[str, str]], system_instructions: str | None = None, unsafe: bool = False) -> list[list[str]]:
 		  Generates content using the specified Gemini model.
 		  - model: Name of the Gemini model (e.g., "gemini-1.5-flash").
-		  - contents: A list of strings representing the conversation history or prompt parts.
-		    Odd-indexed elements are treated as user input, even-indexed as model output (if len > 1).
+		  - contents: A list of (role, text) tuples representing the conversation history.
+		    Valid roles are typically "user" and "model".
 		  - system_instructions: Optional system prompt to guide the model's behavior.
 		  - unsafe: If True, disables safety filters (use with caution).
 		  Returns a list of candidate responses, where each candidate is a list of text parts (strings).
@@ -86,8 +86,13 @@ Additionally, Starlet provides a small standard library that can be loaded from 
 
 Modules available:
 
-	convcache: Provides functions (get, append, reset) to manage simple conversation
-	           histories per chat ID using the kvcache.
+	convcache: Provides functions to manage simple conversation histories per chat ID
+	           using the kvcache.
+	    - get(chat_id: int) -> list[tuple[str, str]]: Retrieves the conversation history
+	      (list of (role, text) tuples) for the given chat ID. Returns an empty list if no history exists.
+	    - append(chat_id: int, role: str, text: str) -> None: Appends a (role, text) tuple to the
+	      conversation history for the given chat ID.
+	    - reset(chat_id: int) -> None: Clears the conversation history for the given chat ID.
 
 	tg: Provides helper functions built on top of telegram.call:
 	    - forward_message(to: int|str, from_chat_id: int|str, message_id: int): Forwards a message.

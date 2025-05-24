@@ -20,24 +20,29 @@ import (
 // This module provides a single function, generate_content, which uses the
 // Gemini API to generate text.
 //
-// It accepts three keyword arguments:
+// It accepts the following keyword arguments:
 //
-//   - model (str): The name of the model to use for generation.
-//   - contents (list of strings): The text to be provided to Gemini for generation.
+//   - model (str): The name of the model to use for generation (e.g., "gemini-1.5-flash").
+//   - contents (list of (str, str) tuples): A list of (role, text) tuples representing
+//     the conversation history. Valid roles are typically "user" and "model".
 //   - system_instructions (str, optional): System instructions to guide Gemini's response.
-//
-// If you pass multiple strings in contents, each odd part will be marked as
-// sent by user, and each even part as sent by bot.
+//   - unsafe (bool, optional): If set to true, disables all safety settings for the
+//     content generation, allowing potentially harmful content. Use with caution.
 //
 // For example:
 //
 //	responses = gemini.generate_content(
 //	    model="gemini-1.5-flash",
-//	    contents=["Once upon a time,"],
+//	    contents=[
+//	        ("user", "Once upon a time,"),
+//	        ("model", "there was a brave knight."),
+//	        ("user", "What happened next?")
+//	    ],
 //	    system_instructions="You are a creative story writer. Write a short story based on the provided prompt."
 //	)
 //
-// The responses variable will contain a list of generated responses.
+// The responses variable will contain a list of generated responses, where each response
+// is a list of strings representing the parts of the generated content.
 func Module(client *gemini.Client) *starlarkstruct.Module {
 	m := &module{client: client}
 	return &starlarkstruct.Module{
@@ -79,23 +84,29 @@ func (m *module) generateContent(thread *starlark.Thread, b *starlark.Builtin, a
 	var contents []*gemini.Content
 
 	for i := range contentsList.Len() {
-		partVal, ok := contentsList.Index(i).(starlark.String)
+		partVal, ok := contentsList.Index(i).(starlark.Tuple)
 		if !ok {
-			return starlark.None, fmt.Errorf("%s: contents[%d] is not a string", b.Name(), i)
+			return nil, fmt.Errorf("%s: contents[%d] is not a tuple", b.Name(), i)
 		}
+
+		if len(partVal) != 2 {
+			return nil, fmt.Errorf("%s: contents[%d] must have exactly two elements: role and model", b.Name(), i)
+		}
+
+		roleStr, ok := partVal.Index(0).(starlark.String)
+		if !ok {
+			return nil, fmt.Errorf("%s: in contents[%d] role must be a string", b.Name(), i)
+		}
+		textStr, ok := partVal.Index(1).(starlark.String)
+		if !ok {
+			return nil, fmt.Errorf("%s: in contents[%d] text must be a string", b.Name(), i)
+		}
+
 		content := &gemini.Content{
 			Parts: []*gemini.Part{
-				{Text: string(partVal)},
+				{Text: string(textStr)},
 			},
-			Role: "user",
-		}
-		// Mark each even message as sent by model.
-		num := 1
-		if i != 0 {
-			num = i + 1
-		}
-		if num%2 == 0 {
-			content.Role = "model"
+			Role: string(roleStr),
 		}
 		contents = append(contents, content)
 	}

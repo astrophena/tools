@@ -7,9 +7,9 @@
 """Provides functions to cache conversation history per chat ID.
 
 Attributes:
-    get(chat_id: int) -> list: Retrieves the conversation history (list of strings)
-        for the given chat ID. Returns an empty list if no history exists.
-    append(chat_id: int, message: str) -> None: Appends a message string to the
+    get(chat_id: int) -> list: Retrieves the conversation history (list of (str, str) tuples,
+        where each tuple is (role, text)) for the given chat ID. Returns an empty list if no history exists.
+    append(chat_id: int, role: str, text: str) -> None: Appends a (role, text) tuple to the
         conversation history for the given chat ID.
     reset(chat_id: int) -> None: Clears the conversation history for the
         given chat ID.
@@ -25,10 +25,10 @@ def _get(chat_id):
     return cur
 
 
-def _append(chat_id, message):
-    """Appends a message to the conversation history for a chat ID."""
+def _append(chat_id, role, text):
+    """Appends a message (role, text) to the conversation history for a chat ID."""
     cur = _get(chat_id)
-    cur.append(message)
+    cur.append((role, text))
     kvcache.set(_cache_key(chat_id), cur)
 
 
