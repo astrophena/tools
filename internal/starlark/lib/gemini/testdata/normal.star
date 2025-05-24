@@ -4,7 +4,7 @@
 
 responses = gemini.generate_content(
     model="gemini-1.5-flash",
-    contents=["Write a story about very kind heiress and her maid."],
+    contents=[("user", "Write a story about very kind heiress and her maid.")],
 )
 
 print(responses[0][0])

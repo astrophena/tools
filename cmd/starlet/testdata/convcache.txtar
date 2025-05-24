@@ -7,7 +7,7 @@ def handle(update):
     conv = convcache.get(chat_id)
     if conv == None:
         fail("conv must be None")
-    convcache.append(chat_id, "testing!")
+    convcache.append(chat_id, "user", "testing!")
     conv2 = convcache.get(chat_id)
     if len(conv2) != 1:
         fail("conv2 must contain one message")

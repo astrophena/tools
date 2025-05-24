@@ -4,7 +4,11 @@
 
 responses = gemini.generate_content(
     model="gemini-1.5-flash",
-    contents=["How are you?", "I'm fine, thank you!", "Tell me about yourself."],
+    contents=[
+        ("user", "How are you?"),
+        ("model", "I'm fine, thank you!"),
+        ("user", "Tell me about yourself."),
+    ],
 )
 
 print(responses[0][0])
