@@ -11,7 +11,7 @@ require (
 	github.com/mmcdole/gofeed v1.3.0
 	github.com/muesli/reflow v0.3.0
 	github.com/tobischo/gokeepasslib/v3 v3.6.1
-	go.astrophena.name/base v0.6.1-0.20250507175744-49382e99b3aa
+	go.astrophena.name/base v0.7.0
 	go.starlark.net v0.0.0-20250417143717-f57e51f710eb
 	golang.org/x/term v0.32.0
 	rsc.io/markdown v0.0.0-20241212154241-6bf72452917f
