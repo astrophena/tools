@@ -52,7 +52,7 @@ func run(ctx context.Context) error {
 	sum := hex.EncodeToString(h.Sum(nil))
 
 	run := func(name string, args ...string) error {
-		cmd := exec.Command(name, args...)
+		cmd := exec.CommandContext(ctx, name, args...)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		cmd.Stdin = os.Stdin
