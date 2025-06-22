@@ -350,7 +350,7 @@ func (f *fetcher) run(ctx context.Context) error {
 	}
 
 	// Recreate updates channel on each fetch.
-	updates := make(chan *gofeed.Item)
+	updates := make(chan *item)
 
 	var baseWg sync.WaitGroup
 
@@ -362,11 +362,11 @@ func (f *fetcher) run(ctx context.Context) error {
 	loop:
 		for {
 			select {
-			case item, valid := <-updates:
+			case feedItem, valid := <-updates:
 				if !valid {
 					break loop
 				}
-				sendWg.Go(func() { f.sendUpdate(ctx, item) })
+				sendWg.Go(func() { f.sendUpdate(ctx, feedItem) })
 			case <-ctx.Done():
 				break loop
 			}

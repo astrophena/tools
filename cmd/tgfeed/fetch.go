@@ -41,8 +41,13 @@ const (
 //go:embed message.tmpl
 var messageTemplate string
 
+type item struct {
+	threadID int64
+	*gofeed.Item
+}
+
 // fetch fetches a single feed. Each fetch runs in it's own goroutine.
-func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *gofeed.Item) (retry bool, retryIn time.Duration) {
+func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *item) (retry bool, retryIn time.Duration) {
 	startTime := time.Now()
 
 	state, exists := f.getState(fd.URL)
@@ -147,26 +152,29 @@ func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *gofeed.Item
 		state.LastModified = lastModified
 	}
 
-	for _, item := range feed.Items {
-		if item.PublishedParsed.Before(state.LastUpdated) {
+	for _, feedItem := range feed.Items {
+		if feedItem.PublishedParsed.Before(state.LastUpdated) {
 			continue
 		}
 
 		if fd.BlockRule != nil {
-			if blocked := f.applyRule(fd.BlockRule, item); blocked {
-				f.slog.Debug("blocked by block rule", "item", item.Link)
+			if blocked := f.applyRule(fd.BlockRule, feedItem); blocked {
+				f.slog.Debug("blocked by block rule", "item", feedItem.Link)
 				continue
 			}
 		}
 
 		if fd.KeepRule != nil {
-			if keep := f.applyRule(fd.KeepRule, item); !keep {
-				f.slog.Debug("skipped by keep rule", "item", item.Link)
+			if keep := f.applyRule(fd.KeepRule, feedItem); !keep {
+				f.slog.Debug("skipped by keep rule", "item", feedItem.Link)
 				continue
 			}
 		}
 
-		updates <- item
+		updates <- &item{
+			Item:     feedItem,
+			threadID: fd.MessageThreadID,
+		}
 	}
 	state.LastUpdated = time.Now()
 	state.ErrorCount = 0
@@ -256,15 +264,15 @@ var nonAlphaNumRe = sync.OnceValue(func() *regexp.Regexp {
 	return regexp.MustCompile("[^a-zA-Z0-9/]+")
 })
 
-func (f *fetcher) sendUpdate(ctx context.Context, item *gofeed.Item) {
-	title := item.Title
-	if item.Title == "" {
-		title = item.Link
+func (f *fetcher) sendUpdate(ctx context.Context, feedItem *item) {
+	title := feedItem.Title
+	if feedItem.Title == "" {
+		title = feedItem.Link
 	}
 
-	msg := fmt.Sprintf(messageTemplate, title, item.Link)
+	msg := fmt.Sprintf(messageTemplate, title, feedItem.Link)
 
-	if u, err := urlpkg.Parse(item.Link); err == nil {
+	if u, err := urlpkg.Parse(feedItem.Link); err == nil {
 		switch u.Hostname() {
 		case "t.me":
 			msg += " #tg" // Telegram
@@ -277,25 +285,26 @@ func (f *fetcher) sendUpdate(ctx context.Context, item *gofeed.Item) {
 
 	inlineKeyboardButtons := []inlineKeyboardButton{}
 
-	if strings.HasPrefix(item.GUID, "https://news.ycombinator.com/item?id=") {
+	if strings.HasPrefix(feedItem.GUID, "https://news.ycombinator.com/item?id=") {
 		inlineKeyboardButtons = append(inlineKeyboardButtons, inlineKeyboardButton{
 			Text: "↪ Hacker News",
-			URL:  item.GUID,
+			URL:  feedItem.GUID,
 		})
 	}
 
-	f.slog.Debug("sending message", "item", item.Link, "message", msg)
+	f.slog.Debug("sending message", "item", feedItem.Link, "message", msg)
 	if f.dry {
 		return
 	}
 
-	if err := f.send(ctx, strings.TrimSpace(msg), false, &inlineKeyboard{inlineKeyboardButtons}); err != nil {
+	if err := f.send(ctx, strings.TrimSpace(msg), false, &inlineKeyboard{inlineKeyboardButtons}, feedItem.threadID); err != nil {
 		f.slog.Warn("failed to send message", "chat_id", f.chatID, "error", err)
 	}
 }
 
 type message struct {
 	ChatID             string `json:"chat_id"`
+	MessageThreadID    int64  `json:"message_thread_id,omitempty"`
 	LinkPreviewOptions struct {
 		IsDisabled bool `json:"is_disabled"`
 	} `json:"link_preview_options,omitempty"`
@@ -313,9 +322,10 @@ type inlineKeyboardButton struct {
 	URL  string `json:"url"`
 }
 
-func (f *fetcher) send(ctx context.Context, text string, disableLinkPreview bool, inlineKeyboard *inlineKeyboard) error {
+func (f *fetcher) send(ctx context.Context, text string, disableLinkPreview bool, inlineKeyboard *inlineKeyboard, threadID int64) error {
 	msg := &message{
-		ChatID: f.chatID,
+		ChatID:          f.chatID,
+		MessageThreadID: threadID,
 	}
 	if inlineKeyboard != nil {
 		msg.ReplyMarkup.InlineKeyboard = *inlineKeyboard
@@ -357,7 +367,7 @@ func isSendingRateLimited(err error) (retryable bool, wait time.Duration) {
 }
 
 func (f *fetcher) errNotify(ctx context.Context, err error) error {
-	return f.send(ctx, fmt.Sprintf(f.errorTemplate, err), true, nil)
+	return f.send(ctx, fmt.Sprintf(f.errorTemplate, err), true, nil, 0)
 }
 
 func (f *fetcher) makeTelegramRequest(ctx context.Context, method string, args any) error {

@@ -22,10 +22,11 @@ import (
 // Feed state.
 
 type feed struct {
-	URL       string             `json:"url"`
-	Title     string             `json:"title,omitempty"`
-	BlockRule *starlark.Function `json:"-"`
-	KeepRule  *starlark.Function `json:"-"`
+	URL             string             `json:"url"`
+	Title           string             `json:"title,omitempty"`
+	MessageThreadID int64              `json:"message_thread_id,omitempty"`
+	BlockRule       *starlark.Function `json:"-"`
+	KeepRule        *starlark.Function `json:"-"`
 }
 
 func (f *feed) String() string        { return fmt.Sprintf("<feed url=%q>", f.URL) }
@@ -42,6 +43,7 @@ func feedBuiltin(_ *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, k
 	if err := starlark.UnpackArgs("feed", args, kwargs,
 		"url", &f.URL,
 		"title?", &f.Title,
+		"message_thread_id?", &f.MessageThreadID,
 		"block_rule?", &f.BlockRule,
 		"keep_rule?", &f.KeepRule,
 	); err != nil {
