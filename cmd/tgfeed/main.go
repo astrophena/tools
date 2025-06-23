@@ -20,6 +20,7 @@ import (
 	"os/exec"
 	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -66,6 +67,7 @@ func (f *fetcher) Run(ctx context.Context) error {
 
 	// Load configuration from environment variables.
 	f.chatID = cmp.Or(f.chatID, env.Getenv("CHAT_ID"))
+	f.errorThreadID = cmp.Or(f.errorThreadID, parseInt(env.Getenv("ERROR_THREAD_ID")))
 	f.ghToken = cmp.Or(f.ghToken, env.Getenv("GITHUB_TOKEN"))
 	f.gistID = cmp.Or(f.gistID, env.Getenv("GIST_ID"))
 	f.statsSpreadsheetID = cmp.Or(f.statsSpreadsheetID, env.Getenv("STATS_SPREADSHEET_ID"))
@@ -130,6 +132,14 @@ func (f *fetcher) Run(ctx context.Context) error {
 	}
 }
 
+func parseInt(s string) int64 {
+	i, err := strconv.ParseInt(s, 10, 64)
+	if err == nil {
+		return i
+	}
+	return 0
+}
+
 type fetcher struct {
 	running atomic.Bool
 	init    sync.Once
@@ -137,6 +147,7 @@ type fetcher struct {
 	// configuration
 	chatID                string
 	dry                   bool
+	errorThreadID         int64
 	ghToken               string
 	gistID                string
 	jsonLog               bool

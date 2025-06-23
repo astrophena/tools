@@ -28,6 +28,11 @@ Required:
   - GITHUB_TOKEN: GitHub personal access token for accessing the GitHub API.
   - TELEGRAM_TOKEN: Telegram bot token for accessing the Telegram Bot API.
 
+Optional:
+
+  - ERROR_THREAD_ID: Telegram message thread ID where the program sends error
+    notifications. This is applicable only for supergroups with topics enabled.
+
 Required for uploading stats to the Google Spreadsheet:
 
   - STATS_SPREADSHEET_ID: ID of the Google Spreadsheet to which the program uploads
@@ -50,10 +55,14 @@ is written in Starlark language and defines a list of feeds, for example:
 	        url = "https://hnrss.org/newest",
 	        title = "Hacker News: Newest",
 	        block_rule = lambda item: "pdf" in item.title.lower(), # Block PDF files.
+	        message_thread_id = 123, # Send updates to a specific topic.
 	    )
 	]
 
 Each feed can have a title, URL, and optional block and keep rules.
+Optionally, message_thread_id can be specified to send updates from this
+feed to a specific message thread (topic) within the chat. This is applicable
+only for supergroups with topics enabled.
 
 Block and keep rules are Starlark functions that take a feed item as an argument
 and return a boolean value. If a block rule returns true, the item is not sent
