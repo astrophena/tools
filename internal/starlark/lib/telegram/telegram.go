@@ -32,10 +32,10 @@ import (
 // For example, to send a message to a chat:
 //
 //	response = telegram.call(
-//	    method = "sendMessage",
-//	    args = {
+//	    method="sendMessage",
+//	    args={
 //	        "chat_id": 123456789,
-//	        "text": "Hello, world!"
+//	        "text": "Hello, world!",
 //	    }
 //	)
 //
