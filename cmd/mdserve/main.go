@@ -68,7 +68,11 @@ func (e *engine) Run(ctx context.Context) error {
 	var rules []landlock.Rule
 
 	if e.fs == nil && dir != "" {
-		e.fs = os.DirFS(dir)
+		root, err := os.OpenRoot(dir)
+		if err != nil {
+			return err
+		}
+		e.fs = root.FS()
 		rules = append(rules, landlock.RODirs(dir))
 	}
 
@@ -98,7 +102,9 @@ func (e *engine) Run(ctx context.Context) error {
 	mux := http.NewServeMux()
 	mux.Handle("/", e)
 
-	e.logf("Serving from %s.", e.fs)
+	if dir != "" {
+		e.logf("Serving from %s.", dir)
+	}
 
 	if e.noServerStart {
 		return nil
