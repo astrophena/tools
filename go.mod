@@ -11,8 +11,8 @@ require (
 	github.com/mmcdole/gofeed v1.3.0
 	github.com/muesli/reflow v0.3.0
 	github.com/tobischo/gokeepasslib/v3 v3.6.1
-	go.astrophena.name/base v0.7.1
-	go.starlark.net v0.0.0-20250417143717-f57e51f710eb
+	go.astrophena.name/base v0.8.0
+	go.starlark.net v0.0.0-20250623223156-8bf495bf4e9a
 	golang.org/x/term v0.32.0
 	rsc.io/markdown v0.0.0-20241212154241-6bf72452917f
 )
@@ -29,14 +29,14 @@ require (
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/rivo/uniseg v0.2.0 // indirect
 	github.com/tobischo/argon2 v0.1.0 // indirect
-	golang.org/x/crypto v0.36.0 // indirect
+	golang.org/x/crypto v0.38.0 // indirect
 	golang.org/x/exp/typeparams v0.0.0-20231108232855-2478ac86f678 // indirect
-	golang.org/x/mod v0.24.0 // indirect
-	golang.org/x/net v0.38.0 // indirect
-	golang.org/x/sync v0.14.0 // indirect
+	golang.org/x/mod v0.25.0 // indirect
+	golang.org/x/net v0.40.0 // indirect
+	golang.org/x/sync v0.15.0 // indirect
 	golang.org/x/sys v0.33.0 // indirect
-	golang.org/x/text v0.25.0 // indirect
-	golang.org/x/tools v0.31.0 // indirect
+	golang.org/x/text v0.26.0 // indirect
+	golang.org/x/tools v0.33.0 // indirect
 	google.golang.org/protobuf v1.34.1 // indirect
 	honnef.co/go/tools v0.6.0 // indirect
 	kernel.org/pub/linux/libs/security/libcap/psx v1.2.70 // indirect
