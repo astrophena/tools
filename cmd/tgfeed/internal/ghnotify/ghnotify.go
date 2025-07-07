@@ -178,5 +178,7 @@ func rewriteURL(url string) string {
 	if url == "" {
 		return ""
 	}
-	return strings.ReplaceAll(url, "https://api.github.com/repos/", "https://github.com/")
+	url = strings.ReplaceAll(url, "https://api.github.com/repos/", "https://github.com/")
+	url = strings.ReplaceAll(url, "pulls", "pull") // fix PR links
+	return url
 }
