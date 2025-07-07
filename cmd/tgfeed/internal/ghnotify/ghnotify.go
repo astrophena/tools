@@ -168,7 +168,7 @@ func (h *handler) markAsRead(ctx context.Context) error {
 		return err
 	}
 
-	if res.StatusCode == http.StatusResetContent || http.StatusOK == http.StatusAccepted {
+	if res.StatusCode == http.StatusResetContent || res.StatusCode == http.StatusAccepted {
 		return nil
 	}
 	return fmt.Errorf("want 205 or 202, got %d: %s", res.StatusCode, b)
