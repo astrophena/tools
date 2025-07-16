@@ -10,15 +10,6 @@ import (
 	"path/filepath"
 )
 
-// Must is a helper that wraps a call to a function returning (T,
-// error) and panics if the error is non-nil.
-func Must[T any](val T, err error) T {
-	if err != nil {
-		panic(err)
-	}
-	return val
-}
-
 // EnsureRoot checks that the current working directory is at the repository
 // root and panics if it doesn't.
 func EnsureRoot() {

@@ -16,9 +16,9 @@ import (
 	"runtime/debug"
 
 	"go.astrophena.name/base/request"
+	"go.astrophena.name/base/unwrap"
 	"go.astrophena.name/base/version"
 	"go.astrophena.name/base/web"
-	"go.astrophena.name/tools/internal/devtools"
 	"go.astrophena.name/tools/internal/starlark/go2star"
 	"go.astrophena.name/tools/internal/starlark/interpreter"
 	"go.astrophena.name/tools/internal/starlark/lib/gemini"
@@ -45,7 +45,7 @@ var (
 	defaultErrorTemplate string
 	//go:embed lib/*.star
 	libRawFS embed.FS
-	libFS    = devtools.Must(fs.Sub(libRawFS, "lib"))
+	libFS    = unwrap.Value(fs.Sub(libRawFS, "lib"))
 )
 
 func (e *engine) loadFromGist(ctx context.Context) error {
