@@ -112,6 +112,9 @@ func (e *engine) ping(ctx context.Context, interval time.Duration) {
 			_, err := request.Make[request.IgnoreResponse](ctx, request.Params{
 				Method: http.MethodGet,
 				URL:    e.pingURL,
+				Headers: map[string]string{
+					"User-Agent": version.UserAgent(),
+				},
 			})
 			if err != nil {
 				e.logf("ping: failed to send heartbeat: %v", err)
