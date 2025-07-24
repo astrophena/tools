@@ -54,6 +54,7 @@ func (e *engine) Run(ctx context.Context) error {
 	e.gistID = cmp.Or(e.gistID, env.Getenv("GIST_ID"))
 	e.host = cmp.Or(e.host, env.Getenv("HOST"))
 	e.onRender = env.Getenv("RENDER") == "true"
+	e.pingURL = cmp.Or(e.pingURL, env.Getenv("PING_URL"))
 	e.reloadToken = cmp.Or(e.reloadToken, env.Getenv("RELOAD_TOKEN"))
 	e.tgOwner = cmp.Or(e.tgOwner, parseInt(env.Getenv("TG_OWNER")))
 	e.tgSecret = cmp.Or(e.tgSecret, env.Getenv("TG_SECRET"))
@@ -84,6 +85,10 @@ func (e *engine) Run(ctx context.Context) error {
 		go e.renderSelfPing(ctx, selfPingInterval)
 	}
 
+	if e.pingURL != "" {
+		go e.ping(ctx, selfPingInterval)
+	}
+
 	// If running in production mode, set the webhook in Telegram Bot API.
 	if e.prod {
 		if err := e.setWebhook(ctx); err != nil {
@@ -95,6 +100,26 @@ func (e *engine) Run(ctx context.Context) error {
 	}
 
 	return e.srv.ListenAndServe(ctx)
+}
+
+func (e *engine) ping(ctx context.Context, interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			_, err := request.Make[request.IgnoreResponse](ctx, request.Params{
+				Method: http.MethodGet,
+				URL:    e.pingURL,
+			})
+			if err != nil {
+				e.logf("ping: failed to send heartbeat: %v", err)
+			}
+		case <-ctx.Done():
+			return
+		}
+	}
 }
 
 func parseInt(s string) int64 {
@@ -128,6 +153,7 @@ type engine struct {
 	httpc         *http.Client
 	me            *getMeResponse // obtained from Telegram Bot API
 	onRender      bool
+	pingURL       string
 	prod          bool
 	reloadToken   string
 	stderr        io.Writer
