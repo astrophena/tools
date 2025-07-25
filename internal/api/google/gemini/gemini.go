@@ -85,8 +85,16 @@ type Content struct {
 
 // Part represents a textual element within a Content object.
 type Part struct {
+	// InlineData is the inline media bytes.
+	InlineData *InlineData `json:"inline_data,omitempty"`
 	// Text is the content of the textual element.
-	Text string `json:"text"`
+	Text string `json:"text,omitempty"`
+}
+
+// InlineData is the raw media bytes.
+type InlineData struct {
+	MimeType string `json:"mime_type"`
+	Data     string `json:"data"` // encoded as Base64
 }
 
 // GenerateContentResponse defines the structure of the response received from
