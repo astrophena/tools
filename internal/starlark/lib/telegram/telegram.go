@@ -22,7 +22,9 @@ import (
 
 // Module returns a Starlark module that exposes the Telegram Bot API.
 //
-// This module provides a single function, call, which makes requests to the Telegram Bot API.
+// This module provides two functions: call and get_file.
+//
+// # call
 //
 // The call function takes two arguments:
 //
@@ -40,6 +42,16 @@ import (
 //	)
 //
 // The response variable will contain the response from the Telegram Bot API.
+//
+// # get_file
+//
+// The get_file function takes one argument:
+//
+//   - file_id (string): The ID of the file to download.
+//
+// It returns the content of the file as bytes. For example:
+//
+//	file_content = telegram.get_file(file_id="...")
 func Module(token string, client *http.Client) *starlarkstruct.Module {
 	m := &module{
 		httpc:    client,
@@ -49,7 +61,8 @@ func Module(token string, client *http.Client) *starlarkstruct.Module {
 	return &starlarkstruct.Module{
 		Name: "telegram",
 		Members: starlark.StringDict{
-			"call": starlark.NewBuiltin("telegram.call", m.call),
+			"call":     starlark.NewBuiltin("telegram.call", m.call),
+			"get_file": starlark.NewBuiltin("telegram.get_file", m.getFile),
 		},
 	}
 }
@@ -97,4 +110,38 @@ func (m *module) call(thread *starlark.Thread, b *starlark.Builtin, args starlar
 	}
 
 	return starlark.Call(thread, starlarkjson.Module.Members["decode"], starlark.Tuple{starlark.String(rawResp)}, []starlark.Tuple{})
+}
+
+func (m *module) getFile(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	var fileID string
+	if err := starlark.UnpackArgs(b.Name(), args, kwargs, "file_id", &fileID); err != nil {
+		return nil, err
+	}
+
+	type fileInfo struct {
+		FilePath string `json:"file_path"`
+	}
+
+	fi, err := request.Make[fileInfo](interpreter.Context(thread), request.Params{
+		Method: http.MethodGet,
+		URL:    "https://api.telegram.org/bot" + m.token + "/getFile",
+		Body: map[string]string{
+			"file_id": fileID,
+		},
+		Scrubber: m.scrubber,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	buf, err := request.Make[request.Bytes](interpreter.Context(thread), request.Params{
+		Method:   http.MethodGet,
+		URL:      "https://api.telegram.org/bot" + m.token + "/" + fi.FilePath,
+		Scrubber: m.scrubber,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return starlark.Bytes(buf), nil
 }

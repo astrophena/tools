@@ -6,7 +6,9 @@
 package gemini
 
 import (
+	"encoding/base64"
 	"fmt"
+	"net/http"
 
 	"go.astrophena.name/tools/internal/api/google/gemini"
 	"go.astrophena.name/tools/internal/starlark/interpreter"
@@ -18,18 +20,21 @@ import (
 // Module returns a Starlark module that exposes Gemini API.
 //
 // This module provides a single function, generate_content, which uses the
-// Gemini API to generate text.
+// Gemini API to generate text, optionally with an image as context.
 //
 // It accepts the following keyword arguments:
 //
 //   - model (str): The name of the model to use for generation (e.g., "gemini-1.5-flash").
 //   - contents (list of (str, str) tuples): A list of (role, text) tuples representing
 //     the conversation history. Valid roles are typically "user" and "model".
+//   - image (bytes, optional): The raw bytes of an image to include. The image is
+//     inserted as a new part just before the last part of the 'contents'.
+//     This is useful for multimodal prompts (e.g., asking a question about an image).
 //   - system_instructions (str, optional): System instructions to guide Gemini's response.
 //   - unsafe (bool, optional): If set to true, disables all safety settings for the
 //     content generation, allowing potentially harmful content. Use with caution.
 //
-// For example:
+// For example, for a text-only prompt:
 //
 //	responses = gemini.generate_content(
 //	    model="gemini-1.5-flash",
@@ -39,6 +44,17 @@ import (
 //	        ("user", "What happened next?")
 //	    ],
 //	    system_instructions="You are a creative story writer. Write a short story based on the provided prompt."
+//	)
+//
+// To ask a question about an image:
+//
+//	image_data = ... # read image file content as bytes
+//	responses = gemini.generate_content(
+//	    model="gemini-1.5-flash",
+//	    contents=[
+//	        ("user", "Describe this image in detail.")
+//	    ],
+//	    image=image_data
 //	)
 //
 // The responses variable will contain a list of generated responses, where each response
@@ -67,6 +83,7 @@ func (m *module) generateContent(thread *starlark.Thread, b *starlark.Builtin, a
 	var (
 		model              string
 		contentsList       *starlark.List
+		image              *starlark.Bytes
 		systemInstructions string
 		unsafe             bool
 	)
@@ -75,6 +92,7 @@ func (m *module) generateContent(thread *starlark.Thread, b *starlark.Builtin, a
 		b.Name(), args, kwargs,
 		"model", &model,
 		"contents", &contentsList,
+		"image?", &image,
 		"system_instructions?", &systemInstructions,
 		"unsafe?", &unsafe,
 	); err != nil {
@@ -109,6 +127,25 @@ func (m *module) generateContent(thread *starlark.Thread, b *starlark.Builtin, a
 			Role: string(roleStr),
 		}
 		contents = append(contents, content)
+	}
+
+	if image != nil {
+		b64 := base64.StdEncoding.EncodeToString([]byte(image.String()))
+		imageData := &gemini.Content{
+			Parts: []*gemini.Part{
+				{
+					InlineData: &gemini.InlineData{
+						MimeType: http.DetectContentType([]byte(image.String())),
+						Data:     b64,
+					},
+				},
+			},
+		}
+		if len(contents) > 0 {
+			contents = append(contents[:len(contents)-1], append([]*gemini.Content{imageData}, contents[len(contents)-1:]...)...)
+		} else {
+			contents = append(contents, imageData)
+		}
 	}
 
 	params := gemini.GenerateContentParams{
