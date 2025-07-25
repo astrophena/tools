@@ -123,7 +123,7 @@ func (m *module) getFile(thread *starlark.Thread, b *starlark.Builtin, args star
 	}
 
 	fi, err := request.Make[fileInfo](interpreter.Context(thread), request.Params{
-		Method: http.MethodGet,
+		Method: http.MethodPost,
 		URL:    "https://api.telegram.org/bot" + m.token + "/getFile",
 		Body: map[string]string{
 			"file_id": fileID,
@@ -136,7 +136,7 @@ func (m *module) getFile(thread *starlark.Thread, b *starlark.Builtin, args star
 
 	buf, err := request.Make[request.Bytes](interpreter.Context(thread), request.Params{
 		Method:   http.MethodGet,
-		URL:      "https://api.telegram.org/bot" + m.token + "/" + fi.FilePath,
+		URL:      "https://api.telegram.org/file/bot" + m.token + "/" + fi.FilePath,
 		Scrubber: m.scrubber,
 	})
 	if err != nil {
