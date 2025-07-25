@@ -2,6 +2,7 @@
 // Use of this source code is governed by the ISC
 // license that can be found in the LICENSE.md file.
 
+// Pre-commit implements a Git pre-commit hook to run tests on each commit.
 package main
 
 import (
