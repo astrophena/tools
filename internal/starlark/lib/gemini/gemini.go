@@ -134,8 +134,8 @@ func (m *module) generateContent(thread *starlark.Thread, b *starlark.Builtin, a
 			Parts: []*gemini.Part{
 				{
 					InlineData: &gemini.InlineData{
-						MimeType: http.DetectContentType([]byte(image.String())),
-						Data:     base64.StdEncoding.EncodeToString([]byte(image.String())),
+						MimeType: http.DetectContentType([]byte(image)),
+						Data:     base64.StdEncoding.EncodeToString([]byte(image)),
 					},
 				},
 			},
