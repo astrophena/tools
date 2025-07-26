@@ -139,6 +139,7 @@ func (m *module) generateContent(thread *starlark.Thread, b *starlark.Builtin, a
 					},
 				},
 			},
+			Role: "user",
 		}
 		if len(contents) > 0 {
 			contents = append(contents[:len(contents)-1], append([]*gemini.Content{imageData}, contents[len(contents)-1:]...)...)
