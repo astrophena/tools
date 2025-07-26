@@ -44,11 +44,14 @@ The following built-in functions and modules are available within the bot.star s
 		  Raises an error if the file does not exist in the Gist.
 
 	gemini: A module for interacting with Google's Gemini API (requires GEMINI_KEY env var).
-		- generate_content(model: str, contents: list[tuple[str, str]], system_instructions: str | None = None, unsafe: bool = False) -> list[list[str]]:
+		- generate_content(model: str, contents: list[tuple[str, str]], image: bytes | None = None, system_instructions: str | None = None, unsafe: bool = False) -> list[list[str]]:
 		  Generates content using the specified Gemini model.
 		  - model: Name of the Gemini model (e.g., "gemini-1.5-flash").
 		  - contents: A list of (role, text) tuples representing the conversation history.
 		    Valid roles are typically "user" and "model".
+		  - image (bytes, optional): The raw bytes of an image to include. The image is
+		    The image is inserted as a new part just before the last part of the 'contents'.
+		    This is useful for multimodal prompts (e.g., asking a question about an image).
 		  - system_instructions: Optional system prompt to guide the model's behavior.
 		  - unsafe: If True, disables safety filters (use with caution).
 		  Returns a list of candidate responses, where each candidate is a list of text parts (strings).
@@ -160,7 +163,7 @@ When not in production mode, or when accessed by the authenticated bot owner in 
 
 Authentication for the debug interface in production mode uses Telegram Login Widget. The bot owner must authenticate via Telegram. The login callback URL should be set to https://<your-bot-host>/login in BotFather (/setdomain).
 
-[Starlark]: https://starlark.dev/
+[Starlark]: https://starlark-lang.org/
 [Render]: https://render.com/
 */
 package main
