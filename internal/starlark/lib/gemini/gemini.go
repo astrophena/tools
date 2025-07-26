@@ -83,7 +83,7 @@ func (m *module) generateContent(thread *starlark.Thread, b *starlark.Builtin, a
 	var (
 		model              string
 		contentsList       *starlark.List
-		image              *starlark.Bytes
+		image              starlark.Bytes
 		systemInstructions string
 		unsafe             bool
 	)
@@ -129,14 +129,13 @@ func (m *module) generateContent(thread *starlark.Thread, b *starlark.Builtin, a
 		contents = append(contents, content)
 	}
 
-	if image != nil {
-		b64 := base64.StdEncoding.EncodeToString([]byte(image.String()))
+	if image.Len() > 0 {
 		imageData := &gemini.Content{
 			Parts: []*gemini.Part{
 				{
 					InlineData: &gemini.InlineData{
 						MimeType: http.DetectContentType([]byte(image.String())),
-						Data:     b64,
+						Data:     base64.StdEncoding.EncodeToString([]byte(image.String())),
 					},
 				},
 			},
