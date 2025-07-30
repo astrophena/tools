@@ -1,6 +1,6 @@
 module go.astrophena.name/tools
 
-go 1.24.2
+go 1.24
 
 require (
 	github.com/dhowden/tag v0.0.0-20240417053706-3d75831295e8
@@ -44,11 +44,9 @@ require (
 // Doesn't exist in this repository.
 retract [v0.0.1, v0.2.0]
 
-tool honnef.co/go/tools/cmd/staticcheck
-
 tool (
 	go.astrophena.name/base/devtools/addcopyright
 	go.astrophena.name/base/devtools/pre-commit
-	go.astrophena.name/tools/internal/devtools/genreadme
-	go.astrophena.name/tools/internal/devtools/new
 )
+
+tool honnef.co/go/tools/cmd/staticcheck
