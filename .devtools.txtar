@@ -1,0 +1,48 @@
+-- copyright/exclusions.json --
+[
+  "cmd/tgfeed/internal/diff/diff.go",
+  "internal/starlark/interpreter/interpreter.go",
+  "internal/starlark/interpreter/loaders.go",
+  "internal/util/rr/rr.go",
+  "internal/util/rr/rr_test.go"
+]
+-- copyright/template.go --
+// © %d Ilya Mateyko. All rights reserved.
+// Use of this source code is governed by the ISC
+// license that can be found in the LICENSE.md file.
+
+-- copyright/header.go --
+// ©
+-- copyright/template.star --
+# © %d Ilya Mateyko. All rights reserved.
+# Use of this source code is governed by the ISC
+# license that can be found in the LICENSE.md file.
+
+-- copyright/header.star --
+# ©
+-- pre-commit.json --
+[
+  {
+    "run": ["gofmt", "-d"]
+  },
+  {
+    "run": ["ruff", "format", "--no-cache", "--config", "extend-include = ['*.star']"]
+  },
+  {
+    "run": ["go", "tool", "staticcheck", "./..."]
+  },
+  {
+    "run": ["go", "test", "./..."],
+    "skip_in_ci": true
+  },
+  {
+    "run": ["go", "test", "-race", "./..."],
+    "only_in_ci": true
+  },
+  {
+    "run": ["go", "mod", "tidy", "--diff"]
+  },
+  {
+    "run": ["go", "tool", "addcopyright", "-check"]
+  }
+]

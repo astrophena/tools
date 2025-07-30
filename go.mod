@@ -11,7 +11,7 @@ require (
 	github.com/mmcdole/gofeed v1.3.0
 	github.com/muesli/reflow v0.3.0
 	github.com/tobischo/gokeepasslib/v3 v3.6.1
-	go.astrophena.name/base v0.8.2-0.20250724161251-08d4d0c48b1b
+	go.astrophena.name/base v0.8.2-0.20250729140258-351c20cf8eca
 	go.starlark.net v0.0.0-20250623223156-8bf495bf4e9a
 	golang.org/x/term v0.33.0
 	rsc.io/markdown v0.0.0-20241212154241-6bf72452917f
@@ -21,7 +21,6 @@ require (
 	github.com/BurntSushi/toml v1.4.1-0.20240526193622-a339e1f7089c // indirect
 	github.com/PuerkitoBio/goquery v1.8.0 // indirect
 	github.com/andybalholm/cascadia v1.3.1 // indirect
-	github.com/benbjohnson/hashfs v0.2.2 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/mattn/go-runewidth v0.0.12 // indirect
 	github.com/mmcdole/goxpp v1.1.1-0.20240225020742-a0c311522b23 // indirect
@@ -48,8 +47,8 @@ retract [v0.0.1, v0.2.0]
 tool honnef.co/go/tools/cmd/staticcheck
 
 tool (
-	go.astrophena.name/tools/internal/devtools/addcopyright
+	go.astrophena.name/base/devtools/addcopyright
+	go.astrophena.name/base/devtools/pre-commit
 	go.astrophena.name/tools/internal/devtools/genreadme
 	go.astrophena.name/tools/internal/devtools/new
-	go.astrophena.name/tools/internal/devtools/pre-commit
 )
