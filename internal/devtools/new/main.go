@@ -14,15 +14,12 @@ import (
 	"path/filepath"
 
 	"go.astrophena.name/base/txtar"
-	"go.astrophena.name/tools/internal/devtools"
 )
 
 //go:embed template.txtar
 var templateTxtar []byte
 
 func main() {
-	devtools.EnsureRoot()
-
 	log.SetFlags(0)
 
 	flag.Usage = func() {

@@ -1,4 +1,0 @@
-#!/bin/sh
-
-echo "==> Running pre-commit check..."
-go tool pre-commit
