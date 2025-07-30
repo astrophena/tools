@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package httprr implements HTTP record and replay, mainly for use in tests.
+// Package rr implements HTTP record and replay, mainly for use in tests.
 //
 // [Open] creates a new [RecordReplay]. Whether it is recording or replaying
 // is controlled by the -httprecord flag, which is defined by this package
