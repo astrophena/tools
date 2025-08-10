@@ -2,11 +2,9 @@
 // Use of this source code is governed by the ISC
 // license that can befound in the LICENSE.md file.
 
-// Package bot implements the core logic of the Starlet bot.
-//
-// It is responsible for handling Telegram webhooks, loading and executing
-// Starlark code from a Gist, and providing a set of built-in functions
-// to the Starlark environment.
+// Package bot implements the core logic of the Starlet bot. It is responsible
+// for handling Telegram webhooks, loading and executing Starlark code, and
+// providing a set of built-in functions to the Starlark environment.
 package bot
 
 import (
@@ -16,12 +14,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"strings"
 	"sync/atomic"
 
 	"go.astrophena.name/base/request"
+	"go.astrophena.name/base/unwrap"
 	"go.astrophena.name/base/version"
 	"go.astrophena.name/base/web"
 	"go.astrophena.name/tools/internal/api/google/gemini"
@@ -46,8 +46,9 @@ var (
 var (
 	//go:embed error.tmpl
 	defaultErrorTemplate string
-	//go:embed *.star
-	libFS embed.FS
+	//go:embed lib/*.star
+	libRawFS embed.FS
+	libFS    = unwrap.Value(fs.Sub(libRawFS, "lib"))
 )
 
 // Bot represents a Starlet bot instance.
@@ -67,6 +68,7 @@ type Bot struct {
 	instance atomic.Pointer[instance]
 }
 
+// instance holds the state that can be hot-reloaded.
 type instance struct {
 	errorTemplate string
 	files         map[string]string
@@ -113,6 +115,12 @@ func New(opts Opts) *Bot {
 	}
 }
 
+// Documentation generates and returns Markdown-formatted documentation for the
+// bot's Starlark environment.
+func (b *Bot) Documentation() string {
+	return b.environment().Markdown()
+}
+
 // Visited returns a list of modules visited by the interpreter.
 func (b *Bot) Visited() []interpreter.ModuleKey {
 	if inst := b.instance.Load(); inst != nil {
@@ -121,6 +129,7 @@ func (b *Bot) Visited() []interpreter.ModuleKey {
 	return nil
 }
 
+// Load loads the bot's Starlark code and assets from the provided files map.
 func (b *Bot) Load(ctx context.Context, files map[string]string) error {
 	_, exists := files[mainFile]
 	if !exists {
@@ -130,7 +139,7 @@ func (b *Bot) Load(ctx context.Context, files map[string]string) error {
 	starlarkLogger := b.logger.WithGroup("starlark")
 
 	intr := &interpreter.Interpreter{
-		Predeclared: b.environment(),
+		Predeclared: b.environment().StringDict(),
 		Logger: func(file string, line int, message string) {
 			starlarkLogger.Info(message, "file", file, "line", line)
 		},

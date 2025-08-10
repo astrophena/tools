@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"runtime/debug"
+	"strings"
 
 	"go.astrophena.name/base/version"
 	"go.astrophena.name/tools/internal/starlark/go2star"
@@ -20,43 +21,172 @@ import (
 	"go.starlark.net/starlarkstruct"
 )
 
-func (b *Bot) environment() starlark.StringDict {
-	return starlark.StringDict{
-		"config": starlarkstruct.FromStringDict(
-			starlarkstruct.Default,
-			starlark.StringDict{
-				"bot_id":       starlark.MakeInt64(b.tgBotID),
-				"bot_username": starlark.String(b.tgBotUsername),
-				"owner_id":     starlark.MakeInt64(b.tgOwner),
-				"version":      starlark.String(version.Version().String()),
+// Environment is a collection of documented members of the Starlark environment.
+type Environment []Member
+
+// Member defines a documented Starlark environment member.
+type Member struct {
+	// Name is the name of the member.
+	Name string
+	// Doc is the documentation string for the member.
+	Doc string
+	// Value is the Starlark value. If Members is not nil, this should be nil,
+	// as the value will be a module constructed from the members.
+	Value starlark.Value
+	// Members is a list of sub-members, used if this member is a module.
+	Members []Member
+}
+
+// StringDict converts the Documentation into a [starlark.StringDict] that can be
+// used as a global environment for a Starlark interpreter.
+func (d Environment) StringDict() starlark.StringDict {
+	dict := make(starlark.StringDict)
+	for _, m := range d {
+		var val starlark.Value
+		if len(m.Members) > 0 {
+			// This member is a module.
+			val = &starlarkstruct.Module{
+				Name:    m.Name,
+				Members: Environment(m.Members).StringDict(),
+			}
+		} else {
+			val = m.Value
+		}
+		dict[m.Name] = val
+	}
+	return dict
+}
+
+// Markdown generates a Markdown documentation string for the Starlark environment.
+func (d Environment) Markdown() string {
+	var b strings.Builder
+	b.WriteString("# Starlark Environment\n\n")
+	b.WriteString("These built-in functions and modules are available in the Starlark environment.\n\n")
+	d.render(&b, 2, "")
+	return strings.TrimSpace(b.String()) + "\n"
+}
+
+func (d Environment) render(b *strings.Builder, level int, prefix string) {
+	for _, m := range d {
+		b.WriteString(strings.Repeat("#", level))
+		b.WriteString(" `")
+		b.WriteString(prefix + m.Name)
+
+		if _, ok := m.Value.(*starlark.Builtin); ok {
+			b.WriteString("()")
+		}
+		b.WriteString("`\n\n")
+
+		b.WriteString(m.Doc)
+		b.WriteString("\n\n")
+
+		if len(m.Members) > 0 {
+			Environment(m.Members).render(b, level+1, prefix+m.Name+".")
+		}
+	}
+}
+
+func (b *Bot) environment() Environment {
+	return Environment{
+		{
+			Name: "config",
+			Doc:  "A module containing configuration information about the bot.",
+			Members: []Member{
+				{
+					Name:  "bot_id",
+					Doc:   "The Telegram ID of the bot.",
+					Value: starlark.MakeInt64(b.tgBotID),
+				},
+				{
+					Name:  "bot_username",
+					Doc:   "The username of the bot.",
+					Value: starlark.String(b.tgBotUsername),
+				},
+				{
+					Name:  "owner_id",
+					Doc:   "The Telegram ID of the bot owner.",
+					Value: starlark.MakeInt64(b.tgOwner),
+				},
+				{
+					Name:  "version",
+					Doc:   "The version of the bot.",
+					Value: starlark.String(version.Version().String()),
+				},
 			},
-		),
-		"debug": starlarkstruct.FromStringDict(
-			starlarkstruct.Default,
-			starlark.StringDict{
-				"stack":    starlark.NewBuiltin("debug.stack", starlarkDebugStack),
-				"go_stack": starlark.NewBuiltin("debug.go_stack", starlarkDebugGoStack),
+		},
+		{
+			Name: "debug",
+			Doc:  "A module containing debugging utilities.",
+			Members: []Member{
+				{
+					Name:  "stack",
+					Doc:   "Returns a string describing the current call stack.",
+					Value: starlark.NewBuiltin("debug.stack", starlarkDebugStack),
+				},
+				{
+					Name:  "go_stack",
+					Doc:   "Returns a string describing the Go call stack.",
+					Value: starlark.NewBuiltin("debug.go_stack", starlarkDebugGoStack),
+				},
 			},
-		),
-		"fail": starlark.NewBuiltin("fail", starlarkFail),
-		"files": &starlarkstruct.Module{
+		},
+		{
+			Name:  "fail",
+			Doc:   "Terminates execution with a specified error message.",
+			Value: starlark.NewBuiltin("fail", starlarkFail),
+		},
+		{
 			Name: "files",
-			Members: starlark.StringDict{
-				"read": starlark.NewBuiltin("files.read", b.starlarkFilesRead),
+			Doc:  "A module for accessing files provided to the bot.",
+			Members: []Member{
+				{
+					Name:  "read",
+					Doc:   "Reads the content of a file.",
+					Value: starlark.NewBuiltin("files.read", b.starlarkFilesRead),
+				},
 			},
 		},
-		"gemini":  starlarkgemini.Module(b.geminic),
-		"kvcache": b.kvCache,
-		"markdown": &starlarkstruct.Module{
+		{
+			Name:  "gemini",
+			Doc:   "A module for interacting with the Google Gemini API.",
+			Value: starlarkgemini.Module(b.geminic),
+		},
+		{
+			Name:  "kvcache",
+			Doc:   "A module for caching key-value pairs.",
+			Value: b.kvCache,
+		},
+		{
 			Name: "markdown",
-			Members: starlark.StringDict{
-				"convert": starlark.NewBuiltin("markdown.convert", starlarkMarkdownConvert),
+			Doc:  "A module for Markdown conversion.",
+			Members: []Member{
+				{
+					Name:  "convert",
+					Doc:   "Converts a Markdown string to a Telegram message struct.",
+					Value: starlark.NewBuiltin("markdown.convert", starlarkMarkdownConvert),
+				},
 			},
 		},
-		"module":   starlark.NewBuiltin("module", starlarkstruct.MakeModule),
-		"struct":   starlark.NewBuiltin("struct", starlarkstruct.Make),
-		"telegram": starlarktelegram.Module(b.tgToken, b.httpc),
-		"time":     starlarktime.Module,
+		{
+			Name:  "module",
+			Doc:   "Creates a new Starlark module from a dictionary.",
+			Value: starlark.NewBuiltin("module", starlarkstruct.MakeModule),
+		},
+		{
+			Name:  "struct",
+			Doc:   "Creates a new Starlark struct from a dictionary.",
+			Value: starlark.NewBuiltin("struct", starlarkstruct.Make),
+		},
+		{
+			Name:  "telegram",
+			Doc:   "A module for interacting with the Telegram Bot API.",
+			Value: starlarktelegram.Module(b.tgToken, b.httpc),
+		},
+		{
+			Name:  "time",
+			Doc:   "A module for time-related functions.",
+			Value: starlarktime.Module,
+		},
 	}
 }
 
