@@ -55,14 +55,11 @@ func TestHealth(t *testing.T) {
 	testutil.AssertEqual(t, health.OK, true)
 }
 
-//go:embed testdata/message.txtar
-var reloadTxtar []byte
-
 func TestReload(t *testing.T) {
 	t.Parallel()
 
 	tm := testMux(t, nil)
-	tm.gist = txtarToGist(t, reloadTxtar)
+	tm.gist = txtarToGist(t, []byte("-- bot.star --\nprint(\"reloaded\")\n"))
 	e := testEngine(t, tm)
 
 	cases := map[string]struct {

@@ -1,8 +1,13 @@
 // © 2025 Ilya Mateyko. All rights reserved.
 // Use of this source code is governed by the ISC
-// license that can be found in the LICENSE.md file.
+// license that can befound in the LICENSE.md file.
 
-package main
+// Package bot implements the core logic of the Starlet bot.
+//
+// It is responsible for handling Telegram webhooks, loading and executing
+// Starlark code from a Gist, and providing a set of built-in functions
+// to the Starlark environment.
+package bot
 
 import (
 	"context"
@@ -14,15 +19,20 @@ import (
 	"io/fs"
 	"net/http"
 	"runtime/debug"
+	"strings"
+	"sync/atomic"
 
 	"go.astrophena.name/base/request"
 	"go.astrophena.name/base/unwrap"
 	"go.astrophena.name/base/version"
 	"go.astrophena.name/base/web"
+
+	"go.astrophena.name/tools/internal/api/github/gist"
+	"go.astrophena.name/tools/internal/api/google/gemini"
 	"go.astrophena.name/tools/internal/starlark/go2star"
 	"go.astrophena.name/tools/internal/starlark/interpreter"
-	"go.astrophena.name/tools/internal/starlark/lib/gemini"
-	"go.astrophena.name/tools/internal/starlark/lib/telegram"
+	starkgemini "go.astrophena.name/tools/internal/starlark/lib/gemini"
+	starktelegram "go.astrophena.name/tools/internal/starlark/lib/telegram"
 	"go.astrophena.name/tools/internal/util/tgmarkup"
 
 	starlarktime "go.starlark.net/lib/time"
@@ -48,8 +58,79 @@ var (
 	libFS    = unwrap.Value(fs.Sub(libRawFS, "lib"))
 )
 
-func (e *engine) loadFromGist(ctx context.Context) error {
-	g, err := e.gistc.Get(ctx, e.gistID)
+// Bot represents a Starlet bot instance.
+type Bot struct {
+	tgToken       string
+	tgSecret      string
+	tgOwner       int64
+	tgBotID       int64
+	tgBotUsername string
+	gistID        string
+	httpc         *http.Client
+	geminic       *gemini.Client
+	gistc         *gist.Client
+	kvCache       *starlarkstruct.Module
+	scrubber      *strings.Replacer
+	logf          func(format string, args ...any)
+
+	instance atomic.Pointer[instance]
+}
+
+type instance struct {
+	errorTemplate string
+	files         map[string]string
+	intr          *interpreter.Interpreter
+}
+
+// Opts is the options for creating a new Bot.
+type Opts struct {
+	// GistID is the ID of the Gist that contains the bot's code.
+	GistID string
+	// Token is the Telegram Bot API token.
+	Token string
+	// Secret is the Telegram Bot API secret token.
+	Secret string
+	// Owner is the Telegram ID of the bot owner.
+	Owner int64
+	// BotID is the Telegram ID of the bot.
+	BotID int64
+	// BotUsername is the username of the bot.
+	BotUsername string
+	// HTTPClient is the HTTP client to use for making requests.
+	HTTPClient *http.Client
+	// GistClient is the client for interacting with the GitHub Gist API.
+	GistClient *gist.Client
+	// GeminiClient is the client for interacting with the Google Gemini API.
+	GeminiClient *gemini.Client
+	// KVCache is the key-value cache for Starlark.
+	KVCache *starlarkstruct.Module
+	// Scrubber is used to scrub sensitive information from logs.
+	Scrubber *strings.Replacer
+	// Logf is the logger function.
+	Logf func(format string, args ...any)
+}
+
+// New creates a new Bot instance.
+func New(opts Opts) *Bot {
+	return &Bot{
+		tgToken:       opts.Token,
+		tgSecret:      opts.Secret,
+		tgOwner:       opts.Owner,
+		tgBotID:       opts.BotID,
+		tgBotUsername: opts.BotUsername,
+		gistID:        opts.GistID,
+		httpc:         opts.HTTPClient,
+		gistc:         opts.GistClient,
+		geminic:       opts.GeminiClient,
+		kvCache:       opts.KVCache,
+		scrubber:      opts.Scrubber,
+		logf:          opts.Logf,
+	}
+}
+
+// LoadFromGist loads the bot's code from a Gist.
+func (b *Bot) LoadFromGist(ctx context.Context) error {
+	g, err := b.gistc.Get(ctx, b.gistID)
 	if err != nil {
 		return err
 	}
@@ -57,19 +138,27 @@ func (e *engine) loadFromGist(ctx context.Context) error {
 	for name, file := range g.Files {
 		files[name] = file.Content
 	}
-	return e.loadCode(ctx, files)
+	return b.loadCode(ctx, files)
 }
 
-func (e *engine) loadCode(ctx context.Context, files map[string]string) error {
+// Visited returns a list of modules visited by the interpreter.
+func (b *Bot) Visited() []interpreter.ModuleKey {
+	if inst := b.instance.Load(); inst != nil {
+		return inst.intr.Visited()
+	}
+	return nil
+}
+
+func (b *Bot) loadCode(ctx context.Context, files map[string]string) error {
 	_, exists := files[mainFile]
 	if !exists {
 		return errNoMainFile
 	}
 
 	intr := &interpreter.Interpreter{
-		Predeclared: e.predeclared(),
+		Predeclared: b.predeclared(),
 		Logger: func(file string, line int, message string) {
-			e.logf("%s:%d: %s", file, line, message)
+			b.logf("%s:%d: %s", file, line, message)
 		},
 		Packages: map[string]interpreter.Loader{
 			interpreter.MainPkg: interpreter.MemoryLoader(files),
@@ -91,34 +180,35 @@ func (e *engine) loadCode(ctx context.Context, files map[string]string) error {
 		}
 	}
 
-	newBot := &bot{
+	newInst := &instance{
 		files: files,
 		intr:  intr,
 	}
 	if errorTmpl, exists := files[errorTemplateFile]; exists {
-		newBot.errorTemplate = errorTmpl
+		newInst.errorTemplate = errorTmpl
 	} else {
-		newBot.errorTemplate = defaultErrorTemplate
+		newInst.errorTemplate = defaultErrorTemplate
 	}
-	e.bot.Store(newBot)
+	b.instance.Store(newInst)
 
 	return nil
 }
 
-func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
-	if r.Header.Get("X-Telegram-Bot-Api-Secret-Token") != e.tgSecret {
+// HandleTelegramWebhook handles a Telegram webhook request.
+func (b *Bot) HandleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
+	if r.Header.Get("X-Telegram-Bot-Api-Secret-Token") != b.tgSecret {
 		web.RespondJSONError(w, r, web.ErrNotFound)
 		return
 	}
 
-	b, err := io.ReadAll(r.Body)
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		web.RespondJSONError(w, r, err)
 		return
 	}
 
 	var rawUpdate map[string]any
-	if err := json.Unmarshal(b, &rawUpdate); err != nil {
+	if err := json.Unmarshal(body, &rawUpdate); err != nil {
 		web.RespondJSONError(w, r, err)
 		return
 	}
@@ -129,37 +219,37 @@ func (e *engine) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var (
-		chatID = e.lookupChatID(rawUpdate) // for error reports
-		bot    = e.bot.Load()
+		chatID = b.lookupChatID(rawUpdate)
+		inst   = b.instance.Load()
 	)
-	mod, err := bot.intr.LoadModule(r.Context(), interpreter.MainPkg, mainFile)
+	mod, err := inst.intr.LoadModule(r.Context(), interpreter.MainPkg, mainFile)
 	if err != nil {
-		e.reportError(r.Context(), chatID, w, err)
+		b.reportError(r.Context(), chatID, w, err)
 		return
 	}
 	f, ok := mod["handle"]
 	if !ok {
-		e.reportError(r.Context(), chatID, w, errNoHandleFunc)
+		b.reportError(r.Context(), chatID, w, errNoHandleFunc)
 		return
 	}
-	_, err = starlark.Call(bot.intr.Thread(r.Context()), f, starlark.Tuple{update}, nil)
+	_, err = starlark.Call(inst.intr.Thread(r.Context()), f, starlark.Tuple{update}, nil)
 	if err != nil {
-		e.reportError(r.Context(), chatID, w, err)
+		b.reportError(r.Context(), chatID, w, err)
 		return
 	}
 
-	jsonOK(w)
+	web.RespondJSON(w, map[string]string{"status": "ok"})
 }
 
-func (e *engine) lookupChatID(update map[string]any) int64 {
+func (b *Bot) lookupChatID(update map[string]any) int64 {
 	msg, ok := update["message"].(map[string]any)
 	if !ok {
-		return e.tgOwner
+		return b.tgOwner
 	}
 
 	chat, ok := msg["chat"].(map[string]any)
 	if !ok {
-		return e.tgOwner
+		return b.tgOwner
 	}
 
 	id, ok := chat["id"].(int64)
@@ -172,29 +262,26 @@ func (e *engine) lookupChatID(update map[string]any) int64 {
 		return int64(fid)
 	}
 
-	return e.tgOwner
+	return b.tgOwner
 }
 
-// https://core.telegram.org/bots/api#linkpreviewoptions
 type linkPreviewOptions struct {
 	IsDisabled bool `json:"is_disabled"`
 }
 
-// https://core.telegram.org/bots/api#message
 type message struct {
 	tgmarkup.Message
 	ChatID             int64              `json:"chat_id"`
 	LinkPreviewOptions linkPreviewOptions `json:"link_preview_options"`
 }
 
-func (e *engine) reportError(ctx context.Context, chatID int64, w http.ResponseWriter, err error) {
+func (b *Bot) reportError(ctx context.Context, chatID int64, w http.ResponseWriter, err error) {
 	errMsg := err.Error()
 	if evalErr, ok := err.(*starlark.EvalError); ok {
 		errMsg = evalErr.Backtrace()
 	}
-	if e.scrubber != nil {
-		// Mask secrets in error messages.
-		errMsg = e.scrubber.Replace(errMsg)
+	if b.scrubber != nil {
+		errMsg = b.scrubber.Replace(errMsg)
 	}
 
 	msg := message{
@@ -204,7 +291,7 @@ func (e *engine) reportError(ctx context.Context, chatID int64, w http.ResponseW
 		},
 	}
 
-	errTmpl := e.bot.Load().errorTemplate
+	errTmpl := b.instance.Load().errorTemplate
 	if errTmpl == "" {
 		errTmpl = defaultErrorTemplate
 	}
@@ -212,33 +299,29 @@ func (e *engine) reportError(ctx context.Context, chatID int64, w http.ResponseW
 
 	_, sendErr := request.Make[request.IgnoreResponse](ctx, request.Params{
 		Method:     http.MethodPost,
-		URL:        "https://api.telegram.org/bot" + e.tgToken + "/sendMessage",
+		URL:        "https://api.telegram.org/bot" + b.tgToken + "/sendMessage",
 		Body:       msg,
-		HTTPClient: e.httpc,
+		HTTPClient: b.httpc,
 		Headers: map[string]string{
 			"User-Agent": version.UserAgent(),
 		},
-		Scrubber: e.scrubber,
+		Scrubber: b.scrubber,
 	})
 	if sendErr != nil {
-		e.logf("Reporting an error %q to bot owner (%q) failed: %v", err, e.tgOwner, sendErr)
+		b.logf("Reporting an error %q to bot owner (%q) failed: %v", err, b.tgOwner, sendErr)
 	}
 
-	// Don't respond with an error because Telegram will go mad and start retrying
-	// updates until my Telegram chat is filled with lots of error messages.
-	jsonOK(w)
+	web.RespondJSON(w, map[string]string{"status": "ok"})
 }
 
-// Starlark environment.
-
-func (e *engine) predeclared() starlark.StringDict {
+func (b *Bot) predeclared() starlark.StringDict {
 	return starlark.StringDict{
 		"config": starlarkstruct.FromStringDict(
 			starlarkstruct.Default,
 			starlark.StringDict{
-				"bot_id":       starlark.MakeInt64(e.tgBotID),
-				"bot_username": starlark.String(e.tgBotUsername),
-				"owner_id":     starlark.MakeInt64(e.tgOwner),
+				"bot_id":       starlark.MakeInt64(b.tgBotID),
+				"bot_username": starlark.String(b.tgBotUsername),
+				"owner_id":     starlark.MakeInt64(b.tgOwner),
 				"version":      starlark.String(version.Version().String()),
 			},
 		),
@@ -253,11 +336,11 @@ func (e *engine) predeclared() starlark.StringDict {
 		"files": &starlarkstruct.Module{
 			Name: "files",
 			Members: starlark.StringDict{
-				"read": starlark.NewBuiltin("files.read", e.starlarkFilesRead),
+				"read": starlark.NewBuiltin("files.read", b.starlarkFilesRead),
 			},
 		},
-		"gemini":  gemini.Module(e.geminic),
-		"kvcache": e.kvCache,
+		"gemini":  starkgemini.Module(b.geminic),
+		"kvcache": b.kvCache,
 		"markdown": &starlarkstruct.Module{
 			Name: "markdown",
 			Members: starlark.StringDict{
@@ -266,12 +349,11 @@ func (e *engine) predeclared() starlark.StringDict {
 		},
 		"module":   starlark.NewBuiltin("module", starlarkstruct.MakeModule),
 		"struct":   starlark.NewBuiltin("struct", starlarkstruct.Make),
-		"telegram": telegram.Module(e.tgToken, e.httpc),
+		"telegram": starktelegram.Module(b.tgToken, b.httpc),
 		"time":     starlarktime.Module,
 	}
 }
 
-// debug.stack Starlark function.
 func starlarkDebugStack(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	if len(args) > 0 || len(kwargs) > 0 {
 		return nil, errors.New("unexpected arguments")
@@ -279,7 +361,6 @@ func starlarkDebugStack(thread *starlark.Thread, b *starlark.Builtin, args starl
 	return starlark.String(thread.CallStack().String()), nil
 }
 
-// debug.go_stack Starlark function.
 func starlarkDebugGoStack(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	if len(args) > 0 || len(kwargs) > 0 {
 		return nil, errors.New("unexpected arguments")
@@ -287,7 +368,6 @@ func starlarkDebugGoStack(_ *starlark.Thread, b *starlark.Builtin, args starlark
 	return starlark.String(string(debug.Stack())), nil
 }
 
-// fail Starlark function.
 func starlarkFail(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	var errStr string
 	if err := starlark.UnpackArgs(
@@ -300,20 +380,18 @@ func starlarkFail(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, 
 	return nil, errors.New(errStr)
 }
 
-// files.read Starlark function.
-func (e *engine) starlarkFilesRead(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+func (b *Bot) starlarkFilesRead(_ *starlark.Thread, built *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	var name string
-	if err := starlark.UnpackArgs(b.Name(), args, kwargs, "name", &name); err != nil {
+	if err := starlark.UnpackArgs(built.Name(), args, kwargs, "name", &name); err != nil {
 		return nil, err
 	}
-	file, ok := e.bot.Load().files[name]
+	file, ok := b.instance.Load().files[name]
 	if !ok {
 		return nil, fmt.Errorf("%s: no such file", name)
 	}
 	return starlark.String(file), nil
 }
 
-// markdown.convert Starlark function.
 func starlarkMarkdownConvert(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	var s string
 	if err := starlark.UnpackArgs(b.Name(), args, kwargs, "s", &s); err != nil {
