@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log/slog"
 	"net/http"
 	"runtime/debug"
 	"strings"
@@ -26,13 +27,12 @@ import (
 	"go.astrophena.name/base/unwrap"
 	"go.astrophena.name/base/version"
 	"go.astrophena.name/base/web"
-
 	"go.astrophena.name/tools/internal/api/github/gist"
 	"go.astrophena.name/tools/internal/api/google/gemini"
 	"go.astrophena.name/tools/internal/starlark/go2star"
 	"go.astrophena.name/tools/internal/starlark/interpreter"
-	starkgemini "go.astrophena.name/tools/internal/starlark/lib/gemini"
-	starktelegram "go.astrophena.name/tools/internal/starlark/lib/telegram"
+	starlarkgemini "go.astrophena.name/tools/internal/starlark/lib/gemini"
+	starlarktelegram "go.astrophena.name/tools/internal/starlark/lib/telegram"
 	"go.astrophena.name/tools/internal/util/tgmarkup"
 
 	starlarktime "go.starlark.net/lib/time"
@@ -66,12 +66,13 @@ type Bot struct {
 	tgBotID       int64
 	tgBotUsername string
 	gistID        string
-	httpc         *http.Client
-	geminic       *gemini.Client
-	gistc         *gist.Client
-	kvCache       *starlarkstruct.Module
-	scrubber      *strings.Replacer
-	logf          func(format string, args ...any)
+
+	httpc    *http.Client
+	geminic  *gemini.Client
+	gistc    *gist.Client
+	kvCache  *starlarkstruct.Module
+	scrubber *strings.Replacer
+	logger   *slog.Logger
 
 	instance atomic.Pointer[instance]
 }
@@ -106,8 +107,8 @@ type Opts struct {
 	KVCache *starlarkstruct.Module
 	// Scrubber is used to scrub sensitive information from logs.
 	Scrubber *strings.Replacer
-	// Logf is the logger function.
-	Logf func(format string, args ...any)
+	// Logger is the logger (FIXME: write more normal comment!).
+	Logger *slog.Logger
 }
 
 // New creates a new Bot instance.
@@ -124,7 +125,7 @@ func New(opts Opts) *Bot {
 		geminic:       opts.GeminiClient,
 		kvCache:       opts.KVCache,
 		scrubber:      opts.Scrubber,
-		logf:          opts.Logf,
+		logger:        opts.Logger,
 	}
 }
 
@@ -155,10 +156,12 @@ func (b *Bot) loadCode(ctx context.Context, files map[string]string) error {
 		return errNoMainFile
 	}
 
+	starlarkLogger := b.logger.WithGroup("starlark")
+
 	intr := &interpreter.Interpreter{
 		Predeclared: b.predeclared(),
 		Logger: func(file string, line int, message string) {
-			b.logf("%s:%d: %s", file, line, message)
+			starlarkLogger.Info(message, "file", file, "line", line)
 		},
 		Packages: map[string]interpreter.Loader{
 			interpreter.MainPkg: interpreter.MemoryLoader(files),
@@ -238,7 +241,11 @@ func (b *Bot) HandleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	web.RespondJSON(w, map[string]string{"status": "ok"})
+	web.RespondJSON(w, ok)
+}
+
+var ok = map[string]string{
+	"status": "ok",
 }
 
 func (b *Bot) lookupChatID(update map[string]any) int64 {
@@ -308,10 +315,10 @@ func (b *Bot) reportError(ctx context.Context, chatID int64, w http.ResponseWrit
 		Scrubber: b.scrubber,
 	})
 	if sendErr != nil {
-		b.logf("Reporting an error %q to bot owner (%q) failed: %v", err, b.tgOwner, sendErr)
+		b.logger.Error("reporting an error failed", "err", err, "bot_owner", b.tgOwner, "send_err", sendErr)
 	}
 
-	web.RespondJSON(w, map[string]string{"status": "ok"})
+	web.RespondJSON(w, ok)
 }
 
 func (b *Bot) predeclared() starlark.StringDict {
@@ -339,7 +346,7 @@ func (b *Bot) predeclared() starlark.StringDict {
 				"read": starlark.NewBuiltin("files.read", b.starlarkFilesRead),
 			},
 		},
-		"gemini":  starkgemini.Module(b.geminic),
+		"gemini":  starlarkgemini.Module(b.geminic),
 		"kvcache": b.kvCache,
 		"markdown": &starlarkstruct.Module{
 			Name: "markdown",
@@ -349,7 +356,7 @@ func (b *Bot) predeclared() starlark.StringDict {
 		},
 		"module":   starlark.NewBuiltin("module", starlarkstruct.MakeModule),
 		"struct":   starlark.NewBuiltin("struct", starlarkstruct.Make),
-		"telegram": starktelegram.Module(b.tgToken, b.httpc),
+		"telegram": starlarktelegram.Module(b.tgToken, b.httpc),
 		"time":     starlarktime.Module,
 	}
 }

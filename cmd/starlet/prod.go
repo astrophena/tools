@@ -48,6 +48,7 @@ func (e *engine) setWebhook(ctx context.Context) error {
 func (e *engine) renderSelfPing(ctx context.Context, interval time.Duration) {
 	env := cli.GetEnv(ctx)
 	ticker := time.NewTicker(interval)
+	logger := e.logger.WithGroup("self_ping")
 	defer ticker.Stop()
 
 	for {
@@ -55,7 +56,7 @@ func (e *engine) renderSelfPing(ctx context.Context, interval time.Duration) {
 		case <-ticker.C:
 			url := env.Getenv("RENDER_EXTERNAL_URL")
 			if url == "" {
-				e.logf("selfPing: RENDER_EXTERNAL_URL is not set; are you really on Render?")
+				logger.Error("RENDER_EXTERNAL_URL is not set, are you really on Render?")
 				return
 			}
 			health, err := request.Make[web.HealthResponse](ctx, request.Params{
@@ -68,10 +69,10 @@ func (e *engine) renderSelfPing(ctx context.Context, interval time.Duration) {
 				Scrubber:   e.scrubber,
 			})
 			if err != nil {
-				e.logf("selfPing: %v", err)
+				logger.Error("failed", "err", err)
 			}
 			if !health.OK {
-				e.logf("selfPing: unhealthy: %+v", health)
+				logger.Error("unhealthy", "response", health)
 			}
 		case <-ctx.Done():
 			return

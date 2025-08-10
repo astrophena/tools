@@ -7,21 +7,20 @@
 package main
 
 import (
-	"bytes"
 	"cmp"
 	"context"
 	_ "embed"
 	"flag"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/lmittmann/tint"
 	"go.astrophena.name/base/cli"
-	"go.astrophena.name/base/logger"
 	"go.astrophena.name/base/request"
 	"go.astrophena.name/base/syncx"
 	"go.astrophena.name/base/tgauth"
@@ -73,9 +72,11 @@ func (e *engine) Run(ctx context.Context) error {
 		return nil
 	}
 
+	serverLogger := e.logger.WithGroup("server")
+
 	// If running on Render, try to look up port to listen on and start goroutine that prevents Starlet from sleeping.
 	if e.onRender {
-		e.logf("Running on Render: enabling production mode and starting self-ping goroutine.")
+		serverLogger.Info("running on Render, enabling production mode and starting self-ping goroutine")
 		e.prod = true
 		// https://docs.render.com/environment-variables#all-runtimes-1
 		if port := env.Getenv("PORT"); port != "" {
@@ -93,9 +94,9 @@ func (e *engine) Run(ctx context.Context) error {
 		if err := e.setWebhook(ctx); err != nil {
 			return err
 		}
-		e.logf("Running in production mode.")
+		serverLogger.Info("running in production mode")
 	} else {
-		e.logf("Running in development mode.")
+		serverLogger.Info("running in development mode")
 	}
 
 	return e.srv.ListenAndServe(ctx)
@@ -103,6 +104,7 @@ func (e *engine) Run(ctx context.Context) error {
 
 func (e *engine) ping(ctx context.Context, interval time.Duration) {
 	ticker := time.NewTicker(interval)
+	logger := e.logger.WithGroup("ping")
 	defer ticker.Stop()
 
 	for {
@@ -116,7 +118,7 @@ func (e *engine) ping(ctx context.Context, interval time.Duration) {
 				},
 			})
 			if err != nil {
-				e.logf("ping: failed to send heartbeat: %v", err)
+				logger.Error("failed to send heartbeat", "err", err)
 			}
 		case <-ctx.Done():
 			return
@@ -141,9 +143,10 @@ type engine struct {
 	gistc     *gist.Client
 	kvCache   *starlarkstruct.Module
 	logStream logstream.Streamer
-	logf      logger.Logf
 	mux       *http.ServeMux
 	scrubber  *strings.Replacer
+	logger    *slog.Logger
+	slogLevel *slog.LevelVar
 	srv       *web.Server
 	tgAuth    *tgauth.Middleware
 
@@ -191,7 +194,19 @@ func (e *engine) doInit(ctx context.Context) error {
 
 	const logLineLimit = 300
 	e.logStream = logstream.New(logLineLimit)
-	e.logf = log.New(io.MultiWriter(e.stderr, &timestampWriter{e.logStream}), "", 0).Printf
+	e.slogLevel = new(slog.LevelVar)
+	wr := io.MultiWriter(e.logStream, e.stderr)
+	var h slog.Handler
+	if e.prod {
+		h = slog.NewJSONHandler(wr, &slog.HandlerOptions{
+			Level: e.slogLevel,
+		})
+	} else {
+		h = tint.NewHandler(wr, &tint.Options{
+			Level: e.slogLevel,
+		})
+	}
+	e.logger = slog.New(h)
 
 	var scrubPairs []string
 	for _, val := range []string{
@@ -247,7 +262,7 @@ func (e *engine) doInit(ctx context.Context) error {
 		GeminiClient: e.geminic,
 		KVCache:      e.kvCache,
 		Scrubber:     e.scrubber,
-		Logf:         e.logf,
+		Logger:       e.logger.WithGroup("bot"),
 	})
 
 	if err := e.bot.LoadFromGist(ctx); err != nil {
@@ -295,32 +310,6 @@ type getMeResponse struct {
 		CanConnectToBusiness    bool   `json:"can_connect_to_business"`
 		HasMainWebApp           bool   `json:"has_main_web_app"`
 	} `json:"result"`
-}
-
-// timestampWriter is an io.Writer that prefixes each line with the current date and time.
-type timestampWriter struct {
-	w io.Writer
-}
-
-func (tw *timestampWriter) Write(p []byte) (n int, err error) {
-	lines := bytes.SplitAfter(p, []byte{'\n'})
-
-	for _, line := range lines {
-		if len(line) > 0 {
-			timestamp := time.Now().Format(time.DateTime + "\t")
-			_, err := tw.w.Write([]byte(timestamp))
-			if err != nil {
-				return n, err
-			}
-			nn, err := tw.w.Write(line)
-			n += nn
-			if err != nil {
-				return n, err
-			}
-		}
-	}
-
-	return n, nil
 }
 
 func (e *engine) debugAuth(next http.Handler) http.Handler {
