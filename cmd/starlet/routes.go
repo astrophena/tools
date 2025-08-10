@@ -29,7 +29,7 @@ func (e *engine) initRoutes() {
 	e.mux = http.NewServeMux()
 
 	e.mux.HandleFunc("/", e.handleRoot)
-	e.mux.HandleFunc("POST /telegram", e.handleTelegramWebhook)
+	e.mux.HandleFunc("POST /telegram", e.bot.HandleTelegramWebhook)
 	e.mux.HandleFunc("POST /reload", e.handleReload)
 
 	// Authentication.
@@ -44,7 +44,7 @@ func (e *engine) initRoutes() {
 	dbg.MenuFunc(e.debugMenu)
 	dbg.KVFunc("Bot information", func() any { return fmt.Sprintf("%+v", e.me) })
 	dbg.KVFunc("Loaded Starlark modules", func() any {
-		return fmt.Sprintf("%+v", e.bot.Load().intr.Visited())
+		return fmt.Sprintf("%+v", e.bot.Visited())
 	})
 	// Log streaming.
 	dbg.HandleFunc("logs", "Logs", func(w http.ResponseWriter, r *http.Request) {
@@ -58,7 +58,7 @@ func (e *engine) initRoutes() {
 	})
 	e.mux.Handle("/debug/log", e.logStream)
 	dbg.HandleFunc("reload", "Reload from gist", func(w http.ResponseWriter, r *http.Request) {
-		if err := e.loadFromGist(r.Context()); err != nil {
+		if err := e.bot.LoadFromGist(r.Context()); err != nil {
 			web.RespondError(w, r, err)
 			return
 		}
@@ -95,11 +95,11 @@ func (e *engine) handleReload(w http.ResponseWriter, r *http.Request) {
 		web.RespondJSONError(w, r, web.ErrUnauthorized)
 		return
 	}
-	if err := e.loadFromGist(r.Context()); err != nil {
+	if err := e.bot.LoadFromGist(r.Context()); err != nil {
 		web.RespondJSONError(w, r, err)
 		return
 	}
-	jsonOK(w)
+	web.RespondJSON(w, map[string]string{"status": "success"})
 }
 
 func (e *engine) debugMenu(r *http.Request) []web.MenuItem {
@@ -148,12 +148,4 @@ func (hi headerItem) ToHTML() template.HTML {
 	sb.WriteString(html.EscapeString(hi.name))
 	sb.WriteString("</a>")
 	return template.HTML(sb.String())
-}
-
-func jsonOK(w http.ResponseWriter) {
-	var res struct {
-		Status string `json:"status"`
-	}
-	res.Status = "success"
-	web.RespondJSON(w, res)
 }

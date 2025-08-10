@@ -18,7 +18,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"go.astrophena.name/base/cli"
@@ -28,9 +27,9 @@ import (
 	"go.astrophena.name/base/tgauth"
 	"go.astrophena.name/base/version"
 	"go.astrophena.name/base/web"
+	"go.astrophena.name/tools/cmd/starlet/internal/bot"
 	"go.astrophena.name/tools/internal/api/github/gist"
 	"go.astrophena.name/tools/internal/api/google/gemini"
-	"go.astrophena.name/tools/internal/starlark/interpreter"
 	"go.astrophena.name/tools/internal/starlark/lib/kvcache"
 	"go.astrophena.name/tools/internal/util/logstream"
 
@@ -137,6 +136,7 @@ type engine struct {
 	init syncx.Lazy[error] // main initialization
 
 	// initialized by doInit
+	bot       *bot.Bot
 	geminic   *gemini.Client
 	gistc     *gist.Client
 	kvCache   *starlarkstruct.Module
@@ -168,15 +168,6 @@ type engine struct {
 	// for tests
 	noServerStart bool
 	ready         func() // see web.Server.Ready
-
-	bot atomic.Pointer[bot] // loaded from Gist
-}
-
-// bot represents a currently running instance of the bot. It's immutable.
-type bot struct {
-	errorTemplate string                   // error.tmpl from Gist or default one
-	files         map[string]string        // Gist files
-	intr          *interpreter.Interpreter // holds and executes Starlark code
 }
 
 const (
@@ -236,6 +227,33 @@ func (e *engine) doInit(ctx context.Context) error {
 		TTL:       authSessionTTL,
 	}
 
+	me, err := e.getMe(ctx)
+	if err != nil {
+		return err
+	}
+	e.me = &me
+	e.tgBotID = me.Result.ID
+	e.tgBotUsername = me.Result.Username
+
+	e.bot = bot.New(bot.Opts{
+		GistID:       e.gistID,
+		Token:        e.tgToken,
+		Secret:       e.tgSecret,
+		Owner:        e.tgOwner,
+		BotID:        e.tgBotID,
+		BotUsername:  e.tgBotUsername,
+		HTTPClient:   e.httpc,
+		GistClient:   e.gistc,
+		GeminiClient: e.geminic,
+		KVCache:      e.kvCache,
+		Scrubber:     e.scrubber,
+		Logf:         e.logf,
+	})
+
+	if err := e.bot.LoadFromGist(ctx); err != nil {
+		return err
+	}
+
 	e.initRoutes()
 	e.srv = &web.Server{
 		Addr:       e.addr,
@@ -248,18 +266,6 @@ func (e *engine) doInit(ctx context.Context) error {
 			e.debugAuth,
 		},
 	}
-
-	if err := e.loadFromGist(ctx); err != nil {
-		return err
-	}
-
-	me, err := e.getMe(ctx)
-	if err != nil {
-		return err
-	}
-	e.me = &me
-	e.tgBotID = me.Result.ID
-	e.tgBotUsername = me.Result.Username
 
 	return nil
 }
