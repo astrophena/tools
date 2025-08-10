@@ -58,7 +58,7 @@ func (e *engine) initRoutes() {
 	})
 	e.mux.Handle("/debug/log", e.logStream)
 	dbg.HandleFunc("reload", "Reload from gist", func(w http.ResponseWriter, r *http.Request) {
-		if err := e.bot.LoadFromGist(r.Context()); err != nil {
+		if err := e.loadFromGist(r.Context()); err != nil {
 			web.RespondError(w, r, err)
 			return
 		}
@@ -95,7 +95,7 @@ func (e *engine) handleReload(w http.ResponseWriter, r *http.Request) {
 		web.RespondJSONError(w, r, web.ErrUnauthorized)
 		return
 	}
-	if err := e.bot.LoadFromGist(r.Context()); err != nil {
+	if err := e.loadFromGist(r.Context()); err != nil {
 		web.RespondJSONError(w, r, err)
 		return
 	}

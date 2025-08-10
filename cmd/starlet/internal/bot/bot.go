@@ -16,26 +16,19 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/fs"
 	"log/slog"
 	"net/http"
-	"runtime/debug"
 	"strings"
 	"sync/atomic"
 
 	"go.astrophena.name/base/request"
-	"go.astrophena.name/base/unwrap"
 	"go.astrophena.name/base/version"
 	"go.astrophena.name/base/web"
-	"go.astrophena.name/tools/internal/api/github/gist"
 	"go.astrophena.name/tools/internal/api/google/gemini"
 	"go.astrophena.name/tools/internal/starlark/go2star"
 	"go.astrophena.name/tools/internal/starlark/interpreter"
-	starlarkgemini "go.astrophena.name/tools/internal/starlark/lib/gemini"
-	starlarktelegram "go.astrophena.name/tools/internal/starlark/lib/telegram"
 	"go.astrophena.name/tools/internal/util/tgmarkup"
 
-	starlarktime "go.starlark.net/lib/time"
 	"go.starlark.net/starlark"
 	"go.starlark.net/starlarkstruct"
 )
@@ -51,11 +44,10 @@ var (
 )
 
 var (
-	//go:embed static/templates/error.tmpl
+	//go:embed error.tmpl
 	defaultErrorTemplate string
-	//go:embed lib/*.star
-	libRawFS embed.FS
-	libFS    = unwrap.Value(fs.Sub(libRawFS, "lib"))
+	//go:embed *.star
+	libFS embed.FS
 )
 
 // Bot represents a Starlet bot instance.
@@ -65,11 +57,9 @@ type Bot struct {
 	tgOwner       int64
 	tgBotID       int64
 	tgBotUsername string
-	gistID        string
 
 	httpc    *http.Client
 	geminic  *gemini.Client
-	gistc    *gist.Client
 	kvCache  *starlarkstruct.Module
 	scrubber *strings.Replacer
 	logger   *slog.Logger
@@ -85,8 +75,6 @@ type instance struct {
 
 // Opts is the options for creating a new Bot.
 type Opts struct {
-	// GistID is the ID of the Gist that contains the bot's code.
-	GistID string
 	// Token is the Telegram Bot API token.
 	Token string
 	// Secret is the Telegram Bot API secret token.
@@ -99,15 +87,13 @@ type Opts struct {
 	BotUsername string
 	// HTTPClient is the HTTP client to use for making requests.
 	HTTPClient *http.Client
-	// GistClient is the client for interacting with the GitHub Gist API.
-	GistClient *gist.Client
 	// GeminiClient is the client for interacting with the Google Gemini API.
 	GeminiClient *gemini.Client
 	// KVCache is the key-value cache for Starlark.
 	KVCache *starlarkstruct.Module
 	// Scrubber is used to scrub sensitive information from logs.
 	Scrubber *strings.Replacer
-	// Logger is the logger (FIXME: write more normal comment!).
+	// Logger is a slog.Logger used for logging.
 	Logger *slog.Logger
 }
 
@@ -119,27 +105,12 @@ func New(opts Opts) *Bot {
 		tgOwner:       opts.Owner,
 		tgBotID:       opts.BotID,
 		tgBotUsername: opts.BotUsername,
-		gistID:        opts.GistID,
 		httpc:         opts.HTTPClient,
-		gistc:         opts.GistClient,
 		geminic:       opts.GeminiClient,
 		kvCache:       opts.KVCache,
 		scrubber:      opts.Scrubber,
 		logger:        opts.Logger,
 	}
-}
-
-// LoadFromGist loads the bot's code from a Gist.
-func (b *Bot) LoadFromGist(ctx context.Context) error {
-	g, err := b.gistc.Get(ctx, b.gistID)
-	if err != nil {
-		return err
-	}
-	files := make(map[string]string)
-	for name, file := range g.Files {
-		files[name] = file.Content
-	}
-	return b.loadCode(ctx, files)
 }
 
 // Visited returns a list of modules visited by the interpreter.
@@ -150,7 +121,7 @@ func (b *Bot) Visited() []interpreter.ModuleKey {
 	return nil
 }
 
-func (b *Bot) loadCode(ctx context.Context, files map[string]string) error {
+func (b *Bot) Load(ctx context.Context, files map[string]string) error {
 	_, exists := files[mainFile]
 	if !exists {
 		return errNoMainFile
@@ -159,7 +130,7 @@ func (b *Bot) loadCode(ctx context.Context, files map[string]string) error {
 	starlarkLogger := b.logger.WithGroup("starlark")
 
 	intr := &interpreter.Interpreter{
-		Predeclared: b.predeclared(),
+		Predeclared: b.environment(),
 		Logger: func(file string, line int, message string) {
 			starlarkLogger.Info(message, "file", file, "line", line)
 		},
@@ -319,90 +290,4 @@ func (b *Bot) reportError(ctx context.Context, chatID int64, w http.ResponseWrit
 	}
 
 	web.RespondJSON(w, ok)
-}
-
-func (b *Bot) predeclared() starlark.StringDict {
-	return starlark.StringDict{
-		"config": starlarkstruct.FromStringDict(
-			starlarkstruct.Default,
-			starlark.StringDict{
-				"bot_id":       starlark.MakeInt64(b.tgBotID),
-				"bot_username": starlark.String(b.tgBotUsername),
-				"owner_id":     starlark.MakeInt64(b.tgOwner),
-				"version":      starlark.String(version.Version().String()),
-			},
-		),
-		"debug": starlarkstruct.FromStringDict(
-			starlarkstruct.Default,
-			starlark.StringDict{
-				"stack":    starlark.NewBuiltin("debug.stack", starlarkDebugStack),
-				"go_stack": starlark.NewBuiltin("debug.go_stack", starlarkDebugGoStack),
-			},
-		),
-		"fail": starlark.NewBuiltin("fail", starlarkFail),
-		"files": &starlarkstruct.Module{
-			Name: "files",
-			Members: starlark.StringDict{
-				"read": starlark.NewBuiltin("files.read", b.starlarkFilesRead),
-			},
-		},
-		"gemini":  starlarkgemini.Module(b.geminic),
-		"kvcache": b.kvCache,
-		"markdown": &starlarkstruct.Module{
-			Name: "markdown",
-			Members: starlark.StringDict{
-				"convert": starlark.NewBuiltin("markdown.convert", starlarkMarkdownConvert),
-			},
-		},
-		"module":   starlark.NewBuiltin("module", starlarkstruct.MakeModule),
-		"struct":   starlark.NewBuiltin("struct", starlarkstruct.Make),
-		"telegram": starlarktelegram.Module(b.tgToken, b.httpc),
-		"time":     starlarktime.Module,
-	}
-}
-
-func starlarkDebugStack(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	if len(args) > 0 || len(kwargs) > 0 {
-		return nil, errors.New("unexpected arguments")
-	}
-	return starlark.String(thread.CallStack().String()), nil
-}
-
-func starlarkDebugGoStack(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	if len(args) > 0 || len(kwargs) > 0 {
-		return nil, errors.New("unexpected arguments")
-	}
-	return starlark.String(string(debug.Stack())), nil
-}
-
-func starlarkFail(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	var errStr string
-	if err := starlark.UnpackArgs(
-		b.Name(),
-		args, kwargs,
-		"err", &errStr,
-	); err != nil {
-		return nil, err
-	}
-	return nil, errors.New(errStr)
-}
-
-func (b *Bot) starlarkFilesRead(_ *starlark.Thread, built *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	var name string
-	if err := starlark.UnpackArgs(built.Name(), args, kwargs, "name", &name); err != nil {
-		return nil, err
-	}
-	file, ok := b.instance.Load().files[name]
-	if !ok {
-		return nil, fmt.Errorf("%s: no such file", name)
-	}
-	return starlark.String(file), nil
-}
-
-func starlarkMarkdownConvert(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	var s string
-	if err := starlark.UnpackArgs(b.Name(), args, kwargs, "s", &s); err != nil {
-		return nil, err
-	}
-	return go2star.To(tgmarkup.FromMarkdown(s))
 }

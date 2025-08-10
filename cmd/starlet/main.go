@@ -57,7 +57,9 @@ func (e *engine) Run(ctx context.Context) error {
 	e.tgOwner = cmp.Or(e.tgOwner, parseInt(env.Getenv("TG_OWNER")))
 	e.tgSecret = cmp.Or(e.tgSecret, env.Getenv("TG_SECRET"))
 	e.tgToken = cmp.Or(e.tgToken, env.Getenv("TG_TOKEN"))
-
+	if e.onRender {
+		e.prod = true
+	}
 	e.stderr = env.Stderr
 
 	// Initialize internal state.
@@ -77,7 +79,6 @@ func (e *engine) Run(ctx context.Context) error {
 	// If running on Render, try to look up port to listen on and start goroutine that prevents Starlet from sleeping.
 	if e.onRender {
 		serverLogger.Info("running on Render, enabling production mode and starting self-ping goroutine")
-		e.prod = true
 		// https://docs.render.com/environment-variables#all-runtimes-1
 		if port := env.Getenv("PORT"); port != "" {
 			e.srv.Addr = ":" + port
@@ -250,22 +251,29 @@ func (e *engine) doInit(ctx context.Context) error {
 	e.tgBotID = me.Result.ID
 	e.tgBotUsername = me.Result.Username
 
+	g, err := e.gistc.Get(ctx, e.gistID)
+	if err != nil {
+		return err
+	}
+	files := make(map[string]string)
+	for name, file := range g.Files {
+		files[name] = file.Content
+	}
+
 	e.bot = bot.New(bot.Opts{
-		GistID:       e.gistID,
 		Token:        e.tgToken,
 		Secret:       e.tgSecret,
 		Owner:        e.tgOwner,
 		BotID:        e.tgBotID,
 		BotUsername:  e.tgBotUsername,
 		HTTPClient:   e.httpc,
-		GistClient:   e.gistc,
 		GeminiClient: e.geminic,
 		KVCache:      e.kvCache,
 		Scrubber:     e.scrubber,
 		Logger:       e.logger.WithGroup("bot"),
 	})
 
-	if err := e.bot.LoadFromGist(ctx); err != nil {
+	if err := e.bot.Load(ctx, files); err != nil {
 		return err
 	}
 
@@ -331,4 +339,17 @@ func (e *engine) debugAuth(next http.Handler) http.Handler {
 
 func (e *engine) authCheck(_ *http.Request, ident *tgauth.Identity) bool {
 	return ident.ID == e.tgOwner
+}
+
+func (e *engine) loadFromGist(ctx context.Context) error {
+	g, err := e.gistc.Get(ctx, e.gistID)
+	if err != nil {
+		return err
+	}
+	files := make(map[string]string)
+	for name, file := range g.Files {
+		files[name] = file.Content
+	}
+
+	return e.bot.Load(ctx, files)
 }

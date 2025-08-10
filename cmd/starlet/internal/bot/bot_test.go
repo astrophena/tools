@@ -23,7 +23,6 @@ import (
 	"go.astrophena.name/base/txtar"
 	"go.astrophena.name/base/web"
 	"go.astrophena.name/tools/cmd/starlet/internal/bot"
-	"go.astrophena.name/tools/internal/api/github/gist"
 	"go.astrophena.name/tools/internal/starlark/lib/kvcache"
 )
 
@@ -60,9 +59,13 @@ func TestHandleTelegramWebhook(t *testing.T) {
 		}
 		upd = json.RawMessage(b)
 
+		files := make(map[string]string)
+		for _, f := range ar.Files {
+			files[f.Name] = string(f.Data)
+		}
+
 		tm := testMux(t, nil)
-		tm.gist = txtarToGist(t, readFile(t, match))
-		bot := testBot(t, tm)
+		bot := testBot(t, tm, files)
 
 		mux := http.NewServeMux()
 		mux.HandleFunc("/telegram", bot.HandleTelegramWebhook)
@@ -88,22 +91,17 @@ func TestHandleTelegramWebhook(t *testing.T) {
 	}, *update)
 }
 
-func testBot(t *testing.T, m *mux) *bot.Bot {
+func testBot(t *testing.T, m *mux, files map[string]string) *bot.Bot {
 	t.Helper()
 	b := bot.New(bot.Opts{
-		GistID:     "test",
 		Token:      tgToken,
 		Secret:     "test",
 		Owner:      123456789,
 		HTTPClient: testutil.MockHTTPClient(m.mux),
-		GistClient: &gist.Client{
-			Token:      "test",
-			HTTPClient: testutil.MockHTTPClient(m.mux),
-		},
-		KVCache: kvcache.Module(t.Context(), 1*time.Minute),
-		Logger:  slog.New(slog.NewTextHandler(logger.Logf(t.Logf), nil)),
+		KVCache:    kvcache.Module(t.Context(), 1*time.Minute),
+		Logger:     slog.New(slog.NewTextHandler(logger.Logf(t.Logf), nil)),
 	})
-	if err := b.LoadFromGist(t.Context()); err != nil {
+	if err := b.Load(t.Context(), files); err != nil {
 		t.Fatal(err)
 	}
 	return b
@@ -112,7 +110,6 @@ func testBot(t *testing.T, m *mux) *bot.Bot {
 type mux struct {
 	mux           *http.ServeMux
 	mu            sync.Mutex
-	gist          []byte
 	telegramCalls []call
 }
 
@@ -121,40 +118,10 @@ type call struct {
 	Args   map[string]any `json:"args"`
 }
 
-const (
-	getGist       = "GET api.github.com/gists/test"
-	getMeTelegram = "GET api.telegram.org/{token}/getMe"
-	postTelegram  = "POST api.telegram.org/{token}/{method}"
-)
+const postTelegram = "POST api.telegram.org/{token}/{method}"
 
 func testMux(t *testing.T, overrides map[string]http.HandlerFunc) *mux {
 	m := &mux{mux: http.NewServeMux()}
-	m.gist = txtarToGist(t, []byte(`
--- bot.star --
-print("hello")
-`))
-	m.mux.HandleFunc(getGist, orHandler(overrides[getGist], func(w http.ResponseWriter, r *http.Request) {
-		testutil.AssertEqual(t, r.Header.Get("Authorization"), "Bearer test")
-		m.mu.Lock()
-		defer m.mu.Unlock()
-		if m.gist != nil {
-			w.Write(m.gist)
-		}
-	}))
-	m.mux.HandleFunc(getMeTelegram, orHandler(overrides[getMeTelegram], func(w http.ResponseWriter, r *http.Request) {
-		testutil.AssertEqual(t, tgToken, strings.TrimPrefix(r.PathValue("token"), "bot"))
-		var resp struct {
-			OK     bool `json:"ok"`
-			Result struct {
-				ID       int64  `json:"id"`
-				Username string `json:"username"`
-			} `json:"result"`
-		}
-		resp.OK = true
-		resp.Result.ID = 123456789
-		resp.Result.Username = "foo_bot"
-		web.RespondJSON(w, resp)
-	}))
 	m.mux.HandleFunc(postTelegram, orHandler(overrides[postTelegram], func(w http.ResponseWriter, r *http.Request) {
 		testutil.AssertEqual(t, tgToken, strings.TrimPrefix(r.PathValue("token"), "bot"))
 		m.mu.Lock()
@@ -167,7 +134,7 @@ print("hello")
 		jsonOK(w)
 	}))
 	for pat, h := range overrides {
-		if pat == getGist || pat == postTelegram || pat == getMeTelegram {
+		if pat == postTelegram {
 			continue
 		}
 		m.mux.HandleFunc(pat, h)
@@ -184,38 +151,11 @@ func orHandler(hh ...http.HandlerFunc) http.HandlerFunc {
 	return nil
 }
 
-func readFile(t *testing.T, path string) []byte {
-	b, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return b
-}
-
 func read(t *testing.T, r io.Reader) []byte {
 	b, err := io.ReadAll(r)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return b
-}
-
-func txtarToGist(t *testing.T, b []byte) []byte {
-	ar := txtar.Parse(b)
-
-	g := &gist.Gist{
-		Files: make(map[string]gist.File),
-	}
-
-	for _, f := range ar.Files {
-		g.Files[f.Name] = gist.File{Content: string(f.Data)}
-	}
-
-	b, err := json.MarshalIndent(g, "", "  ")
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	return b
 }
 
