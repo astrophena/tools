@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"flag"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -16,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"go.astrophena.name/base/logger"
 	"go.astrophena.name/base/request"
 	"go.astrophena.name/base/testutil"
 	"go.astrophena.name/base/txtar"
@@ -99,7 +101,7 @@ func testBot(t *testing.T, m *mux) *bot.Bot {
 			HTTPClient: testutil.MockHTTPClient(m.mux),
 		},
 		KVCache: kvcache.Module(t.Context(), 1*time.Minute),
-		Logf:    t.Logf,
+		Logger:  slog.New(slog.NewTextHandler(logger.Logf(t.Logf), nil)),
 	})
 	if err := b.LoadFromGist(t.Context()); err != nil {
 		t.Fatal(err)
