@@ -34,7 +34,7 @@ Returns a string describing the current call stack.
 
 Returns a string describing the Go call stack.
 
-## `fail()`
+## `fail(err: str)`
 
 Terminates execution with a specified error message.
 
@@ -42,7 +42,7 @@ Terminates execution with a specified error message.
 
 A module for accessing files provided to the bot.
 
-### `files.read()`
+### `files.read(name: str)`
 
 Reads the content of a file.
 
@@ -91,9 +91,9 @@ is a list of strings representing the parts of the generated content.
 
 ## `kvcache`
 
-This module provides two functions:
+This module provides two functions for using a simple key-value cache:
 
-  - get(key: str) -> value | None: Retrieves the value associated with the
+  - get(key: str) -> any | None: Retrieves the value associated with the
     given string key. Returns the stored value if the key exists and has
     not expired. Returns None if the key is not found or if the entry
     has expired. Accessing a key resets its TTL timer.
@@ -105,27 +105,25 @@ This module provides two functions:
 
 A module for Markdown conversion.
 
-### `markdown.convert()`
+### `markdown.convert(s: str)`
 
 Converts a Markdown string to a Telegram message struct.
 
-## `module()`
+## `module(name: str, **members)`
 
 Instantiates a module struct with the name from the specified keyword arguments.
 
-## `struct()`
+## `struct(**fields)`
 
 Instantiates an immutable struct from the specified keyword arguments.
 
 ## `telegram`
 
-This module provides two functions: call and get_file.
-
-# call
+This module provides two functions for working with the Telegram Bot API: call and get_file.
 
 The call function takes two arguments:
 
-  - method (string): The Telegram Bot API method to call.
+  - method (str): The Telegram Bot API method to call.
   - args (dict): The arguments to pass to the method.
 
 For example, to send a message to a chat:
@@ -140,11 +138,9 @@ For example, to send a message to a chat:
 
 The response variable will contain the response from the Telegram Bot API.
 
-# get_file
-
 The get_file function takes one argument:
 
-  - file_id (string): The ID of the file to download.
+  - file_id (str): The ID of the file to download.
 
 It returns the content of the file as bytes. For example:
 
