@@ -12,8 +12,9 @@ import (
 
 	"go.astrophena.name/base/version"
 	"go.astrophena.name/tools/internal/starlark/go2star"
-	starlarkgemini "go.astrophena.name/tools/internal/starlark/lib/gemini"
-	starlarktelegram "go.astrophena.name/tools/internal/starlark/lib/telegram"
+	"go.astrophena.name/tools/internal/starlark/lib/gemini"
+	"go.astrophena.name/tools/internal/starlark/lib/kvcache"
+	"go.astrophena.name/tools/internal/starlark/lib/telegram"
 	"go.astrophena.name/tools/internal/util/tgmarkup"
 
 	starlarktime "go.starlark.net/lib/time"
@@ -77,7 +78,7 @@ func (d Environment) render(b *strings.Builder, level int, prefix string) {
 		}
 		b.WriteString("`\n\n")
 
-		b.WriteString(m.Doc)
+		b.WriteString(strings.TrimSpace(m.Doc))
 		b.WriteString("\n\n")
 
 		if len(m.Members) > 0 {
@@ -148,12 +149,12 @@ func (b *Bot) environment() Environment {
 		},
 		{
 			Name:  "gemini",
-			Doc:   "A module for interacting with the Google Gemini API.",
-			Value: starlarkgemini.Module(b.geminic),
+			Doc:   gemini.Documentation(),
+			Value: gemini.Module(b.geminic),
 		},
 		{
 			Name:  "kvcache",
-			Doc:   "A module for caching key-value pairs.",
+			Doc:   kvcache.Documentation(),
 			Value: b.kvCache,
 		},
 		{
@@ -169,22 +170,22 @@ func (b *Bot) environment() Environment {
 		},
 		{
 			Name:  "module",
-			Doc:   "Creates a new Starlark module from a dictionary.",
+			Doc:   "Instantiates a module struct with the name from the specified keyword arguments.",
 			Value: starlark.NewBuiltin("module", starlarkstruct.MakeModule),
 		},
 		{
 			Name:  "struct",
-			Doc:   "Creates a new Starlark struct from a dictionary.",
+			Doc:   "Instantiates an immutable struct from the specified keyword arguments.",
 			Value: starlark.NewBuiltin("struct", starlarkstruct.Make),
 		},
 		{
 			Name:  "telegram",
-			Doc:   "A module for interacting with the Telegram Bot API.",
-			Value: starlarktelegram.Module(b.tgToken, b.httpc),
+			Doc:   telegram.Documentation(),
+			Value: telegram.Module(b.tgToken, b.httpc),
 		},
 		{
 			Name:  "time",
-			Doc:   "A module for time-related functions.",
+			Doc:   "A module for time-related functions. See https://pkg.go.dev/go.starlark.net/lib/time#Module.",
 			Value: starlarktime.Module,
 		},
 	}
