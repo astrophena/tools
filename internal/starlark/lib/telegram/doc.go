@@ -5,13 +5,11 @@
 /*
 Package telegram contains a Starlark module that exposes the Telegram Bot API.
 
-This module provides two functions: call and get_file.
-
-# call
+This module provides two functions for working with the Telegram Bot API: call and get_file.
 
 The call function takes two arguments:
 
-  - method (string): The Telegram Bot API method to call.
+  - method (str): The Telegram Bot API method to call.
   - args (dict): The arguments to pass to the method.
 
 For example, to send a message to a chat:
@@ -26,11 +24,9 @@ For example, to send a message to a chat:
 
 The response variable will contain the response from the Telegram Bot API.
 
-# get_file
-
 The get_file function takes one argument:
 
-  - file_id (string): The ID of the file to download.
+  - file_id (str): The ID of the file to download.
 
 It returns the content of the file as bytes. For example:
 

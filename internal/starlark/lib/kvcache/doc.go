@@ -3,11 +3,11 @@
 // license that can be found in the LICENSE.md file.
 
 /*
-Package kvcache implements a Starlark module for a simple key-value cache with time-to-live (TTL) expiration based on last access time.
+Package kvcache contains a Starlark module for a simple key-value cache with time-to-live (TTL) expiration based on last access time.
 
-This module provides two functions:
+This module provides two functions for using a simple key-value cache:
 
-  - get(key: str) -> value | None: Retrieves the value associated with the
+  - get(key: str) -> any | None: Retrieves the value associated with the
     given string key. Returns the stored value if the key exists and has
     not expired. Returns None if the key is not found or if the entry
     has expired. Accessing a key resets its TTL timer.

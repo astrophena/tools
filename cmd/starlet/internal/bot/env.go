@@ -31,6 +31,8 @@ type Member struct {
 	Name string
 	// Doc is the documentation string for the member.
 	Doc string
+	// Args is the arguments for builtins.
+	Args []string
 	// Value is the Starlark value. If Members is not nil, this should be nil,
 	// as the value will be a module constructed from the members.
 	Value starlark.Value
@@ -38,7 +40,7 @@ type Member struct {
 	Members []Member
 }
 
-// StringDict converts the Documentation into a [starlark.StringDict] that can be
+// StringDict converts the Environment into a [starlark.StringDict] that can be
 // used as a global environment for a Starlark interpreter.
 func (d Environment) StringDict() starlark.StringDict {
 	dict := make(starlark.StringDict)
@@ -74,7 +76,18 @@ func (d Environment) render(b *strings.Builder, level int, prefix string) {
 		b.WriteString(prefix + m.Name)
 
 		if _, ok := m.Value.(*starlark.Builtin); ok {
-			b.WriteString("()")
+			if len(m.Args) > 0 {
+				b.WriteString("(")
+				for i, arg := range m.Args {
+					b.WriteString(arg)
+					if i+1 != len(m.Args) {
+						b.WriteString(", ")
+					}
+				}
+				b.WriteString(")")
+			} else {
+				b.WriteString("()")
+			}
 		}
 		b.WriteString("`\n\n")
 
@@ -134,6 +147,7 @@ func (b *Bot) environment() Environment {
 		{
 			Name:  "fail",
 			Doc:   "Terminates execution with a specified error message.",
+			Args:  []string{"err: str"},
 			Value: starlark.NewBuiltin("fail", starlarkFail),
 		},
 		{
@@ -143,6 +157,7 @@ func (b *Bot) environment() Environment {
 				{
 					Name:  "read",
 					Doc:   "Reads the content of a file.",
+					Args:  []string{"name: str"},
 					Value: starlark.NewBuiltin("files.read", b.starlarkFilesRead),
 				},
 			},
@@ -163,6 +178,7 @@ func (b *Bot) environment() Environment {
 			Members: []Member{
 				{
 					Name:  "convert",
+					Args:  []string{"s: str"},
 					Doc:   "Converts a Markdown string to a Telegram message struct.",
 					Value: starlark.NewBuiltin("markdown.convert", starlarkMarkdownConvert),
 				},
@@ -170,11 +186,13 @@ func (b *Bot) environment() Environment {
 		},
 		{
 			Name:  "module",
+			Args:  []string{"name: str", "**members"},
 			Doc:   "Instantiates a module struct with the name from the specified keyword arguments.",
 			Value: starlark.NewBuiltin("module", starlarkstruct.MakeModule),
 		},
 		{
 			Name:  "struct",
+			Args:  []string{"**fields"},
 			Doc:   "Instantiates an immutable struct from the specified keyword arguments.",
 			Value: starlark.NewBuiltin("struct", starlarkstruct.Make),
 		},
