@@ -5,24 +5,35 @@
 package main
 
 import (
+	"bytes"
 	"crypto/subtle"
 	"embed"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"html"
 	"html/template"
+	"io"
+	"log/slog"
 	"net/http"
 	"os"
+	"path"
 	"strings"
+	"sync"
 
 	"go.astrophena.name/base/tgauth"
 	"go.astrophena.name/base/web"
 )
 
 var (
-	//go:embed static/templates/logs.tmpl
-	logsTmpl string
-	//go:embed static/js/* static/icons/*
+	//go:embed static/templates/*.tmpl
+	templatesFS embed.FS
+	//go:embed static/css/* static/js/* static/icons/*
 	staticFS embed.FS
+
+	templates = sync.OnceValue(func() *template.Template {
+		return template.Must(template.New("").ParseFS(templatesFS, "static/templates/*.tmpl"))
+	})
 )
 
 func (e *engine) initRoutes() {
@@ -48,15 +59,42 @@ func (e *engine) initRoutes() {
 	})
 	// Log streaming.
 	dbg.HandleFunc("logs", "Logs", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintf(
-			w,
-			logsTmpl,
-			html.EscapeString(strings.Join(e.logStream.Lines(), "")),
-			e.srv.StaticHashName("static/css/main.css"),
-			e.srv.StaticHashName("static/js/logs.js"),
-		)
+		var buf bytes.Buffer
+		data := struct {
+			MainCSS string
+			LogsJS  string
+			Logs    string
+		}{
+			MainCSS: e.srv.StaticHashName("static/css/main.css"),
+			LogsJS:  e.srv.StaticHashName("static/js/logs.js"),
+			Logs:    strings.Join(e.logStream.Lines(), ""),
+		}
+		if err := templates().ExecuteTemplate(&buf, "logs.tmpl", data); err != nil {
+			web.RespondError(w, r, err)
+			return
+		}
+		buf.WriteTo(w)
 	})
 	e.mux.Handle("/debug/log", e.logStream)
+	// Bot debugger.
+	dbg.HandleFunc("bot", "Bot debugger", func(w http.ResponseWriter, r *http.Request) {
+		var buf bytes.Buffer
+		data := struct {
+			MainCSS string
+			BotCSS  string
+			BotJS   string
+		}{
+			MainCSS: e.srv.StaticHashName("static/css/main.css"),
+			BotCSS:  e.srv.StaticHashName("static/css/bot.css"),
+			BotJS:   e.srv.StaticHashName("static/js/bot.js"),
+		}
+		if err := templates().ExecuteTemplate(&buf, "bot.tmpl", data); err != nil {
+			web.RespondError(w, r, err)
+			return
+		}
+		buf.WriteTo(w)
+	})
+	e.mux.Handle("/debug/events", e.tgInterceptor)
 	dbg.HandleFunc("reload", "Reload from gist", func(w http.ResponseWriter, r *http.Request) {
 		if err := e.loadFromGist(r.Context()); err != nil {
 			web.RespondError(w, r, err)
@@ -77,11 +115,15 @@ func (e *engine) initRoutes() {
 }
 
 func (e *engine) handleRoot(w http.ResponseWriter, r *http.Request) {
-	const documentationURL = "https://go.astrophena.name/tools/cmd/starlet"
 	if r.URL.Path != "/" {
 		web.RespondError(w, r, web.ErrNotFound)
 		return
 	}
+	if e.dev {
+		http.Redirect(w, r, "/debug/bot", http.StatusFound)
+		return
+	}
+	const documentationURL = "https://go.astrophena.name/tools/cmd/starlet"
 	if e.tgAuth.LoggedIn(r) {
 		http.Redirect(w, r, "/debug/", http.StatusFound)
 		return
@@ -148,4 +190,86 @@ func (hi headerItem) ToHTML() template.HTML {
 	sb.WriteString(html.EscapeString(hi.name))
 	sb.WriteString("</a>")
 	return template.HTML(sb.String())
+}
+
+type tgInterceptor struct {
+	mu      sync.RWMutex
+	clients map[chan []byte]struct{}
+	logger  *slog.Logger
+}
+
+func newTgInterceptor(logger *slog.Logger) *tgInterceptor {
+	return &tgInterceptor{
+		clients: make(map[chan []byte]struct{}),
+		logger:  logger,
+	}
+}
+
+func (i *tgInterceptor) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+
+	ch := make(chan []byte)
+	i.mu.Lock()
+	i.clients[ch] = struct{}{}
+	i.mu.Unlock()
+
+	defer func() {
+		i.mu.Lock()
+		delete(i.clients, ch)
+		i.mu.Unlock()
+	}()
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		web.RespondError(w, r, errors.New("streaming unsupported"))
+		return
+	}
+
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case msg := <-ch:
+			fmt.Fprintf(w, "data: %s\n\n", msg)
+			flusher.Flush()
+		}
+	}
+}
+
+func (i *tgInterceptor) RoundTrip(r *http.Request) (*http.Response, error) {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		return nil, err
+	}
+	r.Body.Close()
+
+	var data map[string]any
+	if err := json.Unmarshal(body, &data); err != nil {
+		i.logger.Error("unmarshaling intercepted request body failed", "err", err)
+	}
+
+	event := map[string]any{
+		"url":    r.URL.String(),
+		"method": path.Base(r.URL.Path),
+		"body":   data,
+	}
+
+	b, err := json.Marshal(event)
+	if err != nil {
+		return nil, err
+	}
+
+	i.mu.RLock()
+	defer i.mu.RUnlock()
+	for ch := range i.clients {
+		ch <- b
+	}
+
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       io.NopCloser(strings.NewReader(`{"ok":true,"result":{}}`)),
+		Header:     make(http.Header),
+	}, nil
 }

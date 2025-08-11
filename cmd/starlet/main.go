@@ -7,10 +7,11 @@
 package main
 
 import (
+	"bytes"
 	"cmp"
 	"context"
 	_ "embed"
-	"flag"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -19,11 +20,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lmittmann/tint"
 	"go.astrophena.name/base/cli"
 	"go.astrophena.name/base/request"
 	"go.astrophena.name/base/syncx"
 	"go.astrophena.name/base/tgauth"
+	"go.astrophena.name/base/txtar"
 	"go.astrophena.name/base/version"
 	"go.astrophena.name/base/web"
 	"go.astrophena.name/tools/cmd/starlet/internal/bot"
@@ -32,21 +33,22 @@ import (
 	"go.astrophena.name/tools/internal/starlark/lib/kvcache"
 	"go.astrophena.name/tools/internal/util/logstream"
 
-	"go.starlark.net/starlarkstruct"
+	"github.com/lmittmann/tint"
 )
 
 const tgAPI = "https://api.telegram.org"
 
 func main() { cli.Main(new(engine)) }
 
-func (e *engine) Flags(fs *flag.FlagSet) {
-	fs.BoolVar(&e.prod, "prod", false, "Run in production mode.")
-}
-
 func (e *engine) Run(ctx context.Context) error {
 	env := cli.GetEnv(ctx)
 
+	if len(env.Args) > 1 {
+		return errors.New("too many arguments")
+	}
+
 	// Load configuration from environment variables.
+	e.addr = cmp.Or(e.addr, env.Getenv("ADDR"), "localhost:3000")
 	e.geminiKey = cmp.Or(e.geminiKey, env.Getenv("GEMINI_KEY"))
 	e.ghToken = cmp.Or(e.ghToken, env.Getenv("GH_TOKEN"))
 	e.gistID = cmp.Or(e.gistID, env.Getenv("GIST_ID"))
@@ -58,9 +60,13 @@ func (e *engine) Run(ctx context.Context) error {
 	e.tgSecret = cmp.Or(e.tgSecret, env.Getenv("TG_SECRET"))
 	e.tgToken = cmp.Or(e.tgToken, env.Getenv("TG_TOKEN"))
 	if e.onRender {
-		e.prod = true
+		e.dev = false
 	}
 	e.stderr = env.Stderr
+	if len(env.Args) == 1 {
+		e.dev = true
+		e.botStatePath = env.Args[0]
+	}
 
 	// Initialize internal state.
 	if err := e.init.Get(func() error {
@@ -78,7 +84,7 @@ func (e *engine) Run(ctx context.Context) error {
 
 	// If running on Render, try to look up port to listen on and start goroutine that prevents Starlet from sleeping.
 	if e.onRender {
-		serverLogger.Info("running on Render, enabling production mode and starting self-ping goroutine")
+		serverLogger.Info("Running on Render.")
 		// https://docs.render.com/environment-variables#all-runtimes-1
 		if port := env.Getenv("PORT"); port != "" {
 			e.srv.Addr = ":" + port
@@ -91,40 +97,33 @@ func (e *engine) Run(ctx context.Context) error {
 	}
 
 	// If running in production mode, set the webhook in Telegram Bot API.
-	if e.prod {
+	if !e.dev {
 		if err := e.setWebhook(ctx); err != nil {
 			return err
 		}
-		serverLogger.Info("running in production mode")
+		serverLogger.Info("Running in production mode.")
 	} else {
-		serverLogger.Info("running in development mode")
+		serverLogger.Info("Running in development mode.")
 	}
 
-	return e.srv.ListenAndServe(ctx)
+	// Gross hack: re-route all output from web.Server to our slog logger.
+	srvCtx := cli.WithEnv(ctx, &cli.Env{
+		Getenv: env.Getenv,
+		Stderr: &slogWriter{serverLogger},
+	})
+	return e.srv.ListenAndServe(srvCtx)
 }
 
-func (e *engine) ping(ctx context.Context, interval time.Duration) {
-	ticker := time.NewTicker(interval)
-	logger := e.logger.WithGroup("ping")
-	defer ticker.Stop()
+type slogWriter struct{ log *slog.Logger }
 
-	for {
-		select {
-		case <-ticker.C:
-			_, err := request.Make[request.IgnoreResponse](ctx, request.Params{
-				Method: http.MethodGet,
-				URL:    e.pingURL,
-				Headers: map[string]string{
-					"User-Agent": version.UserAgent(),
-				},
-			})
-			if err != nil {
-				logger.Error("failed to send heartbeat", "err", err)
-			}
-		case <-ctx.Done():
-			return
-		}
+func (sw *slogWriter) Write(p []byte) (n int, err error) {
+	// Trim trailing newlines, as slog handlers add their own.
+	msg := string(bytes.TrimSpace(p))
+	// Don't log empty messages.
+	if msg != "" {
+		sw.log.Info(msg)
 	}
+	return len(p), nil
 }
 
 func parseInt(s string) int64 {
@@ -139,36 +138,33 @@ type engine struct {
 	init syncx.Lazy[error] // main initialization
 
 	// initialized by doInit
-	bot       *bot.Bot
-	geminic   *gemini.Client
-	gistc     *gist.Client
-	kvCache   *starlarkstruct.Module
-	logStream logstream.Streamer
-	mux       *http.ServeMux
-	scrubber  *strings.Replacer
-	logger    *slog.Logger
-	slogLevel *slog.LevelVar
-	srv       *web.Server
-	tgAuth    *tgauth.Middleware
+	bot           *bot.Bot
+	gistc         *gist.Client
+	logStream     logstream.Streamer
+	tgInterceptor *tgInterceptor
+	logger        *slog.Logger
+	mux           *http.ServeMux
+	scrubber      *strings.Replacer
+	srv           *web.Server
+	tgAuth        *tgauth.Middleware
 
 	// configuration, read-only after initialization
-	addr          string
-	geminiKey     string
-	ghToken       string
-	gistID        string
-	host          string
-	httpc         *http.Client
-	me            *getMeResponse // obtained from Telegram Bot API
-	onRender      bool
-	pingURL       string
-	prod          bool
-	reloadToken   string
-	stderr        io.Writer
-	tgBotID       int64
-	tgBotUsername string
-	tgOwner       int64
-	tgSecret      string
-	tgToken       string
+	addr         string
+	botStatePath string
+	dev          bool
+	geminiKey    string
+	ghToken      string
+	gistID       string
+	host         string
+	httpc        *http.Client
+	me           *getMeResponse // obtained from Telegram Bot API
+	onRender     bool
+	pingURL      string
+	reloadToken  string
+	stderr       io.Writer
+	tgOwner      int64
+	tgSecret     string
+	tgToken      string
 	// for tests
 	noServerStart bool
 	ready         func() // see web.Server.Ready
@@ -181,33 +177,33 @@ const (
 )
 
 func (e *engine) doInit(ctx context.Context) error {
+	if e.stderr == nil {
+		e.stderr = os.Stderr
+	}
+
+	const logLineLimit = 300
+	e.logStream = logstream.New(logLineLimit)
+	wr := io.MultiWriter(e.logStream, e.stderr)
+	var h slog.Handler
+	if !e.dev {
+		h = slog.NewJSONHandler(wr, &slog.HandlerOptions{})
+	} else {
+		h = tint.NewHandler(wr, &tint.Options{})
+	}
+	e.logger = slog.New(h)
+
+	if e.dev {
+		e.tgInterceptor = newTgInterceptor(e.logger)
+	}
 	if e.httpc == nil {
 		e.httpc = &http.Client{
 			// Increase timeout to properly handle Gemini API response times.
 			Timeout: 60 * time.Second,
 		}
+		if e.dev {
+			e.httpc.Transport = e.tgInterceptor
+		}
 	}
-	if e.stderr == nil {
-		e.stderr = os.Stderr
-	}
-
-	e.kvCache = kvcache.Module(ctx, kvCacheTTL)
-
-	const logLineLimit = 300
-	e.logStream = logstream.New(logLineLimit)
-	e.slogLevel = new(slog.LevelVar)
-	wr := io.MultiWriter(e.logStream, e.stderr)
-	var h slog.Handler
-	if e.prod {
-		h = slog.NewJSONHandler(wr, &slog.HandlerOptions{
-			Level: e.slogLevel,
-		})
-	} else {
-		h = tint.NewHandler(wr, &tint.Options{
-			Level: e.slogLevel,
-		})
-	}
-	e.logger = slog.New(h)
 
 	var scrubPairs []string
 	for _, val := range []string{
@@ -230,49 +226,59 @@ func (e *engine) doInit(ctx context.Context) error {
 		HTTPClient: e.httpc,
 		Scrubber:   e.scrubber,
 	}
-	if e.geminiKey != "" {
-		e.geminic = &gemini.Client{
-			APIKey:     e.geminiKey,
-			HTTPClient: e.httpc,
-			Scrubber:   e.scrubber,
-		}
-	}
 	e.tgAuth = &tgauth.Middleware{
 		CheckFunc: e.authCheck,
 		Token:     e.tgToken,
 		TTL:       authSessionTTL,
 	}
 
-	me, err := e.getMe(ctx)
-	if err != nil {
-		return err
+	opts := bot.Opts{
+		Token:      e.tgToken,
+		Secret:     e.tgSecret,
+		Owner:      e.tgOwner,
+		HTTPClient: e.httpc,
+		KVCache:    kvcache.Module(ctx, kvCacheTTL),
+		Scrubber:   e.scrubber,
+		Logger:     e.logger.WithGroup("bot"),
 	}
-	e.me = &me
-	e.tgBotID = me.Result.ID
-	e.tgBotUsername = me.Result.Username
 
-	g, err := e.gistc.Get(ctx, e.gistID)
-	if err != nil {
-		return err
+	if e.geminiKey != "" {
+		opts.GeminiClient = &gemini.Client{
+			APIKey:     e.geminiKey,
+			HTTPClient: e.httpc,
+			Scrubber:   e.scrubber,
+		}
 	}
+
+	if e.dev {
+		opts.BotID = 123456789
+		opts.BotUsername = "test_bot"
+	} else {
+		me, err := e.getMe(ctx)
+		if err != nil {
+			return err
+		}
+		e.me = &me
+		opts.BotID = me.Result.ID
+		opts.BotUsername = me.Result.Username
+	}
+
 	files := make(map[string]string)
-	for name, file := range g.Files {
-		files[name] = file.Content
+	if e.dev {
+		if err := e.loadFromTxtar(files); err != nil {
+			return err
+		}
+	} else {
+		g, err := e.gistc.Get(ctx, e.gistID)
+		if err != nil {
+			return err
+		}
+		for name, file := range g.Files {
+			files[name] = file.Content
+		}
 	}
 
-	e.bot = bot.New(bot.Opts{
-		Token:        e.tgToken,
-		Secret:       e.tgSecret,
-		Owner:        e.tgOwner,
-		BotID:        e.tgBotID,
-		BotUsername:  e.tgBotUsername,
-		HTTPClient:   e.httpc,
-		GeminiClient: e.geminic,
-		KVCache:      e.kvCache,
-		Scrubber:     e.scrubber,
-		Logger:       e.logger.WithGroup("bot"),
-	})
-
+	e.bot = bot.New(opts)
 	if err := e.bot.Load(ctx, files); err != nil {
 		return err
 	}
@@ -328,7 +334,7 @@ func (e *engine) debugAuth(next http.Handler) http.Handler {
 			return
 		}
 
-		if !strings.HasPrefix(r.URL.Path, "/debug") || !e.prod {
+		if !strings.HasPrefix(r.URL.Path, "/debug") || e.dev {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -342,6 +348,9 @@ func (e *engine) authCheck(_ *http.Request, ident *tgauth.Identity) bool {
 }
 
 func (e *engine) loadFromGist(ctx context.Context) error {
+	if e.dev {
+		return errors.New("cannot load from gist in development mode")
+	}
 	g, err := e.gistc.Get(ctx, e.gistID)
 	if err != nil {
 		return err
@@ -352,4 +361,18 @@ func (e *engine) loadFromGist(ctx context.Context) error {
 	}
 
 	return e.bot.Load(ctx, files)
+}
+
+func (e *engine) loadFromTxtar(files map[string]string) error {
+	if !e.dev {
+		return errors.New("cannot load from txtar in production mode")
+	}
+	ar, err := txtar.ParseFile(e.botStatePath)
+	if err != nil {
+		return err
+	}
+	for _, f := range ar.Files {
+		files[f.Name] = string(f.Data)
+	}
+	return nil
 }

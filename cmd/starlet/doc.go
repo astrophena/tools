@@ -20,7 +20,24 @@ like self-pinging to prevent idling on free tiers.
 
 # Usage
 
-	$ starlet [flags...]
+	$ starlet [path/to/bot.txtar]
+
+If the path to a .txtar archive is provided, Starlet runs in development mode.
+Otherwise, it runs in production mode.
+
+# Development Mode
+
+When running in development mode, Starlet serves a bot debugger interface at
+http://localhost:3000 (or the address specified by the ADDR environment
+variable). This interface allows you to interact with your bot in a chat-like
+UI and inspect the Telegram API calls it makes.
+
+In this mode, instead of fetching code from a GitHub Gist, Starlet loads it
+from the provided .txtar archive. The Telegram Bot API calls are intercepted,
+and responses are mocked. This allows for local development and testing without
+needing to expose your bot to the internet or use a real Telegram bot token.
+
+The .txtar archive should have the same structure as the GitHub Gist.
 
 # Starlark Environment
 
@@ -69,9 +86,10 @@ Required:
 
 Optional:
 
+  - ADDR: Address to listen for HTTP requests, in form of host:port, defaults to localhost:3000.
   - GEMINI_KEY: API key for Google Gemini (required to use the gemini module).
   - GH_TOKEN: A GitHub Personal Access Token (PAT) with gist scope. Recommended for higher rate limits.
-  - HOST: The publicly accessible domain name for the bot (e.g., mybot.example.com). Used for setting the Telegram webhook. Required in production (-prod flag).
+  - HOST: The publicly accessible domain name for the bot (e.g., mybot.example.com). Used for setting the Telegram webhook. Required in production.
   - RELOAD_TOKEN: A secret token. If set, enables reloading the bot code from the Gist by sending a POST request to /reload with header "Authorization: Bearer <token>".
   - TG_SECRET: A secret token passed to Telegram when setting the webhook (X-Telegram-Bot-Api-Secret-Token). Telegram includes this token in the header of webhook requests, and Starlet verifies it.
 
@@ -80,6 +98,7 @@ Optional:
 When not in production mode, or when accessed by the authenticated bot owner in production mode, Starlet provides a debug interface at /debug:
 
   - /debug/: Shows basic bot info, loaded Starlark modules, and links to other debug pages.
+  - /debug/bot: A bot debugger with a chat interface and a log of intercepted Telegram API calls. Available only in development mode.
   - /debug/code: Displays the content of all files currently loaded from the Gist. (Requires auth in prod)
   - /debug/logs: Streams the last 300 lines of logs in real-time. (Requires auth in prod)
   - /debug/reload: A button/link to trigger an immediate reload of the bot code from the GitHub Gist. (Requires auth in prod)
