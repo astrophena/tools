@@ -30,7 +30,7 @@ func (e *engine) setWebhook(ctx context.Context) error {
 	}
 	_, err := request.Make[request.IgnoreResponse](ctx, request.Params{
 		Method: http.MethodPost,
-		URL:    "https://api.telegram.org/bot" + e.tgToken + "/setWebhook",
+		URL:    tgAPI + "/bot" + e.tgToken + "/setWebhook",
 		Body: map[string]string{
 			"url":          u.String(),
 			"secret_token": e.tgSecret,
@@ -44,7 +44,30 @@ func (e *engine) setWebhook(ctx context.Context) error {
 	return err
 }
 
-// renderSelfPing continusly pings Starlet to prevent it's Render app from sleeping.
+func (e *engine) ping(ctx context.Context, interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	logger := e.logger.WithGroup("ping")
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			_, err := request.Make[request.IgnoreResponse](ctx, request.Params{
+				Method: http.MethodGet,
+				URL:    e.pingURL,
+				Headers: map[string]string{
+					"User-Agent": version.UserAgent(),
+				},
+			})
+			if err != nil {
+				logger.Error("failed to send heartbeat", "err", err)
+			}
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
 func (e *engine) renderSelfPing(ctx context.Context, interval time.Duration) {
 	env := cli.GetEnv(ctx)
 	ticker := time.NewTicker(interval)
