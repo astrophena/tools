@@ -29,13 +29,17 @@ func run(ctx context.Context) error {
 		return fmt.Errorf("%w: missing required argument 'program'", cli.ErrInvalidArgs)
 	}
 
-	var (
-		prog = env.Args[0]
-		args = env.Args[1:]
-	)
+	return gox(ctx, env.Args[0], env.Args[1:])
+}
+
+func gox(ctx context.Context, prog string, args []string) error {
+	env := cli.GetEnv(ctx)
 
 	cacheDir, err := getCacheDir()
 	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(cacheDir, 0o755); err != nil {
 		return err
 	}
 
@@ -53,9 +57,9 @@ func run(ctx context.Context) error {
 
 	run := func(name string, args ...string) error {
 		cmd := exec.CommandContext(ctx, name, args...)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		cmd.Stdin = os.Stdin
+		cmd.Stdout = env.Stdout
+		cmd.Stderr = env.Stderr
+		cmd.Stdin = env.Stdin
 		return cmd.Run()
 	}
 
@@ -71,6 +75,8 @@ func run(ctx context.Context) error {
 	return run(binPath, args...)
 }
 
+var userCacheDir = os.UserCacheDir
+
 func getCacheDir() (string, error) {
 	goVersionOut, err := exec.Command("go", "version").Output()
 	if err != nil {
@@ -80,7 +86,7 @@ func getCacheDir() (string, error) {
 	if fields := strings.Fields(string(goVersionOut)); len(fields) >= 3 {
 		goVersion = fields[2]
 	}
-	dir, err := os.UserCacheDir()
+	dir, err := userCacheDir()
 	if err != nil {
 		return "", err
 	}
