@@ -307,10 +307,10 @@ type message struct {
 	MessageThreadID    int64  `json:"message_thread_id,omitempty"`
 	LinkPreviewOptions struct {
 		IsDisabled bool `json:"is_disabled"`
-	} `json:"link_preview_options,omitempty"`
+	} `json:"link_preview_options"`
 	ReplyMarkup struct {
 		InlineKeyboard inlineKeyboard `json:"inline_keyboard"`
-	} `json:"reply_markup,omitempty"`
+	} `json:"reply_markup"`
 	tgmarkup.Message
 }
 
