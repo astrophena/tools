@@ -6,6 +6,7 @@ package kvcache
 
 import (
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"go.starlark.net/starlark"
@@ -74,89 +75,93 @@ func TestSetGet(t *testing.T) {
 }
 
 func TestTTL(t *testing.T) {
-	ttl := 50 * time.Millisecond
-	mod := Module(t.Context(), ttl)
-	thread := &starlark.Thread{Name: t.Name()}
+	synctest.Test(t, func(t *testing.T) {
+		ttl := 50 * time.Millisecond
+		mod := Module(t.Context(), ttl)
+		thread := &starlark.Thread{Name: t.Name()}
 
-	key := starlark.String("expiring_key")
-	value := starlark.String("expiring_value")
+		key := starlark.String("expiring_key")
+		value := starlark.String("expiring_value")
 
-	// Set an entry.
-	_, err := mod.Members["set"].(*starlark.Builtin).CallInternal(thread, starlark.Tuple{key, value}, nil)
-	if err != nil {
-		t.Fatalf("set(%q, %q) failed: %v", key, value, err)
-	}
+		// Set an entry.
+		_, err := mod.Members["set"].(*starlark.Builtin).CallInternal(thread, starlark.Tuple{key, value}, nil)
+		if err != nil {
+			t.Fatalf("set(%q, %q) failed: %v", key, value, err)
+		}
 
-	// Get immediately, should exist.
-	got, err := mod.Members["get"].(*starlark.Builtin).CallInternal(thread, starlark.Tuple{key}, nil)
-	if err != nil {
-		t.Fatalf("get(%q) immediately failed: %v", key, err)
-	}
-	if eq, _ := starlark.Equal(got, value); !eq {
-		t.Errorf("get(%q) immediately = %v, want %v", key, got, value)
-	}
+		// Get immediately, should exist.
+		got, err := mod.Members["get"].(*starlark.Builtin).CallInternal(thread, starlark.Tuple{key}, nil)
+		if err != nil {
+			t.Fatalf("get(%q) immediately failed: %v", key, err)
+		}
+		if eq, _ := starlark.Equal(got, value); !eq {
+			t.Errorf("get(%q) immediately = %v, want %v", key, got, value)
+		}
 
-	// Wait for longer than TTL.
-	time.Sleep(ttl + 20*time.Millisecond)
+		// Wait for longer than TTL.
+		time.Sleep(ttl + 20*time.Millisecond)
 
-	// Get again, should be None (expired).
-	got, err = mod.Members["get"].(*starlark.Builtin).CallInternal(thread, starlark.Tuple{key}, nil)
-	if err != nil {
-		t.Fatalf("get(%q) after TTL failed: %v", key, err)
-	}
-	if got != starlark.None {
-		t.Errorf("get(%q) after TTL = %v, want None", key, got)
-	}
+		// Get again, should be None (expired).
+		got, err = mod.Members["get"].(*starlark.Builtin).CallInternal(thread, starlark.Tuple{key}, nil)
+		if err != nil {
+			t.Fatalf("get(%q) after TTL failed: %v", key, err)
+		}
+		if got != starlark.None {
+			t.Errorf("get(%q) after TTL = %v, want None", key, got)
+		}
+	})
 }
 
 func TestTTL_ResetOnGet(t *testing.T) {
-	ttl := 100 * time.Millisecond
-	mod := Module(t.Context(), ttl)
-	thread := &starlark.Thread{Name: "TestKVCache_TTL_ResetOnGet"}
+	synctest.Test(t, func(t *testing.T) {
+		ttl := 100 * time.Millisecond
+		mod := Module(t.Context(), ttl)
+		thread := &starlark.Thread{Name: "TestKVCache_TTL_ResetOnGet"}
 
-	key := starlark.String("reset_key")
-	value := starlark.String("reset_value")
+		key := starlark.String("reset_key")
+		value := starlark.String("reset_value")
 
-	// Set an entry.
-	_, err := mod.Members["set"].(*starlark.Builtin).CallInternal(thread, starlark.Tuple{key, value}, nil)
-	if err != nil {
-		t.Fatalf("set(%q, %q) failed: %v", key, value, err)
-	}
+		// Set an entry.
+		_, err := mod.Members["set"].(*starlark.Builtin).CallInternal(thread, starlark.Tuple{key, value}, nil)
+		if err != nil {
+			t.Fatalf("set(%q, %q) failed: %v", key, value, err)
+		}
 
-	// Wait for less than TTL.
-	time.Sleep(ttl / 2)
+		// Wait for less than TTL.
+		time.Sleep(ttl / 2)
 
-	// Get the entry, should exist and reset the timer.
-	got, err := mod.Members["get"].(*starlark.Builtin).CallInternal(thread, starlark.Tuple{key}, nil)
-	if err != nil {
-		t.Fatalf("get(%q) before expiry failed: %v", key, err)
-	}
-	if eq, _ := starlark.Equal(got, value); !eq {
-		// Fatal because next steps depend on this.
-		t.Fatalf("get(%q) before expiry = %v, want %v", key, got, value)
-	}
+		// Get the entry, should exist and reset the timer.
+		got, err := mod.Members["get"].(*starlark.Builtin).CallInternal(thread, starlark.Tuple{key}, nil)
+		if err != nil {
+			t.Fatalf("get(%q) before expiry failed: %v", key, err)
+		}
+		if eq, _ := starlark.Equal(got, value); !eq {
+			// Fatal because next steps depend on this.
+			t.Fatalf("get(%q) before expiry = %v, want %v", key, got, value)
+		}
 
-	// Wait again for less than TTL (but total time > original TTL).
-	time.Sleep(ttl / 2)
+		// Wait again for less than TTL (but total time > original TTL).
+		time.Sleep(ttl / 2)
 
-	// Get again, should still exist because the first get reset the timer.
-	got, err = mod.Members["get"].(*starlark.Builtin).CallInternal(thread, starlark.Tuple{key}, nil)
-	if err != nil {
-		t.Fatalf("get(%q) after reset failed: %v", key, err)
-	}
-	if eq, _ := starlark.Equal(got, value); !eq {
-		t.Errorf("get(%q) after reset = %v, want %v (expected TTL reset)", key, got, value)
-	}
+		// Get again, should still exist because the first get reset the timer.
+		got, err = mod.Members["get"].(*starlark.Builtin).CallInternal(thread, starlark.Tuple{key}, nil)
+		if err != nil {
+			t.Fatalf("get(%q) after reset failed: %v", key, err)
+		}
+		if eq, _ := starlark.Equal(got, value); !eq {
+			t.Errorf("get(%q) after reset = %v, want %v (expected TTL reset)", key, got, value)
+		}
 
-	// Wait for longer than TTL after the last get.
-	time.Sleep(ttl + 20*time.Millisecond)
+		// Wait for longer than TTL after the last get.
+		time.Sleep(ttl + 20*time.Millisecond)
 
-	// Get again, should now be expired.
-	got, err = mod.Members["get"].(*starlark.Builtin).CallInternal(thread, starlark.Tuple{key}, nil)
-	if err != nil {
-		t.Fatalf("get(%q) finally failed: %v", key, err)
-	}
-	if got != starlark.None {
-		t.Errorf("get(%q) finally = %v, want None (expected eventual expiry)", key, got)
-	}
+		// Get again, should now be expired.
+		got, err = mod.Members["get"].(*starlark.Builtin).CallInternal(thread, starlark.Tuple{key}, nil)
+		if err != nil {
+			t.Fatalf("get(%q) finally failed: %v", key, err)
+		}
+		if got != starlark.None {
+			t.Errorf("get(%q) finally = %v, want None (expected eventual expiry)", key, got)
+		}
+	})
 }
