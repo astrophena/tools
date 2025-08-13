@@ -38,10 +38,7 @@ import (
 	"github.com/mmcdole/gofeed"
 )
 
-const (
-	ghAPI = "https://api.github.com"
-	tgAPI = "https://api.telegram.org"
-)
+const tgAPI = "https://api.telegram.org"
 
 //go:embed error.tmpl
 var defaultErrorTemplate string
@@ -366,8 +363,7 @@ func (f *fetcher) run(ctx context.Context) error {
 	var baseWg sync.WaitGroup
 
 	// Start sending goroutine.
-	baseWg.Add(1)
-	go func() {
+	baseWg.Go(func() {
 		sendWg := syncx.NewLimitedWaitGroup(sendConcurrencyLimit)
 
 	loop:
@@ -384,8 +380,7 @@ func (f *fetcher) run(ctx context.Context) error {
 		}
 
 		sendWg.Wait()
-		baseWg.Done()
-	}()
+	})
 
 	var fetchedFeeds atomic.Int64
 
