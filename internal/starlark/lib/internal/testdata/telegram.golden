@@ -1,0 +1,26 @@
+This module provides two functions for working with the Telegram Bot API: call and get_file.
+
+The call function takes two arguments:
+
+  - method (str): The Telegram Bot API method to call.
+  - args (dict): The arguments to pass to the method.
+
+For example, to send a message to a chat:
+
+	response = telegram.call(
+	    method="sendMessage",
+	    args={
+	        "chat_id": 123456789,
+	        "text": "Hello, world!",
+	    }
+	)
+
+The response variable will contain the response from the Telegram Bot API.
+
+The get_file function takes one argument:
+
+  - file_id (str): The ID of the file to download.
+
+It returns the content of the file as bytes. For example:
+
+	file_content = telegram.get_file(file_id="...")
