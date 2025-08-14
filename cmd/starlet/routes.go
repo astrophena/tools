@@ -99,8 +99,14 @@ func (e *engine) initRoutes() {
 		e.mux.Handle("/debug/events", e.tgInterceptor)
 	}
 
-	dbg.HandleFunc("reload", "Reload from gist", func(w http.ResponseWriter, r *http.Request) {
-		if err := e.loadFromGist(r.Context()); err != nil {
+	dbg.HandleFunc("reload", "Reload", func(w http.ResponseWriter, r *http.Request) {
+		var err error
+		if e.dev {
+			err = e.loadFromTxtar(r.Context())
+		} else {
+			err = e.loadFromGist(r.Context())
+		}
+		if err != nil {
 			web.RespondError(w, r, err)
 			return
 		}
@@ -141,10 +147,18 @@ func (e *engine) handleReload(w http.ResponseWriter, r *http.Request) {
 		web.RespondJSONError(w, r, web.ErrUnauthorized)
 		return
 	}
-	if err := e.loadFromGist(r.Context()); err != nil {
+
+	var err error
+	if e.dev {
+		err = e.loadFromTxtar(r.Context())
+	} else {
+		err = e.loadFromGist(r.Context())
+	}
+	if err != nil {
 		web.RespondJSONError(w, r, err)
 		return
 	}
+
 	web.RespondJSON(w, map[string]string{"status": "success"})
 }
 
