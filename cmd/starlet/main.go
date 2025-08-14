@@ -192,17 +192,19 @@ func (e *engine) doInit(ctx context.Context) error {
 	}
 	e.logger = slog.New(h)
 
-	if e.dev {
-		e.tgInterceptor = newTgInterceptor(e.logger)
-	}
 	if e.httpc == nil {
 		e.httpc = &http.Client{
 			// Increase timeout to properly handle Gemini API response times.
 			Timeout: 60 * time.Second,
 		}
-		if e.dev {
-			e.httpc.Transport = e.tgInterceptor
+	}
+	if e.dev {
+		tr := http.DefaultTransport
+		if e.httpc.Transport != nil {
+			tr = e.httpc.Transport
 		}
+		e.tgInterceptor = newTgInterceptor(e.logger, tr)
+		e.httpc.Transport = e.tgInterceptor
 	}
 
 	var scrubPairs []string
