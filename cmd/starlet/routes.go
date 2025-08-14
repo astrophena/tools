@@ -76,25 +76,29 @@ func (e *engine) initRoutes() {
 		buf.WriteTo(w)
 	})
 	e.mux.Handle("/debug/log", e.logStream)
-	// Bot debugger.
-	dbg.HandleFunc("bot", "Bot debugger", func(w http.ResponseWriter, r *http.Request) {
-		var buf bytes.Buffer
-		data := struct {
-			MainCSS string
-			BotCSS  string
-			BotJS   string
-		}{
-			MainCSS: e.srv.StaticHashName("static/css/main.css"),
-			BotCSS:  e.srv.StaticHashName("static/css/bot.css"),
-			BotJS:   e.srv.StaticHashName("static/js/bot.js"),
-		}
-		if err := templates().ExecuteTemplate(&buf, "bot.tmpl", data); err != nil {
-			web.RespondError(w, r, err)
-			return
-		}
-		buf.WriteTo(w)
-	})
-	e.mux.Handle("/debug/events", e.tgInterceptor)
+
+	if e.dev {
+		// Bot debugger.
+		dbg.HandleFunc("bot", "Bot debugger", func(w http.ResponseWriter, r *http.Request) {
+			var buf bytes.Buffer
+			data := struct {
+				MainCSS string
+				BotCSS  string
+				BotJS   string
+			}{
+				MainCSS: e.srv.StaticHashName("static/css/main.css"),
+				BotCSS:  e.srv.StaticHashName("static/css/bot.css"),
+				BotJS:   e.srv.StaticHashName("static/js/bot.js"),
+			}
+			if err := templates().ExecuteTemplate(&buf, "bot.tmpl", data); err != nil {
+				web.RespondError(w, r, err)
+				return
+			}
+			buf.WriteTo(w)
+		})
+		e.mux.Handle("/debug/events", e.tgInterceptor)
+	}
+
 	dbg.HandleFunc("reload", "Reload from gist", func(w http.ResponseWriter, r *http.Request) {
 		if err := e.loadFromGist(r.Context()); err != nil {
 			web.RespondError(w, r, err)
