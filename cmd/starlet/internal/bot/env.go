@@ -126,6 +126,11 @@ func (b *Bot) environment() Environment {
 					Doc:   "The version of the bot.",
 					Value: starlark.String(version.Version().String()),
 				},
+				{
+					Name:  "is_dev",
+					Doc:   "Whether the bot is running in development mode.",
+					Value: starlark.Bool(b.isDev),
+				},
 			},
 		},
 		{

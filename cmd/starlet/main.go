@@ -236,6 +236,7 @@ func (e *engine) doInit(ctx context.Context) error {
 		Token:      e.tgToken,
 		Secret:     e.tgSecret,
 		Owner:      e.tgOwner,
+		IsDev:      e.dev,
 		HTTPClient: e.httpc,
 		KVCache:    kvcache.Module(ctx, kvCacheTTL),
 		Scrubber:   e.scrubber,
@@ -263,24 +264,16 @@ func (e *engine) doInit(ctx context.Context) error {
 		opts.BotUsername = me.Result.Username
 	}
 
-	files := make(map[string]string)
+	e.bot = bot.New(opts)
+
 	if e.dev {
-		if err := e.loadFromTxtar(files); err != nil {
+		if err := e.loadFromTxtar(ctx); err != nil {
 			return err
 		}
 	} else {
-		g, err := e.gistc.Get(ctx, e.gistID)
-		if err != nil {
+		if err := e.loadFromGist(ctx); err != nil {
 			return err
 		}
-		for name, file := range g.Files {
-			files[name] = file.Content
-		}
-	}
-
-	e.bot = bot.New(opts)
-	if err := e.bot.Load(ctx, files); err != nil {
-		return err
 	}
 
 	e.initRoutes()
@@ -363,7 +356,7 @@ func (e *engine) loadFromGist(ctx context.Context) error {
 	return e.bot.Load(ctx, files)
 }
 
-func (e *engine) loadFromTxtar(files map[string]string) error {
+func (e *engine) loadFromTxtar(ctx context.Context) error {
 	if !e.dev {
 		return errors.New("cannot load from txtar in production mode")
 	}
@@ -371,8 +364,9 @@ func (e *engine) loadFromTxtar(files map[string]string) error {
 	if err != nil {
 		return err
 	}
+	files := make(map[string]string)
 	for _, f := range ar.Files {
 		files[f.Name] = string(f.Data)
 	}
-	return nil
+	return e.bot.Load(ctx, files)
 }
