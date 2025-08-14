@@ -211,15 +211,17 @@ func (hi headerItem) ToHTML() template.HTML {
 }
 
 type tgInterceptor struct {
-	mu      sync.RWMutex
-	clients map[chan []byte]struct{}
-	logger  *slog.Logger
+	realTransport http.RoundTripper
+	mu            sync.RWMutex
+	clients       map[chan []byte]struct{}
+	logger        *slog.Logger
 }
 
-func newTgInterceptor(logger *slog.Logger) *tgInterceptor {
+func newTgInterceptor(logger *slog.Logger, realTransport http.RoundTripper) *tgInterceptor {
 	return &tgInterceptor{
-		clients: make(map[chan []byte]struct{}),
-		logger:  logger,
+		realTransport: realTransport,
+		clients:       make(map[chan []byte]struct{}),
+		logger:        logger,
 	}
 }
 
@@ -257,6 +259,11 @@ func (i *tgInterceptor) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (i *tgInterceptor) RoundTrip(r *http.Request) (*http.Response, error) {
+	// Intercept only Telegram Bot API requests.
+	if r.URL.Host != "api.telegram.org" {
+		return i.realTransport.RoundTrip(r)
+	}
+
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		return nil, err
