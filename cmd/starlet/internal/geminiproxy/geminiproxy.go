@@ -29,7 +29,11 @@ type handler struct {
 }
 
 func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// Handle preflight request.
 	w.Header().Set("Access-Control-Allow-Origin", "*")
+	if r.Method == http.MethodOptions {
+		return
+	}
 
 	tok := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 	if tok != h.token {
