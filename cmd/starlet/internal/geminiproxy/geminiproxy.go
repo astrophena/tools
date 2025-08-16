@@ -29,6 +29,8 @@ type handler struct {
 }
 
 func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
 	tok := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 	if tok != h.token {
 		web.RespondJSONError(w, r, web.ErrUnauthorized)
