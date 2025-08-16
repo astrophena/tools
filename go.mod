@@ -4,6 +4,7 @@ go 1.25
 
 require (
 	github.com/dhowden/tag v0.0.0-20240417053706-3d75831295e8
+	github.com/fsnotify/fsnotify v1.9.0
 	github.com/golang-jwt/jwt/v5 v5.3.0
 	github.com/google/go-cmp v0.7.0
 	github.com/landlock-lsm/go-landlock v0.0.0-20250303204525-1544bccde3a3

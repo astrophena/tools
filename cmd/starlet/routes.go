@@ -111,7 +111,7 @@ func (e *engine) initRoutes() {
 	dbg.HandleFunc("reload", "Reload", func(w http.ResponseWriter, r *http.Request) {
 		var err error
 		if e.dev {
-			err = e.loadFromTxtar(r.Context())
+			err = e.loadFromDir(r.Context())
 		} else {
 			err = e.loadFromGist(r.Context())
 		}
@@ -159,7 +159,7 @@ func (e *engine) handleReload(w http.ResponseWriter, r *http.Request) {
 
 	var err error
 	if e.dev {
-		err = e.loadFromTxtar(r.Context())
+		err = e.loadFromDir(r.Context())
 	} else {
 		err = e.loadFromGist(r.Context())
 	}
