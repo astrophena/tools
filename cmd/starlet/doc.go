@@ -20,10 +20,10 @@ like self-pinging to prevent idling on free tiers.
 
 # Usage
 
-	$ starlet [path/to/bot.txtar]
+	$ starlet [directory]
 
-If the path to a .txtar archive is provided, Starlet runs in development mode.
-Otherwise, it runs in production mode.
+If a directory is provided, Starlet runs in development mode. Otherwise, it
+runs in production mode.
 
 # Development Mode
 
@@ -33,11 +33,14 @@ variable). This interface allows you to interact with your bot in a chat-like
 UI and inspect the Telegram API calls it makes.
 
 In this mode, instead of fetching code from a GitHub Gist, Starlet loads it
-from the provided .txtar archive. The Telegram Bot API calls are intercepted,
-and responses are mocked. This allows for local development and testing without
-needing to expose your bot to the internet or use a real Telegram bot token.
+from the provided directory. It also watches for file changes in the directory
+and automatically reloads the bot when a file is modified, created, or deleted.
 
-The .txtar archive should have the same structure as the GitHub Gist.
+The Telegram Bot API calls are intercepted, and responses are mocked. This
+allows for local development and testing without needing to expose your bot to
+the internet or use a real Telegram bot token.
+
+The directory should have the same structure as the GitHub Gist.
 
 # Starlark Environment
 

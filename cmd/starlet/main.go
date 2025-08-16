@@ -13,18 +13,20 @@ import (
 	_ "embed"
 	"errors"
 	"io"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
 	"go.astrophena.name/base/cli"
 	"go.astrophena.name/base/request"
+
 	"go.astrophena.name/base/syncx"
 	"go.astrophena.name/base/tgauth"
-	"go.astrophena.name/base/txtar"
 	"go.astrophena.name/base/version"
 	"go.astrophena.name/base/web"
 	"go.astrophena.name/tools/cmd/starlet/internal/bot"
@@ -33,6 +35,7 @@ import (
 	"go.astrophena.name/tools/internal/starlark/lib/kvcache"
 	"go.astrophena.name/tools/internal/util/logstream"
 
+	"github.com/fsnotify/fsnotify"
 	"github.com/lmittmann/tint"
 )
 
@@ -104,6 +107,7 @@ func (e *engine) Run(ctx context.Context) error {
 		}
 		serverLogger.Info("Running in production mode.")
 	} else {
+		go e.watch(ctx)
 		serverLogger.Info("Running in development mode.")
 	}
 
@@ -269,7 +273,7 @@ func (e *engine) doInit(ctx context.Context) error {
 	e.bot = bot.New(opts)
 
 	if e.dev {
-		if err := e.loadFromTxtar(ctx); err != nil {
+		if err := e.loadFromDir(ctx); err != nil {
 			return err
 		}
 	} else {
@@ -358,17 +362,104 @@ func (e *engine) loadFromGist(ctx context.Context) error {
 	return e.bot.Load(ctx, files)
 }
 
-func (e *engine) loadFromTxtar(ctx context.Context) error {
+func (e *engine) loadFromDir(ctx context.Context) error {
 	if !e.dev {
-		return errors.New("cannot load from txtar in production mode")
+		return errors.New("cannot load from directory in production mode")
 	}
-	ar, err := txtar.ParseFile(e.botStatePath)
-	if err != nil {
+
+	files := make(map[string]string)
+	if err := filepath.WalkDir(e.botStatePath, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		if d.Name() == ".DS_Store" || strings.HasSuffix(d.Name(), "~") {
+			return nil
+		}
+
+		b, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+
+		relPath, err := filepath.Rel(e.botStatePath, path)
+		if err != nil {
+			return err
+		}
+
+		files[relPath] = string(b)
+
+		return nil
+	}); err != nil {
 		return err
 	}
-	files := make(map[string]string)
-	for _, f := range ar.Files {
-		files[f.Name] = string(f.Data)
-	}
+
 	return e.bot.Load(ctx, files)
+}
+
+func (e *engine) watch(ctx context.Context) {
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		e.logger.Error("failed to create a watcher", "err", err)
+		return
+	}
+	defer watcher.Close()
+
+	if err := filepath.WalkDir(e.botStatePath, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			if err := watcher.Add(path); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		e.logger.Error("failed to add paths to the watcher", "err", err)
+		return
+	}
+
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+
+	var (
+		lastEventTime time.Time
+		events        []fsnotify.Event
+	)
+
+	e.logger.Info("Watching for file changes.", "path", e.botStatePath)
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case event, ok := <-watcher.Events:
+			if !ok {
+				return
+			}
+			lastEventTime = time.Now()
+			events = append(events, event)
+		case err, ok := <-watcher.Errors:
+			if !ok {
+				return
+			}
+			e.logger.Error("watcher error", "err", err)
+		case <-ticker.C:
+			if time.Since(lastEventTime) < 500*time.Millisecond || len(events) == 0 {
+				continue
+			}
+
+			e.logger.Info("Reloading bot due to file changes.")
+			if err := e.loadFromDir(ctx); err != nil {
+				e.logger.Error("failed to reload bot", "err", err)
+			} else {
+				e.logger.Info("Bot reloaded successfully.")
+			}
+
+			events = nil
+		}
+	}
 }
