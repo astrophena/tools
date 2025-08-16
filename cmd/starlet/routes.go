@@ -54,7 +54,7 @@ func (e *engine) initRoutes() {
 
 	// Gemini proxy.
 	if e.geminiProxyToken != "" && e.geminiKey != "" {
-		e.mux.Handle("/gemini", geminiproxy.Handler(e.geminiProxyToken, &gemini.Client{
+		e.mux.Handle("/gemini/", geminiproxy.Handler(e.geminiProxyToken, &gemini.Client{
 			APIKey:     e.geminiKey,
 			HTTPClient: e.httpc,
 		}))
