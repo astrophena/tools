@@ -88,6 +88,7 @@ Optional:
 
   - ADDR: Address to listen for HTTP requests, in form of host:port, defaults to localhost:3000.
   - GEMINI_KEY: API key for Google Gemini (required to use the gemini module).
+  - GEMINI_PROXY_TOKEN: A secret token for authenticating with the Gemini proxy.
   - GH_TOKEN: A GitHub Personal Access Token (PAT) with gist scope. Recommended for higher rate limits.
   - HOST: The publicly accessible domain name for the bot (e.g., mybot.example.com). Used for setting the Telegram webhook. Required in production.
   - RELOAD_TOKEN: A secret token. If set, enables reloading the bot code from the Gist by sending a POST request to /reload with header "Authorization: Bearer <token>".
