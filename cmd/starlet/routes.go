@@ -23,6 +23,8 @@ import (
 
 	"go.astrophena.name/base/tgauth"
 	"go.astrophena.name/base/web"
+	"go.astrophena.name/tools/cmd/starlet/internal/geminiproxy"
+	"go.astrophena.name/tools/internal/api/google/gemini"
 )
 
 var (
@@ -50,10 +52,17 @@ func (e *engine) initRoutes() {
 	// Health check.
 	web.Health(e.mux)
 
+	// Gemini proxy.
+	if e.geminiProxyToken != "" && e.geminiKey != "" {
+		e.mux.Handle("/gemini", geminiproxy.Handler(e.geminiProxyToken, &gemini.Client{
+			APIKey:     e.geminiKey,
+			HTTPClient: e.httpc,
+		}))
+	}
+
 	// Debug routes.
 	dbg := web.Debugger(e.mux)
 	dbg.MenuFunc(e.debugMenu)
-	dbg.KVFunc("Bot information", func() any { return fmt.Sprintf("%+v", e.me) })
 	dbg.KVFunc("Loaded Starlark modules", func() any {
 		return fmt.Sprintf("%+v", e.bot.Visited())
 	})

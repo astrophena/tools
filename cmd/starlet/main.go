@@ -50,6 +50,7 @@ func (e *engine) Run(ctx context.Context) error {
 	// Load configuration from environment variables.
 	e.addr = cmp.Or(e.addr, env.Getenv("ADDR"), "localhost:3000")
 	e.geminiKey = cmp.Or(e.geminiKey, env.Getenv("GEMINI_KEY"))
+	e.geminiProxyToken = cmp.Or(e.geminiProxyToken, env.Getenv("GEMINI_PROXY_TOKEN"))
 	e.ghToken = cmp.Or(e.ghToken, env.Getenv("GH_TOKEN"))
 	e.gistID = cmp.Or(e.gistID, env.Getenv("GIST_ID"))
 	e.host = cmp.Or(e.host, env.Getenv("HOST"))
@@ -149,22 +150,22 @@ type engine struct {
 	tgAuth        *tgauth.Middleware
 
 	// configuration, read-only after initialization
-	addr         string
-	botStatePath string
-	dev          bool
-	geminiKey    string
-	ghToken      string
-	gistID       string
-	host         string
-	httpc        *http.Client
-	me           *getMeResponse // obtained from Telegram Bot API
-	onRender     bool
-	pingURL      string
-	reloadToken  string
-	stderr       io.Writer
-	tgOwner      int64
-	tgSecret     string
-	tgToken      string
+	addr             string
+	botStatePath     string
+	dev              bool
+	geminiKey        string
+	geminiProxyToken string
+	ghToken          string
+	gistID           string
+	host             string
+	httpc            *http.Client
+	onRender         bool
+	pingURL          string
+	reloadToken      string
+	stderr           io.Writer
+	tgOwner          int64
+	tgSecret         string
+	tgToken          string
 	// for tests
 	noServerStart bool
 	ready         func() // see web.Server.Ready
@@ -261,7 +262,6 @@ func (e *engine) doInit(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		e.me = &me
 		opts.BotID = me.Result.ID
 		opts.BotUsername = me.Result.Username
 	}

@@ -1,0 +1,36 @@
+httprr trace v1
+200 728
+GET https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash HTTP/1.1
+Host: generativelanguage.googleapis.com
+User-Agent: geminiproxy.test/ (+https://astrophena.name/bleep-bloop)
+
+HTTP/2.0 200 OK
+Alt-Svc: h3=":443"; ma=2592000,h3-29=":443"; ma=2592000
+Content-Type: application/json; charset=UTF-8
+Date: Mon, 10 Feb 2025 19:37:52 GMT
+Server: scaffolding on HTTPServer2
+Server-Timing: gfet4t7; dur=31
+Vary: Origin
+Vary: X-Origin
+Vary: Referer
+X-Content-Type-Options: nosniff
+X-Frame-Options: SAMEORIGIN
+X-Xss-Protection: 0
+
+{
+  "name": "models/gemini-2.0-flash",
+  "version": "2.0",
+  "displayName": "Gemini 2.0 Flash",
+  "description": "Gemini 2.0 Flash",
+  "inputTokenLimit": 1048576,
+  "outputTokenLimit": 8192,
+  "supportedGenerationMethods": [
+    "generateContent",
+    "countTokens",
+    "bidiGenerateContent"
+  ],
+  "temperature": 1,
+  "topP": 0.95,
+  "topK": 40,
+  "maxTemperature": 2
+}
