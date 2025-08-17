@@ -109,6 +109,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path"
 	"slices"
@@ -393,9 +394,7 @@ func (intr *Interpreter) Init(ctx context.Context) error {
 	defer intr.init.Store(true)
 
 	intr.globals = make(starlark.StringDict, len(intr.Predeclared)+1)
-	for k, v := range intr.Predeclared {
-		intr.globals[k] = v
-	}
+	maps.Copy(intr.globals, intr.Predeclared)
 	intr.globals["exec"] = intr.execBuiltin()
 
 	// Load the stdlib, if any.

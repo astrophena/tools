@@ -70,7 +70,7 @@ func TestParseConfig(t *testing.T) {
 
 		f := testFetcher(t, tm)
 		if err := f.run(t.Context()); err != nil {
-			return []byte(fmt.Sprintf("Error: %v", err))
+			return fmt.Appendf(nil, "Error: %v", err)
 		}
 
 		return toJSON(t, f.feeds)

@@ -129,6 +129,6 @@ func TestLookup(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		return []byte(fmt.Sprintf("%+v", dups))
+		return fmt.Appendf(nil, "%+v", dups)
 	}, *update)
 }
