@@ -71,10 +71,12 @@ func (e *engine) initRoutes() {
 		var buf bytes.Buffer
 		data := struct {
 			MainCSS string
+			LogsCSS string
 			LogsJS  string
 			Logs    string
 		}{
 			MainCSS: e.srv.StaticHashName("static/css/main.css"),
+			LogsCSS: e.srv.StaticHashName("static/css/logs.css"),
 			LogsJS:  e.srv.StaticHashName("static/js/logs.js"),
 			Logs:    strings.Join(e.logStream.Lines(), ""),
 		}
