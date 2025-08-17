@@ -2,12 +2,12 @@
 // Use of this source code is governed by the ISC
 // license that can be found in the LICENSE.md file.
 
+// This package is adapted from gokrazy's code, see
+// https://github.com/gokrazy/gokrazy/blob/main/LICENSE.
+
 // Package logstream implements an [io.Writer] that buffers lines written to it
 // in a ring buffer and allows them to be streamed through an HTTP endpoint or
 // retrieved as a snapshot.
-//
-// This package is based on gokrazy's code, see
-// https://github.com/gokrazy/gokrazy/blob/main/LICENSE.
 package logstream
 
 import (

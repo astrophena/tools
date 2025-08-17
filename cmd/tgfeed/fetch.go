@@ -21,7 +21,7 @@ import (
 	"go.astrophena.name/base/request"
 	"go.astrophena.name/base/version"
 	"go.astrophena.name/tools/internal/starlark/go2star"
-	"go.astrophena.name/tools/internal/util/tgmarkup"
+	"go.astrophena.name/tools/internal/tgmarkup"
 
 	"github.com/mmcdole/gofeed"
 	"go.starlark.net/starlark"

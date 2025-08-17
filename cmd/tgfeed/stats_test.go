@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"go.astrophena.name/base/request"
-	"go.astrophena.name/tools/internal/api/google/serviceaccount"
-	"go.astrophena.name/tools/internal/util/rr"
+	"go.astrophena.name/tools/cmd/tgfeed/internal/serviceaccount"
+	"go.astrophena.name/tools/internal/rr"
 )
 
 // Updating this test:

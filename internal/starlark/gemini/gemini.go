@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"go.astrophena.name/tools/internal/api/google/gemini"
+	"go.astrophena.name/tools/internal/api/gemini"
 	"go.astrophena.name/tools/internal/starlark/interpreter"
 
 	"go.starlark.net/starlark"

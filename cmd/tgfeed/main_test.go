@@ -21,7 +21,7 @@ import (
 	"go.astrophena.name/base/testutil"
 	"go.astrophena.name/base/txtar"
 	"go.astrophena.name/base/web"
-	"go.astrophena.name/tools/internal/api/github/gist"
+	"go.astrophena.name/tools/internal/api/gist"
 )
 
 var update = flag.Bool("update", false, "update golden files in testdata")

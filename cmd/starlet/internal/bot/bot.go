@@ -24,10 +24,10 @@ import (
 	"go.astrophena.name/base/unwrap"
 	"go.astrophena.name/base/version"
 	"go.astrophena.name/base/web"
-	"go.astrophena.name/tools/internal/api/google/gemini"
+	"go.astrophena.name/tools/internal/api/gemini"
 	"go.astrophena.name/tools/internal/starlark/go2star"
 	"go.astrophena.name/tools/internal/starlark/interpreter"
-	"go.astrophena.name/tools/internal/util/tgmarkup"
+	"go.astrophena.name/tools/internal/tgmarkup"
 
 	"go.starlark.net/starlark"
 	"go.starlark.net/starlarkstruct"
