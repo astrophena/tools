@@ -1,0 +1,90 @@
+#log-container {
+  background-color: var(--accent-bg);
+  border-radius: 5px;
+  padding: 1rem;
+  font-family: var(--mono-font);
+  font-size: 0.9em;
+  height: 70vh;
+  overflow-y: auto;
+  scroll-behavior: smooth;
+}
+
+.log-entry {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.log-entry:last-child {
+  border-bottom: none;
+}
+
+.log-time {
+  color: var(--text-light);
+  margin-right: 1rem;
+  flex-shrink: 0;
+}
+
+.log-level {
+  font-weight: bold;
+  padding: 0.1rem 0.5rem;
+  border-radius: 4px;
+  margin-right: 1rem;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.log-level-info {
+  background-color: #2a3d4f;
+  color: var(--accent);
+}
+
+.log-level-warn {
+  background-color: #5d4d25;
+  color: #ffc107;
+}
+
+.log-level-error {
+  background-color: #5c2c2e;
+  color: #dc3545;
+}
+
+.log-level-default {
+  background-color: #333;
+  color: var(--text-light);
+}
+
+.log-msg {
+  font-weight: bold;
+  flex-grow: 1;
+  word-break: break-all;
+}
+
+.log-attrs {
+  width: 100%;
+  margin-top: 0.5rem;
+  margin-left: 2rem;
+  font-size: 0.9em;
+  color: var(--text-light);
+}
+
+.log-attrs dl {
+  margin: 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.25rem 1rem;
+}
+
+.log-attrs dt {
+  font-weight: bold;
+  grid-column: 1;
+}
+
+.log-attrs dd {
+  margin: 0;
+  grid-column: 2;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
