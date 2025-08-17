@@ -284,6 +284,9 @@ func (e *engine) doInit(ctx context.Context) error {
 		}
 	}
 
+	csrf := http.NewCrossOriginProtection()
+	csrf.AddInsecureBypassPattern("/gemini/")
+
 	e.initRoutes()
 	e.srv = &web.Server{
 		Addr:       e.addr,
@@ -295,6 +298,7 @@ func (e *engine) doInit(ctx context.Context) error {
 			e.tgAuth.Middleware(false),
 			e.debugAuth,
 		},
+		CrossOriginProtection: csrf,
 	}
 
 	return nil
