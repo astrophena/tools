@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"go.astrophena.name/base/syncx"
-	"go.astrophena.name/tools/internal/api/github/gist"
+	"go.astrophena.name/tools/internal/api/gist"
 	"go.astrophena.name/tools/internal/starlark/interpreter"
 
 	"go.starlark.net/starlark"

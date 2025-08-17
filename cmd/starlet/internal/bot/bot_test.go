@@ -23,7 +23,7 @@ import (
 	"go.astrophena.name/base/txtar"
 	"go.astrophena.name/base/web"
 	"go.astrophena.name/tools/cmd/starlet/internal/bot"
-	"go.astrophena.name/tools/internal/starlark/lib/kvcache"
+	"go.astrophena.name/tools/internal/starlark/kvcache"
 )
 
 // Typical Telegram Bot API token, copied from docs.

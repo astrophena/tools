@@ -13,7 +13,7 @@ import (
 	"strings"
 
 	"go.astrophena.name/base/web"
-	"go.astrophena.name/tools/internal/api/google/gemini"
+	"go.astrophena.name/tools/internal/api/gemini"
 
 	"github.com/golang-jwt/jwt/v5"
 )

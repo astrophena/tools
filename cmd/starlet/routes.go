@@ -25,7 +25,7 @@ import (
 	"go.astrophena.name/base/web"
 	"go.astrophena.name/base/web/tgauth"
 	"go.astrophena.name/tools/cmd/starlet/internal/geminiproxy"
-	"go.astrophena.name/tools/internal/api/google/gemini"
+	"go.astrophena.name/tools/internal/api/gemini"
 
 	"github.com/golang-jwt/jwt/v5"
 )

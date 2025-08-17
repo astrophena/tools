@@ -38,7 +38,7 @@ import (
 	_ "embed"
 	"sync"
 
-	"go.astrophena.name/tools/internal/starlark/lib/internal"
+	"go.astrophena.name/tools/internal/starlark/internal"
 )
 
 //go:embed doc.go
