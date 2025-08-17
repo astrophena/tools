@@ -118,15 +118,49 @@ func (e *engine) Run(ctx context.Context) error {
 	return e.srv.ListenAndServe(srvCtx)
 }
 
-type slogWriter struct{ log *slog.Logger }
+func errorLog(msg string, log *slog.Logger) { log.Error(msg) }
+
+var errorHandlers = map[string]func(msg string, log *slog.Logger){
+	"HTTP server error: ":     errorLog,
+	"Internal Server Error: ": errorLog,
+	"web.RespondError: ":      errorLog,
+	"http: panic serving ": func(msg string, log *slog.Logger) {
+		addrAndMsg, stack, foundStack := strings.Cut(msg, "\n")
+		addr, err, foundErr := strings.Cut(addrAndMsg, ": ")
+		var attrs []any
+		attrs = append(attrs, slog.String("addr", addr))
+		if foundErr {
+			attrs = append(attrs, slog.String("err", err))
+		}
+		if foundStack {
+			attrs = append(attrs, slog.String("stack", stack))
+		}
+		log.Error("panicked", attrs...)
+	},
+}
+
+type slogWriter struct {
+	log *slog.Logger
+}
 
 func (sw *slogWriter) Write(p []byte) (n int, err error) {
 	// Trim trailing newlines, as slog handlers add their own.
 	msg := string(bytes.TrimSpace(p))
+
 	// Don't log empty messages.
-	if msg != "" {
-		sw.log.Info(msg)
+	if msg == "" {
+		return len(p), nil
 	}
+
+	for prefix, handler := range errorHandlers {
+		if after, ok := strings.CutPrefix(msg, prefix); ok {
+			handler(after, sw.log)
+			return len(p), nil
+		}
+	}
+
+	// If no error prefix matched, log as Info.
+	sw.log.Info(msg)
 	return len(p), nil
 }
 
