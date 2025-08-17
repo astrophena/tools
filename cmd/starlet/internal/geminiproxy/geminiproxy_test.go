@@ -14,7 +14,9 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"go.astrophena.name/base/cli"
 	"go.astrophena.name/base/logger"
 	"go.astrophena.name/base/testutil"
@@ -29,35 +31,40 @@ import (
 // (notice an extra space before command to prevent recording it in shell
 // history)
 
-const handlerToken = "test"
+const handlerSecretKey = "test"
 
 func TestHandler(t *testing.T) {
 	t.Parallel()
 
 	cases := map[string]struct {
-		hasAuth    bool
+		authToken  string
 		method     string
 		path       string
 		body       any
 		wantStatus int
 	}{
-		"no_auth": {
+		"no_auth_token": {
 			method:     http.MethodGet,
 			path:       "/",
 			wantStatus: http.StatusUnauthorized,
-			hasAuth:    false,
+		},
+		"invalid_auth_token": {
+			authToken:  "invalid",
+			method:     http.MethodGet,
+			path:       "/",
+			wantStatus: http.StatusUnauthorized,
 		},
 		"not_found": {
 			method:     http.MethodGet,
 			path:       "/",
 			wantStatus: http.StatusInternalServerError,
-			hasAuth:    true,
+			authToken:  "valid",
 		},
 		"model_info": {
 			method:     http.MethodGet,
 			path:       "/models/gemini-2.0-flash",
 			wantStatus: http.StatusOK,
-			hasAuth:    true,
+			authToken:  "valid",
 		},
 		"generate_content": {
 			method: http.MethodPost,
@@ -66,7 +73,7 @@ func TestHandler(t *testing.T) {
 				Contents: []*gemini.Content{{Parts: []*gemini.Part{{Text: "Hello! How are you?"}}}},
 			},
 			wantStatus: http.StatusOK,
-			hasAuth:    true,
+			authToken:  "valid",
 		},
 	}
 
@@ -92,7 +99,7 @@ func TestHandler(t *testing.T) {
 				c.APIKey = os.Getenv("GEMINI_API_KEY")
 			}
 
-			h := Handler(handlerToken, c)
+			h := Handler(handlerSecretKey, c)
 			w := httptest.NewRecorder()
 
 			var body io.Reader
@@ -109,8 +116,21 @@ func TestHandler(t *testing.T) {
 			})
 
 			r := httptest.NewRequestWithContext(ctx, tc.method, tc.path, body)
-			if tc.hasAuth {
-				r.Header.Set("Authorization", "Bearer "+handlerToken)
+			if tc.authToken != "" {
+				var tokenString string
+				if tc.authToken == "valid" {
+					token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.RegisteredClaims{
+						ExpiresAt: jwt.NewNumericDate(time.Now().Add(1 * time.Hour)),
+					})
+					var err error
+					tokenString, err = token.SignedString([]byte(handlerSecretKey))
+					if err != nil {
+						t.Fatal(err)
+					}
+				} else {
+					tokenString = tc.authToken
+				}
+				r.Header.Set("Authorization", "Bearer "+tokenString)
 			}
 			if body != nil {
 				r.Header.Set("Content-Type", "application/json")

@@ -1,0 +1,101 @@
+.token-container {
+  background-color: var(--accent-bg);
+  padding: 1.5rem 2rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  margin-top: 2rem;
+}
+
+.token-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: center;
+}
+
+.token-form label {
+  font-weight: bold;
+  color: var(--text-light);
+}
+
+.token-form input[type="text"] {
+  flex-grow: 1;
+  background-color: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 0.75rem;
+  font-size: 1rem;
+  font-family: var(--mono-font);
+  min-width: 100px;
+}
+
+.token-form input[type="text"]:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+.token-form button {
+  background-color: var(--accent);
+  color: var(--bg);
+  border: none;
+  border-radius: 5px;
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background-color 0.2s ease-in-out;
+}
+
+.token-form button:hover {
+  background-color: color-mix(in srgb, var(--accent) 90%, #fff);
+}
+
+/* Блок с результатом */
+.token-result {
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border);
+}
+
+.token-result p {
+  color: var(--text-light);
+}
+
+.token-display {
+  position: relative;
+  background-color: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 1rem;
+}
+
+.token-display pre {
+  margin: 0;
+  padding: 0;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: var(--code);
+  font-size: 0.9em;
+}
+
+.copy-btn {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  background-color: var(--border);
+  color: var(--text);
+  border: none;
+  border-radius: 4px;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.8em;
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 0.2s ease;
+}
+
+.copy-btn:hover {
+  opacity: 1;
+  background-color: var(--text-light);
+}

@@ -7,25 +7,28 @@ package geminiproxy
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
 
 	"go.astrophena.name/base/web"
 	"go.astrophena.name/tools/internal/api/google/gemini"
+
+	"github.com/golang-jwt/jwt/v5"
 )
 
 // Handler returns a HTTP handler to proxy Gemini API requests.
-func Handler(token string, client *gemini.Client) http.Handler {
+func Handler(secretKey string, client *gemini.Client) http.Handler {
 	return &handler{
-		token:  token,
-		client: client,
+		secretKey: secretKey,
+		client:    client,
 	}
 }
 
 type handler struct {
-	token  string
-	client *gemini.Client
+	secretKey string
+	client    *gemini.Client
 }
 
 func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -38,8 +41,19 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tok := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-	if tok != h.token {
+	tokStr := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+	if tokStr == "" {
+		web.RespondJSONError(w, r, web.ErrUnauthorized)
+		return
+	}
+
+	token, err := jwt.Parse(tokStr, func(token *jwt.Token) (any, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+		return []byte(h.secretKey), nil
+	})
+	if err != nil || !token.Valid {
 		web.RespondJSONError(w, r, web.ErrUnauthorized)
 		return
 	}

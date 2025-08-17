@@ -20,11 +20,14 @@ import (
 	"path"
 	"strings"
 	"sync"
+	"time"
 
 	"go.astrophena.name/base/tgauth"
 	"go.astrophena.name/base/web"
 	"go.astrophena.name/tools/cmd/starlet/internal/geminiproxy"
 	"go.astrophena.name/tools/internal/api/google/gemini"
+
+	"github.com/golang-jwt/jwt/v5"
 )
 
 var (
@@ -53,8 +56,8 @@ func (e *engine) initRoutes() {
 	web.Health(e.mux)
 
 	// Gemini proxy.
-	if e.geminiProxyToken != "" && e.geminiKey != "" {
-		e.mux.Handle("/gemini/", http.StripPrefix("/gemini", geminiproxy.Handler(e.geminiProxyToken, &gemini.Client{
+	if e.geminiProxySecretKey != "" && e.geminiKey != "" {
+		e.mux.Handle("/gemini/", http.StripPrefix("/gemini", geminiproxy.Handler(e.geminiProxySecretKey, &gemini.Client{
 			APIKey:     e.geminiKey,
 			HTTPClient: e.httpc,
 		})))
@@ -124,6 +127,10 @@ func (e *engine) initRoutes() {
 		http.Redirect(w, r, "/debug/", http.StatusFound)
 	})
 
+	if e.geminiProxySecretKey != "" {
+		dbg.HandleFunc("gemini-token", "Generate Gemini proxy token", e.handleGeminiProxyToken)
+	}
+
 	// Redirect from *.onrender.com to bot host.
 	if e.onRender && e.host != "" {
 		if onRenderHost := os.Getenv("RENDER_EXTERNAL_HOSTNAME"); onRenderHost != "" {
@@ -171,6 +178,66 @@ func (e *engine) handleReload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	web.RespondJSON(w, map[string]string{"status": "success"})
+}
+
+func (e *engine) handleGeminiProxyToken(w http.ResponseWriter, r *http.Request) {
+	if e.geminiProxySecretKey == "" {
+		// This should not happen because we check for it before setting up the
+		// handler, but just in case.
+		web.RespondError(w, r, errors.New("GEMINI_PROXY_SECRET_KEY is not configured"))
+		return
+	}
+
+	var (
+		token    string
+		duration = "24h"
+	)
+
+	if r.Method == http.MethodPost {
+		if err := r.ParseForm(); err != nil {
+			web.RespondError(w, r, err)
+			return
+		}
+
+		d, err := time.ParseDuration(r.FormValue("duration"))
+		if err != nil {
+			web.RespondError(w, r, err)
+			return
+		}
+		duration = r.FormValue("duration")
+
+		claims := jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(d)),
+		}
+		t := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+		token, err = t.SignedString([]byte(e.geminiProxySecretKey))
+		if err != nil {
+			web.RespondError(w, r, err)
+			return
+		}
+	}
+
+	var buf bytes.Buffer
+	data := struct {
+		MainCSS         string
+		GeminiTokenCSS  string
+		GeminiTokenJS   string
+		DefaultDuration string
+		Duration        string
+		Token           string
+	}{
+		MainCSS:         e.srv.StaticHashName("static/css/main.css"),
+		GeminiTokenCSS:  e.srv.StaticHashName("static/css/gemini-token.css"),
+		GeminiTokenJS:   e.srv.StaticHashName("static/js/gemini-token.js"),
+		DefaultDuration: duration,
+		Duration:        duration,
+		Token:           token,
+	}
+	if err := templates().ExecuteTemplate(&buf, "gemini-token.tmpl", data); err != nil {
+		web.RespondError(w, r, err)
+		return
+	}
+	buf.WriteTo(w)
 }
 
 func (e *engine) debugMenu(r *http.Request) []web.MenuItem {
