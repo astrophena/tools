@@ -22,8 +22,8 @@ import (
 	"sync"
 	"time"
 
-	"go.astrophena.name/base/tgauth"
 	"go.astrophena.name/base/web"
+	"go.astrophena.name/base/web/tgauth"
 	"go.astrophena.name/tools/cmd/starlet/internal/geminiproxy"
 	"go.astrophena.name/tools/internal/api/google/gemini"
 
