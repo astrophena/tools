@@ -35,7 +35,7 @@ Follow the Go style for commit messages.
 Before submitting your changes, run the pre-commit checks from the repository root:
 
 ```sh
-go tool pre-commit
+$ go tool pre-commit
 ```
 
 This command runs `gofmt`, `ruff`, `staticcheck`, and more.
@@ -44,11 +44,11 @@ If you see errors about missing copyright headers, run this command from the
 repository root to fix them:
 
 ```sh
-go tool addcopyright
+$ go tool addcopyright
 ```
 
 If the pre-commit tool fails because `ruff` is not installed, install it with:
 
 ```sh
-pip install ruff
+$ pip install ruff
 ```
