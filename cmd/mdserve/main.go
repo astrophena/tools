@@ -144,7 +144,7 @@ func (e *engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	p := r.URL.Path
 	if p == "/" {
-		p = "/index.md"
+		p = e.findIndexFile()
 	}
 	p = strings.TrimPrefix(path.Clean(p), "/")
 
@@ -177,6 +177,22 @@ func (e *engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	title := parseTitle(b)
 
 	fmt.Fprintf(w, tmpl, title, markdown.ToHTML(doc), web.StaticFS.HashName("static/css/main.css"))
+}
+
+func (e *engine) findIndexFile() string {
+	candidates := []string{
+		"index.md",
+		"README.md",
+	}
+
+	for _, candidate := range candidates {
+		if _, err := fs.Stat(e.fs, candidate); err == nil {
+			return candidate
+		}
+	}
+
+	// Fall back to the old behavior.
+	return candidates[0]
 }
 
 func parseTitle(b []byte) string {

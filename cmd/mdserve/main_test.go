@@ -62,6 +62,23 @@ func TestServe(t *testing.T) {
 			wantStatus: http.StatusOK,
 			wantInBody: "<p>Hello, world!</p>",
 		},
+		"infers README.md when index.md does not exist": {
+			files: map[string]string{
+				"README.md": "Hello, world!",
+			},
+			path:       "/",
+			wantStatus: http.StatusOK,
+			wantInBody: "<p>Hello, world!</p>",
+		},
+		"infers index.md when both index.md and README.md does exist": {
+			files: map[string]string{
+				"README.md": "Hello, world from README.md!",
+				"index.md":  "Hello, world from index.md!",
+			},
+			path:       "/",
+			wantStatus: http.StatusOK,
+			wantInBody: "<p>Hello, world from index.md!</p>",
+		},
 		"correctly parses title": {
 			files: map[string]string{
 				"index.md": `# Hello, world!
