@@ -27,6 +27,7 @@ import (
 	"go.astrophena.name/tools/cmd/starlet/internal/geminiproxy"
 	"go.astrophena.name/tools/internal/api/gemini"
 
+	"github.com/arl/statsviz"
 	"github.com/golang-jwt/jwt/v5"
 )
 
@@ -69,6 +70,9 @@ func (e *engine) initRoutes() {
 	dbg.KVFunc("Loaded Starlark modules", func() any {
 		return fmt.Sprintf("%+v", e.bot.Visited())
 	})
+	// Runtime metrics.
+	statsviz.Register(e.mux)
+	dbg.Link("/debug/statsviz", "Metrics")
 	// Log streaming.
 	dbg.HandleFunc("logs", "Logs", func(w http.ResponseWriter, r *http.Request) {
 		var buf bytes.Buffer
