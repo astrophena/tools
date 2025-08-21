@@ -177,14 +177,15 @@ type engine struct {
 
 	// initialized by doInit
 	bot           *bot.Bot
+	cspMux        *web.CSPMux
 	gistc         *gist.Client
 	logStream     logstream.Streamer
-	tgInterceptor *tgInterceptor
 	logger        *slog.Logger
 	mux           *http.ServeMux
 	scrubber      *strings.Replacer
 	srv           *web.Server
 	tgAuth        *tgauth.Middleware
+	tgInterceptor *tgInterceptor
 
 	// configuration, read-only after initialization
 	addr                 string
@@ -318,6 +319,8 @@ func (e *engine) doInit(ctx context.Context) error {
 		}
 	}
 
+	e.cspMux = web.NewCSPMux()
+
 	csrf := http.NewCrossOriginProtection()
 	csrf.AddInsecureBypassPattern("/gemini/")
 
@@ -333,6 +336,7 @@ func (e *engine) doInit(ctx context.Context) error {
 			e.debugAuth,
 		},
 		CrossOriginProtection: csrf,
+		CSP:                   e.cspMux,
 	}
 
 	return nil

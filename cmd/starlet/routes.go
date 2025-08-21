@@ -42,6 +42,17 @@ var (
 	})
 )
 
+var statsvizCSP = web.CSP{
+	DefaultSrc:     []string{web.CSPSelf},
+	ScriptSrc:      []string{web.CSPSelf},
+	StyleSrc:       []string{web.CSPSelf, web.CSPUnsafeInline},
+	ConnectSrc:     []string{web.CSPSelf},
+	ImgSrc:         []string{web.CSPSelf, "data:"},
+	FontSrc:        []string{web.CSPSelf},
+	ObjectSrc:      []string{web.CSPNone},
+	FrameAncestors: []string{web.CSPNone},
+}
+
 func (e *engine) initRoutes() {
 	e.mux = http.NewServeMux()
 
@@ -72,6 +83,7 @@ func (e *engine) initRoutes() {
 	})
 	// Runtime metrics.
 	statsviz.Register(e.mux)
+	e.cspMux.Handle("/debug/statsviz/", statsvizCSP)
 	dbg.Link("/debug/statsviz", "Metrics")
 	// Log streaming.
 	dbg.HandleFunc("logs", "Logs", func(w http.ResponseWriter, r *http.Request) {
