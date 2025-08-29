@@ -16,12 +16,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
 	"go.astrophena.name/base/cli"
 	"go.astrophena.name/base/logger"
 	"go.astrophena.name/base/testutil"
 	"go.astrophena.name/tools/internal/api/gemini"
 	"go.astrophena.name/tools/internal/rr"
+
+	"github.com/golang-jwt/jwt/v5"
+	"golang.org/x/time/rate"
 )
 
 // Updating this test:
@@ -119,8 +121,16 @@ func TestHandler(t *testing.T) {
 			if tc.authToken != "" {
 				var tokenString string
 				if tc.authToken == "valid" {
-					token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.RegisteredClaims{
-						ExpiresAt: jwt.NewNumericDate(time.Now().Add(1 * time.Hour)),
+					type geminiProxyClaims struct {
+						Description string     `json:"gemini_description,omitempty"`
+						RateLimit   rate.Limit `json:"gemini_rate_limit,omitempty"`
+						jwt.RegisteredClaims
+					}
+					token := jwt.NewWithClaims(jwt.SigningMethodHS256, &geminiProxyClaims{
+						RateLimit: 100,
+						RegisteredClaims: jwt.RegisteredClaims{
+							ExpiresAt: jwt.NewNumericDate(time.Now().Add(1 * time.Hour)),
+						},
 					})
 					var err error
 					tokenString, err = token.SignedString([]byte(handlerSecretKey))
