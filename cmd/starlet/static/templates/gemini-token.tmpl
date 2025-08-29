@@ -13,11 +13,15 @@
     <p>Generate a new JWT for accessing the Gemini proxy.</p>
 
     <div class="token-container">
-      <form method="post" class="token-form">
-        <label for="duration">Token TTL</label>
-        <input type="text" id="duration" name="duration" value="{{ .DefaultDuration }}" title="e.g., 1h, 24h, 7d">
-        <button type="submit">Generate</button>
-      </form>
+    <form method="post" class="token-form">
+      <label for="description">Description</label>
+      <input type="text" id="description" name="description" placeholder="e.g., My Awesome App" required>
+      <label for="rate_limit">Rate Limit (req/s)</label>
+      <input type="number" id="rate_limit" name="rate_limit" value="1" step="0.1" min="0.1" title="Requests per second">
+      <label for="duration">Token TTL</label>
+      <input type="text" id="duration" name="duration" value="{{ .DefaultDuration }}" title="e.g., 1h, 24h, 7d">
+      <button type="submit">Generate</button>
+    </form>
 
       {{ if .Token }}
         <div class="token-result">
