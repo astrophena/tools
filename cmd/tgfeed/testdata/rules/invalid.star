@@ -2,9 +2,7 @@
 # Use of this source code is governed by the ISC
 # license that can be found in the LICENSE.md file.
 
-feeds = [
-    feed(
-        url="https://example.com/feed.xml",
-        keep_rule=lambda item: "foo",
-    )
-]
+feed(
+    url="https://example.com/feed.xml",
+    keep_rule=lambda item: "foo",
+)

@@ -1,14 +1,12 @@
 -- config.star --
-feeds = [
-    feed(
-        title = "Example Feed",
-        url = "https://example.com/feed.xml",
-    ),
-    feed(
-        title = "Disabled Feed",
-        url = "https://example.com/disabled.xml",
-    ),
-]
+feed(
+    title = "Example Feed",
+    url = "https://example.com/feed.xml",
+)
+feed(
+    title = "Disabled Feed",
+    url = "https://example.com/disabled.xml",
+)
 -- state.json --
 {
   "https://example.com/feed.xml": {

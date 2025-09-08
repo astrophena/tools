@@ -1,7 +1,5 @@
 -- config.star --
-feeds = [
-    feed(
-        title = "GitHub Notifications",
-        url = "tgfeed://github-notifications",
-    ),
-]
+feed(
+    title = "GitHub Notifications",
+    url = "tgfeed://github-notifications",
+)
