@@ -50,14 +50,12 @@ Required for uploading stats to the Google Spreadsheet:
 tgfeed loads it's configuration from config.star file on GitHub Gist. This file
 is written in Starlark language and defines a list of feeds, for example:
 
-	feeds = [
-	    feed(
-	        url = "https://hnrss.org/newest",
-	        title = "Hacker News: Newest",
-	        block_rule = lambda item: "pdf" in item.title.lower(), # Block PDF files.
-	        message_thread_id = 123, # Send updates to a specific topic.
-	    )
-	]
+	feed(
+	    url = "https://hnrss.org/newest",
+	    title = "Hacker News: Newest",
+	    block_rule = lambda item: "pdf" in item.title.lower(), # Block PDF files.
+	    message_thread_id = 123, # Send updates to a specific topic.
+	)
 
 Each feed can have a title, URL, and optional block and keep rules.
 Optionally, message_thread_id can be specified to send updates from this

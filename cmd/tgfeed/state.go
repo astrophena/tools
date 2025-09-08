@@ -35,21 +35,24 @@ func (f *feed) Freeze()               {} // immutable
 func (f *feed) Truth() starlark.Bool  { return starlark.Bool(f.URL != "") }
 func (f *feed) Hash() (uint32, error) { return 0, fmt.Errorf("unhashable: %s", f.Type()) }
 
-func feedBuiltin(_ *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	if len(args) > 0 {
-		return nil, fmt.Errorf("unexpected positional arguments")
-	}
-	f := new(feed)
-	if err := starlark.UnpackArgs("feed", args, kwargs,
-		"url", &f.URL,
-		"title?", &f.Title,
-		"message_thread_id?", &f.MessageThreadID,
-		"block_rule?", &f.BlockRule,
-		"keep_rule?", &f.KeepRule,
-	); err != nil {
-		return nil, err
-	}
-	return f, nil
+func newFeedBuiltin(feeds *[]*feed) *starlark.Builtin {
+	return starlark.NewBuiltin("feed", func(_ *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+		if len(args) > 0 {
+			return nil, fmt.Errorf("unexpected positional arguments")
+		}
+		f := new(feed)
+		if err := starlark.UnpackArgs("feed", args, kwargs,
+			"url", &f.URL,
+			"title?", &f.Title,
+			"message_thread_id?", &f.MessageThreadID,
+			"block_rule?", &f.BlockRule,
+			"keep_rule?", &f.KeepRule,
+		); err != nil {
+			return nil, err
+		}
+		*feeds = append(*feeds, f)
+		return starlark.None, nil
+	})
 }
 
 type feedState struct {
@@ -109,9 +112,10 @@ func (f *fetcher) loadFromGist(ctx context.Context) error {
 }
 
 func (f *fetcher) parseConfig(ctx context.Context, config string) ([]*feed, error) {
+	var feeds []*feed
 	intr := &interpreter.Interpreter{
 		Predeclared: starlark.StringDict{
-			"feed": starlark.NewBuiltin("feed", feedBuiltin),
+			"feed": newFeedBuiltin(&feeds),
 		},
 		Packages: map[string]interpreter.Loader{
 			interpreter.MainPkg: interpreter.MemoryLoader(map[string]string{
@@ -126,28 +130,14 @@ func (f *fetcher) parseConfig(ctx context.Context, config string) ([]*feed, erro
 		return nil, err
 	}
 
-	globals, err := intr.LoadModule(ctx, interpreter.MainPkg, "config.star")
-	if err != nil {
+	if _, err := intr.LoadModule(ctx, interpreter.MainPkg, "config.star"); err != nil {
 		return nil, err
 	}
 
-	feedsList, ok := globals["feeds"].(*starlark.List)
-	if !ok {
-		return nil, errors.New("feeds must be defined and be a list")
-	}
-
-	var feeds []*feed
-
-	for elem := range feedsList.Elements() {
-		feed, ok := elem.(*feed)
-		if !ok {
-			continue
-		}
-		_, err := url.Parse(feed.URL)
-		if err != nil {
+	for _, feed := range feeds {
+		if _, err := url.Parse(feed.URL); err != nil {
 			return nil, fmt.Errorf("invalid URL %q of feed %q", feed.URL, feed.Title)
 		}
-		feeds = append(feeds, feed)
 	}
 
 	return feeds, nil

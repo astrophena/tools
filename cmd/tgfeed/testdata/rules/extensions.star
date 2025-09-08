@@ -12,9 +12,7 @@ def filter_description(item):
     )
 
 
-feeds = [
-    feed(
-        url="https://example.com/feed.xml",
-        keep_rule=filter_description,
-    )
-]
+feed(
+    url="https://example.com/feed.xml",
+    keep_rule=filter_description,
+)
