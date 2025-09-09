@@ -17,7 +17,7 @@ require (
 	go.astrophena.name/base v0.11.0
 	go.starlark.net v0.0.0-20250623223156-8bf495bf4e9a
 	golang.org/x/term v0.35.0
-	golang.org/x/time v0.12.0
+	golang.org/x/time v0.13.0
 	rsc.io/markdown v0.0.0-20241212154241-6bf72452917f
 )
 
