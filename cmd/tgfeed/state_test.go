@@ -50,11 +50,6 @@ func TestLoadFromGistHandleError(t *testing.T) {
 	testutil.AssertEqual(t, err.Error(), fmt.Sprintf("GET \"https://api.github.com/gists/test\": want 200, got 404: %s", gistErrorJSON))
 }
 
-func TestFeedString(t *testing.T) {
-	f := &feed{URL: atomFeedURL}
-	testutil.AssertEqual(t, f.String(), fmt.Sprintf("<feed url=%q>", atomFeedURL))
-}
-
 func TestParseConfig(t *testing.T) {
 	testutil.RunGolden(t, "testdata/config/*.star", func(t *testing.T, match string) []byte {
 		config := readFile(t, match)

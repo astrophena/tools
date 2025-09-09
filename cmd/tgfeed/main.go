@@ -215,15 +215,15 @@ func (f *fetcher) listFeeds(ctx context.Context, w io.Writer) error {
 	var sb strings.Builder
 
 	for _, feed := range f.feeds {
-		state, hasState := f.getState(feed.URL)
-		fmt.Fprintf(&sb, "%s", feed.URL)
+		state, hasState := f.getState(feed.url)
+		fmt.Fprintf(&sb, "%s", feed.url)
 		if !hasState {
 			fmt.Fprintf(&sb, " \n")
 			continue
 		}
 		fmt.Fprintf(&sb, " (")
-		if feed.Title != "" {
-			fmt.Fprintf(&sb, "%q, ", feed.Title)
+		if feed.title != "" {
+			fmt.Fprintf(&sb, "%q, ", feed.title)
 		}
 		fmt.Fprintf(&sb, "last updated %s", state.LastUpdated.Format(time.DateTime))
 		if state.ErrorCount > 0 {
@@ -395,7 +395,7 @@ func (f *fetcher) run(ctx context.Context) error {
 			for {
 				if retry, retryIn := f.fetch(ctx, feed, updates); retry && retries < retryLimit {
 					f.slog.Warn("retrying feed",
-						"feed", feed.URL,
+						"feed", feed.url,
 						"retry_in", retryIn,
 						"retries", retries+1,
 						"retry_limit", retryLimit,
@@ -457,7 +457,7 @@ func (f *fetcher) cleanState(s map[string]*feedState) {
 	for url := range s {
 		var found bool
 		for _, existing := range f.feeds {
-			if url == existing.URL {
+			if url == existing.url {
 				found = true
 				break
 			}

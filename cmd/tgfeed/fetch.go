@@ -50,27 +50,27 @@ type item struct {
 func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *item) (retry bool, retryIn time.Duration) {
 	startTime := time.Now()
 
-	state, exists := f.getState(fd.URL)
+	state, exists := f.getState(fd.url)
 	// If we don't remember this feed, it's probably new. Set it's last update
 	// date to current so we don't get a lot of unread articles and trigger
 	// Telegram Bot API rate limit.
 	if !exists {
-		f.slog.Debug("initializing state", "feed", fd.URL)
+		f.slog.Debug("initializing state", "feed", fd.url)
 		f.state.WriteAccess(func(s map[string]*feedState) {
-			s[fd.URL] = new(feedState)
-			state = s[fd.URL]
+			s[fd.url] = new(feedState)
+			state = s[fd.url]
 		})
 		state.LastUpdated = time.Now()
 	}
 
 	if state.Disabled {
-		f.slog.Debug("skipping, feed is disabled", "feed", fd.URL)
+		f.slog.Debug("skipping, feed is disabled", "feed", fd.url)
 		return false, 0
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fd.URL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fd.url, nil)
 	if err != nil {
-		f.handleFetchFailure(ctx, state, fd.URL, err)
+		f.handleFetchFailure(ctx, state, fd.url, err)
 		return false, 0
 	}
 
@@ -84,14 +84,14 @@ func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *item) (retr
 
 	res, err := f.makeFeedRequest(req)
 	if err != nil {
-		f.handleFetchFailure(ctx, state, fd.URL, err)
+		f.handleFetchFailure(ctx, state, fd.url, err)
 		return false, 0
 	}
 	defer res.Body.Close()
 
 	// Ignore unmodified feeds and report an error otherwise.
 	if res.StatusCode == http.StatusNotModified {
-		f.slog.Debug("unmodified feed", "feed", fd.URL)
+		f.slog.Debug("unmodified feed", "feed", fd.url)
 		f.stats.WriteAccess(func(s *stats) {
 			s.NotModifiedFeeds += 1
 		})
@@ -132,18 +132,18 @@ func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *item) (retr
 						continue
 					}
 				}
-				f.slog.Warn("rate-limited by tg.i-c-a.su", "feed", fd.URL, "retry_in", t)
+				f.slog.Warn("rate-limited by tg.i-c-a.su", "feed", fd.url, "retry_in", t)
 				return true, t
 			}
 		}
 
-		f.handleFetchFailure(ctx, state, fd.URL, fmt.Errorf("want 200, got %d: %s", res.StatusCode, body))
+		f.handleFetchFailure(ctx, state, fd.url, fmt.Errorf("want 200, got %d: %s", res.StatusCode, body))
 		return false, 0
 	}
 
 	feed, err := f.fp.Parse(res.Body)
 	if err != nil {
-		f.handleFetchFailure(ctx, state, fd.URL, err)
+		f.handleFetchFailure(ctx, state, fd.url, err)
 		return false, 0
 	}
 
@@ -157,15 +157,15 @@ func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *item) (retr
 			continue
 		}
 
-		if fd.BlockRule != nil {
-			if blocked := f.applyRule(fd.BlockRule, feedItem); blocked {
+		if fd.blockRule != nil {
+			if blocked := f.applyRule(fd.blockRule, feedItem); blocked {
 				f.slog.Debug("blocked by block rule", "item", feedItem.Link)
 				continue
 			}
 		}
 
-		if fd.KeepRule != nil {
-			if keep := f.applyRule(fd.KeepRule, feedItem); !keep {
+		if fd.keepRule != nil {
+			if keep := f.applyRule(fd.keepRule, feedItem); !keep {
 				f.slog.Debug("skipped by keep rule", "item", feedItem.Link)
 				continue
 			}
@@ -173,7 +173,7 @@ func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *item) (retr
 
 		updates <- &item{
 			Item:     feedItem,
-			threadID: fd.MessageThreadID,
+			threadID: fd.messageThreadID,
 		}
 	}
 	state.LastUpdated = time.Now()
