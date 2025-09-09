@@ -11,21 +11,28 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
+	"go.astrophena.name/base/request"
 	"go.astrophena.name/base/web"
 )
 
 // Handler returns an HTTP handler that serves a JSON Feed of GitHub
 // notifications.
-func Handler(token string, client *http.Client) http.Handler {
-	return &handler{token: token, client: client}
+func Handler(token string, logger *slog.Logger, client *http.Client) http.Handler {
+	if logger == nil {
+		logger = slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
+	}
+	return &handler{token: token, logger: logger, client: client}
 }
 
 type handler struct {
 	token  string
+	logger *slog.Logger
 	client *http.Client
 }
 
@@ -65,15 +72,21 @@ type feedItem struct {
 const ghAPI = "https://api.github.com"
 
 func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	headers := map[string]string{
+		"Authorization": "Bearer " + h.token,
+		"Accept":        "application/vnd.github.v3+json",
+		"User-Agent":    "ghnotify (+https://astrophena.name/bleep-bloop)",
+	}
+
 	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, ghAPI+"/notifications", nil)
 	if err != nil {
 		web.RespondJSONError(w, r, err)
 		return
 	}
 
-	req.Header.Set("Authorization", "Bearer "+h.token)
-	req.Header.Set("Accept", "application/vnd.github.v3+json")
-	req.Header.Set("User-Agent", "ghnotify (+https://astrophena.name/bleep-bloop)")
+	for key, value := range headers {
+		req.Header.Set(key, value)
+	}
 
 	if lastModified := r.Header.Get("If-Modified-Since"); lastModified != "" {
 		req.Header.Set("If-Modified-Since", lastModified)
@@ -110,6 +123,26 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	var items []feedItem
 	for _, n := range notifications {
+		if n.Subject.Type == "PullRequest" {
+			prURL := n.Subject.URL
+			if prURL != "" {
+				pr, err := request.Make[pullRequest](r.Context(), request.Params{
+					Method:   http.MethodGet,
+					URL:      prURL,
+					Headers:  headers,
+					Scrubber: strings.NewReplacer(h.token, "REDACTED"),
+				})
+				if err == nil {
+					if slices.Contains(ignoredAuthors, pr.User.Login) {
+						h.logger.Info("skipping GitHub PR notification from ignored author", "author", pr.User.Login, "pr_url", prURL)
+						continue
+					}
+				} else {
+					h.logger.Error("fetching GitHub PR details failed", "err", err, "pr_url", prURL)
+				}
+			}
+		}
+
 		url := rewriteURL(n.Subject.URL)
 		if url == "" {
 			url = n.Repository.HTMLURL
@@ -181,4 +214,16 @@ func rewriteURL(url string) string {
 	url = strings.ReplaceAll(url, "https://api.github.com/repos/", "https://github.com/")
 	url = strings.ReplaceAll(url, "pulls", "pull") // fix PR links
 	return url
+}
+
+// ignoredAuthors is a list of GitHub usernames whose PRs should be ignored.
+var ignoredAuthors = []string{
+	// I create PRs using Jules manually, so I don't want to be notified about them.
+	"google-labs-jules[bot]",
+}
+
+type pullRequest struct {
+	User struct {
+		Login string `json:"login"`
+	} `json:"user"`
 }

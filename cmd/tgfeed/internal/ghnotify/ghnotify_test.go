@@ -36,7 +36,7 @@ func TestHandler(t *testing.T) {
 		tok = os.Getenv("GITHUB_TOKEN")
 	}
 
-	h := Handler(tok, rec.Client())
+	h := Handler(tok, nil, rec.Client())
 
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest(http.MethodGet, "/", nil)
