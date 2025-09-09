@@ -30,7 +30,7 @@ func (f *fetcher) handleSpecialFeed(req *http.Request) (*http.Response, error) {
 
 	switch typ := req.URL.Host; typ {
 	case "github-notifications":
-		h = ghnotify.Handler(f.ghToken, f.httpc)
+		h = ghnotify.Handler(f.ghToken, f.slog, f.httpc)
 	default:
 		return nil, fmt.Errorf("unknown special feed type %s", typ)
 	}
