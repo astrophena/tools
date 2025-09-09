@@ -22,18 +22,12 @@ import (
 // Feed state.
 
 type feed struct {
-	URL             string             `json:"url"`
-	Title           string             `json:"title,omitempty"`
-	MessageThreadID int64              `json:"message_thread_id,omitempty"`
-	BlockRule       *starlark.Function `json:"-"`
-	KeepRule        *starlark.Function `json:"-"`
+	url             string
+	title           string
+	messageThreadID int64
+	blockRule       *starlark.Function
+	keepRule        *starlark.Function
 }
-
-func (f *feed) String() string        { return fmt.Sprintf("<feed url=%q>", f.URL) }
-func (f *feed) Type() string          { return "feed" }
-func (f *feed) Freeze()               {} // immutable
-func (f *feed) Truth() starlark.Bool  { return starlark.Bool(f.URL != "") }
-func (f *feed) Hash() (uint32, error) { return 0, fmt.Errorf("unhashable: %s", f.Type()) }
 
 func newFeedBuiltin(feeds *[]*feed) *starlark.Builtin {
 	return starlark.NewBuiltin("feed", func(_ *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
@@ -42,11 +36,11 @@ func newFeedBuiltin(feeds *[]*feed) *starlark.Builtin {
 		}
 		f := new(feed)
 		if err := starlark.UnpackArgs("feed", args, kwargs,
-			"url", &f.URL,
-			"title?", &f.Title,
-			"message_thread_id?", &f.MessageThreadID,
-			"block_rule?", &f.BlockRule,
-			"keep_rule?", &f.KeepRule,
+			"url", &f.url,
+			"title?", &f.title,
+			"message_thread_id?", &f.messageThreadID,
+			"block_rule?", &f.blockRule,
+			"keep_rule?", &f.keepRule,
 		); err != nil {
 			return nil, err
 		}
@@ -135,8 +129,8 @@ func (f *fetcher) parseConfig(ctx context.Context, config string) ([]*feed, erro
 	}
 
 	for _, feed := range feeds {
-		if _, err := url.Parse(feed.URL); err != nil {
-			return nil, fmt.Errorf("invalid URL %q of feed %q", feed.URL, feed.Title)
+		if _, err := url.Parse(feed.url); err != nil {
+			return nil, fmt.Errorf("invalid URL %q of feed %q", feed.url, feed.title)
 		}
 	}
 
