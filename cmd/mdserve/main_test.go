@@ -5,9 +5,12 @@
 package main
 
 import (
+	"bytes"
+	"context"
 	"errors"
 	"flag"
 	"io/fs"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -39,6 +42,19 @@ func TestEngineMain(t *testing.T) {
 			Args: []string{},
 		},
 	})
+}
+
+func setupTestContext(t *testing.T) (context.Context, *bytes.Buffer) {
+	var buf bytes.Buffer
+	level := new(slog.LevelVar)
+	level.Set(slog.LevelDebug)
+	h := slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: level})
+	l := &logger.Logger{
+		Logger: slog.New(h),
+		Level:  level,
+	}
+	ctx := logger.Put(context.Background(), l)
+	return ctx, &buf
 }
 
 func TestServe(t *testing.T) {
@@ -132,11 +148,8 @@ This is bla bla bla.
 				e.fs = &failFS{}
 			}
 
-			env := &cli.Env{
-				Stderr: logger.Logf(t.Logf),
-			}
-
-			r := httptest.NewRequestWithContext(cli.WithEnv(t.Context(), env), http.MethodGet, tc.path, nil)
+			ctx, logBuf := setupTestContext(t)
+			r := httptest.NewRequestWithContext(ctx, http.MethodGet, tc.path, nil)
 			w := httptest.NewRecorder()
 			e.ServeHTTP(w, r)
 
@@ -146,6 +159,15 @@ This is bla bla bla.
 
 			if tc.wantInBody != "" && !strings.Contains(w.Body.String(), tc.wantInBody) {
 				t.Errorf("body must contain %q, got %q", tc.wantInBody, w.Body.String())
+			}
+
+			if tc.failRead {
+				if logBuf.Len() == 0 {
+					t.Error("expected an error to be logged, but log buffer is empty")
+				}
+				if !strings.Contains(logBuf.String(), `"level":"ERROR"`) {
+					t.Errorf("expected ERROR log, but got: %s", logBuf.String())
+				}
 			}
 		})
 	}

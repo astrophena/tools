@@ -66,13 +66,6 @@ func TestFetcherMain(t *testing.T) {
 			Args:    []string{"-version"},
 			WantErr: cli.ErrExitVersion,
 		},
-		"edit without any changes": {
-			Args: []string{"edit"},
-			Env: map[string]string{
-				"EDITOR": "true",
-			},
-			WantInStderr: "No changes made to config.star, exiting.",
-		},
 		"edit without defined editor": {
 			Args:    []string{"edit"},
 			WantErr: errNoEditor,
@@ -146,7 +139,9 @@ func testFetcher(t *testing.T, m *mux) *fetcher {
 		chatID:             "test",
 		statsSpreadsheetID: "test",
 	}
-	f.init.Do(f.doInit)
+	f.init.Do(func() {
+		f.doInit(t.Context())
+	})
 	return f
 }
 

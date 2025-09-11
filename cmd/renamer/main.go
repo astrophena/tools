@@ -11,12 +11,14 @@ import (
 	"flag"
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"slices"
 	"testing"
 
 	"go.astrophena.name/base/cli"
+	"go.astrophena.name/base/logger"
 	"go.astrophena.name/tools/internal/restrict"
 
 	"github.com/landlock-lsm/go-landlock/landlock"
@@ -91,10 +93,10 @@ func (a *app) Run(ctx context.Context) error {
 		return errUnknownSortMode
 	}
 
-	return a.rename(env, dir, files)
+	return a.rename(ctx, dir, files)
 }
 
-func (a *app) rename(env *cli.Env, dir string, files []fs.DirEntry) error {
+func (a *app) rename(ctx context.Context, dir string, files []fs.DirEntry) error {
 	for _, d := range files {
 		if d.IsDir() {
 			return nil
@@ -107,15 +109,15 @@ func (a *app) rename(env *cli.Env, dir string, files []fs.DirEntry) error {
 		)
 
 		if _, err := os.Stat(newname); !errors.Is(err, fs.ErrNotExist) {
-			env.Logf("File %s already exists, skipping.", newname)
+			logger.Info(ctx, "file already exists, skipping", slog.String("path", newname))
 			a.start++
 			continue
 		}
 
 		if a.dry {
-			env.Logf("Would rename %s to %s.", oldname, newname)
+			logger.Info(ctx, "would rename", slog.String("from", oldname), slog.String("to", newname))
 		} else {
-			env.Logf("Renaming %s to %s.", oldname, newname)
+			logger.Info(ctx, "renaming", slog.String("from", oldname), slog.String("to", newname))
 			if err := os.Rename(oldname, newname); err != nil {
 				return err
 			}

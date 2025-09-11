@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"go.astrophena.name/base/cli"
-	"go.astrophena.name/base/logger"
 	"go.astrophena.name/base/testutil"
 	"go.astrophena.name/tools/internal/rr"
 )
@@ -32,7 +31,7 @@ func TestGitHubNotificationsFeed(t *testing.T) {
 	}
 
 	if err := f.run(cli.WithEnv(t.Context(), &cli.Env{
-		Stderr: logger.Logf(t.Logf),
+		Stderr: t.Output(),
 	})); err != nil {
 		t.Fatal(err)
 	}

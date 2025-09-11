@@ -17,7 +17,6 @@ import (
 	"time"
 
 	"go.astrophena.name/base/cli"
-	"go.astrophena.name/base/logger"
 	"go.astrophena.name/base/testutil"
 	"go.astrophena.name/tools/internal/api/gemini"
 	"go.astrophena.name/tools/internal/rr"
@@ -114,7 +113,7 @@ func TestHandler(t *testing.T) {
 			}
 
 			ctx := cli.WithEnv(context.Background(), &cli.Env{
-				Stderr: logger.Logf(t.Logf),
+				Stderr: t.Output(),
 			})
 
 			r := httptest.NewRequestWithContext(ctx, tc.method, tc.path, body)

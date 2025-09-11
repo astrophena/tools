@@ -7,11 +7,13 @@ package main
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"time"
 
 	"go.astrophena.name/base/cli"
+	"go.astrophena.name/base/logger"
 	"go.astrophena.name/base/request"
 	"go.astrophena.name/base/version"
 	"go.astrophena.name/base/web"
@@ -46,7 +48,6 @@ func (e *engine) setWebhook(ctx context.Context) error {
 
 func (e *engine) ping(ctx context.Context, interval time.Duration) {
 	ticker := time.NewTicker(interval)
-	logger := e.logger.WithGroup("ping")
 	defer ticker.Stop()
 
 	for {
@@ -60,7 +61,7 @@ func (e *engine) ping(ctx context.Context, interval time.Duration) {
 				},
 			})
 			if err != nil {
-				logger.Error("failed to send heartbeat", "err", err)
+				logger.Error(ctx, "failed to send heartbeat", slog.Any("err", err))
 			}
 		case <-ctx.Done():
 			return
@@ -71,7 +72,6 @@ func (e *engine) ping(ctx context.Context, interval time.Duration) {
 func (e *engine) renderSelfPing(ctx context.Context, interval time.Duration) {
 	env := cli.GetEnv(ctx)
 	ticker := time.NewTicker(interval)
-	logger := e.logger.WithGroup("self_ping")
 	defer ticker.Stop()
 
 	for {
@@ -79,7 +79,7 @@ func (e *engine) renderSelfPing(ctx context.Context, interval time.Duration) {
 		case <-ticker.C:
 			url := env.Getenv("RENDER_EXTERNAL_URL")
 			if url == "" {
-				logger.Error("RENDER_EXTERNAL_URL is not set, are you really on Render?")
+				logger.Error(ctx, "RENDER_EXTERNAL_URL is not set, are you really on Render?")
 				return
 			}
 			health, err := request.Make[web.HealthResponse](ctx, request.Params{
@@ -92,10 +92,10 @@ func (e *engine) renderSelfPing(ctx context.Context, interval time.Duration) {
 				Scrubber:   e.scrubber,
 			})
 			if err != nil {
-				logger.Error("failed", "err", err)
+				logger.Error(ctx, "failed", slog.Any("err", err))
 			}
 			if !health.OK {
-				logger.Error("unhealthy", "response", health)
+				logger.Error(ctx, "unhealthy", slog.Any("response", health))
 			}
 		case <-ctx.Done():
 			return

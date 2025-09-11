@@ -89,6 +89,7 @@ func TestRenderSelfPing(t *testing.T) {
 			}
 			return "https://bot.astrophena.name"
 		},
+		Stderr: t.Output(),
 	}
 
 	go e.renderSelfPing(cli.WithEnv(t.Context(), env), 10*time.Millisecond)

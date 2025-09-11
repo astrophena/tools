@@ -50,7 +50,7 @@ func TestRun(t *testing.T) {
 				"5. Fake Track 3.mp3",
 				"6. Fake Track 4.mp3",
 			},
-			wantInStderr: "4 processed: 4 renamed, 0 existing.\n",
+			wantInStderr: `"msg":"finished","processed":4,"renamed":4,"existing":0`,
 		},
 		"rename (flac)": {
 			args:          []string{"[TMPDIR]"},
@@ -61,12 +61,12 @@ func TestRun(t *testing.T) {
 				"5. Fake Track 3.flac",
 				"6. Fake Track 4.flac",
 			},
-			wantInStderr: "4 processed: 4 renamed, 0 existing.\n",
+			wantInStderr: `"msg":"finished","processed":4,"renamed":4,"existing":0`,
 		},
 		"skipped not audio": {
 			args:          []string{"[TMPDIR]"},
 			copyToDirGlob: "testdata/notaudio.mp3",
-			wantInStderr:  "0 processed: 0 renamed, 0 existing.\n",
+			wantInStderr:  `"msg":"finished","processed":0,"renamed":0,"existing":0`,
 		},
 		"not renamed": {
 			args:          []string{"[TMPDIR]"},
@@ -77,12 +77,12 @@ func TestRun(t *testing.T) {
 				"5. Fake Track 3.flac",
 				"6. Fake Track 4.flac",
 			},
-			wantInStderr: "4 processed: 0 renamed, 4 existing.\n",
+			wantInStderr: `"msg":"finished","processed":4,"renamed":0,"existing":4`,
 		},
 		"dry run": {
 			args:          []string{"-dry", "[TMPDIR]"},
 			copyToDirGlob: "testdata/mp3/*.mp3",
-			wantInStderr:  "Dry run: 4 processed: 4 renamed, 0 existing.",
+			wantInStderr:  `"msg":"finished dry run","processed":4,"renamed":4,"existing":0`,
 		},
 	}
 

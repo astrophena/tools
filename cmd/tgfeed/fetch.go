@@ -209,7 +209,7 @@ func (f *fetcher) applyRule(rule *starlark.Function, item *gofeed.Item) bool {
 	}
 	val, err := starlark.Call(
 		&starlark.Thread{
-			Print: func(_ *starlark.Thread, msg string) { f.logf("%s", msg) },
+			Print: func(_ *starlark.Thread, msg string) { f.slog.Info(msg) },
 		},
 		rule,
 		starlark.Tuple{starlarkstruct.FromStringDict(

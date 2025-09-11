@@ -13,6 +13,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log"
 	"log/slog"
 	"math/rand/v2"
 	"net/http"
@@ -34,7 +35,6 @@ import (
 	"go.astrophena.name/tools/cmd/tgfeed/internal/serviceaccount"
 	"go.astrophena.name/tools/internal/api/gist"
 
-	"github.com/lmittmann/tint"
 	"github.com/mmcdole/gofeed"
 )
 
@@ -55,12 +55,10 @@ func main() { cli.Main(new(fetcher)) }
 
 func (f *fetcher) Flags(fs *flag.FlagSet) {
 	fs.BoolVar(&f.dry, "dry", false, "Enable dry-run mode: log actions, but don't send updates or save state.")
-	fs.BoolVar(&f.jsonLog, "json-log", false, "Emit logs in JSON format.")
 }
 
 func (f *fetcher) Run(ctx context.Context) error {
 	env := cli.GetEnv(ctx)
-	f.logf = env.Logf
 
 	// Load configuration from environment variables.
 	f.chatID = cmp.Or(f.chatID, env.Getenv("CHAT_ID"))
@@ -83,7 +81,9 @@ func (f *fetcher) Run(ctx context.Context) error {
 	}
 
 	// Initialize internal state.
-	f.init.Do(f.doInit)
+	f.init.Do(func() {
+		f.doInit(ctx)
+	})
 
 	// Enable debug logging in dry-run mode.
 	if f.dry {
@@ -147,8 +147,6 @@ type fetcher struct {
 	errorThreadID         int64
 	ghToken               string
 	gistID                string
-	jsonLog               bool
-	logf                  logger.Logf
 	serviceAccountKey     *serviceaccount.Key
 	statsSpreadsheetID    string
 	statsSpreadsheetSheet string
@@ -156,9 +154,10 @@ type fetcher struct {
 
 	// initialized by doInit
 	fp        *gofeed.Parser
-	httpc     *http.Client
-	scrubber  *strings.Replacer
 	gistc     *gist.Client
+	httpc     *http.Client
+	logf      func(string, ...any)
+	scrubber  *strings.Replacer
 	slog      *slog.Logger
 	slogLevel *slog.LevelVar
 
@@ -171,10 +170,9 @@ type fetcher struct {
 	stats syncx.Protected[*stats]
 }
 
-func (f *fetcher) doInit() {
-	if f.logf == nil {
-		panic("f.logf is nil")
-	}
+func (f *fetcher) doInit(ctx context.Context) {
+	env := cli.GetEnv(ctx)
+	f.logf = log.New(env.Stderr, "", 0).Printf
 
 	if f.httpc == nil {
 		f.httpc = request.DefaultClient
@@ -195,16 +193,9 @@ func (f *fetcher) doInit() {
 		Scrubber:   f.scrubber,
 	}
 
-	f.slogLevel = new(slog.LevelVar)
-	if f.jsonLog {
-		f.slog = slog.New(slog.NewJSONHandler(f.logf, &slog.HandlerOptions{
-			Level: f.slogLevel,
-		}))
-	} else {
-		f.slog = slog.New(tint.NewHandler(f.logf, &tint.Options{
-			Level: f.slogLevel,
-		}))
-	}
+	l := logger.Get(ctx)
+	f.slogLevel = l.Level
+	f.slog = l.Logger
 }
 
 func (f *fetcher) listFeeds(ctx context.Context, w io.Writer) error {

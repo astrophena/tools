@@ -11,6 +11,7 @@ import (
 	"flag"
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -21,6 +22,7 @@ import (
 	"github.com/landlock-lsm/go-landlock/landlock"
 
 	"go.astrophena.name/base/cli"
+	"go.astrophena.name/base/logger"
 	"go.astrophena.name/tools/internal/restrict"
 )
 
@@ -68,14 +70,10 @@ func (a *app) Run(ctx context.Context) error {
 		restrict.Do(ctx, landlock.RWDirs(dir))
 	}
 
-	vlog := func(format string, args ...any) {
-		if !a.dry {
-			if !a.verbose {
-				return
-			}
-			return
+	vlog := func(msg string, attrs ...slog.Attr) {
+		if a.dry || a.verbose {
+			logger.Info(ctx, msg, attrs...)
 		}
-		env.Logf(format, args...)
 	}
 
 	var processed, existing, renamed int
@@ -119,16 +117,16 @@ func (a *app) Run(ctx context.Context) error {
 		newname = filepath.Join(dir, newname+filepath.Ext(path))
 
 		if path == newname {
-			vlog("Already exists: %q, no need to rename.", path)
+			vlog("already exists, no need to rename", slog.String("path", path))
 			existing++
 			return nil
 		}
 
-		logMsg := "Renaming"
+		logMsg := "renaming"
 		if a.dry {
-			logMsg = "Would rename"
+			logMsg = "would rename"
 		}
-		vlog("%s: %q -> %q.", logMsg, path, newname)
+		vlog(logMsg, slog.String("from", path), slog.String("to", newname))
 		if !a.dry {
 			if err := os.Rename(path, newname); err != nil {
 				return err
@@ -141,12 +139,11 @@ func (a *app) Run(ctx context.Context) error {
 		return err
 	}
 
-	var msg string
+	msg := "finished"
 	if a.dry {
-		msg += "Dry run: "
+		msg += " dry run"
 	}
-	msg += "%d processed: %d renamed, %d existing."
-	env.Logf(msg, processed, renamed, existing)
+	logger.Info(ctx, msg, slog.Int("processed", processed), slog.Int("renamed", renamed), slog.Int("existing", existing))
 
 	return nil
 }
