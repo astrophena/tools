@@ -308,10 +308,12 @@ type message struct {
 	LinkPreviewOptions struct {
 		IsDisabled bool `json:"is_disabled"`
 	} `json:"link_preview_options"`
-	ReplyMarkup struct {
-		InlineKeyboard inlineKeyboard `json:"inline_keyboard"`
-	} `json:"reply_markup"`
+	ReplyMarkup *replyMarkup `json:"reply_markup,omitempty"`
 	tgmarkup.Message
+}
+
+type replyMarkup struct {
+	InlineKeyboard *inlineKeyboard `json:"inline_keyboard"`
 }
 
 type inlineKeyboard = [][]inlineKeyboardButton
@@ -328,7 +330,7 @@ func (f *fetcher) send(ctx context.Context, text string, disableLinkPreview bool
 		MessageThreadID: threadID,
 	}
 	if inlineKeyboard != nil {
-		msg.ReplyMarkup.InlineKeyboard = *inlineKeyboard
+		msg.ReplyMarkup = &replyMarkup{inlineKeyboard}
 	}
 	msg.LinkPreviewOptions.IsDisabled = disableLinkPreview
 	msg.Message = tgmarkup.FromMarkdown(text)
