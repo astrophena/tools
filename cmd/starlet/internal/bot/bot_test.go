@@ -17,7 +17,6 @@ import (
 	"testing"
 	"time"
 
-	"go.astrophena.name/base/logger"
 	"go.astrophena.name/base/request"
 	"go.astrophena.name/base/testutil"
 	"go.astrophena.name/base/txtar"
@@ -99,7 +98,7 @@ func testBot(t *testing.T, m *mux, files map[string]string) *bot.Bot {
 		Owner:      123456789,
 		HTTPClient: testutil.MockHTTPClient(m.mux),
 		KVCache:    kvcache.Module(t.Context(), 1*time.Minute),
-		Logger:     slog.New(slog.NewTextHandler(logger.Logf(t.Logf), nil)),
+		Logger:     slog.New(slog.NewTextHandler(t.Output(), nil)),
 	})
 	if err := b.Load(t.Context(), files); err != nil {
 		t.Fatal(err)

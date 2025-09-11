@@ -8,8 +8,9 @@ package restrict
 
 import (
 	"context"
+	"log/slog"
 
-	"go.astrophena.name/base/cli"
+	"go.astrophena.name/base/logger"
 
 	"github.com/landlock-lsm/go-landlock/landlock"
 )
@@ -21,6 +22,6 @@ import (
 // continue execution.
 func Do(ctx context.Context, rules ...landlock.Rule) {
 	if err := landlock.V5.BestEffort().Restrict(rules...); err != nil {
-		cli.GetEnv(ctx).Logf("Sandboxing failed: %v", err)
+		logger.Warn(ctx, "sandboxing failed", slog.Any("err", err))
 	}
 }

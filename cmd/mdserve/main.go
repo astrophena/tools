@@ -13,6 +13,7 @@ import (
 	"flag"
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -44,7 +45,6 @@ type engine struct {
 	// configuration
 	addr string
 	fs   fs.FS
-	logf logger.Logf
 
 	// used in tests
 	noServerStart bool
@@ -95,15 +95,13 @@ func (e *engine) Run(ctx context.Context) error {
 		restrict.Do(ctx, rules...)
 	}
 
-	e.logf = env.Logf
-
 	e.init.Do(e.doInit)
 
 	mux := http.NewServeMux()
 	mux.Handle("/", e)
 
 	if dir != "" {
-		e.logf("Serving from %s.", dir)
+		logger.Info(ctx, "serving from", slog.String("dir", dir))
 	}
 
 	if e.noServerStart {
@@ -121,10 +119,6 @@ func (e *engine) doInit() {
 	// Serve by default from current directory.
 	if e.fs == nil {
 		e.fs = os.DirFS(".")
-	}
-	// No logger passed? Throw all logs away.
-	if e.logf == nil {
-		e.logf = func(format string, args ...any) {}
 	}
 	e.md = &markdown.Parser{
 		HeadingID:          true,

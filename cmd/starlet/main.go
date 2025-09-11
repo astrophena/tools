@@ -7,7 +7,6 @@
 package main
 
 import (
-	"bytes"
 	"cmp"
 	"context"
 	_ "embed"
@@ -23,6 +22,7 @@ import (
 	"time"
 
 	"go.astrophena.name/base/cli"
+	"go.astrophena.name/base/logger"
 	"go.astrophena.name/base/request"
 	"go.astrophena.name/base/syncx"
 	"go.astrophena.name/base/version"
@@ -87,7 +87,7 @@ func (e *engine) Run(ctx context.Context) error {
 
 	// If running on Render, try to look up port to listen on and start goroutine that prevents Starlet from sleeping.
 	if e.onRender {
-		serverLogger.Info("Running on Render.")
+		serverLogger.Info("running on Render")
 		// https://docs.render.com/environment-variables#all-runtimes-1
 		if port := env.Getenv("PORT"); port != "" {
 			e.srv.Addr = ":" + port
@@ -104,64 +104,13 @@ func (e *engine) Run(ctx context.Context) error {
 		if err := e.setWebhook(ctx); err != nil {
 			return err
 		}
-		serverLogger.Info("Running in production mode.")
+		serverLogger.Info("running in production mode")
 	} else {
 		go e.watch(ctx)
-		serverLogger.Info("Running in development mode.")
+		serverLogger.Info("running in development mode")
 	}
 
-	// Gross hack: re-route all output from web.Server to our slog logger.
-	srvCtx := cli.WithEnv(ctx, &cli.Env{
-		Getenv: env.Getenv,
-		Stderr: &slogWriter{serverLogger},
-	})
-	return e.srv.ListenAndServe(srvCtx)
-}
-
-func errorLog(msg string, log *slog.Logger) { log.Error(msg) }
-
-var errorHandlers = map[string]func(msg string, log *slog.Logger){
-	"HTTP server error: ":     errorLog,
-	"Internal Server Error: ": errorLog,
-	"web.RespondError: ":      errorLog,
-	"http: panic serving ": func(msg string, log *slog.Logger) {
-		addrAndMsg, stack, foundStack := strings.Cut(msg, "\n")
-		addr, err, foundErr := strings.Cut(addrAndMsg, ": ")
-		var attrs []any
-		attrs = append(attrs, slog.String("addr", addr))
-		if foundErr {
-			attrs = append(attrs, slog.String("err", err))
-		}
-		if foundStack {
-			attrs = append(attrs, slog.String("stack", stack))
-		}
-		log.Error("panicked", attrs...)
-	},
-}
-
-type slogWriter struct {
-	log *slog.Logger
-}
-
-func (sw *slogWriter) Write(p []byte) (n int, err error) {
-	// Trim trailing newlines, as slog handlers add their own.
-	msg := string(bytes.TrimSpace(p))
-
-	// Don't log empty messages.
-	if msg == "" {
-		return len(p), nil
-	}
-
-	for prefix, handler := range errorHandlers {
-		if after, ok := strings.CutPrefix(msg, prefix); ok {
-			handler(after, sw.log)
-			return len(p), nil
-		}
-	}
-
-	// If no error prefix matched, log as Info.
-	sw.log.Info(msg)
-	return len(p), nil
+	return e.srv.ListenAndServe(ctx)
 }
 
 func parseInt(s string) int64 {
@@ -222,13 +171,15 @@ func (e *engine) doInit(ctx context.Context) error {
 
 	const logLineLimit = 300
 	e.logStream = logstream.New(logLineLimit)
+
+	level := logger.LevelVar(ctx)
 	var h slog.Handler
 	if !e.dev {
 		wr := io.MultiWriter(e.logStream, e.stderr)
-		h = slog.NewJSONHandler(wr, &slog.HandlerOptions{})
+		h = slog.NewJSONHandler(wr, &slog.HandlerOptions{Level: level})
 	} else {
 		h = multiHandler{
-			tint.NewHandler(e.stderr, &tint.Options{}),               // sends to terminal
+			tint.NewHandler(e.stderr, &tint.Options{Level: level}),   // sends to terminal
 			slog.NewJSONHandler(e.logStream, &slog.HandlerOptions{}), // sends to /debug/logs
 		}
 	}
@@ -474,7 +425,7 @@ func (e *engine) watch(ctx context.Context) {
 		events        []fsnotify.Event
 	)
 
-	e.logger.Info("Watching for file changes.", "path", e.botStatePath)
+	e.logger.Info("watching for file changes", "path", e.botStatePath)
 
 	for {
 		select {
@@ -496,11 +447,11 @@ func (e *engine) watch(ctx context.Context) {
 				continue
 			}
 
-			e.logger.Info("Reloading bot due to file changes.")
+			e.logger.Info("reloading bot due to file changes")
 			if err := e.loadFromDir(ctx); err != nil {
 				e.logger.Error("failed to reload bot", "err", err)
 			} else {
-				e.logger.Info("Bot reloaded successfully.")
+				e.logger.Info("bot reloaded successfully")
 			}
 
 			events = nil

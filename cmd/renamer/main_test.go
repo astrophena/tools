@@ -63,6 +63,11 @@ func TestRun(t *testing.T) {
 			args:    []string{"-sort", "foo", "[TMPDIR]"},
 			wantErr: errUnknownSortMode,
 		},
+		"dry run": {
+			args:         []string{"-dry", "[TMPDIR]"},
+			extractTxtar: "testdata/name.txtar",
+			wantInStderr: `"msg":"would rename"`,
+		},
 	}
 
 	for name, tc := range cases {
