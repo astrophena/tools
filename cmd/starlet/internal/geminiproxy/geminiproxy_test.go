@@ -58,7 +58,7 @@ func TestHandler(t *testing.T) {
 		"not_found": {
 			method:     http.MethodGet,
 			path:       "/",
-			wantStatus: http.StatusInternalServerError,
+			wantStatus: http.StatusNotFound,
 			authToken:  "valid",
 		},
 		"model_info": {

@@ -7,6 +7,7 @@ package geminiproxy
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -15,6 +16,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"go.astrophena.name/base/request"
 	"go.astrophena.name/base/syncx"
 	"go.astrophena.name/base/web"
 	"go.astrophena.name/tools/internal/api/gemini"
@@ -151,6 +153,13 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	resp, err := gemini.RawRequest[any](r.Context(), h.client, r.Method, r.URL.Path, body)
 	if err != nil {
+		var statusErr *request.StatusError
+		if errors.As(err, &statusErr) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(statusErr.StatusCode)
+			w.Write(statusErr.Body)
+			return
+		}
 		web.RespondJSONError(w, r, err)
 		return
 	}
