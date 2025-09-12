@@ -11,7 +11,6 @@ import (
 	"context"
 	_ "embed"
 	"errors"
-	"io"
 	"io/fs"
 	"log/slog"
 	"net/http"
@@ -35,7 +34,6 @@ import (
 	"go.astrophena.name/tools/internal/starlark/kvcache"
 
 	"github.com/fsnotify/fsnotify"
-	"github.com/lmittmann/tint"
 )
 
 const tgAPI = "https://api.telegram.org"
@@ -65,7 +63,6 @@ func (e *engine) Run(ctx context.Context) error {
 	if e.onRender {
 		e.dev = false
 	}
-	e.stderr = env.Stderr
 	if len(env.Args) == 1 {
 		e.dev = true
 		e.botStatePath = env.Args[0]
@@ -149,7 +146,6 @@ type engine struct {
 	onRender             bool
 	pingURL              string
 	reloadToken          string
-	stderr               io.Writer
 	tgOwner              int64
 	tgSecret             string
 	tgToken              string
@@ -165,25 +161,14 @@ const (
 )
 
 func (e *engine) doInit(ctx context.Context) error {
-	if e.stderr == nil {
-		e.stderr = os.Stderr
-	}
-
 	const logLineLimit = 300
 	e.logStream = logstream.New(logLineLimit)
 
-	level := logger.LevelVar(ctx)
-	var h slog.Handler
-	if !e.dev {
-		wr := io.MultiWriter(e.logStream, e.stderr)
-		h = slog.NewJSONHandler(wr, &slog.HandlerOptions{Level: level})
-	} else {
-		h = multiHandler{
-			tint.NewHandler(e.stderr, &tint.Options{Level: level}),   // sends to terminal
-			slog.NewJSONHandler(e.logStream, &slog.HandlerOptions{}), // sends to /debug/logs
-		}
-	}
-	e.logger = slog.New(h)
+	logger := logger.Get(ctx)
+	logger.Attach(slog.NewJSONHandler(e.logStream, &slog.HandlerOptions{
+		Level: logger.Level,
+	}))
+	e.logger = logger.Logger
 
 	if e.httpc == nil {
 		e.httpc = &http.Client{
@@ -457,46 +442,4 @@ func (e *engine) watch(ctx context.Context) {
 			events = nil
 		}
 	}
-}
-
-// The following code is copied from https://github.com/golang/go/issues/65954#issuecomment-2786268756.
-// Replace by slog.MultiHandler when https://github.com/golang/go/issues/65954 is finished.
-
-type multiHandler []slog.Handler
-
-func (h multiHandler) Enabled(ctx context.Context, l slog.Level) bool {
-	for i := range h {
-		if h[i].Enabled(ctx, l) {
-			return true
-		}
-	}
-	return false
-}
-
-func (h multiHandler) Handle(ctx context.Context, r slog.Record) error {
-	var errs []error
-	for i := range h {
-		if h[i].Enabled(ctx, r.Level) {
-			if err := h[i].Handle(ctx, r.Clone()); err != nil {
-				errs = append(errs, err)
-			}
-		}
-	}
-	return errors.Join(errs...)
-}
-
-func (h multiHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
-	handlers := make([]slog.Handler, 0, len(h))
-	for i := range h {
-		handlers = append(handlers, h[i].WithAttrs(attrs))
-	}
-	return multiHandler(handlers)
-}
-
-func (h multiHandler) WithGroup(name string) slog.Handler {
-	handlers := make([]slog.Handler, 0, len(h))
-	for i := range h {
-		handlers = append(handlers, h[i].WithGroup(name))
-	}
-	return multiHandler(handlers)
 }
