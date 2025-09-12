@@ -32,7 +32,6 @@ func TestRun(t *testing.T) {
 		e := new(engine)
 		e.httpc = testutil.MockHTTPClient(testMux(t, nil).mux)
 		e.noServerStart = true
-		e.stderr = t.Output()
 		return e
 	}, map[string]clitest.Case[*engine]{
 		"prints usage with help flag": {
@@ -63,7 +62,6 @@ func testEngine(t *testing.T, m *mux) *engine {
 		gistID:      "test",
 		httpc:       testutil.MockHTTPClient(m.mux),
 		tgOwner:     123456789,
-		stderr:      t.Output(),
 		reloadToken: "foobar",
 		tgSecret:    "test",
 		tgToken:     tgToken,

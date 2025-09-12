@@ -10,11 +10,10 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.3.0
 	github.com/google/go-cmp v0.7.0
 	github.com/landlock-lsm/go-landlock v0.0.0-20250303204525-1544bccde3a3
-	github.com/lmittmann/tint v1.1.2
 	github.com/mmcdole/gofeed v1.3.0
 	github.com/muesli/reflow v0.3.0
 	github.com/tobischo/gokeepasslib/v3 v3.6.1
-	go.astrophena.name/base v0.11.1-0.20250911202400-82af8edb4200
+	go.astrophena.name/base v0.11.1-0.20250912223340-e0a03fe65489
 	go.starlark.net v0.0.0-20250623223156-8bf495bf4e9a
 	golang.org/x/term v0.35.0
 	golang.org/x/time v0.13.0
@@ -27,6 +26,7 @@ require (
 	github.com/andybalholm/cascadia v1.3.1 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
+	github.com/lmittmann/tint v1.1.2 // indirect
 	github.com/mattn/go-runewidth v0.0.12 // indirect
 	github.com/mmcdole/goxpp v1.1.1-0.20240225020742-a0c311522b23 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
