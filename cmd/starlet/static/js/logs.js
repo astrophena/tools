@@ -95,7 +95,7 @@ window.onload = function () {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       const history = await response.json();
-      history.forEach((line) => {
+      history.reverse().forEach((line) => {
         try {
           const logData = JSON.parse(line);
           const logElement = createLogElement(logData);

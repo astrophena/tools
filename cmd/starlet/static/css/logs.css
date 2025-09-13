@@ -1,11 +1,12 @@
 #load-history-btn {
+  display: block;
+  margin: 0 auto 1rem auto;
   background-color: var(--accent);
   color: var(--bg);
   border: none;
   padding: 0.5rem 1rem;
   border-radius: 5px;
   cursor: pointer;
-  margin-bottom: 1rem;
   font-family: var(--sans-font);
   font-weight: bold;
 }
@@ -96,6 +97,43 @@
 .log-level-default {
   background-color: #333;
   color: var(--text-light);
+}
+
+.badge {
+  display: inline-block;
+  padding: 0.25em 0.4em;
+  font-size: 75%;
+  font-weight: 700;
+  line-height: 1;
+  text-align: center;
+  white-space: nowrap;
+  vertical-align: baseline;
+  border-radius: 0.25rem;
+}
+
+.badge-success {
+  color: #fff;
+  background-color: #28a745;
+}
+
+.badge-info {
+  color: #fff;
+  background-color: #17a2b8;
+}
+
+.badge-warning {
+  color: #212529;
+  background-color: #ffc107;
+}
+
+.badge-danger {
+  color: #fff;
+  background-color: #dc3545;
+}
+
+.badge-secondary {
+  color: #fff;
+  background-color: #6c757d;
 }
 
 .log-msg {
