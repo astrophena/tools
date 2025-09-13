@@ -3,12 +3,13 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <link rel="stylesheet" href="/%[3]s" />
-    <title>%[1]s</title>
+    <link rel="stylesheet" href="/{{ .AppCSS }}" />
+    <script src="/{{ .AppJS }}"></script>
+    <title>{{ .Title }}</title>
   </head>
   <body>
     <main>
-      %[2]s
+      {{ .Content }}
     </main>
   </body>
 </html>

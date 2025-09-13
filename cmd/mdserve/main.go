@@ -8,10 +8,11 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	_ "embed"
+	"embed"
 	"errors"
 	"flag"
 	"fmt"
+	"html/template"
 	"io/fs"
 	"log/slog"
 	"net"
@@ -33,14 +34,20 @@ import (
 	"rsc.io/markdown"
 )
 
-//go:embed template.html
-var tmpl string
+var (
+	//go:embed template.html
+	tmplStr string
+	tmpl    = template.Must(template.New("").Parse(tmplStr))
+	//go:embed static
+	staticFS embed.FS
+)
 
 func main() { cli.Main(new(engine)) }
 
 type engine struct {
 	init sync.Once
 	md   *markdown.Parser
+	srv  *web.Server
 
 	// configuration
 	addr string
@@ -97,9 +104,6 @@ func (e *engine) Run(ctx context.Context) error {
 
 	e.init.Do(e.doInit)
 
-	mux := http.NewServeMux()
-	mux.Handle("/", e)
-
 	if dir != "" {
 		logger.Info(ctx, "serving from", slog.String("dir", dir))
 	}
@@ -108,11 +112,7 @@ func (e *engine) Run(ctx context.Context) error {
 		return nil
 	}
 
-	s := &web.Server{
-		Addr: e.addr,
-		Mux:  mux,
-	}
-	return s.ListenAndServe(ctx)
+	return e.srv.ListenAndServe(ctx)
 }
 
 func (e *engine) doInit() {
@@ -130,6 +130,15 @@ func (e *engine) doInit() {
 		SmartDot:           true,
 		SmartDash:          true,
 		SmartQuote:         true,
+	}
+
+	mux := http.NewServeMux()
+	mux.Handle("/", e)
+
+	e.srv = &web.Server{
+		Addr:     e.addr,
+		Mux:      mux,
+		StaticFS: staticFS,
 	}
 }
 
@@ -170,7 +179,23 @@ func (e *engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	doc := e.md.Parse(string(b))
 	title := parseTitle(b)
 
-	fmt.Fprintf(w, tmpl, title, markdown.ToHTML(doc), web.StaticFS.HashName("static/css/main.css"))
+	var buf bytes.Buffer
+	data := struct {
+		Title   string
+		Content template.HTML
+		AppCSS  string
+		AppJS   string
+	}{
+		Title:   title,
+		Content: template.HTML(markdown.ToHTML(doc)),
+		AppCSS:  e.srv.StaticHashName("static/css/app.css"),
+		AppJS:   e.srv.StaticHashName("static/js/app.js"),
+	}
+	if err := tmpl.Execute(&buf, data); err != nil {
+		web.RespondError(w, r, err)
+		return
+	}
+	buf.WriteTo(w)
 }
 
 func (e *engine) findIndexFile() string {
