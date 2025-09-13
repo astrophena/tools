@@ -44,7 +44,7 @@ The directory should have the same structure as the GitHub Gist.
 
 # Starlark Environment
 
-See https://github.com/astrophena/tools/blob/master/cmd/starlet/internal/bot/doc.md.
+See https://bot.astrophena.name/env.
 
 # GitHub Gist Structure
 

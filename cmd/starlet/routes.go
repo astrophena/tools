@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+	"go.astrophena.name/base/syncx"
 	"go.astrophena.name/base/web"
 	"go.astrophena.name/base/web/tgauth"
 	"go.astrophena.name/tools/cmd/starlet/internal/geminiproxy"
@@ -32,6 +33,7 @@ import (
 	"github.com/dchest/uniuri"
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/time/rate"
+	"rsc.io/markdown"
 )
 
 var (
@@ -56,6 +58,8 @@ var statsvizCSP = web.CSP{
 	FrameAncestors: []string{web.CSPNone},
 }
 
+var botDocs syncx.Lazy[template.HTML]
+
 func (e *engine) initRoutes() {
 	e.mux = http.NewServeMux()
 
@@ -77,6 +81,38 @@ func (e *engine) initRoutes() {
 			HTTPClient: e.httpc,
 		})))
 	}
+
+	// Starlark environment documentation.
+	e.mux.HandleFunc("GET /env", func(w http.ResponseWriter, r *http.Request) {
+		var buf bytes.Buffer
+
+		docs := botDocs.Get(func() template.HTML {
+			parser := &markdown.Parser{
+				Strikethrough:      true,
+				AutoLinkText:       true,
+				AutoLinkAssumeHTTP: true,
+				Table:              true,
+				SmartDot:           true,
+				SmartDash:          true,
+				SmartQuote:         true,
+			}
+			doc := parser.Parse(e.bot.Documentation())
+			return template.HTML(markdown.ToHTML(doc))
+		})
+
+		data := struct {
+			MainCSS       string
+			Documentation template.HTML
+		}{
+			MainCSS:       e.srv.StaticHashName("static/css/main.css"),
+			Documentation: docs,
+		}
+		if err := templates().ExecuteTemplate(&buf, "env.tmpl", data); err != nil {
+			web.RespondError(w, r, err)
+			return
+		}
+		buf.WriteTo(w)
+	})
 
 	// Debug routes.
 	dbg := web.Debugger(e.mux)
