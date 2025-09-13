@@ -7,6 +7,27 @@ window.onload = function () {
     return;
   }
 
+  function getStatusBadge(status) {
+    let className = "badge-secondary";
+    let text = `Status ${status}`;
+
+    if (status >= 200 && status < 300) {
+      className = "badge-success";
+      text = `OK ${status}`;
+    } else if (status >= 300 && status < 400) {
+      className = "badge-info";
+      text = `Redirect ${status}`;
+    } else if (status >= 400 && status < 500) {
+      className = "badge-warning";
+      text = `Client Error ${status}`;
+    } else if (status >= 500) {
+      className = "badge-danger";
+      text = `Server Error ${status}`;
+    }
+
+    return `<span class="badge ${className}">${text}</span>`;
+  }
+
   function createLogElement(log) {
     const entry = document.createElement("div");
     entry.className = "log-entry";
@@ -39,11 +60,20 @@ window.onload = function () {
         const dt = document.createElement("dt");
         dt.textContent = key;
         const dd = document.createElement("dd");
-        const value =
-          typeof log[key] === "object"
-            ? JSON.stringify(log[key], null, 2)
-            : log[key];
+
+        let value = log[key];
+        if (key === "duration" && typeof value === "number") {
+          value = `${(value / 1e9).toFixed(3)}s`;
+        } else if (key === "status" && typeof value === "number") {
+          dd.innerHTML = getStatusBadge(value);
+          dl.appendChild(dt);
+          dl.appendChild(dd);
+          return;
+        } else if (typeof value === "object") {
+          value = JSON.stringify(value, null, 2);
+        }
         dd.textContent = value;
+
         dl.appendChild(dt);
         dl.appendChild(dd);
       });
@@ -55,24 +85,38 @@ window.onload = function () {
     return entry;
   }
 
-  const initialLogsRaw = logContainer.textContent.trim();
-  logContainer.innerHTML = "";
+  const loadingIndicator = document.getElementById("loading-indicator");
+  const loadHistoryBtn = document.getElementById("load-history-btn");
 
-  if (initialLogsRaw) {
-    initialLogsRaw.split("\n").forEach((line) => {
-      try {
-        const log = JSON.parse(line);
-        logContainer.appendChild(createLogElement(log));
-      } catch (e) {
-        const pre = document.createElement("pre");
-        pre.textContent = line;
-        logContainer.appendChild(pre);
+  loadHistoryBtn.addEventListener("click", async () => {
+    try {
+      const response = await fetch("/debug/loghistory");
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
-    });
-  }
+      const history = await response.json();
+      history.reverse().forEach((line) => {
+        try {
+          const logData = JSON.parse(line);
+          const logElement = createLogElement(logData);
+          logContainer.insertBefore(logElement, logContainer.firstChild);
+        } catch (error) {
+          console.error("Failed to parse log line from history:", line, error);
+        }
+      });
+      loadHistoryBtn.style.display = "none";
+    } catch (error) {
+      console.error("Failed to load log history:", error);
+    }
+  });
 
   const eventSource = new EventSource("/debug/log", { withCredentials: true });
+
   eventSource.addEventListener("logline", function (e) {
+    if (loadingIndicator) {
+      loadingIndicator.style.display = "none";
+    }
+
     try {
       const logData = JSON.parse(e.data);
       const logElement = createLogElement(logData);

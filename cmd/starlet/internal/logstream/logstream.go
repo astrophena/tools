@@ -12,6 +12,7 @@ package logstream
 
 import (
 	"container/ring"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -61,6 +62,18 @@ func (lrb *lineRingBuffer) Write(b []byte) (int, error) {
 		}
 
 		line := text[:idx+1] // Include the newline character.
+
+		var entry struct {
+			URL       string `json:"url"`
+			UserAgent string `json:"user_agent"`
+		}
+		if json.Unmarshal([]byte(line), &entry) == nil {
+			if entry.URL == "/health" && entry.UserAgent == "Render/1.0" {
+				text = text[idx+1:]
+				continue
+			}
+		}
+
 		lrb.r.Value = line
 		for stream := range lrb.streams {
 			select {
