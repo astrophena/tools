@@ -5,7 +5,9 @@
 package main
 
 import (
+	"context"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -71,28 +73,79 @@ func TestSetWebhook(t *testing.T) {
 	}
 }
 
-func TestRenderSelfPing(t *testing.T) {
-	recv := make(chan struct{})
+func TestPing(t *testing.T) {
+	t.Parallel()
 
-	e := testEngine(t, testMux(t, map[string]http.HandlerFunc{
-		"GET bot.astrophena.name/health": func(w http.ResponseWriter, r *http.Request) {
-			testutil.AssertEqual(t, r.URL.Scheme, "https")
-			web.RespondJSON(w, web.HealthResponse{OK: true})
-			recv <- struct{}{}
-		},
+	recv := make(chan struct{}, 1)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		recv <- struct{}{}
 	}))
+	defer srv.Close()
 
-	env := &cli.Env{
-		Getenv: func(key string) string {
-			if key != "RENDER_EXTERNAL_URL" {
-				t.Fatalf("selfPing tried to read environment variable %s", key)
-			}
-			return "https://bot.astrophena.name"
-		},
-		Stderr: t.Output(),
-	}
+	e := testEngine(t, testMux(t, nil))
+	e.pingURL = srv.URL
 
-	go e.renderSelfPing(cli.WithEnv(t.Context(), env), 10*time.Millisecond)
+	go e.ping(context.Background(), 10*time.Millisecond)
 
 	<-recv
+}
+
+func TestRenderSelfPing(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		recv := make(chan struct{})
+
+		e := testEngine(t, testMux(t, map[string]http.HandlerFunc{
+			"GET bot.astrophena.name/health": func(w http.ResponseWriter, r *http.Request) {
+				testutil.AssertEqual(t, r.URL.Scheme, "https")
+				web.RespondJSON(w, web.HealthResponse{OK: true})
+				recv <- struct{}{}
+			},
+		}))
+
+		env := &cli.Env{
+			Getenv: func(key string) string {
+				if key != "RENDER_EXTERNAL_URL" {
+					t.Fatalf("selfPing tried to read environment variable %s", key)
+				}
+				return "https://bot.astrophena.name"
+			},
+			Stderr: t.Output(),
+		}
+
+		go e.renderSelfPing(cli.WithEnv(t.Context(), env), 10*time.Millisecond)
+
+		<-recv
+	})
+
+	t.Run("no url", func(t *testing.T) {
+		e := testEngine(t, testMux(t, nil))
+		env := &cli.Env{
+			Getenv: func(key string) string {
+				return ""
+			},
+			Stderr: t.Output(),
+		}
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		go e.renderSelfPing(cli.WithEnv(ctx, env), 10*time.Millisecond)
+		time.Sleep(20 * time.Millisecond)
+	})
+
+	t.Run("unhealthy", func(t *testing.T) {
+		e := testEngine(t, testMux(t, map[string]http.HandlerFunc{
+			"GET bot.astrophena.name/health": func(w http.ResponseWriter, r *http.Request) {
+				web.RespondJSON(w, web.HealthResponse{OK: false})
+			},
+		}))
+		env := &cli.Env{
+			Getenv: func(key string) string {
+				return "https://bot.astrophena.name"
+			},
+			Stderr: t.Output(),
+		}
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		go e.renderSelfPing(cli.WithEnv(ctx, env), 10*time.Millisecond)
+		time.Sleep(20 * time.Millisecond)
+	})
 }

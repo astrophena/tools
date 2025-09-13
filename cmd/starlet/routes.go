@@ -223,7 +223,7 @@ func (e *engine) handleGeminiProxyToken(w http.ResponseWriter, r *http.Request) 
 
 		d, err := time.ParseDuration(r.FormValue("duration"))
 		if err != nil {
-			web.RespondError(w, r, err)
+			web.RespondError(w, r, fmt.Errorf("%w: %v", web.ErrBadRequest, err))
 			return
 		}
 		duration = r.FormValue("duration")

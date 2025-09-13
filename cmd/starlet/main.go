@@ -38,13 +38,24 @@ import (
 
 const tgAPI = "https://api.telegram.org"
 
+// tgAuther is an interface that abstracts the tgauth.Middleware.
+// It is used to allow mocking in tests.
+type tgAuther interface {
+	LoggedIn(r *http.Request) bool
+	LoginHandler(redirectTarget string) http.Handler
+	LogoutHandler(redirectTarget string) http.Handler
+	Middleware(enforceAuth bool) func(next http.Handler) http.Handler
+}
+
 func main() { cli.Main(new(engine)) }
+
+var errTooManyArguments = errors.New("too many arguments")
 
 func (e *engine) Run(ctx context.Context) error {
 	env := cli.GetEnv(ctx)
 
 	if len(env.Args) > 1 {
-		return errors.New("too many arguments")
+		return errTooManyArguments
 	}
 
 	// Load configuration from environment variables.
@@ -130,7 +141,7 @@ type engine struct {
 	mux           *http.ServeMux
 	scrubber      *strings.Replacer
 	srv           *web.Server
-	tgAuth        *tgauth.Middleware
+	tgAuth        tgAuther
 	tgInterceptor *tgInterceptor
 
 	// configuration, read-only after initialization

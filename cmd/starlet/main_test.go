@@ -5,11 +5,13 @@
 package main
 
 import (
-	_ "embed"
+	"context"
 	"encoding/json"
 	"flag"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -18,7 +20,10 @@ import (
 	"go.astrophena.name/base/cli/clitest"
 	"go.astrophena.name/base/testutil"
 	"go.astrophena.name/base/txtar"
+	"log/slog"
+
 	"go.astrophena.name/base/web"
+	"go.astrophena.name/tools/cmd/starlet/internal/bot"
 	"go.astrophena.name/tools/internal/api/gist"
 )
 
@@ -51,13 +56,68 @@ func TestRun(t *testing.T) {
 			Args:    []string{"-version"},
 			WantErr: cli.ErrExitVersion,
 		},
-	},
-	)
+		"too many arguments": {
+			Args:    []string{"foo", "bar"},
+			WantErr: errTooManyArguments,
+		},
+		"dev mode": {
+			Args: []string{"."},
+			CheckFunc: func(t *testing.T, e *engine) {
+				testutil.AssertEqual(t, e.dev, true)
+				testutil.AssertEqual(t, e.botStatePath, ".")
+			},
+		},
+		"dev mode with render env": {
+			Args: []string{"."},
+			Env: map[string]string{
+				"RENDER": "true",
+			},
+			CheckFunc: func(t *testing.T, e *engine) {
+				testutil.AssertEqual(t, e.dev, true)
+			},
+		},
+	})
+}
+
+func TestParseInt(t *testing.T) {
+	t.Parallel()
+
+	cases := map[string]struct {
+		in   string
+		want int64
+	}{
+		"valid": {
+			in:   "123",
+			want: 123,
+		},
+		"invalid": {
+			in:   "abc",
+			want: 0,
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			got := parseInt(tc.in)
+			testutil.AssertEqual(t, got, tc.want)
+		})
+	}
 }
 
 func testEngine(t *testing.T, m *mux) *engine {
 	t.Helper()
-	e := &engine{
+	e := testEngineWithoutRoutes(t, m)
+	if err := e.init.Get(func() error {
+		return e.doInit(t.Context())
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return e
+}
+
+func testEngineWithoutRoutes(t *testing.T, m *mux) *engine {
+	t.Helper()
+	return &engine{
 		ghToken:     "test",
 		gistID:      "test",
 		httpc:       testutil.MockHTTPClient(m.mux),
@@ -66,12 +126,6 @@ func testEngine(t *testing.T, m *mux) *engine {
 		tgSecret:    "test",
 		tgToken:     tgToken,
 	}
-	if err := e.init.Get(func() error {
-		return e.doInit(t.Context())
-	}); err != nil {
-		t.Fatal(err)
-	}
-	return e
 }
 
 type mux struct {
@@ -165,4 +219,40 @@ func txtarToGist(t *testing.T, b []byte) []byte {
 	}
 
 	return b
+}
+
+func TestEngine_loadFromDir(t *testing.T) {
+	t.Parallel()
+
+	e := &engine{
+		dev: true,
+		bot: bot.New(bot.Opts{
+			Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		}),
+	}
+
+	tmp := t.TempDir()
+	e.botStatePath = tmp
+
+	// Create some files and directories to test with.
+	if err := os.WriteFile(filepath.Join(tmp, "bot.star"), []byte(`print("hello")`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(tmp, "lib"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tmp, "lib", "helpers.star"), []byte(`print("helper")`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tmp, ".DS_Store"), []byte{}, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tmp, "main.star~"), []byte{}, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	err := e.loadFromDir(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
 }
