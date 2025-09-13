@@ -95,12 +95,10 @@ func (e *engine) initRoutes() {
 			MainCSS string
 			LogsCSS string
 			LogsJS  string
-			Logs    string
 		}{
 			MainCSS: e.srv.StaticHashName("static/css/main.css"),
 			LogsCSS: e.srv.StaticHashName("static/css/logs.css"),
 			LogsJS:  e.srv.StaticHashName("static/js/logs.js"),
-			Logs:    strings.Join(e.logStream.Lines(), ""),
 		}
 		if err := templates().ExecuteTemplate(&buf, "logs.tmpl", data); err != nil {
 			web.RespondError(w, r, err)
@@ -109,6 +107,9 @@ func (e *engine) initRoutes() {
 		buf.WriteTo(w)
 	})
 	e.mux.Handle("/debug/log", e.logStream)
+	e.mux.Handle("GET /debug/loghistory", web.HandleJSON(func(r *http.Request, req any) ([]string, error) {
+		return e.logStream.Lines(), nil
+	}))
 
 	if e.dev {
 		// Bot debugger.
