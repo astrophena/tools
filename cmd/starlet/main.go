@@ -283,6 +283,7 @@ func (e *engine) doInit(ctx context.Context) error {
 
 	csrf := http.NewCrossOriginProtection()
 	csrf.AddInsecureBypassPattern("/gemini/")
+	csrf.AddInsecureBypassPattern("/app-telemetry")
 
 	e.initRoutes()
 	e.srv = &web.Server{
