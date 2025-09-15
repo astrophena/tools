@@ -80,9 +80,9 @@ func (c *Collector) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	web.HandleJSON(func(r *http.Request, evt *Event) (*response, error) {
 		if _, err := c.conn.Exec(r.Context(), `
-INSERT INTO app_telemetry_events (session_id, app_version, os, event_type, payload, created_at)
-VALUES ($1, $2, $3, $4, $5, NOW());
-`, evt.SessionID, evt.AppVersion, evt.OS, evt.Type, evt.Payload); err != nil {
+INSERT INTO app_telemetry_events (session_id, app_name, app_version, os, event_type, payload, created_at)
+VALUES ($1, $2, $3, $4, $5, $6, NOW());
+`, evt.SessionID, evt.AppName, evt.AppVersion, evt.OS, evt.Type, evt.Payload); err != nil {
 			return nil, err
 		}
 		return &response{Status: "success"}, nil
