@@ -106,6 +106,7 @@ func (c *Collector) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "*")
 	w.Header().Set("Access-Control-Max-Age", "1728000")
+	w.Header().Set("Access-Control-Allow-Credentials", "true")
 	if r.Method == http.MethodOptions {
 		return
 	}
