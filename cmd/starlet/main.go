@@ -32,6 +32,7 @@ import (
 	"go.astrophena.name/tools/internal/api/gemini"
 	"go.astrophena.name/tools/internal/api/gist"
 	"go.astrophena.name/tools/internal/starlark/kvcache"
+	"go.astrophena.name/tools/internal/store"
 
 	"github.com/fsnotify/fsnotify"
 )
@@ -49,6 +50,7 @@ func (e *engine) Run(ctx context.Context) error {
 
 	// Load configuration from environment variables.
 	e.addr = cmp.Or(e.addr, env.Getenv("ADDR"), "localhost:3000")
+	e.databaseURL = cmp.Or(e.databaseURL, env.Getenv("DATABASE_URL"))
 	e.geminiKey = cmp.Or(e.geminiKey, env.Getenv("GEMINI_KEY"))
 	e.geminiProxySecretKey = cmp.Or(e.geminiProxySecretKey, env.Getenv("GEMINI_PROXY_SECRET_KEY"))
 	e.ghToken = cmp.Or(e.ghToken, env.Getenv("GH_TOKEN"))
@@ -73,6 +75,9 @@ func (e *engine) Run(ctx context.Context) error {
 		return e.doInit(ctx)
 	}); err != nil {
 		return err
+	}
+	if e.store != nil {
+		defer e.store.Close()
 	}
 
 	// Used in tests.
@@ -133,9 +138,12 @@ type engine struct {
 	tgAuth        *tgauth.Middleware
 	tgInterceptor *tgInterceptor
 
+	store                store.Store
+
 	// configuration, read-only after initialization
 	addr                 string
 	botStatePath         string
+	databaseURL          string
 	dev                  bool
 	geminiKey            string
 	geminiProxySecretKey string
@@ -212,13 +220,23 @@ func (e *engine) doInit(ctx context.Context) error {
 		TTL:       authSessionTTL,
 	}
 
+	if e.databaseURL != "" {
+		s, err := store.NewPostgresStore(ctx, e.databaseURL, kvCacheTTL)
+		if err != nil {
+			return err
+		}
+		e.store = s
+	} else {
+		e.store = store.NewMemStore(ctx, kvCacheTTL)
+	}
+
 	opts := bot.Opts{
 		Token:      e.tgToken,
 		Secret:     e.tgSecret,
 		Owner:      e.tgOwner,
 		IsDev:      e.dev,
 		HTTPClient: e.httpc,
-		KVCache:    kvcache.Module(ctx, kvCacheTTL),
+		KVCache:    kvcache.Module(ctx, e.store),
 		Scrubber:   e.scrubber,
 		Logger:     e.logger.WithGroup("bot"),
 	}
