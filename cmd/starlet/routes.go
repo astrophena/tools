@@ -188,6 +188,9 @@ func (e *engine) initRoutes() {
 		dbg.HandleFunc("gemini-proxy-stats", "Gemini proxy stats", e.handleGeminiProxyStats)
 		e.mux.HandleFunc("/debug/gemini-proxy-stats-stream", e.handleGeminiProxyStatsStream)
 	}
+	if e.appTelemetry != nil {
+		e.mux.Handle("/app-telemetry", e.appTelemetry)
+	}
 
 	// Redirect from *.onrender.com to bot host.
 	if e.onRender && e.host != "" {
