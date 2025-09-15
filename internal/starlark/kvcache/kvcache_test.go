@@ -9,12 +9,13 @@ import (
 	"testing/synctest"
 	"time"
 
+	"go.astrophena.name/tools/internal/store"
 	"go.starlark.net/starlark"
 )
 
 func TestSetGet(t *testing.T) {
-	// Use a reasonable TTL that won't expire during the test.
-	mod := Module(t.Context(), time.Minute)
+	s := store.NewMemStore(t.Context(), time.Minute)
+	mod := Module(t.Context(), s)
 	thread := &starlark.Thread{Name: t.Name()}
 
 	key1 := starlark.String("mykey")
@@ -77,7 +78,8 @@ func TestSetGet(t *testing.T) {
 func TestTTL(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		ttl := 50 * time.Millisecond
-		mod := Module(t.Context(), ttl)
+		s := store.NewMemStore(t.Context(), ttl)
+		mod := Module(t.Context(), s)
 		thread := &starlark.Thread{Name: t.Name()}
 
 		key := starlark.String("expiring_key")
@@ -115,7 +117,8 @@ func TestTTL(t *testing.T) {
 func TestTTL_ResetOnGet(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		ttl := 100 * time.Millisecond
-		mod := Module(t.Context(), ttl)
+		s := store.NewMemStore(t.Context(), ttl)
+		mod := Module(t.Context(), s)
 		thread := &starlark.Thread{Name: "TestKVCache_TTL_ResetOnGet"}
 
 		key := starlark.String("reset_key")

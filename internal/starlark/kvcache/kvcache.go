@@ -6,25 +6,19 @@ package kvcache
 
 import (
 	"context"
-	_ "embed"
-	"time"
 
-	"go.astrophena.name/base/syncx"
+	"go.astrophena.name/tools/internal/store"
 
 	"go.starlark.net/starlark"
 	"go.starlark.net/starlarkstruct"
 )
 
 // Module returns a Starlark module that exposes key-value caching functionality.
-//
-// The ttl argument specifies the time-to-live duration. A cache entry will
-// expire if it hasn't been accessed (via get) or updated (via set) for
-// longer than this duration.
-func Module(ctx context.Context, ttl time.Duration) *starlarkstruct.Module {
+func Module(ctx context.Context, s store.Store) *starlarkstruct.Module {
 	m := &module{
-		ttl: ttl,
+		ctx:   ctx,
+		store: s,
 	}
-	go m.cleanup(ctx)
 	return &starlarkstruct.Module{
 		Name: "kvcache",
 		Members: starlark.StringDict{
@@ -35,59 +29,19 @@ func Module(ctx context.Context, ttl time.Duration) *starlarkstruct.Module {
 }
 
 type module struct {
-	ttl   time.Duration
-	cache syncx.Map[string, cacheEntry]
+	ctx   context.Context
+	store store.Store
 }
 
-func (m *module) cleanup(ctx context.Context) {
-	ticker := time.NewTicker(m.ttl)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-			m.cache.Range(func(key string, entry cacheEntry) bool {
-				if time.Since(entry.lastAccessed) > m.ttl {
-					m.cache.Delete(key)
-				}
-				return true
-			})
-		case <-ctx.Done():
-			return
-		}
-	}
-}
-
-// cacheEntry stores the cached value and its last access time.
-type cacheEntry struct {
-	value        starlark.Value
-	lastAccessed time.Time
-}
-
-func (m *module) get(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+func (m *module) get(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	var key string
 	if err := starlark.UnpackArgs(b.Name(), args, kwargs, "key", &key); err != nil {
 		return nil, err
 	}
-
-	entry, ok := m.cache.Load(key)
-	if !ok {
-		return starlark.None, nil
-	}
-
-	// Check if the entry has expired based on last access time.
-	if time.Since(entry.lastAccessed) > m.ttl {
-		m.cache.Delete(key)
-		return starlark.None, nil
-	}
-
-	entry.lastAccessed = time.Now()
-	m.cache.Store(key, entry)
-
-	return entry.value, nil
+	return m.store.Get(m.ctx, key)
 }
 
-func (m *module) set(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+func (m *module) set(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	var (
 		key   string
 		value starlark.Value
@@ -95,9 +49,5 @@ func (m *module) set(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tupl
 	if err := starlark.UnpackArgs(b.Name(), args, kwargs, "key", &key, "value", &value); err != nil {
 		return nil, err
 	}
-	m.cache.Store(key, cacheEntry{
-		value:        value,
-		lastAccessed: time.Now(),
-	})
-	return starlark.None, nil
+	return starlark.None, m.store.Set(m.ctx, key, value)
 }
