@@ -2,11 +2,14 @@
 // Use of this source code is governed by the ISC
 // license that can be found in the LICENSE.md file.
 
+// Package apptelemetry provides a simple telemetry collector for personal pet
+// projects.
 package apptelemetry
 
 import (
 	"context"
 	_ "embed"
+	"errors"
 	"net/http"
 	"time"
 
@@ -55,13 +58,42 @@ func (c *Collector) cleanup(ctx context.Context) {
 	}
 }
 
+// Event is a telemetry event.
 type Event struct {
-	SessionID  string `json:"session_id"`
-	AppName    string `json:"app_name"`
+	// SessionID is a unique identifier for a session.
+	SessionID string `json:"session_id"`
+	// AppName is the name of the application.
+	AppName string `json:"app_name"`
+	// AppVersion is the version of the application.
 	AppVersion string `json:"app_version"`
-	OS         string `json:"os"`
-	Type       string `json:"event_type"`
-	Payload    any    `json:"payload"`
+	// OS is the operating system the application is running on.
+	OS string `json:"os"`
+	// Type is the type of the event.
+	Type string `json:"event_type"`
+	// Payload is the event payload.
+	Payload any `json:"payload"`
+}
+
+func (e *Event) Validate() error {
+	if e.SessionID == "" {
+		return errors.New("session_id is required")
+	}
+	if e.AppName == "" {
+		return errors.New("app_name is required")
+	}
+	if e.AppVersion == "" {
+		return errors.New("app_version is required")
+	}
+	if e.OS == "" {
+		return errors.New("os is required")
+	}
+	if e.Type == "" {
+		return errors.New("event_type is required")
+	}
+	if e.Payload == nil {
+		return errors.New("payload is required")
+	}
+	return nil
 }
 
 type response struct {
