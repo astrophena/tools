@@ -75,6 +75,9 @@ type Event struct {
 }
 
 func (e *Event) Validate() error {
+	if e == nil {
+		return errors.New("event is required")
+	}
 	if e.SessionID == "" {
 		return errors.New("session_id is required")
 	}
@@ -96,10 +99,6 @@ func (e *Event) Validate() error {
 	return nil
 }
 
-type eventWrapper struct {
-	*Event
-}
-
 type response struct {
 	Status string `json:"status"`
 }
@@ -115,14 +114,7 @@ func (c *Collector) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	web.HandleJSON(func(r *http.Request, wrapper *eventWrapper) (*response, error) {
-		evt := wrapper.Event
-		if evt == nil {
-			return nil, errors.New("event is required")
-		}
-		if err := evt.Validate(); err != nil {
-			return nil, err
-		}
+	web.HandleJSON(func(r *http.Request, evt *Event) (*response, error) {
 		if _, err := c.conn.Exec(r.Context(), `
 INSERT INTO app_telemetry_events (session_id, app_name, app_version, os, event_type, payload, created_at)
 VALUES ($1, $2, $3, $4, $5, $6, NOW());

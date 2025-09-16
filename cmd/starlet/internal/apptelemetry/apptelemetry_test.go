@@ -96,14 +96,7 @@ func testCollector(t *testing.T, c *Collector) {
 
 	t.Run("NullPayload", func(t *testing.T) {
 		// This test case checks that the server handles a `null` JSON payload
-		// gracefully. Previously, this would cause a panic, because the JSON
-		// decoder would decode `null` into a `nil` `*Event` pointer, and the
-		// generic `web.HandleJSON` handler would then try to call the `Validate`
-		// method on this `nil` pointer, leading to a panic.
-		//
-		// The fix was to wrap the `*Event` in a struct that does not have a
-		// `Validate` method, and then manually validate the event inside the
-		// handler, after checking for `nil`.
+		// gracefully. Previously, this would cause a panic.
 		req := httptest.NewRequest(http.MethodPost, "/", bytes.NewBufferString("null"))
 		res := httptest.NewRecorder()
 
