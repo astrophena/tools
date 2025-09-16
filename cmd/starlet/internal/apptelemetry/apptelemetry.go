@@ -15,29 +15,29 @@ import (
 
 	"go.astrophena.name/base/web"
 
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 //go:embed schema.sql
 var schema string
 
 type Collector struct {
-	conn *pgx.Conn
+	pool *pgxpool.Pool
 	ttl  time.Duration
 }
 
 func NewCollector(ctx context.Context, databaseURL string, ttl time.Duration) (*Collector, error) {
-	conn, err := pgx.Connect(ctx, databaseURL)
+	pool, err := pgxpool.New(ctx, databaseURL)
 	if err != nil {
 		return nil, err
 	}
 
-	if _, err := conn.Exec(ctx, schema); err != nil {
+	if _, err := pool.Exec(ctx, schema); err != nil {
 		return nil, err
 	}
 
 	c := &Collector{
-		conn: conn,
+		pool: pool,
 		ttl:  ttl,
 	}
 	go c.cleanup(ctx)
@@ -51,7 +51,7 @@ func (c *Collector) cleanup(ctx context.Context) {
 	for {
 		select {
 		case <-ticker.C:
-			c.conn.Exec(ctx, `DELETE FROM app_telemetry_events WHERE created_at < NOW() - $1;`, c.ttl.String())
+			c.pool.Exec(ctx, `DELETE FROM app_telemetry_events WHERE created_at < NOW() - $1;`, c.ttl.String())
 		case <-ctx.Done():
 			return
 		}
@@ -115,7 +115,7 @@ func (c *Collector) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	web.HandleJSON(func(r *http.Request, evt *Event) (*response, error) {
-		if _, err := c.conn.Exec(r.Context(), `
+		if _, err := c.pool.Exec(r.Context(), `
 INSERT INTO app_telemetry_events (session_id, app_name, app_version, os, event_type, payload, created_at)
 VALUES ($1, $2, $3, $4, $5, $6, NOW());
 `, evt.SessionID, evt.AppName, evt.AppVersion, evt.OS, evt.Type, evt.Payload); err != nil {
