@@ -41,8 +41,8 @@ func TestPostgresStore(t *testing.T) {
 func testStore(t *testing.T, s Store) {
 	ctx := context.Background()
 
-	value1 := []byte("value1")
-	value2 := []byte("value2")
+	value1 := []byte(`"value1"`)
+	value2 := []byte(`123`)
 
 	// Test Set and Get.
 	if err := s.Set(ctx, "key1", value1); err != nil {
