@@ -37,60 +37,82 @@ func TestPostgresCollector(t *testing.T) {
 func testCollector(t *testing.T, c *Collector) {
 	t.Helper()
 
-	evt := &Event{
-		SessionID:  "test-session",
-		AppName:    "test-app",
-		AppVersion: "1.0.0",
-		OS:         "linux",
-		Type:       "test-event",
-		Payload:    map[string]any{"foo": "bar"},
-	}
+	t.Run("OK", func(t *testing.T) {
+		evt := &Event{
+			SessionID:  "test-session",
+			AppName:    "test-app",
+			AppVersion: "1.0.0",
+			OS:         "linux",
+			Type:       "test-event",
+			Payload:    map[string]any{"foo": "bar"},
+		}
 
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(evt); err != nil {
-		t.Fatal(err)
-	}
+		var buf bytes.Buffer
+		if err := json.NewEncoder(&buf).Encode(evt); err != nil {
+			t.Fatal(err)
+		}
 
-	req := httptest.NewRequest(http.MethodPost, "/", &buf)
-	res := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/", &buf)
+		res := httptest.NewRecorder()
 
-	c.ServeHTTP(res, req)
+		c.ServeHTTP(res, req)
 
-	if res.Code != http.StatusOK {
-		t.Errorf("got status %d, want %d", res.Code, http.StatusOK)
-	}
+		if res.Code != http.StatusOK {
+			t.Errorf("got status %d, want %d", res.Code, http.StatusOK)
+		}
 
-	// Check that the event was stored in the database.
-	var (
-		sessionID, appName, appVersion, os, eventType string
-		payload                                       map[string]any
-	)
-	if err := c.conn.QueryRow(context.Background(), `
-		SELECT session_id, app_name, app_version, os, event_type, payload
-		FROM app_telemetry_events
-		WHERE session_id = $1
-	`, evt.SessionID).Scan(&sessionID, &appName, &appVersion, &os, &eventType, &payload); err != nil {
-		t.Fatal(err)
-	}
+		// Check that the event was stored in the database.
+		var (
+			sessionID, appName, appVersion, os, eventType string
+			payload                                       map[string]any
+		)
+		if err := c.conn.QueryRow(context.Background(), `
+			SELECT session_id, app_name, app_version, os, event_type, payload
+			FROM app_telemetry_events
+			WHERE session_id = $1
+		`, evt.SessionID).Scan(&sessionID, &appName, &appVersion, &os, &eventType, &payload); err != nil {
+			t.Fatal(err)
+		}
 
-	if sessionID != evt.SessionID {
-		t.Errorf("got session_id %q, want %q", sessionID, evt.SessionID)
-	}
-	if appName != evt.AppName {
-		t.Errorf("got app_name %q, want %q", appName, evt.AppName)
-	}
-	if appVersion != evt.AppVersion {
-		t.Errorf("got app_version %q, want %q", appVersion, evt.AppVersion)
-	}
-	if os != evt.OS {
-		t.Errorf("got os %q, want %q", os, evt.OS)
-	}
-	if eventType != evt.Type {
-		t.Errorf("got event_type %q, want %q", eventType, evt.Type)
-	}
-	if payload["foo"] != "bar" {
-		t.Errorf("got payload %v, want %v", payload, evt.Payload)
-	}
+		if sessionID != evt.SessionID {
+			t.Errorf("got session_id %q, want %q", sessionID, evt.SessionID)
+		}
+		if appName != evt.AppName {
+			t.Errorf("got app_name %q, want %q", appName, evt.AppName)
+		}
+		if appVersion != evt.AppVersion {
+			t.Errorf("got app_version %q, want %q", appVersion, evt.AppVersion)
+		}
+		if os != evt.OS {
+			t.Errorf("got os %q, want %q", os, evt.OS)
+		}
+		if eventType != evt.Type {
+			t.Errorf("got event_type %q, want %q", eventType, evt.Type)
+		}
+		if payload["foo"] != "bar" {
+			t.Errorf("got payload %v, want %v", payload, evt.Payload)
+		}
+	})
+
+	t.Run("NullPayload", func(t *testing.T) {
+		// This test case checks that the server handles a `null` JSON payload
+		// gracefully. Previously, this would cause a panic, because the JSON
+		// decoder would decode `null` into a `nil` `*Event` pointer, and the
+		// generic `web.HandleJSON` handler would then try to call the `Validate`
+		// method on this `nil` pointer, leading to a panic.
+		//
+		// The fix was to wrap the `*Event` in a struct that does not have a
+		// `Validate` method, and then manually validate the event inside the
+		// handler, after checking for `nil`.
+		req := httptest.NewRequest(http.MethodPost, "/", bytes.NewBufferString("null"))
+		res := httptest.NewRecorder()
+
+		c.ServeHTTP(res, req)
+
+		if res.Code != http.StatusBadRequest {
+			t.Errorf("got status %d, want %d", res.Code, http.StatusBadRequest)
+		}
+	})
 }
 
 func TestEvent_Validate(t *testing.T) {
