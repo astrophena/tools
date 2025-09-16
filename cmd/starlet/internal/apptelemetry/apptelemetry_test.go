@@ -25,9 +25,9 @@ func TestPostgresCollector(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer c.conn.Close(context.Background())
+	defer c.pool.Close()
 
-	if _, err := c.conn.Exec(context.Background(), "DELETE FROM app_telemetry_events"); err != nil {
+	if _, err := c.pool.Exec(context.Background(), "DELETE FROM app_telemetry_events"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -66,7 +66,7 @@ func testCollector(t *testing.T, c *Collector) {
 			sessionID, appName, appVersion, os, eventType string
 			payload                                       map[string]any
 		)
-		if err := c.conn.QueryRow(context.Background(), `
+		if err := c.pool.QueryRow(context.Background(), `
 			SELECT session_id, app_name, app_version, os, event_type, payload
 			FROM app_telemetry_events
 			WHERE session_id = $1

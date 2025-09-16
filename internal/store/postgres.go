@@ -12,24 +12,25 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"go.starlark.net/starlark"
 	"go.starlark.net/starlarkstruct"
 )
 
 // PostgresStore is a PostgreSQL implementation of the Store interface.
 type PostgresStore struct {
-	conn *pgx.Conn
+	pool *pgxpool.Pool
 	ttl  time.Duration
 }
 
 // NewPostgresStore creates a new PostgresStore and connects to the database.
 func NewPostgresStore(ctx context.Context, databaseURL string, ttl time.Duration) (*PostgresStore, error) {
-	conn, err := pgx.Connect(ctx, databaseURL)
+	pool, err := pgxpool.New(ctx, databaseURL)
 	if err != nil {
 		return nil, err
 	}
 
-	if _, err := conn.Exec(ctx, `
+	if _, err := pool.Exec(ctx, `
 		CREATE TABLE IF NOT EXISTS kv (
 			key TEXT PRIMARY KEY,
 			value JSONB NOT NULL,
@@ -40,7 +41,7 @@ func NewPostgresStore(ctx context.Context, databaseURL string, ttl time.Duration
 	}
 
 	s := &PostgresStore{
-		conn: conn,
+		pool: pool,
 		ttl:  ttl,
 	}
 	go s.cleanup(ctx)
@@ -54,7 +55,7 @@ func (s *PostgresStore) cleanup(ctx context.Context) {
 	for {
 		select {
 		case <-ticker.C:
-			s.conn.Exec(ctx, `DELETE FROM kv WHERE last_accessed < NOW() - $1;`, s.ttl.String())
+			s.pool.Exec(ctx, `DELETE FROM kv WHERE last_accessed < NOW() - $1;`, s.ttl.String())
 		case <-ctx.Done():
 			return
 		}
@@ -64,7 +65,7 @@ func (s *PostgresStore) cleanup(ctx context.Context) {
 // Get retrieves a value for a given key.
 func (s *PostgresStore) Get(ctx context.Context, key string) (starlark.Value, error) {
 	var data []byte
-	if err := s.conn.QueryRow(ctx, `
+	if err := s.pool.QueryRow(ctx, `
 		UPDATE kv SET last_accessed = NOW() WHERE key = $1
 		RETURNING value;
 	`, key).Scan(&data); err != nil {
@@ -83,7 +84,7 @@ func (s *PostgresStore) Set(ctx context.Context, key string, value starlark.Valu
 		return err
 	}
 
-	_, err = s.conn.Exec(ctx, `
+	_, err = s.pool.Exec(ctx, `
 		INSERT INTO kv (key, value, last_accessed)
 		VALUES ($1, $2, NOW())
 		ON CONFLICT (key) DO UPDATE
@@ -94,7 +95,8 @@ func (s *PostgresStore) Set(ctx context.Context, key string, value starlark.Valu
 
 // Close closes the database connection.
 func (s *PostgresStore) Close() error {
-	return s.conn.Close(context.Background())
+	s.pool.Close()
+	return nil
 }
 
 func starlarkToJSON(v starlark.Value) ([]byte, error) {

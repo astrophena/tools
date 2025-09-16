@@ -33,7 +33,7 @@ func TestPostgresStore(t *testing.T) {
 	defer s.Close()
 
 	// Clean up the table before running the test.
-	if _, err := s.conn.Exec(ctx, "DELETE FROM kv"); err != nil {
+	if _, err := s.pool.Exec(ctx, "DELETE FROM kv"); err != nil {
 		t.Fatal(err)
 	}
 
