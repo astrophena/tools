@@ -9,8 +9,6 @@ import (
 	"time"
 
 	"go.astrophena.name/base/syncx"
-
-	"go.starlark.net/starlark"
 )
 
 // MemStore is an in-memory implementation of the Store interface.
@@ -29,7 +27,7 @@ func NewMemStore(ctx context.Context, ttl time.Duration) *MemStore {
 }
 
 type cacheEntry struct {
-	value        starlark.Value
+	value        []byte
 	lastAccessed time.Time
 }
 
@@ -53,27 +51,30 @@ func (s *MemStore) cleanup(ctx context.Context) {
 }
 
 // Get retrieves a value for a given key.
-func (s *MemStore) Get(_ context.Context, key string) (starlark.Value, error) {
+func (s *MemStore) Get(_ context.Context, key string) ([]byte, error) {
 	entry, ok := s.cache.Load(key)
 	if !ok {
-		return starlark.None, nil
+		return nil, nil
 	}
 
 	if time.Since(entry.lastAccessed) > s.ttl {
 		s.cache.Delete(key)
-		return starlark.None, nil
+		return nil, nil
 	}
 
 	entry.lastAccessed = time.Now()
 	s.cache.Store(key, entry)
 
-	return entry.value, nil
+	// Return a copy to prevent the caller from mutating the cache.
+	return append([]byte(nil), entry.value...), nil
 }
 
 // Set stores a value for a given key.
-func (s *MemStore) Set(_ context.Context, key string, value starlark.Value) error {
+func (s *MemStore) Set(_ context.Context, key string, value []byte) error {
+	// Store a copy to prevent the caller from mutating the cache.
+	valueCopy := append([]byte(nil), value...)
 	s.cache.Store(key, cacheEntry{
-		value:        value,
+		value:        valueCopy,
 		lastAccessed: time.Now(),
 	})
 	return nil

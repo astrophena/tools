@@ -7,16 +7,15 @@ package store
 
 import (
 	"context"
-
-	"go.starlark.net/starlark"
 )
 
 // Store is a generic interface for a key-value store.
 type Store interface {
 	// Get retrieves a value for a given key.
-	Get(ctx context.Context, key string) (starlark.Value, error)
+	// It must return (nil, nil) if the key is not found.
+	Get(ctx context.Context, key string) ([]byte, error)
 	// Set stores a value for a given key.
-	Set(ctx context.Context, key string, value starlark.Value) error
+	Set(ctx context.Context, key string, value []byte) error
 	// Close closes the store and releases any resources.
 	Close() error
 }

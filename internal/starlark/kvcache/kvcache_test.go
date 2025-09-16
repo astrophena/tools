@@ -11,6 +11,7 @@ import (
 
 	"go.astrophena.name/tools/internal/store"
 	"go.starlark.net/starlark"
+	"go.starlark.net/starlarkstruct"
 )
 
 func TestSetGet(t *testing.T) {
@@ -167,4 +168,44 @@ func TestTTL_ResetOnGet(t *testing.T) {
 			t.Errorf("get(%q) finally = %v, want None (expected eventual expiry)", key, got)
 		}
 	})
+}
+
+func TestSerialization(t *testing.T) {
+	values := []starlark.Value{
+		starlark.None,
+		starlark.Bool(true),
+		starlark.MakeInt(123),
+		starlark.Float(123.456),
+		starlark.String("hello"),
+		starlark.NewList([]starlark.Value{starlark.String("a"), starlark.MakeInt(1)}),
+		starlark.Tuple{starlark.String("b"), starlark.MakeInt(2)},
+		func() *starlark.Dict {
+			d := starlark.NewDict(1)
+			d.SetKey(starlark.String("c"), starlark.MakeInt(3))
+			return d
+		}(),
+		starlarkstruct.FromStringDict(starlark.String("struct"), starlark.StringDict{
+			"d": starlark.MakeInt(4),
+		}),
+	}
+
+	for _, v := range values {
+		t.Run(v.Type(), func(t *testing.T) {
+			data, err := starlarkToJSON(v)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, err := jsonToStarlark(data)
+			if err != nil {
+				t.Fatal(err)
+			}
+			eq, err := starlark.Equal(v, got)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !eq {
+				t.Errorf("got %s, want %s", got.String(), v.String())
+			}
+		})
+	}
 }

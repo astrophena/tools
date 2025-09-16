@@ -5,13 +5,11 @@
 package store
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"testing"
 	"time"
-
-	"go.starlark.net/starlark"
-	"go.starlark.net/starlarkstruct"
 )
 
 func TestMemStore(t *testing.T) {
@@ -43,11 +41,14 @@ func TestPostgresStore(t *testing.T) {
 func testStore(t *testing.T, s Store) {
 	ctx := context.Background()
 
+	value1 := []byte(`"value1"`)
+	value2 := []byte(`123`)
+
 	// Test Set and Get.
-	if err := s.Set(ctx, "key1", starlark.String("value1")); err != nil {
+	if err := s.Set(ctx, "key1", value1); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Set(ctx, "key2", starlark.MakeInt(123)); err != nil {
+	if err := s.Set(ctx, "key2", value2); err != nil {
 		t.Fatal(err)
 	}
 
@@ -55,16 +56,16 @@ func testStore(t *testing.T, s Store) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if v.(starlark.String) != "value1" {
-		t.Errorf("got %q, want %q", v, "value1")
+	if !bytes.Equal(v, value1) {
+		t.Errorf("got %q, want %q", v, value1)
 	}
 
 	v, err = s.Get(ctx, "key2")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if v.(starlark.Int).String() != "123" {
-		t.Errorf("got %q, want %q", v, "123")
+	if !bytes.Equal(v, value2) {
+		t.Errorf("got %q, want %q", v, value2)
 	}
 
 	// Test Get non-existent key.
@@ -72,47 +73,7 @@ func testStore(t *testing.T, s Store) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if v != starlark.None {
-		t.Errorf("got %q, want None", v)
-	}
-}
-
-func TestSerialization(t *testing.T) {
-	values := []starlark.Value{
-		starlark.None,
-		starlark.Bool(true),
-		starlark.MakeInt(123),
-		starlark.Float(123.456),
-		starlark.String("hello"),
-		starlark.NewList([]starlark.Value{starlark.String("a"), starlark.MakeInt(1)}),
-		starlark.Tuple{starlark.String("b"), starlark.MakeInt(2)},
-		func() *starlark.Dict {
-			d := starlark.NewDict(1)
-			d.SetKey(starlark.String("c"), starlark.MakeInt(3))
-			return d
-		}(),
-		starlarkstruct.FromStringDict(starlark.String("struct"), starlark.StringDict{
-			"d": starlark.MakeInt(4),
-		}),
-	}
-
-	for _, v := range values {
-		t.Run(v.Type(), func(t *testing.T) {
-			data, err := starlarkToJSON(v)
-			if err != nil {
-				t.Fatal(err)
-			}
-			got, err := jsonToStarlark(data)
-			if err != nil {
-				t.Fatal(err)
-			}
-			eq, err := starlark.Equal(v, got)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if !eq {
-				t.Errorf("got %s, want %s", got.String(), v.String())
-			}
-		})
+	if v != nil {
+		t.Errorf("got %q, want nil", v)
 	}
 }
