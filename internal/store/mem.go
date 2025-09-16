@@ -22,7 +22,8 @@ func NewMemStore(ctx context.Context, ttl time.Duration) *MemStore {
 	s := &MemStore{
 		ttl: ttl,
 	}
-	go s.cleanup(ctx)
+	s.cleanup(ctx, true)
+	go s.cleanup(ctx, false)
 	return s
 }
 
@@ -31,23 +32,34 @@ type cacheEntry struct {
 	lastAccessed time.Time
 }
 
-func (s *MemStore) cleanup(ctx context.Context) {
-	ticker := time.NewTicker(s.ttl)
-	defer ticker.Stop()
+func (s *MemStore) cleanup(ctx context.Context, firstRun bool) {
+	if firstRun {
+		s.performCleanup()
+		return
+	}
+
+	sleepDuration := s.ttl / 2
+	if sleepDuration > 24*time.Hour {
+		sleepDuration = 24 * time.Hour
+	}
 
 	for {
 		select {
-		case <-ticker.C:
-			s.cache.Range(func(key string, entry cacheEntry) bool {
-				if time.Since(entry.lastAccessed) > s.ttl {
-					s.cache.Delete(key)
-				}
-				return true
-			})
+		case <-time.After(sleepDuration):
+			s.performCleanup()
 		case <-ctx.Done():
 			return
 		}
 	}
+}
+
+func (s *MemStore) performCleanup() {
+	s.cache.Range(func(key string, entry cacheEntry) bool {
+		if time.Since(entry.lastAccessed) > s.ttl {
+			s.cache.Delete(key)
+		}
+		return true
+	})
 }
 
 // Get retrieves a value for a given key.

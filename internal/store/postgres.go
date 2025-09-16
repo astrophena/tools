@@ -40,22 +40,34 @@ func NewPostgresStore(ctx context.Context, databaseURL string, ttl time.Duration
 		pool: pool,
 		ttl:  ttl,
 	}
-	go s.cleanup(ctx)
+	s.cleanup(ctx, true)
+	go s.cleanup(ctx, false)
 	return s, nil
 }
 
-func (s *PostgresStore) cleanup(ctx context.Context) {
-	ticker := time.NewTicker(s.ttl)
-	defer ticker.Stop()
+func (s *PostgresStore) cleanup(ctx context.Context, firstRun bool) {
+	if firstRun {
+		s.performCleanup(ctx)
+		return
+	}
+
+	sleepDuration := s.ttl / 2
+	if sleepDuration > 24*time.Hour {
+		sleepDuration = 24 * time.Hour
+	}
 
 	for {
 		select {
-		case <-ticker.C:
-			s.pool.Exec(ctx, `DELETE FROM kv WHERE last_accessed < NOW() - $1;`, s.ttl.String())
+		case <-time.After(sleepDuration):
+			s.performCleanup(ctx)
 		case <-ctx.Done():
 			return
 		}
 	}
+}
+
+func (s *PostgresStore) performCleanup(ctx context.Context) {
+	s.pool.Exec(ctx, `DELETE FROM kv WHERE last_accessed < NOW() - $1;`, s.ttl.String())
 }
 
 // Get retrieves a value for a given key.
