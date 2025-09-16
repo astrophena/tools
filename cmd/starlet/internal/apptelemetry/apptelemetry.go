@@ -75,6 +75,9 @@ type Event struct {
 }
 
 func (e *Event) Validate() error {
+	if e == nil {
+		return errors.New("event is required")
+	}
 	if e.SessionID == "" {
 		return errors.New("session_id is required")
 	}
