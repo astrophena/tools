@@ -32,7 +32,8 @@ Follow the Go style for commit messages.
 
 ## Testing and Verification
 
-Before submitting your changes, run the pre-commit checks from the repository root:
+Before submitting your changes, run the pre-commit checks from the repository
+root:
 
 ```sh
 $ go tool pre-commit

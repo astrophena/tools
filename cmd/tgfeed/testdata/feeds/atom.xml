@@ -10,7 +10,8 @@
     <title>Experimenting with intersections in Cities: Skylines</title>
     <updated>2024-03-10T00:00:00Z</updated>
     <id>tag:astrophena.name,2024-03-10:/cs</id>
-    <content type="html">&lt;figure&gt;&#xA;  &lt;img alt=&#34;First intersection.&#34; src=&#34;https://astrophena.name/images/cs/intersection.webp&#34; loading=&#34;lazy&#34;/&gt;&#xA;  &lt;figcaption&gt;First intersection.&lt;/figcaption&gt;&#xA;&lt;/figure&gt;&#xA;&#xA;&lt;figure&gt;&#xA;  &lt;img alt=&#34;Second intersection.&#34; src=&#34;https://astrophena.name/images/cs/intersection2.webp&#34; loading=&#34;lazy&#34;/&gt;&#xA;  &lt;figcaption&gt;Second intersection.&lt;/figcaption&gt;&#xA;&lt;/figure&gt;&#xA;</content>
+    <content type="html"
+    >&lt;figure&gt;&#xA;  &lt;img alt=&#34;First intersection.&#34; src=&#34;https://astrophena.name/images/cs/intersection.webp&#34; loading=&#34;lazy&#34;/&gt;&#xA;  &lt;figcaption&gt;First intersection.&lt;/figcaption&gt;&#xA;&lt;/figure&gt;&#xA;&#xA;&lt;figure&gt;&#xA;  &lt;img alt=&#34;Second intersection.&#34; src=&#34;https://astrophena.name/images/cs/intersection2.webp&#34; loading=&#34;lazy&#34;/&gt;&#xA;  &lt;figcaption&gt;Second intersection.&lt;/figcaption&gt;&#xA;&lt;/figure&gt;&#xA;</content>
     <link href="https://astrophena.name/cs" rel="alternate"></link>
     <author>
       <name>Ilya Mateyko</name>
@@ -20,7 +21,8 @@
     <title>Hello, world!</title>
     <updated>2022-02-14T00:00:00Z</updated>
     <id>tag:astrophena.name,2022-02-14:/hello</id>
-    <content type="html">&lt;p&gt;This is the first post on &lt;a href=&#34;https://astrophena.name&#34;&gt;astrophena.name&lt;/a&gt;.&lt;/p&gt;&#xA;&#xA;&lt;p&gt;I finally fleshed out my new&#xA;&lt;a href=&#34;https://go.astrophena.name/site&#34;&gt;static site generator&lt;/a&gt; and it&amp;rsquo;s time to write&#xA;something.&lt;/p&gt;&#xA;</content>
+    <content type="html"
+    >&lt;p&gt;This is the first post on &lt;a href=&#34;https://astrophena.name&#34;&gt;astrophena.name&lt;/a&gt;.&lt;/p&gt;&#xA;&#xA;&lt;p&gt;I finally fleshed out my new&#xA;&lt;a href=&#34;https://go.astrophena.name/site&#34;&gt;static site generator&lt;/a&gt; and it&amp;rsquo;s time to write&#xA;something.&lt;/p&gt;&#xA;</content>
     <link href="https://astrophena.name/hello" rel="alternate"></link>
     <summary type="html">This is the first post on astrophena.name.</summary>
     <author>

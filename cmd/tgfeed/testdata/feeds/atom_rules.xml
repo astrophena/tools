@@ -1,16 +1,20 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <feed xml:lang="en-US">
   <title>Example Feed</title>
-  <link href="https://example.com/feed.xml" rel="self" type="application/rss+xml"/>
+  <link
+    href="https://example.com/feed.xml"
+    rel="self"
+    type="application/rss+xml"
+  />
   <entry>
     <title>Block this item</title>
     <updated>2024-03-10T00:00:00Z</updated>
-    <link href="https://example.com/block"/>
+    <link href="https://example.com/block" />
   </entry>
   <entry>
     <title>Keep this item</title>
     <updated>2024-03-10T00:00:00Z</updated>
-    <link href="https://example.com/keep"/>
+    <link href="https://example.com/keep" />
   </entry>
   <entry>
     <title>Item with extensions</title>
@@ -20,8 +24,8 @@
       <media:title>Item with extensions</media:title>
       <media:description>Some description</media:description>
       <media:community>
-        <media:starRating count="512314" average="5.00" min="1" max="5"/>
-        <media:statistics views="12887626"/>
+        <media:starRating count="512314" average="5.00" min="1" max="5" />
+        <media:statistics views="12887626" />
       </media:community>
     </media:group>
   </entry>
