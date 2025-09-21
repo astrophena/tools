@@ -60,7 +60,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const data = JSON.parse(event.data);
 
     const callData = JSON.stringify(data.body, null, 2);
-    apiCalls.textContent += `[${new Date().toLocaleTimeString()}] ${data.method} ${data.url}\n${callData}\n\n`;
+    apiCalls.textContent += `[${
+      new Date().toLocaleTimeString()
+    }] ${data.method} ${data.url}\n${callData}\n\n`;
     apiCalls.scrollTop = apiCalls.scrollHeight;
 
     // If it's a sendMessage call, display it as a bot message.

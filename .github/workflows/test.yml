@@ -1,19 +1,19 @@
-name: 'Test'
+name: "Test"
 on:
   push:
-    branches: ['master']
+    branches: ["master"]
   pull_request:
 jobs:
   test:
-    name: 'Test'
-    runs-on: 'ubuntu-latest'
+    name: "Test"
+    runs-on: "ubuntu-latest"
     services:
       postgres:
-        image: 'postgres:alpine'
+        image: "postgres:alpine"
         env:
-          POSTGRES_DB: 'postgres'
-          POSTGRES_PASSWORD: 'postgres'
-          POSTGRES_USER: 'postgres'
+          POSTGRES_DB: "postgres"
+          POSTGRES_PASSWORD: "postgres"
+          POSTGRES_USER: "postgres"
         # Set health checks to wait until postgres has started.
         options: >-
           --health-cmd pg_isready
@@ -21,23 +21,23 @@ jobs:
           --health-timeout 5s
           --health-retries 5
         ports:
-          - '5432:5432'
+          - "5432:5432"
     steps:
-      - name: 'Check out'
-        uses: 'actions/checkout@v5'
-      - name: 'Set up Go'
-        uses: 'actions/setup-go@v6'
+      - name: "Check out"
+        uses: "actions/checkout@v5"
+      - name: "Set up Go"
+        uses: "actions/setup-go@v6"
         with:
-          go-version-file: 'go.mod'
-      - name: 'Set up ruff'
-        run: 'pip install ruff'
-      - name: 'Test'
+          go-version-file: "go.mod"
+      - name: "Set up ruff"
+        run: "pip install ruff"
+      - name: "Test"
         env:
-          DATABASE_URL: 'postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable'
-        run: 'go tool pre-commit'
-      - name: 'Trigger vanity deploy'
+          DATABASE_URL: "postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable"
+        run: "go tool pre-commit"
+      - name: "Trigger vanity deploy"
         if: "github.ref == 'refs/heads/master'"
         env:
-          VANITY_DEPLOY_HOOK: '${{ secrets.VANITY_DEPLOY_HOOK }}'
+          VANITY_DEPLOY_HOOK: "${{ secrets.VANITY_DEPLOY_HOOK }}"
         run: |
           curl "$VANITY_DEPLOY_HOOK"

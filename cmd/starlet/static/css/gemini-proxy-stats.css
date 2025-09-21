@@ -24,7 +24,7 @@ tbody tr:nth-child(even) {
 }
 
 td:nth-child(1), /* ID */
-td:nth-child(5)  /* Last Used */ {
+td:nth-child(5) /* Last Used */ {
   font-family: var(--mono-font);
   color: var(--text-light);
 }
