@@ -15,9 +15,6 @@ into a Starlark dictionary, and invokes the handle function defined in the
 user's bot.star script. Errors during execution are caught and reported back
 to the bot owner via Telegram, using a customizable error template.
 
-Starlet is designed for deployment on platforms like Render and includes features
-like self-pinging to prevent idling on free tiers.
-
 # Usage
 
 	$ starlet [directory]
@@ -120,7 +117,6 @@ environment variable to sign and verify tokens. A new token can be generated on
 the /debug/gemini-token page.
 
 [Starlark]: https://starlark-lang.org/
-[Render]: https://render.com/
 */
 package main
 

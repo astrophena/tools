@@ -9,9 +9,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
-	"time"
 
-	"go.astrophena.name/base/cli"
 	"go.astrophena.name/base/testutil"
 	"go.astrophena.name/base/web"
 )
@@ -69,30 +67,4 @@ func TestSetWebhook(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestRenderSelfPing(t *testing.T) {
-	recv := make(chan struct{})
-
-	e := testEngine(t, testMux(t, map[string]http.HandlerFunc{
-		"GET bot.astrophena.name/health": func(w http.ResponseWriter, r *http.Request) {
-			testutil.AssertEqual(t, r.URL.Scheme, "https")
-			web.RespondJSON(w, web.HealthResponse{OK: true})
-			recv <- struct{}{}
-		},
-	}))
-
-	env := &cli.Env{
-		Getenv: func(key string) string {
-			if key != "RENDER_EXTERNAL_URL" {
-				t.Fatalf("selfPing tried to read environment variable %s", key)
-			}
-			return "https://bot.astrophena.name"
-		},
-		Stderr: t.Output(),
-	}
-
-	go e.renderSelfPing(cli.WithEnv(t.Context(), env), 10*time.Millisecond)
-
-	<-recv
 }
