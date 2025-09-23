@@ -13,6 +13,7 @@ import (
 	"errors"
 	"io/fs"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -57,15 +58,11 @@ func (e *engine) Run(ctx context.Context) error {
 	e.ghToken = cmp.Or(e.ghToken, env.Getenv("GH_TOKEN"))
 	e.gistID = cmp.Or(e.gistID, env.Getenv("GIST_ID"))
 	e.host = cmp.Or(e.host, env.Getenv("HOST"))
-	e.onRender = env.Getenv("RENDER") == "true"
 	e.pingURL = cmp.Or(e.pingURL, env.Getenv("PING_URL"))
 	e.reloadToken = cmp.Or(e.reloadToken, env.Getenv("RELOAD_TOKEN"))
 	e.tgOwner = cmp.Or(e.tgOwner, parseInt(env.Getenv("TG_OWNER")))
 	e.tgSecret = cmp.Or(e.tgSecret, env.Getenv("TG_SECRET"))
 	e.tgToken = cmp.Or(e.tgToken, env.Getenv("TG_TOKEN"))
-	if e.onRender {
-		e.dev = false
-	}
 	if len(env.Args) == 1 {
 		e.dev = true
 		e.botStatePath = env.Args[0]
@@ -88,16 +85,6 @@ func (e *engine) Run(ctx context.Context) error {
 
 	serverLogger := e.logger.WithGroup("server")
 
-	// If running on Render, try to look up port to listen on and start goroutine that prevents Starlet from sleeping.
-	if e.onRender {
-		serverLogger.Info("running on Render")
-		// https://docs.render.com/environment-variables#all-runtimes-1
-		if port := env.Getenv("PORT"); port != "" {
-			e.srv.Addr = ":" + port
-		}
-		go e.renderSelfPing(ctx, selfPingInterval)
-	}
-
 	if e.pingURL != "" {
 		go e.ping(ctx, selfPingInterval)
 	}
@@ -111,6 +98,24 @@ func (e *engine) Run(ctx context.Context) error {
 	} else {
 		go e.watch(ctx)
 		serverLogger.Info("running in development mode")
+	}
+
+	sdNotify(ctx, sdNotifyReady)
+	interval := watchdogInterval(env)
+	if interval > 0 {
+		go func() {
+			ticker := time.NewTicker(interval)
+			defer ticker.Stop()
+
+			for {
+				select {
+				case <-ticker.C:
+					sdNotify(ctx, sdNotifyWatchdog)
+				case <-ctx.Done():
+					return
+				}
+			}
+		}()
 	}
 
 	return e.srv.ListenAndServe(ctx)
@@ -152,7 +157,6 @@ type engine struct {
 	gistID               string
 	host                 string
 	httpc                *http.Client
-	onRender             bool
 	pingURL              string
 	reloadToken          string
 	tgOwner              int64
@@ -466,5 +470,52 @@ func (e *engine) watch(ctx context.Context) {
 
 			events = nil
 		}
+	}
+}
+
+const (
+	// sdNotifyReady tells the service manager that service startup is
+	// finished, or the service finished loading its configuration.
+	// https://www.freedesktop.org/software/systemd/man/sd_notify.html#READY=1
+	sdNotifyReady = "READY=1"
+
+	// sdNotifyWatchdog the service manager to update the watchdog timestamp.
+	// https://www.freedesktop.org/software/systemd/man/sd_notify.html#WATCHDOG=1
+	sdNotifyWatchdog = "WATCHDOG=1"
+)
+
+// watchdogInterval returns the watchdog interval configured in systemd unit file.
+func watchdogInterval(env *cli.Env) time.Duration {
+	s, err := strconv.Atoi(os.Getenv("WATCHDOG_USEC"))
+	if err != nil {
+		return 0
+	}
+	if s <= 0 {
+		return 0
+	}
+	return time.Duration(s) * time.Microsecond
+}
+
+// sdNotify sends a message to systemd using the sd_notify protocol.
+// See https://www.freedesktop.org/software/systemd/man/sd_notify.html.
+func sdNotify(ctx context.Context, state string) {
+	addr := &net.UnixAddr{
+		Net:  "unixgram",
+		Name: cli.GetEnv(ctx).Getenv("NOTIFY_SOCKET"),
+	}
+
+	if addr.Name == "" {
+		// We're not running under systemd (NOTIFY_SOCKET is not set).
+		return
+	}
+
+	conn, err := net.DialUnix(addr.Net, nil, addr)
+	if err != nil {
+		logger.Error(ctx, "sdnotify failed", slog.String("state", state), slog.Any("err", err))
+	}
+	defer conn.Close()
+
+	if _, err = conn.Write([]byte(state)); err != nil {
+		logger.Error(ctx, "sdnotify failed", slog.String("state", state), slog.Any("err", err))
 	}
 }

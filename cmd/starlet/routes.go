@@ -16,7 +16,6 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"os"
 	"path"
 	"strconv"
 	"strings"
@@ -190,16 +189,6 @@ func (e *engine) initRoutes() {
 	}
 	if e.appTelemetry != nil {
 		e.mux.Handle("/app-telemetry", e.appTelemetry)
-	}
-
-	// Redirect from *.onrender.com to bot host.
-	if e.onRender && e.host != "" {
-		if onRenderHost := os.Getenv("RENDER_EXTERNAL_HOSTNAME"); onRenderHost != "" {
-			e.mux.HandleFunc(onRenderHost+"/", func(w http.ResponseWriter, r *http.Request) {
-				targetURL := "https://" + e.host + r.URL.Path
-				http.Redirect(w, r, targetURL, http.StatusMovedPermanently)
-			})
-		}
 	}
 }
 
