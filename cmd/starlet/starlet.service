@@ -1,0 +1,120 @@
+[Unit]
+Description=starlet
+# Ensure the network is fully available before starting the bot.
+Wants=network-online.target
+# Start after the network and PostgreSQL are ready.
+After=network-online.target postgresql.service
+
+[Service]
+Type=notify
+ExecStart=/usr/local/bin/starlet
+EnvironmentFile=/etc/starlet.conf
+
+# Run as a transient, unprivileged user.
+User=starlet
+DynamicUser=yes
+
+# Automatically restart Starlet if it crashes.
+Restart=always
+RestartSec=5
+
+# Enable watchdog to monitor service health.
+WatchdogSec=60s
+WatchdogSignal=SIGKILL
+
+# Allocate a directory at /run/starlet for Unix sockets.
+RuntimeDirectory=starlet
+
+#
+# Sandboxing and Hardening
+#
+
+# Drop all Linux capabilities. This is safe as starlet binds to a
+# non-privileged port (>1024) and doesn't need special privileges.
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+#
+# Filesystem Isolation (Deny-by-default approach)
+#
+
+# Make kernel and system files read-only (/usr, /boot, /etc, /var).
+ProtectSystem=full
+# Provide a private, empty /tmp and /var/tmp.
+PrivateTmp=yes
+# Provide a private /proc and hide other users' processes.
+ProtectProc=invisible
+# Make home directories inaccessible.
+ProtectHome=yes
+# Make most device nodes inaccessible.
+PrivateDevices=yes
+
+# Make common, non-essential directories completely inaccessible.
+InaccessiblePaths=/boot /mnt /opt /root /srv
+
+# Explicitly allow read-only access to files required for networking.
+ReadOnlyPaths=/etc/resolv.conf /etc/ssl/certs/
+
+# Explicitly allow read-write access to the PostgreSQL socket directory.
+# This allows the client to connect via the Unix socket.
+ReadWritePaths=/run/postgresql
+
+#
+# Privilege, Namespace, and Kernel Hardening
+#
+
+# Create a private user namespace to isolate user/group IDs.
+PrivateUsers=yes
+# Ensure the service can never gain new privileges (e.g., via setuid).
+NoNewPrivileges=yes
+# Prohibit access to any kind of namespacing.
+RestrictNamespaces=yes
+# Make cgroup file system hierarchy inaccessible.
+ProtectControlGroups=yes
+# Deny kernel module loading.
+ProtectKernelModules=yes
+# Make kernel variables (e.g. /proc/sys, /sys) read-only.
+ProtectKernelTunables=yes
+# Deny hostname changing.
+ProtectHostname=yes
+# Deny realtime scheduling.
+RestrictRealtime=yes
+# Deny access to the kernel log ring buffer.
+ProtectKernelLogs=yes
+# Deny setting the hardware or system clock.
+ProtectClock=yes
+# Remove access to legacy SysV IPC.
+RemoveIPC=yes
+# Use a private kernel keyring.
+KeyringMode=private
+# Set a restrictive umask (files 0700, dirs 0600).
+UMask=0077
+
+#
+# System Call and Memory Protection
+#
+
+# Deny kernel execution domain changing.
+LockPersonality=yes
+# Deny memory mappings that are both writable and executable (W^X).
+MemoryDenyWriteExecute=yes
+# Filter dangerous system calls. This denylist blocks groups of syscalls
+# not needed by the service.
+SystemCallArchitectures=native
+SystemCallFilter=~@clock @cpu-emulation @debug @module @mount @obsolete @privileged @raw-io @reboot @resources @swap
+
+#
+# Resource Control
+#
+
+# Make the service a more likely candidate for the OOM killer.
+OOMScoreAdjust=500
+# Limit the number of file descriptors.
+LimitNOFILE=1024:524288
+# Limit the number of processes/threads.
+LimitNPROC=100
+# Prevent the process from locking memory into RAM.
+LimitMEMLOCK=0
+
+[Install]
+WantedBy=network-online.target
