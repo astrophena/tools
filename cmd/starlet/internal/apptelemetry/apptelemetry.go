@@ -7,12 +7,15 @@
 package apptelemetry
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	_ "embed"
+	"encoding/csv"
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 	"time"
 
 	"go.astrophena.name/base/web"
@@ -121,6 +124,70 @@ type response struct {
 	Status string `json:"status"`
 }
 
+func (c *Collector) ExportHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		rows, err := c.db.QueryContext(r.Context(), `
+			SELECT id, session_id, app_name, app_version, os, event_type, payload, created_at
+			FROM app_telemetry_events
+			ORDER BY created_at DESC;
+		`)
+		if err != nil {
+			web.RespondError(w, r, err)
+			return
+		}
+		defer rows.Close()
+
+		var buf bytes.Buffer
+		csvDest := csv.NewWriter(&buf)
+
+		header := []string{"id", "session_id", "app_name", "app_version", "os", "event_type", "payload", "created_at"}
+		if err := csvDest.Write(header); err != nil {
+			web.RespondError(w, r, err)
+			return
+		}
+
+		for rows.Next() {
+			var (
+				id                                                                int
+				sessionID, appName, appVersion, os, eventType, payload, createdAt string
+			)
+			if err := rows.Scan(&id, &sessionID, &appName, &appVersion, &os, &eventType, &payload, &createdAt); err != nil {
+				// Stop processing as the stream might be corrupted.
+				web.RespondError(w, r, err)
+				return
+			}
+			record := []string{
+				strconv.Itoa(id),
+				sessionID,
+				appName,
+				appVersion,
+				os,
+				eventType,
+				payload,
+				createdAt,
+			}
+			if err := csvDest.Write(record); err != nil {
+				web.RespondError(w, r, err)
+				return
+			}
+		}
+		if err := rows.Err(); err != nil {
+			web.RespondError(w, r, err)
+			return
+		}
+
+		csvDest.Flush()
+		if err := csvDest.Error(); err != nil {
+			web.RespondError(w, r, err)
+			return
+		}
+
+		w.Header().Set("Content-Type", "text/csv")
+		w.Header().Set("Content-Disposition", `attachment; filename="apptelemetry_export.csv"`)
+		buf.WriteTo(w)
+	}
+}
+
 func (c *Collector) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Handle preflight request.
 	w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -129,6 +196,11 @@ func (c *Collector) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Max-Age", "1728000")
 	w.Header().Set("Access-Control-Allow-Credentials", "true")
 	if r.Method == http.MethodOptions {
+		return
+	}
+
+	if r.Method != http.MethodPost {
+		web.RespondJSONError(w, r, web.StatusErr(http.StatusMethodNotAllowed))
 		return
 	}
 

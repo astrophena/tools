@@ -7,16 +7,21 @@ package apptelemetry
 import (
 	"bytes"
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
+	"go.astrophena.name/base/testutil"
+
 	_ "github.com/tailscale/sqlite"
 )
 
 func TestSQLiteCollector(t *testing.T) {
+	t.Parallel()
+
 	c, err := NewCollector(t.Context(), "file:/apptelemetry-test?vfs=memdb", time.Minute)
 	if err != nil {
 		t.Fatal(err)
@@ -33,6 +38,8 @@ func testCollector(t *testing.T, c *Collector) {
 	t.Helper()
 
 	t.Run("OK", func(t *testing.T) {
+		t.Parallel()
+
 		evt := &Event{
 			SessionID:  "test-session",
 			AppName:    "test-app",
@@ -95,7 +102,9 @@ func testCollector(t *testing.T, c *Collector) {
 	})
 
 	t.Run("NullPayload", func(t *testing.T) {
-		// This test case checks that the server handles a `null` JSON payload
+		t.Parallel()
+
+		// This test case checks that the server handles a null JSON payload
 		// gracefully. Previously, this would cause a panic.
 		req := httptest.NewRequest(http.MethodPost, "/", bytes.NewBufferString("null"))
 		res := httptest.NewRecorder()
@@ -109,6 +118,8 @@ func testCollector(t *testing.T, c *Collector) {
 }
 
 func TestEvent_Validate(t *testing.T) {
+	t.Parallel()
+
 	testCases := []struct {
 		name  string
 		evt   *Event
@@ -205,4 +216,71 @@ func TestEvent_Validate(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestExportHandler(t *testing.T) {
+	t.Parallel()
+
+	c, err := NewCollector(t.Context(), "file:/apptelemetry-export-test?vfs=memdb", time.Minute)
+	if err != nil {
+		t.Fatalf("NewCollector() error = %v", err)
+	}
+
+	// Seed the database with test data.
+	events := []Event{
+		{ // This will be the second row in the CSV
+			SessionID:  "session-abc",
+			AppName:    "app-1",
+			AppVersion: "1.0.0",
+			OS:         "linux",
+			Type:       "app_start",
+			Payload:    map[string]any{"user": "alpha"},
+		},
+		{ // This will be the first row in the CSV
+			SessionID:  "session-def",
+			AppName:    "app-2",
+			AppVersion: "2.1.0",
+			OS:         "macos",
+			Type:       "feature_used",
+			Payload:    map[string]any{"feature": "export"},
+		},
+	}
+
+	for _, evt := range events {
+		payload, err := json.Marshal(evt.Payload)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// Insert with a small delay to ensure distinct created_at timestamps for reliable ordering.
+		_, err = c.db.ExecContext(context.Background(), `
+			INSERT INTO app_telemetry_events (session_id, app_name, app_version, os, event_type, payload, created_at)
+			VALUES (?, ?, ?, ?, ?, ?, datetime('now'));
+		`, evt.SessionID, evt.AppName, evt.AppVersion, evt.OS, evt.Type, payload)
+		if err != nil {
+			t.Fatal(err)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/export", nil)
+	rr := httptest.NewRecorder()
+	c.ExportHandler().ServeHTTP(rr, req)
+
+	testutil.AssertEqual(t, rr.Code, http.StatusOK)
+	testutil.AssertEqual(t, rr.Header().Get("Content-Type"), "text/csv")
+	testutil.AssertEqual(t, rr.Header().Get("Content-Disposition"), `attachment; filename="apptelemetry_export.csv"`)
+
+	csvReader := csv.NewReader(rr.Body)
+	records, err := csvReader.ReadAll()
+	if err != nil {
+		t.Fatalf("failed to read csv response: %v", err)
+	}
+
+	if len(records) != 3 { // 1 header + 2 data rows.
+		t.Fatalf("expected 3 records (1 header, 2 data), got %d", len(records))
+	}
+
+	// Verify header.
+	expectedHeader := []string{"id", "session_id", "app_name", "app_version", "os", "event_type", "payload", "created_at"}
+	testutil.AssertEqual(t, records[0], expectedHeader)
 }

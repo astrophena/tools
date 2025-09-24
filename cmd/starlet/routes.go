@@ -189,6 +189,7 @@ func (e *engine) initRoutes() {
 	}
 	if e.appTelemetry != nil {
 		e.mux.Handle("/app-telemetry", e.appTelemetry)
+		dbg.HandleFunc("app-telemetry-export", "Export app telemetry data in CSV format", e.appTelemetry.ExportHandler())
 	}
 }
 
