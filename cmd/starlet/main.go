@@ -52,7 +52,7 @@ func (e *engine) Run(ctx context.Context) error {
 
 	// Load configuration from environment variables.
 	e.addr = cmp.Or(e.addr, env.Getenv("ADDR"), "localhost:3000")
-	e.databaseURL = cmp.Or(e.databaseURL, env.Getenv("DATABASE_URL"))
+	e.databasePath = cmp.Or(e.databasePath, env.Getenv("DATABASE_PATH"))
 	e.geminiKey = cmp.Or(e.geminiKey, env.Getenv("GEMINI_KEY"))
 	e.geminiProxySecretKey = cmp.Or(e.geminiProxySecretKey, env.Getenv("GEMINI_PROXY_SECRET_KEY"))
 	e.ghToken = cmp.Or(e.ghToken, env.Getenv("GH_TOKEN"))
@@ -149,7 +149,7 @@ type engine struct {
 	// configuration, read-only after initialization
 	addr                 string
 	botStatePath         string
-	databaseURL          string
+	databasePath         string
 	dev                  bool
 	geminiKey            string
 	geminiProxySecretKey string
@@ -225,13 +225,13 @@ func (e *engine) doInit(ctx context.Context) error {
 		TTL:       authSessionTTL,
 	}
 
-	if e.databaseURL != "" {
-		s, err := store.NewPostgresStore(ctx, e.databaseURL, kvCacheTTL)
+	if e.databasePath != "" {
+		s, err := store.NewSQLiteStore(ctx, e.databasePath, kvCacheTTL)
 		if err != nil {
 			return err
 		}
 		e.store = s
-		c, err := apptelemetry.NewCollector(ctx, e.databaseURL, 30*24*time.Hour) // 30 days
+		c, err := apptelemetry.NewCollector(ctx, e.databasePath, 30*24*time.Hour) // 30 days
 		if err != nil {
 			return err
 		}

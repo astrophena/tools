@@ -10,24 +10,19 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 	"time"
+
+	_ "github.com/tailscale/sqlite"
 )
 
-func TestPostgresCollector(t *testing.T) {
-	databaseURL := os.Getenv("DATABASE_URL")
-	if databaseURL == "" {
-		t.Skip("DATABASE_URL is not set, skipping")
-	}
-
-	c, err := NewCollector(context.Background(), databaseURL, time.Minute)
+func TestSQLiteCollector(t *testing.T) {
+	c, err := NewCollector(t.Context(), "file:/apptelemetry-test?vfs=memdb", time.Minute)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer c.pool.Close()
 
-	if _, err := c.pool.Exec(context.Background(), "DELETE FROM app_telemetry_events"); err != nil {
+	if _, err := c.db.ExecContext(t.Context(), "DELETE FROM app_telemetry_events"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -64,12 +59,12 @@ func testCollector(t *testing.T, c *Collector) {
 		// Check that the event was stored in the database.
 		var (
 			sessionID, appName, appVersion, os, eventType string
-			payload                                       map[string]any
+			payload                                       []byte
 		)
-		if err := c.pool.QueryRow(context.Background(), `
+		if err := c.db.QueryRowContext(context.Background(), `
 			SELECT session_id, app_name, app_version, os, event_type, payload
 			FROM app_telemetry_events
-			WHERE session_id = $1
+			WHERE session_id = ?
 		`, evt.SessionID).Scan(&sessionID, &appName, &appVersion, &os, &eventType, &payload); err != nil {
 			t.Fatal(err)
 		}
@@ -89,8 +84,13 @@ func testCollector(t *testing.T, c *Collector) {
 		if eventType != evt.Type {
 			t.Errorf("got event_type %q, want %q", eventType, evt.Type)
 		}
-		if payload["foo"] != "bar" {
-			t.Errorf("got payload %v, want %v", payload, evt.Payload)
+
+		var gotPayload map[string]any
+		if err := json.Unmarshal(payload, &gotPayload); err != nil {
+			t.Fatal(err)
+		}
+		if gotPayload["foo"] != "bar" {
+			t.Errorf("got payload %v, want %v", gotPayload, evt.Payload)
 		}
 	})
 

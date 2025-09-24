@@ -9,9 +9,9 @@ require (
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/golang-jwt/jwt/v5 v5.3.0
 	github.com/google/go-cmp v0.7.0
-	github.com/jackc/pgx/v5 v5.7.6
 	github.com/landlock-lsm/go-landlock v0.0.0-20250303204525-1544bccde3a3
 	github.com/mmcdole/gofeed v1.3.0
+	github.com/tailscale/sqlite v0.0.0-20250822145721-1673cdf564b7
 	github.com/tobischo/gokeepasslib/v3 v3.6.1
 	go.astrophena.name/base v0.12.5
 	go.starlark.net v0.0.0-20250906160240-bf296ed553ea
@@ -25,9 +25,6 @@ require (
 	github.com/PuerkitoBio/goquery v1.8.0 // indirect
 	github.com/andybalholm/cascadia v1.3.1 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
-	github.com/jackc/pgpassfile v1.0.0 // indirect
-	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
-	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/lmittmann/tint v1.1.2 // indirect
 	github.com/mmcdole/goxpp v1.1.1-0.20240225020742-a0c311522b23 // indirect
