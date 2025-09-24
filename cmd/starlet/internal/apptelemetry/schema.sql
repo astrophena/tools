@@ -1,10 +1,10 @@
 CREATE TABLE IF NOT EXISTS app_telemetry_events (
-  id SERIAL PRIMARY KEY,
-  session_id VARCHAR NOT NULL,
-  app_name VARCHAR NOT NULL,
-  app_version VARCHAR NOT NULL,
-  os VARCHAR NOT NULL,
-  event_type VARCHAR NOT NULL,
-  payload JSONB NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  session_id TEXT NOT NULL,
+  app_name TEXT NOT NULL,
+  app_version TEXT NOT NULL,
+  os TEXT NOT NULL,
+  event_type TEXT NOT NULL,
+  payload TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );

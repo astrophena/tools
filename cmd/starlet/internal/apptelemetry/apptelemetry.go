@@ -8,39 +8,57 @@ package apptelemetry
 
 import (
 	"context"
+	"database/sql"
 	_ "embed"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"time"
 
 	"go.astrophena.name/base/web"
 
-	"github.com/jackc/pgx/v5/pgxpool"
+	_ "github.com/tailscale/sqlite"
 )
 
 //go:embed schema.sql
 var schema string
 
 type Collector struct {
-	pool *pgxpool.Pool
-	ttl  time.Duration
+	db  *sql.DB
+	ttl time.Duration
 }
 
-func NewCollector(ctx context.Context, databaseURL string, ttl time.Duration) (*Collector, error) {
-	pool, err := pgxpool.New(ctx, databaseURL)
+func NewCollector(ctx context.Context, dbPath string, ttl time.Duration) (*Collector, error) {
+	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		return nil, err
 	}
 
-	if _, err := pool.Exec(ctx, schema); err != nil {
+	if _, err := db.ExecContext(ctx, "PRAGMA journal_mode=WAL;"); err != nil {
+		return nil, err
+	}
+	if _, err := db.ExecContext(ctx, "PRAGMA foreign_keys=ON;"); err != nil {
+		return nil, err
+	}
+	if _, err := db.ExecContext(ctx, "PRAGMA strict=ON;"); err != nil {
+		return nil, err
+	}
+
+	if _, err := db.ExecContext(ctx, schema); err != nil {
 		return nil, err
 	}
 
 	c := &Collector{
-		pool: pool,
-		ttl:  ttl,
+		db:  db,
+		ttl: ttl,
 	}
 	go c.cleanup(ctx)
+
+	go func() {
+		<-ctx.Done()
+		c.db.Close()
+	}()
+
 	return c, nil
 }
 
@@ -51,7 +69,7 @@ func (c *Collector) cleanup(ctx context.Context) {
 	for {
 		select {
 		case <-ticker.C:
-			c.pool.Exec(ctx, `DELETE FROM app_telemetry_events WHERE created_at < NOW() - $1;`, c.ttl.String())
+			c.db.ExecContext(ctx, `DELETE FROM app_telemetry_events WHERE created_at < datetime('now', '-' || ?);`, c.ttl.String())
 		case <-ctx.Done():
 			return
 		}
@@ -115,10 +133,15 @@ func (c *Collector) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	web.HandleJSON(func(r *http.Request, evt *Event) (*response, error) {
-		if _, err := c.pool.Exec(r.Context(), `
-INSERT INTO app_telemetry_events (session_id, app_name, app_version, os, event_type, payload, created_at)
-VALUES ($1, $2, $3, $4, $5, $6, NOW());
-`, evt.SessionID, evt.AppName, evt.AppVersion, evt.OS, evt.Type, evt.Payload); err != nil {
+		payload, err := json.Marshal(evt.Payload)
+		if err != nil {
+			return nil, err
+		}
+
+		if _, err := c.db.ExecContext(r.Context(), `
+			INSERT INTO app_telemetry_events (session_id, app_name, app_version, os, event_type, payload)
+			VALUES (?, ?, ?, ?, ?, ?);
+		`, evt.SessionID, evt.AppName, evt.AppVersion, evt.OS, evt.Type, payload); err != nil {
 			return nil, err
 		}
 		return &response{Status: "success"}, nil

@@ -87,6 +87,7 @@ Required:
 Optional:
 
   - ADDR: Address to listen for HTTP requests, in form of host:port, defaults to localhost:3000.
+  - DATABASE_PATH: Path to a SQLite database file. If not provided, an in-memory store is used.
   - GEMINI_KEY: API key for Google Gemini (required to use the gemini module).
   - GEMINI_PROXY_SECRET_KEY: A secret key for signing and verifying JWTs for the Gemini proxy.
   - GH_TOKEN: A GitHub Personal Access Token (PAT) with gist scope. Recommended for higher rate limits.

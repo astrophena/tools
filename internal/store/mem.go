@@ -11,13 +11,13 @@ import (
 	"go.astrophena.name/base/syncx"
 )
 
-// MemStore is an in-memory implementation of the Store interface.
+// MemStore is an in-memory implementation of the [Store] interface.
 type MemStore struct {
 	ttl   time.Duration
 	cache syncx.Map[string, cacheEntry]
 }
 
-// NewMemStore creates a new MemStore with the given TTL.
+// NewMemStore creates a new [MemStore] with the given TTL.
 func NewMemStore(ctx context.Context, ttl time.Duration) *MemStore {
 	s := &MemStore{
 		ttl: ttl,
@@ -38,10 +38,7 @@ func (s *MemStore) cleanup(ctx context.Context, firstRun bool) {
 		return
 	}
 
-	sleepDuration := s.ttl / 2
-	if sleepDuration > 24*time.Hour {
-		sleepDuration = 24 * time.Hour
-	}
+	sleepDuration := min(s.ttl / 2, 24 * time.Hour)
 
 	for {
 		select {

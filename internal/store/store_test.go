@@ -7,9 +7,10 @@ package store
 import (
 	"bytes"
 	"context"
-	"os"
 	"testing"
 	"time"
+
+	_ "github.com/tailscale/sqlite"
 )
 
 func TestMemStore(t *testing.T) {
@@ -17,21 +18,15 @@ func TestMemStore(t *testing.T) {
 	testStore(t, s)
 }
 
-func TestPostgresStore(t *testing.T) {
-	databaseURL := os.Getenv("DATABASE_URL")
-	if databaseURL == "" {
-		t.Skip("DATABASE_URL is not set")
-	}
-
-	ctx := context.Background()
-	s, err := NewPostgresStore(ctx, databaseURL, time.Minute)
+func TestSQLiteStore(t *testing.T) {
+	s, err := NewSQLiteStore(t.Context(), "file:/store-test?vfs=memdb", time.Minute)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer s.Close()
 
 	// Clean up the table before running the test.
-	if _, err := s.pool.Exec(ctx, "DELETE FROM kv"); err != nil {
+	if _, err := s.db.ExecContext(t.Context(), "DELETE FROM kv"); err != nil {
 		t.Fatal(err)
 	}
 
