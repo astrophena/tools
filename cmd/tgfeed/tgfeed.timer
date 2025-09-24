@@ -1,0 +1,15 @@
+[Unit]
+Description=Run tgfeed periodically to fetch RSS feeds
+
+[Timer]
+# Run every 6 hours (at 00:00, 06:00, 12:00, 18:00).
+OnCalendar=0/6:00
+
+# Add a random delay of up to 15 minutes to avoid thundering herd issues.
+RandomizedDelaySec=15min
+
+# If a run was missed (e.g., system was off), run it once as soon as possible.
+Persistent=true
+
+[Install]
+WantedBy=timers.target
