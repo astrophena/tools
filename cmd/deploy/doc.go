@@ -3,7 +3,7 @@
 // license that can be found in the LICENSE.md file.
 
 /*
-Deploy sends the service archive to the deployment server.
+Deploy sends the service or site archive to the deployment server.
 
 This tool is designed to be run within a GitHub Actions workflow. It
 automates the process of authenticating with the deployment server
@@ -11,11 +11,11 @@ using an OIDC token and uploading the site archive for deployment.
 
 # Usage
 
-	$ go tool deploy <service> <archive>
+	$ go tool deploy <service or site> <archive>
 
 Arguments:
 
-  - host: The target service for deployment (e.g., "starlet").
+  - service or site: The target service or site for deployment (e.g., "starlet" or "astrophena.name").
   - archive: The path to the service archive file (e.g., "archive.tar.gz").
 
 # Environment Variables
