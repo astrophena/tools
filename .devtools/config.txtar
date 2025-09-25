@@ -23,7 +23,7 @@
 -- pre-commit.json --
 [
   {
-    "run": ["gofmt", "-d"]
+    "run": ["gofmt", "-d", "."]
   },
   {
     "run": ["ruff", "format", "--no-cache", "--config", "extend-include = ['*.star']"]
