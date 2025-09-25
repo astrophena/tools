@@ -9,7 +9,7 @@ After=network-online.target
 Type=oneshot
 
 # Path to the tgfeed binary.
-ExecStart=/usr/local/bin/tgfeed run
+ExecStart=/srv/tgfeed/current/bin/tgfeed run
 
 # Load secrets from a configuration file.
 EnvironmentFile=/etc/tgfeed.conf
@@ -41,7 +41,7 @@ PrivateDevices=yes
 ReadOnlyPaths=/etc/resolv.conf /etc/ssl/certs/
 
 # Make common, non-essential directories completely inaccessible.
-InaccessiblePaths=/boot /mnt /opt /root /srv
+InaccessiblePaths=/boot /mnt /opt /root
 
 # Ensure the service can never gain new privileges (e.g., via setuid).
 NoNewPrivileges=yes
