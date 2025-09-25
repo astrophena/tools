@@ -27,3 +27,22 @@ jobs:
           tar -czf archive.tar.gz -C build .
       - name: 'Deploy'
         run: 'go tool deploy -type service starlet archive.tar.gz'
+  tgfeed:
+    name: 'tgfeed'
+    runs-on: 'ubuntu-latest'
+    steps:
+      - name: 'Check out'
+        uses: 'actions/checkout@v5'
+      - name: 'Set up Go'
+        uses: 'actions/setup-go@v6'
+        with:
+          go-version-file: 'go.mod'
+      - name: 'Build'
+        run: |
+          mkdir -p build/bin build/etc/systemd/system
+          go build -ldflags="-s -w -buildid=" -trimpath -o build/bin/tgfeed ./cmd/tgfeed
+          cp cmd/tgfeed/tgfeed.service build/etc/systemd/system
+          cp cmd/tgfeed/tgfeed.timer build/etc/systemd/system
+          tar -czf archive.tar.gz -C build .
+      - name: 'Deploy'
+        run: 'go tool deploy -type service tgfeed archive.tar.gz'
