@@ -6,7 +6,7 @@ After=network-online.target
 
 [Service]
 Type=notify
-ExecStart=/usr/local/bin/starlet
+ExecStart=/srv/starlet/current/bin/starlet
 EnvironmentFile=/etc/starlet.conf
 Environment="DATABASE_PATH=/var/lib/starlet/starlet.db"
 
@@ -50,7 +50,7 @@ ProtectHome=yes
 PrivateDevices=yes
 
 # Make common, non-essential directories completely inaccessible.
-InaccessiblePaths=/boot /mnt /opt /root /srv
+InaccessiblePaths=/boot /mnt /opt /root
 
 # Explicitly allow read-only access to files required for networking.
 ReadOnlyPaths=/etc/resolv.conf /etc/ssl/certs/
