@@ -53,3 +53,56 @@ If the pre-commit tool fails because `ruff` is not installed, install it with:
 ```sh
 $ pip install ruff
 ```
+
+## Go Style Guide
+
+In addition to standard Go idioms, follow these specific style guidelines.
+
+### Error Formatting
+
+When using sentinel errors from `go.astrophena.name/base/web`, wrap them at the
+beginning of the error message. For internal server errors, include the original
+error message.
+
+- **Bad:** `fmt.Errorf("a detailed error message: %w", web.ErrUnauthorized)`
+- **Good:** `fmt.Errorf("%w: a detailed error message", web.ErrUnauthorized)`
+- **Good:**
+  `fmt.Errorf("%w: failed to perform action: %v", web.ErrInternalServerError, err)`
+
+### Logging
+
+Use explicit `slog` attribute constructors instead of alternating key-value
+pairs.
+
+- **Bad (and won't work):**
+  `logger.Info(ctx, "authenticated request", "repo", claims.Repository)`
+- **Good:**
+  `logger.Info(ctx, "authenticated request", slog.String("repo", claims.Repository))`
+
+### Modern Go Features
+
+Prefer modern Go features and standard library packages where they improve
+clarity and conciseness.
+
+- **Use the `slices` package for slice operations.**
+  - **Bad:**
+    ```go
+    isAllowed := false
+    for _, s := range sites {
+        if s == host {
+            isAllowed = true
+            break
+        }
+    }
+    ```
+  - **Good:** `isAllowed := slices.Contains(sites, host)`
+- **Use modern octal literals.**
+  - **Bad:** `os.MkdirAll(path, 0755)`
+  - **Good:** `os.MkdirAll(path, 0o755)`
+
+### API Responses
+
+Keep successful JSON API responses minimal and consistent.
+
+- **Bad:** `{"ok": true, "message": "Action was successful."}`
+- **Good:** `{"status": "success"}`
