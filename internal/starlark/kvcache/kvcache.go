@@ -122,7 +122,7 @@ func starlarkToJSON(v starlark.Value) ([]byte, error) {
 		}
 		return json.Marshal(map[string]any{
 			"__starlark_type__": "tuple",
-			"values":          list,
+			"values":            list,
 		})
 	case *starlarkstruct.Struct:
 		dict := make(map[string]any)
@@ -139,7 +139,7 @@ func starlarkToJSON(v starlark.Value) ([]byte, error) {
 		}
 		return json.Marshal(map[string]any{
 			"__starlark_type__": "struct",
-			"values":          dict,
+			"values":            dict,
 		})
 	default:
 		return nil, fmt.Errorf("unsupported type: %s", v.Type())

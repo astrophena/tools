@@ -38,7 +38,7 @@ func (s *MemStore) cleanup(ctx context.Context, firstRun bool) {
 		return
 	}
 
-	sleepDuration := min(s.ttl / 2, 24 * time.Hour)
+	sleepDuration := min(s.ttl/2, 24*time.Hour)
 
 	for {
 		select {
