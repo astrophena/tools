@@ -61,10 +61,7 @@ func (s *SQLiteStore) cleanup(ctx context.Context, firstRun bool) {
 		return
 	}
 
-	sleepDuration := s.ttl / 2
-	if sleepDuration > 24*time.Hour {
-		sleepDuration = 24 * time.Hour
-	}
+	sleepDuration := min(s.ttl/2, 24*time.Hour)
 
 	for {
 		select {
