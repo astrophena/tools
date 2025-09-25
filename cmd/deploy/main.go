@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -19,7 +20,7 @@ import (
 	"go.astrophena.name/base/request"
 )
 
-func main() { cli.Main(cli.AppFunc(run)) }
+func main() { cli.Main(new(app)) }
 
 type tokenResponse struct {
 	Value string `json:"value"`
@@ -27,12 +28,25 @@ type tokenResponse struct {
 
 const tokenAudience = "astrophena.name"
 
-func run(ctx context.Context) error {
+type app struct {
+	// configuration
+	typ string // service or site
+}
+
+func (a *app) Flags(fs *flag.FlagSet) {
+	fs.StringVar(&a.typ, "type", "site", "Whether to deploy `site or service`.")
+}
+
+func (a *app) Run(ctx context.Context) error {
+	if a.typ != "site" && a.typ != "service" {
+		return fmt.Errorf("%w: invalid type, want site or service, got %q", cli.ErrInvalidArgs, a.typ)
+	}
+
 	env := cli.GetEnv(ctx)
 	if len(env.Args) != 2 {
-		return fmt.Errorf("%w: want host and archive path", cli.ErrInvalidArgs)
+		return fmt.Errorf("%w: want service or host and archive path", cli.ErrInvalidArgs)
 	}
-	host, archive := env.Args[0], env.Args[1]
+	target, archive := env.Args[0], env.Args[1]
 
 	requestURL := env.Getenv("ACTIONS_ID_TOKEN_REQUEST_URL")
 	requestToken := env.Getenv("ACTIONS_ID_TOKEN_REQUEST_TOKEN")
@@ -71,7 +85,7 @@ func run(ctx context.Context) error {
 		return err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://deploy.astrophena.name/service/"+host, &buf)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://deploy.astrophena.name/"+a.typ+"/"+target, &buf)
 	if err != nil {
 		return err
 	}
