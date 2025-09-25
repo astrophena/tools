@@ -51,6 +51,7 @@ retract [v0.0.1, v0.2.0]
 tool (
 	go.astrophena.name/base/devtools/addcopyright
 	go.astrophena.name/base/devtools/pre-commit
+	go.astrophena.name/tools/cmd/deploy
 )
 
 tool honnef.co/go/tools/cmd/staticcheck

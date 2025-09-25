@@ -1,0 +1,28 @@
+name: 'Deploy'
+on:
+  push:
+    branches: ['master']
+permissions:
+  id-token: 'write'
+  contents: 'read'
+concurrency:
+  group: '${{ github.workflow }}-${{ github.ref }}'
+  cancel-in-progress: true
+jobs:
+  starlet:
+    name: 'Starlet'
+    runs-on: 'ubuntu-latest'
+    steps:
+      - name: 'Check out'
+        uses: 'actions/checkout@v5'
+      - name: 'Set up Go'
+        uses: 'actions/setup-go@v6'
+        with:
+          go-version-file: 'go.mod'
+      - name: 'Build'
+        run: |
+          mkdir -p build/bin
+          go build -ldflags="-s -w -buildid=" -trimpath -o build/bin/starlet ./cmd/starlet
+          tar -czf archive.tar.gz -C build .
+      - name: 'Deploy'
+        run: 'go tool deploy starlet archive.tar.gz'
