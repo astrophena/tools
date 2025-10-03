@@ -104,7 +104,7 @@ func (e *engine) Run(ctx context.Context) error {
 	interval := watchdogInterval(env)
 	if interval > 0 {
 		go func() {
-			ticker := time.NewTicker(interval)
+			ticker := time.NewTicker(interval / 2)
 			defer ticker.Stop()
 
 			for {
