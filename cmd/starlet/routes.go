@@ -187,10 +187,6 @@ func (e *engine) initRoutes() {
 		dbg.HandleFunc("gemini-proxy-stats", "Gemini proxy stats", e.handleGeminiProxyStats)
 		e.mux.HandleFunc("/debug/gemini-proxy-stats-stream", e.handleGeminiProxyStatsStream)
 	}
-	if e.appTelemetry != nil {
-		e.mux.Handle("/app-telemetry", e.appTelemetry)
-		dbg.HandleFunc("app-telemetry-export", "Export app telemetry data in CSV format", e.appTelemetry.ExportHandler())
-	}
 }
 
 func (e *engine) handleRoot(w http.ResponseWriter, r *http.Request) {
