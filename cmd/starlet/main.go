@@ -28,7 +28,6 @@ import (
 	"go.astrophena.name/base/version"
 	"go.astrophena.name/base/web"
 	"go.astrophena.name/base/web/tgauth"
-	"go.astrophena.name/tools/cmd/starlet/internal/apptelemetry"
 	"go.astrophena.name/tools/cmd/starlet/internal/bot"
 	"go.astrophena.name/tools/cmd/starlet/internal/logstream"
 	"go.astrophena.name/tools/internal/api/gemini"
@@ -135,7 +134,6 @@ type engine struct {
 	// initialized by doInit
 	bot           *bot.Bot
 	cspMux        *web.CSPMux
-	appTelemetry  *apptelemetry.Collector
 	gistc         *gist.Client
 	logStream     logstream.Streamer
 	logger        *slog.Logger
@@ -231,11 +229,6 @@ func (e *engine) doInit(ctx context.Context) error {
 			return err
 		}
 		e.store = s
-		c, err := apptelemetry.NewCollector(ctx, e.databasePath, 30*24*time.Hour) // 30 days
-		if err != nil {
-			return err
-		}
-		e.appTelemetry = c
 	} else {
 		e.store = store.NewMemStore(ctx, kvCacheTTL)
 	}
