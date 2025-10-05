@@ -19,6 +19,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"slices"
 	"strconv"
@@ -33,7 +34,6 @@ import (
 	"go.astrophena.name/base/syncx"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/diff"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/serviceaccount"
-	"go.astrophena.name/tools/internal/api/gist"
 
 	"github.com/mmcdole/gofeed"
 )
@@ -45,26 +45,41 @@ var defaultErrorTemplate string
 
 // Some types of errors that can happen during tgfeed execution.
 var (
-	errAlreadyRunning      = errors.New("already running")
-	errNoFeed              = errors.New("no such feed")
-	errNoEditor            = errors.New("environment variable EDITOR is not defined")
-	errNoServiceAccountKey = errors.New("no service account key")
+	errAlreadyRunning = errors.New("already running")
+	errNoFeed         = errors.New("no such feed")
+	errNoEditor       = errors.New("environment variable EDITOR is not defined")
 )
 
 func main() { cli.Main(new(fetcher)) }
 
 func (f *fetcher) Flags(fs *flag.FlagSet) {
 	fs.BoolVar(&f.dry, "dry", false, "Enable dry-run mode: log actions, but don't send updates or save state.")
+	fs.StringVar(&f.remoteURL, "remote", "", "Remote admin API URL (e.g., 'http://localhost:8080' or '/run/tgfeed/admin-socket')")
 }
 
 func (f *fetcher) Run(ctx context.Context) error {
 	env := cli.GetEnv(ctx)
 
 	// Load configuration from environment variables.
+	f.adminAddr = cmp.Or(f.adminAddr, env.Getenv("ADMIN_ADDR"), "localhost:3000")
 	f.chatID = cmp.Or(f.chatID, env.Getenv("CHAT_ID"))
 	f.errorThreadID = cmp.Or(f.errorThreadID, parseInt(env.Getenv("ERROR_THREAD_ID")))
 	f.ghToken = cmp.Or(f.ghToken, env.Getenv("GITHUB_TOKEN"))
-	f.gistID = cmp.Or(f.gistID, env.Getenv("GIST_ID"))
+	f.stateDir = cmp.Or(f.stateDir, env.Getenv("STATE_DIRECTORY"))
+	if f.stateDir == "" {
+		xdgStateHome := env.Getenv("XDG_STATE_HOME")
+		if xdgStateHome == "" {
+			home, err := os.UserHomeDir()
+			if err != nil {
+				return err
+			}
+			xdgStateHome = filepath.Join(home, ".local", "state")
+		}
+		f.stateDir = filepath.Join(xdgStateHome, "tgfeed")
+		if err := os.MkdirAll(f.stateDir, 0o700); err != nil {
+			return err
+		}
+	}
 	f.statsSpreadsheetID = cmp.Or(f.statsSpreadsheetID, env.Getenv("STATS_SPREADSHEET_ID"))
 	f.statsSpreadsheetSheet = cmp.Or(f.statsSpreadsheetSheet, env.Getenv("STATS_SPREADSHEET_SHEET"), "Stats")
 	f.tgToken = cmp.Or(f.tgToken, env.Getenv("TELEGRAM_TOKEN"))
@@ -96,6 +111,8 @@ func (f *fetcher) Run(ctx context.Context) error {
 	command := env.Args[0]
 
 	switch command {
+	case "admin":
+		return f.admin(ctx)
 	case "feeds":
 		return f.listFeeds(ctx, env.Stdout)
 	case "edit":
@@ -110,20 +127,6 @@ func (f *fetcher) Run(ctx context.Context) error {
 			return fmt.Errorf("%w: reenable command expects a feed URL", cli.ErrInvalidArgs)
 		}
 		return f.reenable(ctx, env.Args[1])
-	// Internal command, used in jobs/tgfeed/pprof-upload.bash.
-	case "google-token":
-		if len(env.Args) != 2 {
-			return fmt.Errorf("%w: google-token command expects a scope", cli.ErrInvalidArgs)
-		}
-		if f.serviceAccountKey == nil {
-			return errNoServiceAccountKey
-		}
-		tok, err := f.serviceAccountKey.AccessToken(ctx, f.httpc, env.Args[1])
-		if err != nil {
-			return err
-		}
-		fmt.Println(tok)
-		return nil
 	default:
 		return fmt.Errorf("%w: no such command %q", cli.ErrInvalidArgs, command)
 	}
@@ -142,26 +145,27 @@ type fetcher struct {
 	init    sync.Once
 
 	// configuration
+	adminAddr             string
 	chatID                string
 	dry                   bool
 	errorThreadID         int64
 	ghToken               string
-	gistID                string
+	remoteURL             string
 	serviceAccountKey     *serviceaccount.Key
+	stateDir              string
 	statsSpreadsheetID    string
 	statsSpreadsheetSheet string
 	tgToken               string
 
 	// initialized by doInit
 	fp        *gofeed.Parser
-	gistc     *gist.Client
 	httpc     *http.Client
 	logf      func(string, ...any)
 	scrubber  *strings.Replacer
 	slog      *slog.Logger
 	slogLevel *slog.LevelVar
 
-	// loaded from Gist
+	// loaded from state
 	config        string
 	feeds         []*feed
 	errorTemplate string
@@ -180,17 +184,10 @@ func (f *fetcher) doInit(ctx context.Context) {
 
 	f.fp = gofeed.NewParser()
 
-	if f.ghToken != "" && f.tgToken != "" {
+	if f.tgToken != "" {
 		f.scrubber = strings.NewReplacer(
-			f.ghToken, "[EXPUNGED]",
 			f.tgToken, "[EXPUNGED]",
 		)
-	}
-
-	f.gistc = &gist.Client{
-		Token:      f.ghToken,
-		HTTPClient: f.httpc,
-		Scrubber:   f.scrubber,
 	}
 
 	l := logger.Get(ctx)
@@ -199,7 +196,7 @@ func (f *fetcher) doInit(ctx context.Context) {
 }
 
 func (f *fetcher) listFeeds(ctx context.Context, w io.Writer) error {
-	if err := f.loadFromGist(ctx); err != nil {
+	if err := f.loadState(ctx); err != nil {
 		return err
 	}
 
@@ -252,7 +249,7 @@ func (f *fetcher) edit(ctx context.Context) error {
 		return errNoEditor
 	}
 
-	if err := f.loadFromGist(ctx); err != nil {
+	if err := f.loadState(ctx); err != nil {
 		return err
 	}
 
@@ -306,7 +303,7 @@ func (f *fetcher) edit(ctx context.Context) error {
 		break
 	}
 
-	return f.saveToGist(ctx)
+	return f.saveConfig()
 }
 
 // ask prompts the user for a yes or no answer.
@@ -322,9 +319,10 @@ func (f *fetcher) ask(prompt string, stdin io.Reader) bool {
 
 		input = strings.TrimSpace(strings.ToLower(input))
 
-		if input == "y" || input == "yes" {
+		switch input {
+		case "y", "yes":
 			return true
-		} else if input == "n" || input == "no" {
+		case "n", "no":
 			return false
 		}
 		f.logf("Invalid input (y/n).")
@@ -339,13 +337,19 @@ func (f *fetcher) run(ctx context.Context) error {
 	f.running.Store(true)
 	defer f.running.Store(false)
 
+	// Acquire run lock to prevent concurrent state modifications.
+	if err := f.acquireRunLock(); err != nil {
+		return err
+	}
+	defer f.releaseRunLock()
+
 	// Start with empty stats for every run.
 	f.stats = syncx.Protect(&stats{
 		StartTime: time.Now(),
 	})
 
-	if err := f.loadFromGist(ctx); err != nil {
-		return fmt.Errorf("fetching gist failed: %w", err)
+	if err := f.loadState(ctx); err != nil {
+		return fmt.Errorf("loading state failed: %w", err)
 	}
 
 	// Recreate updates channel on each fetch.
@@ -441,7 +445,7 @@ func (f *fetcher) run(ctx context.Context) error {
 		})
 	}
 
-	return f.saveToGist(ctx)
+	return f.saveState(ctx)
 }
 
 func (f *fetcher) cleanState(s map[string]*feedState) {
@@ -469,7 +473,7 @@ func shuffle[S any](s []S) []S {
 }
 
 func (f *fetcher) reenable(ctx context.Context, url string) error {
-	if err := f.loadFromGist(ctx); err != nil {
+	if err := f.loadState(ctx); err != nil {
 		return err
 	}
 
@@ -482,5 +486,5 @@ func (f *fetcher) reenable(ctx context.Context, url string) error {
 	state.ErrorCount = 0
 	state.LastError = ""
 
-	return f.saveToGist(ctx)
+	return f.saveState(ctx)
 }

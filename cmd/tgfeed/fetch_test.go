@@ -6,6 +6,7 @@ package main
 
 import (
 	_ "embed"
+	"encoding/json"
 	"net/http"
 	"sort"
 	"testing"
@@ -18,7 +19,7 @@ import (
 func TestFailingFeed(t *testing.T) {
 	t.Parallel()
 
-	tm := testMux(t, map[string]http.HandlerFunc{
+	tm := testMux(t, txtarToFS(txtar.Parse(defaultGistTxtar)), map[string]http.HandlerFunc{
 		atomFeedRoute: func(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "I'm a teapot.", http.StatusTeapot)
 		},
@@ -37,7 +38,7 @@ func TestFailingFeed(t *testing.T) {
 func TestDisablingAndReenablingFailingFeed(t *testing.T) {
 	t.Parallel()
 
-	tm := testMux(t, map[string]http.HandlerFunc{
+	tm := testMux(t, txtarToFS(txtar.Parse(defaultGistTxtar)), map[string]http.HandlerFunc{
 		atomFeedRoute: func(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "I'm a teapot.", http.StatusTeapot)
 		},
@@ -77,7 +78,7 @@ func TestFetchWithIfModifiedSinceAndETag(t *testing.T) {
 		eTag            = "test"
 	)
 
-	tm := testMux(t, map[string]http.HandlerFunc{
+	tm := testMux(t, txtarToFS(txtar.Parse(defaultGistTxtar)), map[string]http.HandlerFunc{
 		atomFeedRoute: func(w http.ResponseWriter, r *http.Request) {
 			if r.Header.Get("If-Modified-Since") == ifModifiedSince && r.Header.Get("If-None-Match") == eTag {
 				w.WriteHeader(http.StatusNotModified)
@@ -128,12 +129,6 @@ func TestBlockAndKeepRules(t *testing.T) {
 
 		config := readFile(t, match)
 
-		tm := testMux(t, map[string]http.HandlerFunc{
-			atomFeedRoute: func(w http.ResponseWriter, r *http.Request) {
-				w.Write([]byte(rulesAtomFeed))
-			},
-		})
-
 		state := map[string]*feedState{
 			"https://example.com/feed.xml": {
 				LastUpdated: time.Time{},
@@ -145,7 +140,12 @@ func TestBlockAndKeepRules(t *testing.T) {
 				{Name: "state.json", Data: toJSON(t, state)},
 			},
 		}
-		tm.gist = txtarToGist(t, txtar.Format(ar))
+
+		tm := testMux(t, txtarToFS(ar), map[string]http.HandlerFunc{
+			atomFeedRoute: func(w http.ResponseWriter, r *http.Request) {
+				w.Write([]byte(rulesAtomFeed))
+			},
+		})
 
 		f := testFetcher(t, tm)
 		if err := f.run(t.Context()); err != nil {
@@ -176,4 +176,12 @@ func compareMaps(map1, map2 map[string]any) bool {
 	}
 	// Compare texts alphabetically.
 	return text1 < text2
+}
+
+func toJSON(t *testing.T, val any) []byte {
+	b, err := json.MarshalIndent(val, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b
 }

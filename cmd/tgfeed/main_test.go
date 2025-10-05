@@ -10,18 +10,21 @@ import (
 	"encoding/json"
 	"flag"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
+	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
+	"testing/fstest"
 
 	"go.astrophena.name/base/cli"
 	"go.astrophena.name/base/cli/clitest"
 	"go.astrophena.name/base/testutil"
 	"go.astrophena.name/base/txtar"
 	"go.astrophena.name/base/web"
-	"go.astrophena.name/tools/internal/api/gist"
 )
 
 var update = flag.Bool("update", false, "update golden files in testdata")
@@ -45,7 +48,7 @@ func TestFetcherMain(t *testing.T) {
 	t.Parallel()
 
 	clitest.Run(t, func(t *testing.T) *fetcher {
-		return testFetcher(t, testMux(t, map[string]http.HandlerFunc{
+		return testFetcher(t, testMux(t, txtarToFS(txtar.Parse(defaultGistTxtar)), map[string]http.HandlerFunc{
 			atomFeedRoute: func(w http.ResponseWriter, r *http.Request) {
 				w.Write(atomFeed)
 			},
@@ -90,14 +93,6 @@ func TestFetcherMain(t *testing.T) {
 			Args:    []string{"reenable", "https://example.com/non-existent.xml"},
 			WantErr: errNoFeed,
 		},
-		"google-token command without arguments": {
-			Args:    []string{"google-token"},
-			WantErr: cli.ErrInvalidArgs,
-		},
-		"obtaining Google token fails without service account key": {
-			Args:    []string{"google-token", "https://www.googleapis.com/auth/drive"},
-			WantErr: errNoServiceAccountKey,
-		},
 	},
 	)
 }
@@ -108,8 +103,7 @@ func TestListFeeds(t *testing.T) {
 	testutil.RunGolden(t, "testdata/list/*.txtar", func(t *testing.T, tc string) []byte {
 		t.Parallel()
 
-		tm := testMux(t, nil)
-		tm.gist = txtarToGist(t, readFile(t, tc))
+		tm := testMux(t, txtarToFS(txtar.Parse(readFile(t, tc))), nil)
 		f := testFetcher(t, tm)
 
 		var buf bytes.Buffer
@@ -134,7 +128,7 @@ func testFetcher(t *testing.T, m *mux) *fetcher {
 		httpc:              testutil.MockHTTPClient(m.mux),
 		logf:               t.Logf,
 		ghToken:            "superdupersecret",
-		gistID:             "test",
+		stateDir:           m.stateDir,
 		tgToken:            tgToken,
 		chatID:             "test",
 		statsSpreadsheetID: "test",
@@ -148,7 +142,7 @@ func testFetcher(t *testing.T, m *mux) *fetcher {
 type mux struct {
 	mux          *http.ServeMux
 	mu           sync.Mutex
-	gist         []byte
+	stateDir     string
 	sentMessages []map[string]any
 	statsValues  [][]string
 }
@@ -156,41 +150,31 @@ type mux struct {
 func (m *mux) state(t *testing.T) map[string]*feedState {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	updatedGist := testutil.UnmarshalJSON[*gist.Gist](t, m.gist)
-	stateJSON, ok := updatedGist.Files["state.json"]
-	if !ok {
-		t.Fatal("state.json has not found in updated gist")
+
+	state, err := os.ReadFile(filepath.Join(m.stateDir, "state.json"))
+	if err != nil {
+		t.Fatalf("reading state.json: %v", err)
 	}
-	return testutil.UnmarshalJSON[map[string]*feedState](t, []byte(stateJSON.Content))
+
+	return testutil.UnmarshalJSON[map[string]*feedState](t, state)
 }
 
 const (
-	getGist        = "GET api.github.com/gists/test"
-	patchGist      = "PATCH api.github.com/gists/test"
 	sendTelegram   = "POST api.telegram.org/{token}/sendMessage"
 	updateSheet    = "POST sheets.googleapis.com/v4/spreadsheets/test/values/Stats:append"
 	getGoogleToken = "POST oauth2.googleapis.com/token"
 )
 
-func testMux(t *testing.T, overrides map[string]http.HandlerFunc) *mux {
-	m := &mux{mux: http.NewServeMux()}
-	m.mux.HandleFunc(getGist, orHandler(overrides[getGist], func(w http.ResponseWriter, r *http.Request) {
-		testutil.AssertEqual(t, r.Header.Get("Authorization"), "Bearer superdupersecret")
-		m.mu.Lock()
-		defer m.mu.Unlock()
-		if m.gist != nil {
-			w.Write(m.gist)
-			return
+func testMux(t *testing.T, baseState fs.FS, overrides map[string]http.HandlerFunc) *mux {
+	m := &mux{
+		mux:      http.NewServeMux(),
+		stateDir: t.TempDir(),
+	}
+	if baseState != nil {
+		if err := os.CopyFS(m.stateDir, baseState); err != nil {
+			t.Fatalf("initializing state directory: %v", err)
 		}
-		w.Write(txtarToGist(t, defaultGistTxtar))
-	}))
-	m.mux.HandleFunc(patchGist, orHandler(overrides[patchGist], func(w http.ResponseWriter, r *http.Request) {
-		testutil.AssertEqual(t, r.Header.Get("Authorization"), "Bearer superdupersecret")
-		m.mu.Lock()
-		defer m.mu.Unlock()
-		m.gist = read(t, r.Body)
-		w.Write(m.gist)
-	}))
+	}
 	m.mux.HandleFunc(sendTelegram, orHandler(overrides[sendTelegram], func(w http.ResponseWriter, r *http.Request) {
 		testutil.AssertEqual(t, tgToken, strings.TrimPrefix(r.PathValue("token"), "bot"))
 		m.mu.Lock()
@@ -220,12 +204,22 @@ func testMux(t *testing.T, overrides map[string]http.HandlerFunc) *mux {
 		web.RespondJSON(w, response)
 	}))
 	for pat, h := range overrides {
-		if pat == getGist || pat == patchGist || pat == sendTelegram || pat == updateSheet || pat == getGoogleToken {
+		if slices.Contains([]string{sendTelegram, updateSheet, getGoogleToken}, pat) {
 			continue
 		}
 		m.mux.HandleFunc(pat, h)
 	}
 	return m
+}
+
+func txtarToFS(ar *txtar.Archive) fs.FS {
+	fs := make(fstest.MapFS)
+	for _, file := range ar.Files {
+		fs[file.Name] = &fstest.MapFile{
+			Data: file.Data,
+		}
+	}
+	return fs
 }
 
 func orHandler(hh ...http.HandlerFunc) http.HandlerFunc {
@@ -239,33 +233,6 @@ func orHandler(hh ...http.HandlerFunc) http.HandlerFunc {
 
 func read(t *testing.T, r io.Reader) []byte {
 	b, err := io.ReadAll(r)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return b
-}
-
-func txtarToGist(t *testing.T, b []byte) []byte {
-	ar := txtar.Parse(b)
-
-	g := &gist.Gist{
-		Files: make(map[string]gist.File),
-	}
-
-	for _, f := range ar.Files {
-		g.Files[f.Name] = gist.File{Content: string(f.Data)}
-	}
-
-	b, err := json.MarshalIndent(g, "", "  ")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	return b
-}
-
-func toJSON(t *testing.T, val any) []byte {
-	b, err := json.MarshalIndent(val, "", "  ")
 	if err != nil {
 		t.Fatal(err)
 	}
