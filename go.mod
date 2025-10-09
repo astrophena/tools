@@ -4,7 +4,6 @@ go 1.25
 
 require (
 	github.com/arl/statsviz v0.7.1
-	github.com/dchest/uniuri v1.2.0
 	github.com/dhowden/tag v0.0.0-20240417053706-3d75831295e8
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/golang-jwt/jwt/v5 v5.3.0
@@ -16,7 +15,6 @@ require (
 	go.astrophena.name/base v0.12.5
 	go.starlark.net v0.0.0-20250906160240-bf296ed553ea
 	golang.org/x/term v0.35.0
-	golang.org/x/time v0.13.0
 	rsc.io/markdown v0.0.0-20241212154241-6bf72452917f
 )
 

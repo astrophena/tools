@@ -17,21 +17,14 @@ import (
 	"log/slog"
 	"net/http"
 	"path"
-	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"go.astrophena.name/base/syncx"
 	"go.astrophena.name/base/web"
 	"go.astrophena.name/base/web/tgauth"
-	"go.astrophena.name/tools/cmd/starlet/internal/geminiproxy"
-	"go.astrophena.name/tools/internal/api/gemini"
 
 	"github.com/arl/statsviz"
-	"github.com/dchest/uniuri"
-	"github.com/golang-jwt/jwt/v5"
-	"golang.org/x/time/rate"
 	"rsc.io/markdown"
 )
 
@@ -72,14 +65,6 @@ func (e *engine) initRoutes() {
 
 	// Health check.
 	web.Health(e.mux)
-
-	// Gemini proxy.
-	if e.geminiProxySecretKey != "" && e.geminiKey != "" {
-		e.mux.Handle("/gemini/", http.StripPrefix("/gemini", geminiproxy.Handler(e.geminiProxySecretKey, &gemini.Client{
-			APIKey:     e.geminiKey,
-			HTTPClient: e.httpc,
-		})))
-	}
 
 	// Starlark environment documentation.
 	e.mux.HandleFunc("GET /env", func(w http.ResponseWriter, r *http.Request) {
@@ -181,12 +166,6 @@ func (e *engine) initRoutes() {
 		}
 		http.Redirect(w, r, "/debug/", http.StatusFound)
 	})
-
-	if e.geminiProxySecretKey != "" {
-		dbg.HandleFunc("gemini-token", "Generate Gemini proxy token", e.handleGeminiProxyToken)
-		dbg.HandleFunc("gemini-proxy-stats", "Gemini proxy stats", e.handleGeminiProxyStats)
-		e.mux.HandleFunc("/debug/gemini-proxy-stats-stream", e.handleGeminiProxyStatsStream)
-	}
 }
 
 func (e *engine) handleRoot(w http.ResponseWriter, r *http.Request) {
@@ -225,155 +204,6 @@ func (e *engine) handleReload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	web.RespondJSON(w, map[string]string{"status": "success"})
-}
-
-func (e *engine) handleGeminiProxyToken(w http.ResponseWriter, r *http.Request) {
-	if e.geminiProxySecretKey == "" {
-		// This should not happen because we check for it before setting up the
-		// handler, but just in case.
-		web.RespondError(w, r, errors.New("GEMINI_PROXY_SECRET_KEY is not configured"))
-		return
-	}
-
-	var (
-		token    string
-		duration = "24h"
-	)
-
-	if r.Method == http.MethodPost {
-		if err := r.ParseForm(); err != nil {
-			web.RespondError(w, r, err)
-			return
-		}
-
-		d, err := time.ParseDuration(r.FormValue("duration"))
-		if err != nil {
-			web.RespondError(w, r, err)
-			return
-		}
-		duration = r.FormValue("duration")
-
-		rateLimit, err := strconv.ParseFloat(r.FormValue("rate_limit"), 64)
-		if err != nil || rateLimit <= 0 {
-			rateLimit = 1
-		}
-
-		claims := geminiproxy.Claims{
-			Description: r.FormValue("description"),
-			RateLimit:   rate.Limit(rateLimit),
-			RegisteredClaims: jwt.RegisteredClaims{
-				ID:        uniuri.New(),
-				ExpiresAt: jwt.NewNumericDate(time.Now().Add(d)),
-			},
-		}
-		t := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-		token, err = t.SignedString([]byte(e.geminiProxySecretKey))
-		if err != nil {
-			web.RespondError(w, r, err)
-			return
-		}
-	}
-
-	var buf bytes.Buffer
-	data := struct {
-		MainCSS         string
-		GeminiTokenCSS  string
-		GeminiTokenJS   string
-		DefaultDuration string
-		Duration        string
-		Token           string
-	}{
-		MainCSS:         e.srv.StaticHashName("static/css/main.css"),
-		GeminiTokenCSS:  e.srv.StaticHashName("static/css/gemini-token.css"),
-		GeminiTokenJS:   e.srv.StaticHashName("static/js/gemini-token.js"),
-		DefaultDuration: duration,
-		Duration:        duration,
-		Token:           token,
-	}
-	if err := templates().ExecuteTemplate(&buf, "gemini-token.tmpl", data); err != nil {
-		web.RespondError(w, r, err)
-		return
-	}
-	buf.WriteTo(w)
-}
-
-func (e *engine) handleGeminiProxyStats(w http.ResponseWriter, r *http.Request) {
-	var buf bytes.Buffer
-	data := struct {
-		MainCSS  string
-		StatsCSS string
-		StatsJS  string
-	}{
-		MainCSS:  e.srv.StaticHashName("static/css/main.css"),
-		StatsCSS: e.srv.StaticHashName("static/css/gemini-proxy-stats.css"),
-		StatsJS:  e.srv.StaticHashName("static/js/gemini-proxy-stats.js"),
-	}
-	if err := templates().ExecuteTemplate(&buf, "gemini-proxy-stats.tmpl", data); err != nil {
-		web.RespondError(w, r, err)
-		return
-	}
-	buf.WriteTo(w)
-}
-
-func (e *engine) handleGeminiProxyStatsStream(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
-
-	type statLine struct {
-		ID          string `json:"id"`
-		Description string `json:"description"`
-		Requests    uint64 `json:"requests"`
-		Limit       string `json:"limit"`
-		LastUsed    string `json:"last_used"`
-	}
-
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-r.Context().Done():
-			return
-		case <-ticker.C:
-			var (
-				lines   []statLine
-				flusher http.Flusher
-				ok      bool
-			)
-			if flusher, ok = w.(http.Flusher); !ok {
-				web.RespondError(w, r, errors.New("streaming unsupported"))
-				return
-			}
-
-			geminiproxy.RangeStats(func(id string, stat *geminiproxy.TokenStat) bool {
-				var lastUsed string
-				if lu := stat.LastUsed(); lu != nil {
-					lastUsed = lu.Format(time.RFC3339)
-				} else {
-					lastUsed = "never"
-				}
-
-				lines = append(lines, statLine{
-					ID:          id,
-					Description: stat.Description(),
-					Requests:    stat.Requests(),
-					Limit:       fmt.Sprintf("%v req/s", stat.Limit()),
-					LastUsed:    lastUsed,
-				})
-				return true
-			})
-
-			var buf bytes.Buffer
-			if err := json.NewEncoder(&buf).Encode(lines); err != nil {
-				e.logger.Error("failed to encode gemini proxy stats", "err", err)
-				return
-			}
-
-			fmt.Fprintf(w, "data: %s\n\n", buf.String())
-			flusher.Flush()
-		}
-	}
 }
 
 func (e *engine) debugMenu(r *http.Request) []web.MenuItem {
