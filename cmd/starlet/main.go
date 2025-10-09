@@ -53,7 +53,6 @@ func (e *engine) Run(ctx context.Context) error {
 	e.addr = cmp.Or(e.addr, env.Getenv("ADDR"), "localhost:3000")
 	e.databasePath = cmp.Or(e.databasePath, env.Getenv("DATABASE_PATH"))
 	e.geminiKey = cmp.Or(e.geminiKey, env.Getenv("GEMINI_KEY"))
-	e.geminiProxySecretKey = cmp.Or(e.geminiProxySecretKey, env.Getenv("GEMINI_PROXY_SECRET_KEY"))
 	e.ghToken = cmp.Or(e.ghToken, env.Getenv("GH_TOKEN"))
 	e.gistID = cmp.Or(e.gistID, env.Getenv("GIST_ID"))
 	e.host = cmp.Or(e.host, env.Getenv("HOST"))
@@ -145,21 +144,20 @@ type engine struct {
 	tgInterceptor *tgInterceptor
 
 	// configuration, read-only after initialization
-	addr                 string
-	botStatePath         string
-	databasePath         string
-	dev                  bool
-	geminiKey            string
-	geminiProxySecretKey string
-	ghToken              string
-	gistID               string
-	host                 string
-	httpc                *http.Client
-	pingURL              string
-	reloadToken          string
-	tgOwner              int64
-	tgSecret             string
-	tgToken              string
+	addr         string
+	botStatePath string
+	databasePath string
+	dev          bool
+	geminiKey    string
+	ghToken      string
+	gistID       string
+	host         string
+	httpc        *http.Client
+	pingURL      string
+	reloadToken  string
+	tgOwner      int64
+	tgSecret     string
+	tgToken      string
 	// for tests
 	noServerStart bool
 	ready         func() // see web.Server.Ready
@@ -278,10 +276,6 @@ func (e *engine) doInit(ctx context.Context) error {
 
 	e.cspMux = web.NewCSPMux()
 
-	csrf := http.NewCrossOriginProtection()
-	csrf.AddInsecureBypassPattern("/gemini/")
-	csrf.AddInsecureBypassPattern("/app-telemetry")
-
 	e.initRoutes()
 	e.srv = &web.Server{
 		Addr:       e.addr,
@@ -293,8 +287,7 @@ func (e *engine) doInit(ctx context.Context) error {
 			e.tgAuth.Middleware(false),
 			e.debugAuth,
 		},
-		CrossOriginProtection: csrf,
-		CSP:                   e.cspMux,
+		CSP: e.cspMux,
 	}
 
 	return nil
@@ -479,7 +472,7 @@ const (
 
 // watchdogInterval returns the watchdog interval configured in systemd unit file.
 func watchdogInterval(env *cli.Env) time.Duration {
-	s, err := strconv.Atoi(os.Getenv("WATCHDOG_USEC"))
+	s, err := strconv.Atoi(env.Getenv("WATCHDOG_USEC"))
 	if err != nil {
 		return 0
 	}

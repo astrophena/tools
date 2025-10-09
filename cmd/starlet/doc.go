@@ -89,7 +89,6 @@ Optional:
   - ADDR: Address to listen for HTTP requests, in form of host:port, defaults to localhost:3000.
   - DATABASE_PATH: Path to a SQLite database file. If not provided, an in-memory store is used.
   - GEMINI_KEY: API key for Google Gemini (required to use the gemini module).
-  - GEMINI_PROXY_SECRET_KEY: A secret key for signing and verifying JWTs for the Gemini proxy.
   - GH_TOKEN: A GitHub Personal Access Token (PAT) with gist scope. Recommended for higher rate limits.
   - HOST: The publicly accessible domain name for the bot (e.g., mybot.example.com). Used for setting the Telegram webhook. Required in production.
   - RELOAD_TOKEN: A secret token. If set, enables reloading the bot code from the Gist by sending a POST request to /reload with header "Authorization: Bearer <token>".
@@ -103,19 +102,8 @@ When not in production mode, or when accessed by the authenticated bot owner in 
   - /debug/bot: A bot debugger with a chat interface and a log of intercepted Telegram API calls. Available only in development mode.
   - /debug/logs: Streams the last 300 lines of logs in real-time. (Requires auth in prod)
   - /debug/reload: A button/link to trigger an immediate reload of the bot code from the GitHub Gist. (Requires auth in prod)
-  - /debug/gemini-token: A page to generate JWTs for accessing the Gemini proxy. (Requires auth in prod)
 
 Authentication for the debug interface in production mode uses Telegram Login Widget. The bot owner must authenticate via Telegram. The login callback URL should be set to https://<your-bot-host>/login in BotFather (/setdomain).
-
-# Gemini Proxy
-
-Starlet includes an optional, built-in Gemini API proxy at /gemini. This
-proxy is intended for the author's other pet projects and is not essential for
-the bot's core functionality. It allows other applications to access the Gemini
-API without exposing the actual API key. Access to the proxy is protected by
-JWTs. The server uses the secret key defined in the GEMINI_PROXY_SECRET_KEY
-environment variable to sign and verify tokens. A new token can be generated on
-the /debug/gemini-token page.
 
 [Starlark]: https://starlark-lang.org/
 */
