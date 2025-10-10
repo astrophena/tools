@@ -5,7 +5,6 @@ go 1.25
 require (
 	github.com/arl/statsviz v0.7.1
 	github.com/dhowden/tag v0.0.0-20240417053706-3d75831295e8
-	github.com/fsnotify/fsnotify v1.9.0
 	github.com/golang-jwt/jwt/v5 v5.3.0
 	github.com/google/go-cmp v0.7.0
 	github.com/landlock-lsm/go-landlock v0.0.0-20250303204525-1544bccde3a3
@@ -14,6 +13,7 @@ require (
 	github.com/tobischo/gokeepasslib/v3 v3.6.1
 	go.astrophena.name/base v0.12.5
 	go.starlark.net v0.0.0-20250906160240-bf296ed553ea
+	golang.org/x/sync v0.17.0
 	golang.org/x/term v0.35.0
 	rsc.io/markdown v0.0.0-20241212154241-6bf72452917f
 )
@@ -33,7 +33,6 @@ require (
 	golang.org/x/exp/typeparams v0.0.0-20231108232855-2478ac86f678 // indirect
 	golang.org/x/mod v0.27.0 // indirect
 	golang.org/x/net v0.43.0 // indirect
-	golang.org/x/sync v0.17.0 // indirect
 	golang.org/x/sys v0.36.0 // indirect
 	golang.org/x/text v0.29.0 // indirect
 	golang.org/x/tools v0.36.0 // indirect

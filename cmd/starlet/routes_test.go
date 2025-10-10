@@ -5,11 +5,8 @@
 package main
 
 import (
-	"bytes"
 	_ "embed"
-	"encoding/json"
 	"net/http"
-	"net/http/httptest"
 	"testing"
 
 	"go.astrophena.name/base/request"
@@ -22,20 +19,40 @@ func TestRoutes(t *testing.T) {
 
 	e := testEngine(t, testMux(t, nil))
 
+	// Test public routes.
 	for _, path := range []string{
-		"/debug/",
-		"/debug/logs",
-		"/debug/reload",
 		"/" + e.srv.StaticHashName("static/css/main.css"),
-		"/" + e.srv.StaticHashName("static/js/logs.js"),
 	} {
 		_, err := request.Make[request.IgnoreResponse](t.Context(), request.Params{
 			Method:     http.MethodGet,
 			URL:        path,
-			HTTPClient: testutil.MockHTTPClient(e.mux),
+			HTTPClient: testutil.MockHTTPClient(e.srv),
 		})
 		if err != nil {
-			t.Errorf("%s: %v", path, err)
+			t.Errorf("public: %s: %v", path, err)
+		}
+	}
+
+	// Test admin routes.
+	adminSrv := &web.Server{
+		Mux:        e.adminMux,
+		StaticFS:   staticFS,
+		Debuggable: true,
+	}
+	for _, path := range []string{
+		"/debug/",
+		"/debug/logs",
+		"/debug/reload",
+		"/" + adminSrv.StaticHashName("static/css/main.css"),
+		"/" + adminSrv.StaticHashName("static/js/logs.js"),
+	} {
+		_, err := request.Make[request.IgnoreResponse](t.Context(), request.Params{
+			Method:     http.MethodGet,
+			URL:        path,
+			HTTPClient: testutil.MockHTTPClient(adminSrv),
+		})
+		if err != nil {
+			t.Errorf("admin: %s: %v", path, err)
 		}
 	}
 }
@@ -53,48 +70,4 @@ func TestHealth(t *testing.T) {
 		t.Fatal(err)
 	}
 	testutil.AssertEqual(t, health.OK, true)
-}
-
-func TestReload(t *testing.T) {
-	t.Parallel()
-
-	tm := testMux(t, nil)
-	tm.gist = txtarToGist(t, []byte("-- bot.star --\nprint(\"reloaded\")\n"))
-	e := testEngine(t, tm)
-
-	cases := map[string]struct {
-		authHeader string
-		wantStatus int
-		wantBody   string
-	}{
-		"unauthorized": {
-			wantStatus: http.StatusUnauthorized,
-			wantBody:   `{"status":"error","error":"unauthorized"}`,
-		},
-		"authorized": {
-			authHeader: "Bearer " + e.reloadToken,
-			wantStatus: http.StatusOK,
-			wantBody:   `{"status":"success"}`,
-		},
-	}
-
-	for name, tc := range cases {
-		t.Run(name, func(t *testing.T) {
-			t.Parallel()
-
-			r := httptest.NewRequest(http.MethodPost, "/reload", nil)
-			r.Header.Set("Authorization", tc.authHeader)
-			w := httptest.NewRecorder()
-
-			e.handleReload(w, r)
-
-			var got bytes.Buffer
-			if err := json.Compact(&got, w.Body.Bytes()); err != nil {
-				t.Fatal(err)
-			}
-
-			testutil.AssertEqual(t, w.Code, tc.wantStatus)
-			testutil.AssertEqual(t, got.String(), tc.wantBody)
-		})
-	}
 }

@@ -22,10 +22,6 @@ The Telegram ID of the bot owner.
 
 The version of the bot.
 
-### `config.is_dev`
-
-Whether the bot is running in development mode.
-
 ## `debug`
 
 A module containing debugging utilities.
