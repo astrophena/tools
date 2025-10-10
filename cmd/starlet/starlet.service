@@ -9,7 +9,7 @@ Type=notify
 ExecStart=/srv/starlet/current/bin/starlet
 EnvironmentFile=/etc/starlet.conf
 Environment="DATABASE_PATH=/var/lib/starlet/starlet.db"
-Environment="ADMIN_ADDR=unix//run/starlet/admin-socket"
+Environment="ADMIN_ADDR=/run/starlet/admin-socket"
 
 # Run as a transient, unprivileged user.
 User=starlet

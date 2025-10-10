@@ -15,6 +15,9 @@ jobs:
     steps:
       - name: 'Check out'
         uses: 'actions/checkout@v5'
+        with:
+          # Show Git tags in version.
+          fetch-depth: 0
       - name: 'Set up Go'
         uses: 'actions/setup-go@v6'
         with:
@@ -33,6 +36,9 @@ jobs:
     steps:
       - name: 'Check out'
         uses: 'actions/checkout@v5'
+        with:
+          # Show Git tags in version.
+          fetch-depth: 0
       - name: 'Set up Go'
         uses: 'actions/setup-go@v6'
         with:
