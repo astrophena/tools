@@ -58,13 +58,12 @@ func TestRun(t *testing.T) {
 func testEngine(t *testing.T, m *mux) *engine {
 	t.Helper()
 	e := &engine{
-		ghToken:     "test",
-		gistID:      "test",
-		httpc:       testutil.MockHTTPClient(m.mux),
-		tgOwner:     123456789,
-		reloadToken: "foobar",
-		tgSecret:    "test",
-		tgToken:     tgToken,
+		ghToken:  "test",
+		gistID:   "test",
+		httpc:    testutil.MockHTTPClient(m.mux),
+		tgOwner:  123456789,
+		tgSecret: "test",
+		tgToken:  tgToken,
 	}
 	if err := e.init.Get(func() error {
 		return e.doInit(t.Context())

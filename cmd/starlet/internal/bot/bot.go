@@ -58,7 +58,6 @@ type Bot struct {
 	tgOwner       int64
 	tgBotID       int64
 	tgBotUsername string
-	isDev         bool
 
 	httpc    *http.Client
 	geminic  *gemini.Client
@@ -88,8 +87,6 @@ type Opts struct {
 	BotID int64
 	// BotUsername is the username of the bot.
 	BotUsername string
-	// IsDev specifies whether the bot is running in development mode.
-	IsDev bool
 	// HTTPClient is the HTTP client to use for making requests.
 	HTTPClient *http.Client
 	// GeminiClient is the client for interacting with the Google Gemini API.
@@ -110,7 +107,6 @@ func New(opts Opts) *Bot {
 		tgOwner:       opts.Owner,
 		tgBotID:       opts.BotID,
 		tgBotUsername: opts.BotUsername,
-		isDev:         opts.IsDev,
 		httpc:         opts.HTTPClient,
 		geminic:       opts.GeminiClient,
 		kvCache:       opts.KVCache,
