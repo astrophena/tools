@@ -54,7 +54,7 @@ func main() { cli.Main(new(fetcher)) }
 
 func (f *fetcher) Flags(fs *flag.FlagSet) {
 	fs.BoolVar(&f.dry, "dry", false, "Enable dry-run mode: log actions, but don't send updates or save state.")
-	fs.StringVar(&f.remoteURL, "remote", "", "Remote admin API URL (e.g., 'http://localhost:8080' or '/run/tgfeed/admin-socket')")
+	fs.StringVar(&f.remoteURL, "remote", "", "Remote admin API URL (e.g., 'http://localhost:8080' or '/run/tgfeed/admin-socket').")
 }
 
 func (f *fetcher) Run(ctx context.Context) error {

@@ -7,8 +7,10 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -121,7 +123,6 @@ func (f *fetcher) handlePutState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate JSON
 	var stateMap map[string]*feedState
 	if err := json.Unmarshal(content, &stateMap); err != nil {
 		web.RespondJSONError(w, r, fmt.Errorf("%w: invalid JSON: %v", web.ErrBadRequest, err))
@@ -140,7 +141,7 @@ func (f *fetcher) handleGetErrorTemplate(w http.ResponseWriter, r *http.Request)
 	content, err := os.ReadFile(filepath.Join(f.stateDir, "error.tmpl"))
 	if err != nil {
 		// If file doesn't exist, return default template.
-		if os.IsNotExist(err) {
+		if errors.Is(err, fs.ErrNotExist) {
 			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 			w.Write([]byte(defaultErrorTemplate))
 			return
