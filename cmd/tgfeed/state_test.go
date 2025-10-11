@@ -5,64 +5,47 @@
 package main
 
 import (
-	_ "embed"
 	"fmt"
-	"net/http"
 	"testing"
+	"testing/fstest"
 
 	"go.astrophena.name/base/testutil"
 	"go.astrophena.name/base/txtar"
 )
 
-var (
-	//go:embed testdata/load/gist.json
-	gistJSON []byte
-
-	//go:embed testdata/load/gist_error.json
-	gistErrorJSON []byte
-)
-
-func TestLoadFromGist(t *testing.T) {
+func TestLoadState(t *testing.T) {
 	t.Parallel()
 
-	tm := testMux(t, nil)
-	tm.gist = gistJSON
+	baseState := fstest.MapFS{
+		"config.star": &fstest.MapFile{
+			Data: []byte("feeds = []"),
+		},
+		"error.tmpl": &fstest.MapFile{
+			Data: []byte("test"),
+		},
+	}
+
+	tm := testMux(t, baseState, nil)
 	f := testFetcher(t, tm)
 
-	if err := f.loadFromGist(t.Context()); err != nil {
+	if err := f.loadState(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 
 	testutil.AssertEqual(t, f.errorTemplate, "test")
 }
 
-func TestLoadFromGistHandleError(t *testing.T) {
-	t.Parallel()
-
-	tm := testMux(t, map[string]http.HandlerFunc{
-		"GET api.github.com/gists/test": func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusNotFound)
-			w.Write(gistErrorJSON)
-		},
-	})
-	f := testFetcher(t, tm)
-	err := f.loadFromGist(t.Context())
-	testutil.AssertEqual(t, err.Error(), fmt.Sprintf("GET \"https://api.github.com/gists/test\": want 200, got 404: %s", gistErrorJSON))
-}
-
 func TestParseConfig(t *testing.T) {
 	testutil.RunGolden(t, "testdata/config/*.star", func(t *testing.T, match string) []byte {
 		config := readFile(t, match)
-
-		tm := testMux(t, nil)
 
 		ar := &txtar.Archive{
 			Files: []txtar.File{
 				{Name: "config.star", Data: config},
 			},
 		}
-		tm.gist = txtarToGist(t, txtar.Format(ar))
 
+		tm := testMux(t, txtarToFS(ar), nil)
 		f := testFetcher(t, tm)
 		if err := f.run(t.Context()); err != nil {
 			return fmt.Appendf(nil, "Error: %v", err)

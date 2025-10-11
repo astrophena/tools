@@ -1,25 +1,29 @@
 [Unit]
-Description=tgfeed
-# This service is triggered by tgfeed.timer, not started at boot.
+Description=tgfeed admin API server
+# This service runs continuously to provide remote management API.
 Wants=network-online.target
 After=network-online.target
 
 [Service]
-# This is a one-shot command, not a daemon.
-Type=oneshot
+# This is a long-running daemon service.
+Type=notify
 
 # Path to the tgfeed binary.
-ExecStart=/srv/tgfeed/current/bin/tgfeed run
+ExecStart=/srv/tgfeed/current/bin/tgfeed admin
 
 # Load secrets from a configuration file.
 EnvironmentFile=/etc/tgfeed.conf
+
+# Set the admin socket path.
+Environment=ADMIN_ADDR=/run/tgfeed/admin-socket
 
 # Run as a transient, unprivileged user.
 User=tgfeed
 DynamicUser=yes
 
-# Allocate a directory for tgfeed's state.
+# Allocate directories for tgfeed's state and runtime socket.
 StateDirectory=tgfeed
+RuntimeDirectory=tgfeed
 
 #
 # Sandboxing and Hardening
@@ -73,3 +77,6 @@ RemoveIPC=yes
 # not needed by the service.
 SystemCallArchitectures=native
 SystemCallFilter=~@clock @cpu-emulation @debug @module @mount @obsolete @privileged @raw-io @reboot @resources @swap
+
+[Install]
+WantedBy=multi-user.target

@@ -11,6 +11,7 @@ import (
 
 	"go.astrophena.name/base/cli"
 	"go.astrophena.name/base/testutil"
+	"go.astrophena.name/base/txtar"
 	"go.astrophena.name/tools/internal/rr"
 )
 
@@ -23,8 +24,7 @@ func TestGitHubNotificationsFeed(t *testing.T) {
 	}
 	defer rec.Close()
 
-	tm := testMux(t, nil)
-	tm.gist = txtarToGist(t, githubNotificationsTxtar)
+	tm := testMux(t, txtarToFS(txtar.Parse(githubNotificationsTxtar)), nil)
 	f := testFetcher(t, tm)
 	f.httpc = &http.Client{
 		Transport: &roundTripper{f.httpc.Transport, rec.Client().Transport},

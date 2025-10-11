@@ -5,15 +5,24 @@
 package main
 
 import (
+	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"io/fs"
+	"net"
+	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
+	"go.astrophena.name/base/request"
 	"go.astrophena.name/base/syncx"
-	"go.astrophena.name/tools/internal/api/gist"
 	"go.astrophena.name/tools/internal/starlark/interpreter"
 
 	"go.starlark.net/starlark"
@@ -69,24 +78,22 @@ func (f *fetcher) getState(url string) (state *feedState, exists bool) {
 	return
 }
 
-func (f *fetcher) loadFromGist(ctx context.Context) error {
-	g, err := f.gistc.Get(ctx, f.gistID)
+func (f *fetcher) loadState(ctx context.Context) error {
+	if f.remoteURL != "" {
+		return f.loadStateRemote(ctx)
+	}
+
+	errorTemplateBytes, err := os.ReadFile(filepath.Join(f.stateDir, "error.tmpl"))
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+	f.errorTemplate = cmp.Or(string(errorTemplateBytes), defaultErrorTemplate)
+
+	configBytes, err := os.ReadFile(filepath.Join(f.stateDir, "config.star"))
 	if err != nil {
 		return err
 	}
-
-	errorTemplate, ok := g.Files["error.tmpl"]
-	if ok {
-		f.errorTemplate = errorTemplate.Content
-	} else {
-		f.errorTemplate = defaultErrorTemplate
-	}
-
-	config, ok := g.Files["config.star"]
-	if !ok {
-		return errors.New("config.star not found")
-	}
-	f.config = config.Content
+	f.config = string(configBytes)
 
 	f.feeds, err = f.parseConfig(ctx, f.config)
 	if err != nil {
@@ -94,13 +101,72 @@ func (f *fetcher) loadFromGist(ctx context.Context) error {
 	}
 
 	stateMap := make(map[string]*feedState)
-	state, ok := g.Files["state.json"]
-	if ok {
-		if err := json.Unmarshal([]byte(state.Content), &stateMap); err != nil {
+	state, err := os.ReadFile(filepath.Join(f.stateDir, "state.json"))
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+	if state != nil {
+		if err := json.Unmarshal([]byte(state), &stateMap); err != nil {
 			return err
 		}
 	}
 	f.state = syncx.Protect(stateMap)
+
+	return nil
+}
+
+type errorResponse struct {
+	Error string `json:"error"`
+}
+
+func (f *fetcher) loadStateRemote(ctx context.Context) error {
+	fetch := func(url string) ([]byte, error) {
+		b, err := request.Make[request.Bytes](ctx, request.Params{
+			Method:     http.MethodGet,
+			URL:        f.apiURL(url),
+			HTTPClient: f.httpClient(),
+		})
+		if err != nil {
+			var statusErr *request.StatusError
+			if errors.As(err, &statusErr) {
+				var errResp *errorResponse
+				if jsonErr := json.Unmarshal(statusErr.Body, &errResp); jsonErr == nil {
+					err = errors.New(errResp.Error)
+				}
+			}
+			return nil, err
+		}
+		return b, err
+	}
+
+	configBytes, err := fetch("/api/config")
+	if err != nil {
+		return fmt.Errorf("failed to fetch config from remote: %w", err)
+	}
+	f.config = string(configBytes)
+	f.feeds, err = f.parseConfig(ctx, f.config)
+	if err != nil {
+		return err
+	}
+
+	stateBytes, err := fetch("/api/state")
+	if err != nil {
+		return fmt.Errorf("failed to fetch state from remote: %w", err)
+	}
+
+	stateMap := make(map[string]*feedState)
+	if len(stateBytes) > 0 {
+		if err := json.Unmarshal(stateBytes, &stateMap); err != nil {
+			return fmt.Errorf("failed to parse state JSON: %w", err)
+		}
+	}
+	f.state = syncx.Protect(stateMap)
+
+	errorTemplateBytes, err := fetch("/api/error-template")
+	if err != nil {
+		return fmt.Errorf("failed to fetch error template from remote: %w", err)
+	}
+	f.errorTemplate = string(errorTemplateBytes)
 
 	return nil
 }
@@ -137,7 +203,11 @@ func (f *fetcher) parseConfig(ctx context.Context, config string) ([]*feed, erro
 	return feeds, nil
 }
 
-func (f *fetcher) saveToGist(ctx context.Context) error {
+func (f *fetcher) saveState(ctx context.Context) error {
+	if f.remoteURL != "" {
+		return f.saveStateRemote(ctx)
+	}
+
 	var (
 		state []byte
 		err   error
@@ -148,12 +218,109 @@ func (f *fetcher) saveToGist(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	ng := &gist.Gist{
-		Files: map[string]gist.File{
-			"config.star": {Content: f.config},
-			"state.json":  {Content: string(state)},
-		},
+	return os.WriteFile(filepath.Join(f.stateDir, "state.json"), state, 0o644)
+}
+
+func (f *fetcher) saveStateRemote(ctx context.Context) error {
+	var (
+		state []byte
+		err   error
+	)
+	f.state.ReadAccess(func(s map[string]*feedState) {
+		state, err = json.MarshalIndent(s, "", "  ")
+	})
+	if err != nil {
+		return err
 	}
-	_, err = f.gistc.Update(ctx, f.gistID, ng)
-	return err
+
+	_, err = request.Make[request.IgnoreResponse](ctx, request.Params{
+		Method: http.MethodPut,
+		URL:    f.apiURL("/api/state"),
+		Body:   bytes.NewReader(state),
+		Headers: map[string]string{
+			"Content-Type": "application/json",
+		},
+		HTTPClient: f.httpClient(),
+	})
+	if err != nil {
+		var statusErr *request.StatusError
+		if errors.As(err, &statusErr) {
+			// It actually succeeded. That's fine.
+			// FIXME: make request.Make support http.StatusNoContent and refactor this code.
+			if statusErr.StatusCode == http.StatusNoContent {
+				return nil
+			}
+		}
+		return fmt.Errorf("failed to save state to remote: %w", err)
+	}
+
+	return nil
+}
+
+func (f *fetcher) saveConfig() error {
+	if f.remoteURL != "" {
+		return f.saveConfigRemote()
+	}
+	return os.WriteFile(filepath.Join(f.stateDir, "config.star"), []byte(f.config), 0o644)
+}
+
+func (f *fetcher) saveConfigRemote() error {
+	client := f.httpClient()
+	req, err := http.NewRequest(http.MethodPut, f.apiURL("/api/config"), strings.NewReader(f.config))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "text/plain")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to save config to remote: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusNoContent {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to save config: status %d: %s", resp.StatusCode, string(body))
+	}
+
+	return nil
+}
+
+func (f *fetcher) httpClient() *http.Client {
+	if strings.HasPrefix(f.remoteURL, "/") {
+		// Unix socket.
+		return &http.Client{
+			Transport: &http.Transport{
+				DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+					return (&net.Dialer{}).DialContext(ctx, "unix", f.remoteURL)
+				},
+			},
+		}
+	}
+	return f.httpc
+}
+
+func (f *fetcher) apiURL(endpoint string) string {
+	if strings.HasPrefix(f.remoteURL, "/") {
+		// For Unix sockets, use dummy host.
+		return "http://unix" + endpoint
+	}
+	return f.remoteURL + endpoint
+}
+
+func (f *fetcher) acquireRunLock() error {
+	lockPath := filepath.Join(f.stateDir, ".run.lock")
+	if _, err := os.Stat(lockPath); err == nil {
+		return fmt.Errorf("%w: lock file exists at %s", errAlreadyRunning, lockPath)
+	}
+	return os.WriteFile(lockPath, fmt.Append(nil, os.Getpid()), 0o644)
+}
+
+func (f *fetcher) releaseRunLock() error {
+	return os.Remove(filepath.Join(f.stateDir, ".run.lock"))
+}
+
+func (f *fetcher) isRunLocked() bool {
+	_, err := os.Stat(filepath.Join(f.stateDir, ".run.lock"))
+	return err == nil
 }
