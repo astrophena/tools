@@ -34,7 +34,7 @@ Required:
 
   - CHAT_ID: Telegram chat ID where the program sends new articles.
   - STATE_DIRECTORY: Directory where tgfeed stores its state files (config.star,
-    state.json, error.tmpl). Defaults to $XDG_CONFIG_STATE/tgfeed if not
+    state.json, error.tmpl). Defaults to $XDG_STATE_HOME/tgfeed directory if not
     set (~/.local/state/tgfeed).
   - TELEGRAM_TOKEN: Telegram bot token for accessing the Telegram Bot API.
 
