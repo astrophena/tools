@@ -6,7 +6,11 @@ After=network-online.target
 
 [Service]
 # This is a long-running daemon service.
-Type=simple
+Type=notify
+
+# Enable watchdog to monitor service health.
+WatchdogSec=60s
+WatchdogSignal=SIGKILL
 
 # Path to the tgfeed binary.
 ExecStart=/srv/tgfeed/current/bin/tgfeed admin
