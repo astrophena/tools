@@ -23,6 +23,14 @@ var errConflict = web.StatusErr(http.StatusConflict)
 func (f *fetcher) admin(ctx context.Context) error {
 	mux := http.NewServeMux()
 
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" {
+			web.RespondJSONError(w, r, web.ErrNotFound)
+			return
+		}
+		http.Redirect(w, r, "/debug/", http.StatusFound)
+	})
+
 	mux.HandleFunc("/api/config", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
@@ -55,9 +63,10 @@ func (f *fetcher) admin(ctx context.Context) error {
 	})
 
 	srv := &web.Server{
-		Mux:        mux,
-		Addr:       f.adminAddr,
-		Debuggable: true,
+		Mux:           mux,
+		Addr:          f.adminAddr,
+		Debuggable:    true,
+		NotifySystemd: true,
 	}
 
 	return srv.ListenAndServe(ctx)

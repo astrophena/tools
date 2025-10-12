@@ -5,13 +5,11 @@
 package main
 
 import (
-	"bytes"
 	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
 	"net"
 	"net/http"
@@ -236,53 +234,41 @@ func (f *fetcher) saveStateRemote(ctx context.Context) error {
 	_, err = request.Make[request.IgnoreResponse](ctx, request.Params{
 		Method: http.MethodPut,
 		URL:    f.apiURL("/api/state"),
-		Body:   bytes.NewReader(state),
+		Body:   state,
 		Headers: map[string]string{
 			"Content-Type": "application/json",
 		},
-		HTTPClient: f.httpClient(),
+		WantStatusCode: http.StatusNoContent,
+		HTTPClient:     f.httpClient(),
 	})
 	if err != nil {
-		var statusErr *request.StatusError
-		if errors.As(err, &statusErr) {
-			// It actually succeeded. That's fine.
-			// FIXME: make request.Make support http.StatusNoContent and refactor this code.
-			if statusErr.StatusCode == http.StatusNoContent {
-				return nil
-			}
-		}
 		return fmt.Errorf("failed to save state to remote: %w", err)
 	}
 
 	return nil
 }
 
-func (f *fetcher) saveConfig() error {
+func (f *fetcher) saveConfig(ctx context.Context) error {
 	if f.remoteURL != "" {
-		return f.saveConfigRemote()
+		return f.saveConfigRemote(ctx)
 	}
 	return os.WriteFile(filepath.Join(f.stateDir, "config.star"), []byte(f.config), 0o644)
 }
 
-func (f *fetcher) saveConfigRemote() error {
-	client := f.httpClient()
-	req, err := http.NewRequest(http.MethodPut, f.apiURL("/api/config"), strings.NewReader(f.config))
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
-	}
-	req.Header.Set("Content-Type", "text/plain")
-
-	resp, err := client.Do(req)
+func (f *fetcher) saveConfigRemote(ctx context.Context) error {
+	_, err := request.Make[request.IgnoreResponse](ctx, request.Params{
+		Method: http.MethodPut,
+		URL:    f.apiURL("/api/config"),
+		Body:   []byte(f.config),
+		Headers: map[string]string{
+			"Content-Type": "text/plain",
+		},
+		WantStatusCode: http.StatusNoContent,
+		HTTPClient:     f.httpClient(),
+	})
 	if err != nil {
 		return fmt.Errorf("failed to save config to remote: %w", err)
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusNoContent {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to save config: status %d: %s", resp.StatusCode, string(body))
-	}
-
 	return nil
 }
 

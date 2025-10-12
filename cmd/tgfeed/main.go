@@ -303,7 +303,7 @@ func (f *fetcher) edit(ctx context.Context) error {
 		break
 	}
 
-	return f.saveConfig()
+	return f.saveConfig(ctx)
 }
 
 // ask prompts the user for a yes or no answer.
