@@ -6,7 +6,7 @@ After=network-online.target
 
 [Service]
 # This is a long-running daemon service.
-Type=notify
+Type=simple
 
 # Path to the tgfeed binary.
 ExecStart=/srv/tgfeed/current/bin/tgfeed admin
