@@ -12,7 +12,6 @@ import (
 	_ "embed"
 	"errors"
 	"log/slog"
-	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -79,24 +78,6 @@ func (e *engine) Run(ctx context.Context) error {
 
 	if err := e.setWebhook(ctx); err != nil {
 		return err
-	}
-
-	sdNotify(ctx, sdNotifyReady)
-	interval := watchdogInterval(env)
-	if interval > 0 {
-		go func() {
-			ticker := time.NewTicker(interval / 2)
-			defer ticker.Stop()
-
-			for {
-				select {
-				case <-ticker.C:
-					sdNotify(ctx, sdNotifyWatchdog)
-				case <-ctx.Done():
-					return
-				}
-			}
-		}()
 	}
 
 	g, ctx := errgroup.WithContext(ctx)
@@ -251,11 +232,12 @@ func (e *engine) doInit(ctx context.Context) error {
 
 	e.initRoutes()
 	e.srv = &web.Server{
-		Addr:     e.addr,
-		Mux:      e.mux,
-		Ready:    e.ready,
-		StaticFS: staticFS,
-		CSP:      e.cspMux,
+		Addr:          e.addr,
+		Mux:           e.mux,
+		Ready:         e.ready,
+		StaticFS:      staticFS,
+		CSP:           e.cspMux,
+		NotifySystemd: true,
 	}
 
 	return nil
@@ -299,51 +281,4 @@ func (e *engine) loadFromGist(ctx context.Context) error {
 	}
 
 	return e.bot.Load(ctx, files)
-}
-
-const (
-	// sdNotifyReady tells the service manager that service startup is
-	// finished, or the service finished loading its configuration.
-	// https://www.freedesktop.org/software/systemd/man/sd_notify.html#READY=1
-	sdNotifyReady = "READY=1"
-
-	// sdNotifyWatchdog the service manager to update the watchdog timestamp.
-	// https://www.freedesktop.org/software/systemd/man/sd_notify.html#WATCHDOG=1
-	sdNotifyWatchdog = "WATCHDOG=1"
-)
-
-// watchdogInterval returns the watchdog interval configured in systemd unit file.
-func watchdogInterval(env *cli.Env) time.Duration {
-	s, err := strconv.Atoi(env.Getenv("WATCHDOG_USEC"))
-	if err != nil {
-		return 0
-	}
-	if s <= 0 {
-		return 0
-	}
-	return time.Duration(s) * time.Microsecond
-}
-
-// sdNotify sends a message to systemd using the sd_notify protocol.
-// See https://www.freedesktop.org/software/systemd/man/sd_notify.html.
-func sdNotify(ctx context.Context, state string) {
-	addr := &net.UnixAddr{
-		Net:  "unixgram",
-		Name: cli.GetEnv(ctx).Getenv("NOTIFY_SOCKET"),
-	}
-
-	if addr.Name == "" {
-		// We're not running under systemd (NOTIFY_SOCKET is not set).
-		return
-	}
-
-	conn, err := net.DialUnix(addr.Net, nil, addr)
-	if err != nil {
-		logger.Error(ctx, "sdnotify failed", slog.String("state", state), slog.Any("err", err))
-	}
-	defer conn.Close()
-
-	if _, err = conn.Write([]byte(state)); err != nil {
-		logger.Error(ctx, "sdnotify failed", slog.String("state", state), slog.Any("err", err))
-	}
 }
