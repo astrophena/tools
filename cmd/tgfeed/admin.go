@@ -62,6 +62,14 @@ func (f *fetcher) admin(ctx context.Context) error {
 		}
 	})
 
+	dbg := web.Debugger(mux)
+	dbg.Link("/api/config", "Config")
+	dbg.Link("/api/state", "State")
+	dbg.Link("/api/error-template", "Error template")
+	if f.statsSpreadsheetID != "" {
+		dbg.Link(fmt.Sprintf("https://docs.google.com/spreadsheets/d/%s/view", f.statsSpreadsheetID), "Stats")
+	}
+
 	srv := &web.Server{
 		Mux:           mux,
 		Addr:          f.adminAddr,
