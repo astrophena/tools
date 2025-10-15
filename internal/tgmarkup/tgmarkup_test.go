@@ -13,8 +13,8 @@ import (
 	"testing"
 
 	"go.astrophena.name/base/request"
+	"go.astrophena.name/base/rr"
 	"go.astrophena.name/base/testutil"
-	"go.astrophena.name/tools/internal/rr"
 )
 
 // Updating this test:

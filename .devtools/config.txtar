@@ -1,8 +1,6 @@
 -- copyright/exclusions.json --
 [
   "cmd/tgfeed/internal/diff/diff.go",
-  "internal/rr/rr.go",
-  "internal/rr/rr_test.go",
   "internal/starlark/interpreter/interpreter.go",
   "internal/starlark/interpreter/loaders.go"
 ]

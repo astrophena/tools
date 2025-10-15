@@ -11,7 +11,7 @@ require (
 	github.com/mmcdole/gofeed v1.3.0
 	github.com/tailscale/sqlite v0.0.0-20250822145721-1673cdf564b7
 	github.com/tobischo/gokeepasslib/v3 v3.6.1
-	go.astrophena.name/base v0.12.6-0.20251012164634-d77dda49c1dc
+	go.astrophena.name/base v0.13.0
 	go.starlark.net v0.0.0-20250906160240-bf296ed553ea
 	golang.org/x/sync v0.17.0
 	golang.org/x/term v0.36.0

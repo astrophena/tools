@@ -14,9 +14,9 @@ import (
 	"strings"
 	"testing"
 
+	"go.astrophena.name/base/rr"
 	"go.astrophena.name/base/testutil"
 	"go.astrophena.name/tools/internal/api/gemini"
-	"go.astrophena.name/tools/internal/rr"
 	"go.astrophena.name/tools/internal/starlark/interpreter"
 
 	"go.starlark.net/starlark"

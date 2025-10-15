@@ -10,8 +10,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"go.astrophena.name/tools/internal/rr"
-
+	"go.astrophena.name/base/rr"
 	"go.astrophena.name/base/testutil"
 )
 
