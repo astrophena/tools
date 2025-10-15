@@ -3,7 +3,7 @@ module go.astrophena.name/tools
 go 1.25
 
 require (
-	github.com/arl/statsviz v0.7.1
+	github.com/arl/statsviz v0.7.2
 	github.com/dhowden/tag v0.0.0-20240417053706-3d75831295e8
 	github.com/golang-jwt/jwt/v5 v5.3.0
 	github.com/google/go-cmp v0.7.0
