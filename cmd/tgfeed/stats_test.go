@@ -13,7 +13,7 @@ import (
 
 	"go.astrophena.name/base/request"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/serviceaccount"
-	"go.astrophena.name/tools/internal/rr"
+	"go.astrophena.name/base/rr"
 )
 
 // Updating this test:

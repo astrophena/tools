@@ -10,9 +10,9 @@ import (
 	"testing"
 
 	"go.astrophena.name/base/cli"
+	"go.astrophena.name/base/rr"
 	"go.astrophena.name/base/testutil"
 	"go.astrophena.name/base/txtar"
-	"go.astrophena.name/tools/internal/rr"
 )
 
 func TestGitHubNotificationsFeed(t *testing.T) {
