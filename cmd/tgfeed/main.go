@@ -33,7 +33,6 @@ import (
 	"go.astrophena.name/base/request"
 	"go.astrophena.name/base/syncx"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/diff"
-	"go.astrophena.name/tools/cmd/tgfeed/internal/serviceaccount"
 
 	"github.com/mmcdole/gofeed"
 )
@@ -80,20 +79,7 @@ func (f *fetcher) Run(ctx context.Context) error {
 			return err
 		}
 	}
-	f.statsSpreadsheetID = cmp.Or(f.statsSpreadsheetID, env.Getenv("STATS_SPREADSHEET_ID"))
-	f.statsSpreadsheetSheet = cmp.Or(f.statsSpreadsheetSheet, env.Getenv("STATS_SPREADSHEET_SHEET"), "Stats")
 	f.tgToken = cmp.Or(f.tgToken, env.Getenv("TELEGRAM_TOKEN"))
-
-	// Load Google service account key from SERVICE_ACCOUNT_KEY environment
-	// variable. If it's not defined, stats won't be uploaded to a Google
-	// spreadsheet.
-	if key := env.Getenv("SERVICE_ACCOUNT_KEY"); key != "" {
-		var err error
-		f.serviceAccountKey, err = serviceaccount.LoadKey([]byte(key))
-		if err != nil {
-			return err
-		}
-	}
 
 	// Initialize internal state.
 	f.init.Do(func() {
@@ -145,17 +131,14 @@ type fetcher struct {
 	init    sync.Once
 
 	// configuration
-	adminAddr             string
-	chatID                string
-	dry                   bool
-	errorThreadID         int64
-	ghToken               string
-	remoteURL             string
-	serviceAccountKey     *serviceaccount.Key
-	stateDir              string
-	statsSpreadsheetID    string
-	statsSpreadsheetSheet string
-	tgToken               string
+	adminAddr     string
+	chatID        string
+	dry           bool
+	errorThreadID int64
+	ghToken       string
+	remoteURL     string
+	stateDir      string
+	tgToken       string
 
 	// initialized by doInit
 	fp        *gofeed.Parser
@@ -433,17 +416,11 @@ func (f *fetcher) run(ctx context.Context) error {
 		return nil
 	}
 
-	if f.serviceAccountKey != nil && f.statsSpreadsheetID != "" {
-		token, err := f.serviceAccountKey.AccessToken(ctx, f.httpc, spreadsheetsScope)
-		if err != nil {
-			return err
+	f.stats.ReadAccess(func(s *stats) {
+		if err := f.putStats(ctx, s); err != nil {
+			f.slog.Warn("failed to upload stats", "error", err)
 		}
-		f.stats.ReadAccess(func(s *stats) {
-			if err := f.uploadStatsToSheets(ctx, token, s); err != nil {
-				f.slog.Warn("failed to upload stats", "error", err)
-			}
-		})
-	}
+	})
 
 	return f.saveState(ctx)
 }

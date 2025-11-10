@@ -6,6 +6,7 @@ package main
 
 import (
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,6 +15,10 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
+	"strconv"
+	"strings"
+	"time"
 
 	"go.astrophena.name/base/web"
 )
@@ -61,14 +66,13 @@ func (f *fetcher) admin(ctx context.Context) error {
 			web.RespondJSONError(w, r, fmt.Errorf("method not allowed: %w", web.ErrMethodNotAllowed))
 		}
 	})
+	mux.HandleFunc("/debug/stats.csv", f.handleStatsCSV)
 
 	dbg := web.Debugger(mux)
 	dbg.Link("/api/config", "Config")
 	dbg.Link("/api/state", "State")
 	dbg.Link("/api/error-template", "Error template")
-	if f.statsSpreadsheetID != "" {
-		dbg.Link(fmt.Sprintf("https://docs.google.com/spreadsheets/d/%s/view", f.statsSpreadsheetID), "Stats")
-	}
+	dbg.Link("/debug/stats.csv", "Download Stats (CSV)")
 
 	srv := &web.Server{
 		Mux:           mux,
@@ -189,4 +193,77 @@ func (f *fetcher) handlePutErrorTemplate(w http.ResponseWriter, r *http.Request)
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (f *fetcher) handleStatsCSV(w http.ResponseWriter, r *http.Request) {
+	statsDir := filepath.Join(f.stateDir, "stats")
+	entries, err := os.ReadDir(statsDir)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			http.Error(w, "No stats available.", http.StatusNotFound)
+			return
+		}
+		web.RespondJSONError(w, r, fmt.Errorf("reading stats directory: %w", err))
+		return
+	}
+
+	var allStats []stats
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
+			continue
+		}
+		path := filepath.Join(statsDir, entry.Name())
+		b, err := os.ReadFile(path)
+		if err != nil {
+			web.RespondJSONError(w, r, fmt.Errorf("reading stats file %s: %w", path, err))
+			return
+		}
+
+		var s stats
+		if err := json.Unmarshal(b, &s); err != nil {
+			web.RespondJSONError(w, r, fmt.Errorf("parsing stats file %s: %w", path, err))
+			return
+		}
+		allStats = append(allStats, s)
+	}
+
+	// Sort by start time, newest first.
+	slices.SortFunc(allStats, func(a, b stats) int {
+		return b.StartTime.Compare(a.StartTime)
+	})
+
+	w.Header().Set("Content-Type", "text/csv")
+	w.Header().Set("Content-Disposition", `attachment; filename="stats.csv"`)
+
+	csvWriter := csv.NewWriter(w)
+	defer csvWriter.Flush()
+
+	header := []string{
+		"StartTime", "Duration", "TotalFeeds", "SuccessFeeds",
+		"FailedFeeds", "NotModifiedFeeds", "TotalItemsParsed",
+		"TotalFetchTime", "AvgFetchTime", "MemoryUsage (Bytes)",
+	}
+	if err := csvWriter.Write(header); err != nil {
+		f.slog.Error("failed to write CSV header", "err", err)
+		return
+	}
+
+	for _, s := range allStats {
+		record := []string{
+			s.StartTime.Format(time.RFC3339),
+			s.Duration.String(),
+			strconv.Itoa(s.TotalFeeds),
+			strconv.Itoa(s.SuccessFeeds),
+			strconv.Itoa(s.FailedFeeds),
+			strconv.Itoa(s.NotModifiedFeeds),
+			strconv.Itoa(s.TotalItemsParsed),
+			s.TotalFetchTime.String(),
+			s.AvgFetchTime.String(),
+			strconv.FormatUint(s.MemoryUsage, 10),
+		}
+		if err := csvWriter.Write(record); err != nil {
+			f.slog.Error("failed to write CSV record", "err", err)
+			return
+		}
+	}
 }

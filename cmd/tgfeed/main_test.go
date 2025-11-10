@@ -125,13 +125,12 @@ func readFile(t *testing.T, path string) []byte {
 
 func testFetcher(t *testing.T, m *mux) *fetcher {
 	f := &fetcher{
-		httpc:              testutil.MockHTTPClient(m.mux),
-		logf:               t.Logf,
-		ghToken:            "superdupersecret",
-		stateDir:           m.stateDir,
-		tgToken:            tgToken,
-		chatID:             "test",
-		statsSpreadsheetID: "test",
+		httpc:    testutil.MockHTTPClient(m.mux),
+		logf:     t.Logf,
+		ghToken:  "superdupersecret",
+		stateDir: m.stateDir,
+		tgToken:  tgToken,
+		chatID:   "test",
 	}
 	f.init.Do(func() {
 		f.doInit(t.Context())
