@@ -1,0 +1,10 @@
+[Unit]
+Description=tgfeed Admin Socket
+
+[Socket]
+ListenStream=/run/tgfeed/admin-socket
+Service=tgfeed-admin.service
+SocketMode=0666
+
+[Install]
+WantedBy=sockets.target

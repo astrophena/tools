@@ -26,7 +26,7 @@ jobs:
         run: |
           mkdir -p build/bin build/etc/systemd/system
           go build -ldflags="-s -w -buildid=" -trimpath -o build/bin/starlet ./cmd/starlet
-          cp cmd/starlet/starlet.service build/etc/systemd/system
+          cp cmd/starlet/*.service cmd/starlet/*.socket build/etc/systemd/system
           tar -czf archive.tar.gz -C build .
       - name: 'Deploy'
         run: 'go tool deploy -type service starlet archive.tar.gz'
@@ -49,6 +49,7 @@ jobs:
           go build -ldflags="-s -w -buildid=" -trimpath -o build/bin/tgfeed ./cmd/tgfeed
           cp cmd/tgfeed/tgfeed.service build/etc/systemd/system
           cp cmd/tgfeed/tgfeed-admin.service build/etc/systemd/system
+          cp cmd/tgfeed/tgfeed-admin.socket build/etc/systemd/system
           cp cmd/tgfeed/tgfeed.timer build/etc/systemd/system
           tar -czf archive.tar.gz -C build .
       - name: 'Deploy'

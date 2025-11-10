@@ -1,0 +1,10 @@
+[Unit]
+Description=starlet Socket
+
+[Socket]
+ListenStream=/run/starlet/socket
+Service=starlet.service
+SocketMode=0666
+
+[Install]
+WantedBy=sockets.target

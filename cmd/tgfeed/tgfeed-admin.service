@@ -19,15 +19,14 @@ ExecStart=/srv/tgfeed/current/bin/tgfeed admin
 EnvironmentFile=/etc/tgfeed.conf
 
 # Set the admin socket path.
-Environment=ADMIN_ADDR=/run/tgfeed/admin-socket
+Environment=ADMIN_ADDR=sd-socket:tgfeed-admin.socket
 
 # Run as a transient, unprivileged user.
 User=tgfeed
 DynamicUser=yes
 
-# Allocate directories for tgfeed's state and runtime socket.
+# Allocate directory for tgfeed's state.
 StateDirectory=tgfeed
-RuntimeDirectory=tgfeed
 
 #
 # Sandboxing and Hardening
@@ -81,6 +80,3 @@ RemoveIPC=yes
 # not needed by the service.
 SystemCallArchitectures=native
 SystemCallFilter=~@clock @cpu-emulation @debug @module @mount @obsolete @privileged @raw-io @reboot @resources @swap
-
-[Install]
-WantedBy=multi-user.target

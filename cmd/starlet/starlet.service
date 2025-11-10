@@ -1,30 +1,25 @@
 [Unit]
 Description=starlet
-# Ensure the network is fully available before starting the bot.
-Wants=network-online.target
-After=network-online.target
 
 [Service]
 Type=notify
 ExecStart=/srv/starlet/current/bin/starlet
 EnvironmentFile=/etc/starlet.conf
 Environment="DATABASE_PATH=/var/lib/starlet/starlet.db"
-Environment="ADMIN_ADDR=/run/starlet/admin-socket"
+Environment="ADDR=sd-socket:starlet.socket"
+Environment="ADMIN_ADDR=sd-socket:starlet-admin.socket"
 
 # Run as a transient, unprivileged user.
 User=starlet
 DynamicUser=yes
 
 # Automatically restart Starlet if it crashes.
-Restart=always
+Restart=on-failure
 RestartSec=5
 
 # Enable watchdog to monitor service health.
 WatchdogSec=60s
 WatchdogSignal=SIGKILL
-
-# Allocate a directory at /run/starlet for Unix sockets.
-RuntimeDirectory=starlet
 
 #
 # Sandboxing and Hardening
@@ -115,6 +110,3 @@ LimitNOFILE=1024:524288
 LimitNPROC=100
 # Prevent the process from locking memory into RAM.
 LimitMEMLOCK=0
-
-[Install]
-WantedBy=network-online.target
