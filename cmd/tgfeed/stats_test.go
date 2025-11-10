@@ -5,62 +5,20 @@
 package main
 
 import (
-	"net/http"
+	"encoding/json"
 	"os"
-	"strings"
+	"path/filepath"
 	"testing"
 	"time"
 
-	"go.astrophena.name/base/request"
-	"go.astrophena.name/tools/cmd/tgfeed/internal/serviceaccount"
-	"go.astrophena.name/base/rr"
+	"go.astrophena.name/base/testutil"
 )
 
-// Updating this test:
-//
-//	$ SERVICE_ACCOUNT_FILE=... STATS_SPREADSHEET_ID=... go test -httprecord testdata/load/stats.httprr -run TestUploadStatsToSheets
-//
-
-func TestUploadStatsToSheets(t *testing.T) {
-	var (
-		key                  *serviceaccount.Key
-		token                = "test"
-		defaultSpreadsheetID = "123456789_ABCDEFGHIMgy0tHXlXy"
-		spreadsheetID        = defaultSpreadsheetID
-	)
-
-	rec, err := rr.Open("testdata/load/stats.httprr", http.DefaultTransport)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer rec.Close()
-	rec.ScrubReq(func(r *http.Request) error {
-		r.URL.Path = strings.ReplaceAll(r.URL.Path, spreadsheetID, defaultSpreadsheetID)
-		r.Header.Del("Authorization")
-		r.Header.Set("Authorization", "Bearer test")
-		return nil
-	})
-
-	if rec.Recording() {
-		spreadsheetID = os.Getenv("STATS_SPREADSHEET_ID")
-		b, err := os.ReadFile(os.Getenv("SERVICE_ACCOUNT_FILE"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		key, err = serviceaccount.LoadKey(b)
-		if err != nil {
-			t.Fatal(err)
-		}
-		token, err = key.AccessToken(t.Context(), request.DefaultClient, spreadsheetsScope)
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
-
+func TestPutStats(t *testing.T) {
+	stateDir := t.TempDir()
 	f := &fetcher{
-		httpc:              rec.Client(),
-		logf:               t.Logf,
-		statsSpreadsheetID: spreadsheetID,
+		logf:     t.Logf,
+		stateDir: stateDir,
 	}
 
 	s := &stats{
@@ -76,7 +34,29 @@ func TestUploadStatsToSheets(t *testing.T) {
 		MemoryUsage:      9,
 	}
 
-	if err := f.uploadStatsToSheets(t.Context(), token, s); err != nil {
+	if err := f.putStats(t.Context(), s); err != nil {
 		t.Fatal(err)
 	}
+
+	statsDir := filepath.Join(stateDir, "stats")
+	entries, err := os.ReadDir(statsDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 file in stats directory, got %d", len(entries))
+	}
+
+	statsFile := filepath.Join(statsDir, entries[0].Name())
+	b, err := os.ReadFile(statsFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var got stats
+	if err := json.Unmarshal(b, &got); err != nil {
+		t.Fatal(err)
+	}
+
+	testutil.AssertEqual(t, got, *s)
 }

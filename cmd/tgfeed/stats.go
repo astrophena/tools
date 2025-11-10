@@ -6,20 +6,10 @@ package main
 
 import (
 	"context"
-	"fmt"
-	"net/http"
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"time"
-
-	"go.astrophena.name/base/request"
-	"go.astrophena.name/base/version"
-)
-
-// Uploading stats to Google Sheets.
-
-const (
-	spreadsheetsScope = "https://www.googleapis.com/auth/spreadsheets"
-	sheetsAPI         = "https://sheets.googleapis.com/v4/"
-	defaultSheet      = "Stats"
 )
 
 type stats struct {
@@ -38,57 +28,17 @@ type stats struct {
 	MemoryUsage uint64 `json:"memory_usage"`
 }
 
-func (f *fetcher) uploadStatsToSheets(ctx context.Context, token string, s *stats) error {
-	sheet := f.statsSpreadsheetSheet
-	if sheet == "" {
-		sheet = defaultSheet
+func (f *fetcher) putStats(ctx context.Context, s *stats) error {
+	statsDir := filepath.Join(f.stateDir, "stats")
+	if err := os.MkdirAll(statsDir, 0o755); err != nil {
+		return err
 	}
 
-	// https://developers.google.com/sheets/api/reference/rest/v4/spreadsheets.values/append
-	append := struct {
-		Range          string     `json:"range"`
-		MajorDimension string     `json:"majorDimension"`
-		Values         [][]string `json:"values"`
-	}{
-		Range: sheet,
-		// https://developers.google.com/sheets/api/reference/rest/v4/Dimension
-		MajorDimension: "ROWS",
-		Values: [][]string{
-			{
-				fmt.Sprintf("%d", s.TotalFeeds),
-				fmt.Sprintf("%d", s.SuccessFeeds),
-				fmt.Sprintf("%d", s.FailedFeeds),
-				fmt.Sprintf("%d", s.NotModifiedFeeds),
-				s.StartTime.Format(time.RFC3339),
-				s.Duration.String(),
-				fmt.Sprintf("%d", s.TotalItemsParsed),
-				s.TotalFetchTime.String(),
-				s.AvgFetchTime.String(),
-				fmt.Sprintf("%d", s.MemoryUsage),
-			},
-		},
+	js, err := json.MarshalIndent(s, "", "  ")
+	if err != nil {
+		return err
 	}
-	return f.makeSheetsRequest(
-		ctx,
-		http.MethodPost,
-		// https://developers.google.com/sheets/api/reference/rest/v4/ValueInputOption
-		fmt.Sprintf("spreadsheets/%s/values/%s:append?valueInputOption=USER_ENTERED", f.statsSpreadsheetID, sheet),
-		token,
-		append,
-	)
-}
+	statsFile := filepath.Join(statsDir, time.Now().UTC().Format("20060102150405")+".json")
 
-func (f *fetcher) makeSheetsRequest(ctx context.Context, method, path, token string, body any) error {
-	_, err := request.Make[request.IgnoreResponse](ctx, request.Params{
-		Method: method,
-		URL:    sheetsAPI + path,
-		Body:   body,
-		Headers: map[string]string{
-			"Authorization": "Bearer " + token,
-			"User-Agent":    version.UserAgent(),
-		},
-		HTTPClient: f.httpc,
-		Scrubber:   f.scrubber,
-	})
-	return err
+	return os.WriteFile(statsFile, js, 0o644)
 }

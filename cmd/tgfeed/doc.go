@@ -16,7 +16,7 @@ Where <command> is one of the following commands:
   - edit: Open the config.star configuration file in your $EDITOR for editing.
   - feeds: List all configured feeds and their status.
   - reenable: Re-enable a previously disabled feed by its URL.
-  - admin: Start the admin API server for remote state management.
+  - admin: Start the admin API server for remote management and statistics download.
 
 # Flags
 
@@ -49,18 +49,6 @@ Optional:
     Defaults to "/run/tgfeed/admin-socket".
   - ERROR_THREAD_ID: Telegram message thread ID where the program sends error
     notifications. This is applicable only for supergroups with topics enabled.
-
-Required for uploading stats to the Google Spreadsheet:
-
-  - STATS_SPREADSHEET_ID: ID of the Google Spreadsheet to which the program uploads
-    statistics for every run.
-  - STATS_SPREADSHEET_SHEET: Sheet of the Google Spreadsheet to which the
-    program uploads statistics for every run. Defaults to "Stats". You need to
-    create a sheet with this name (or another name, and set the
-    STATS_SPREADSHEET_SHEET environment variable accordingly) in your Google
-    Spreadsheet for stats collection to work.
-  - SERVICE_ACCOUNT_KEY: JSON object string representing the service account key
-    for accessing the Google API.
 
 # Configuration
 
@@ -113,36 +101,35 @@ and disables them after a certain threshold of consecutive failures. State
 information is stored and updated in the state.json file. You won't need to
 touch this file at all, except in very rare cases.
 
-The following files are used:
+The following files and directories are used:
 
   - config.star: Feed configuration written in Starlark.
-  - state.json: Feed state information (last fetch times, errors, stats).
+  - state.json: Feed state information (last fetch times, errors, etc.).
   - error.tmpl: Optional custom error notification template.
+  - stats/: A directory containing JSON files with statistics for each run.
 
 # Stats Collection
 
-tgfeed collects and reports stats about every run to Google Sheets.
-You can specify the ID of the spreadsheet via the STATS_SPREADSHEET_ID
-environment variable. To collect stats, you must provide the SERVICE_ACCOUNT_KEY
-environment variable with JSON string representing the service account key for
-accessing the Google API. You also need to create a sheet named "Stats" (or
-the name specified by STATS_SPREADSHEET_SHEET) in your spreadsheet.
+tgfeed collects statistics for every execution and saves them as individual
+JSON files in the $STATE_DIRECTORY/stats directory. This allows for historical
+performance monitoring.
 
 Stats include:
 
-  - Total number of feeds fetched
+  - Total number of feeds
   - Number of successfully fetched feeds
   - Number of feeds that failed to fetch
   - Number of feeds that were not modified
   - Start time of a run
   - Duration of a run
   - Number of parsed RSS items
-  - Total fetch time
-  - Average fetch time
-  - Memory usage
+  - Total fetch time for all successful feeds
+  - Average fetch time per successful feed
+  - Memory usage at the end of the run
 
-You can use these stats to monitor performance of tgfeed and understand which
-feeds are causing problems.
+These stats can be downloaded in bulk as a single CSV file from the admin
+server's /debug/stats.csv endpoint. This is useful for analyzing feed
+performance and identifying problematic feeds over time.
 
 # Administration
 
@@ -174,8 +161,9 @@ To start the admin API server:
 	$ tgfeed admin
 
 The server listens on the address specified by ADMIN_ADDR (defaults to
-/run/tgfeed/admin-socket). When running as a systemd service, use
-tgfeed-admin.service.
+/run/tgfeed/admin-socket). It provides a simple web interface for viewing and
+editing the configuration and state, and for downloading run statistics via
+/debug/stats.csv.
 
 To manage tgfeed remotely, use the -remote flag with any command:
 
