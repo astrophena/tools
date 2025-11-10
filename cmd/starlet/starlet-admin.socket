@@ -1,0 +1,10 @@
+[Unit]
+Description=starlet Admin Socket
+
+[Socket]
+ListenStream=/run/starlet/admin-socket
+Service=starlet.service
+SocketMode=0666
+
+[Install]
+WantedBy=sockets.target
