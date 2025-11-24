@@ -14,7 +14,7 @@ jobs:
     runs-on: 'ubuntu-latest'
     steps:
       - name: 'Check out'
-        uses: 'actions/checkout@v5'
+        uses: 'actions/checkout@v6'
         with:
           # Show Git tags in version.
           fetch-depth: 0
@@ -35,7 +35,7 @@ jobs:
     runs-on: 'ubuntu-latest'
     steps:
       - name: 'Check out'
-        uses: 'actions/checkout@v5'
+        uses: 'actions/checkout@v6'
         with:
           # Show Git tags in version.
           fetch-depth: 0
