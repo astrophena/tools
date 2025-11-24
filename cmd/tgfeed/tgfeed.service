@@ -9,7 +9,7 @@ After=network-online.target
 Type=oneshot
 
 # Path to the tgfeed binary.
-ExecStart=/srv/tgfeed/current/bin/tgfeed run
+ExecStart=/srv/tgfeed/current/bin/tgfeed -cpuprofile %S/tgfeed/cpu.pprof -memprofile %S/tgfeed/mem.pprof -log-level debug run
 
 # Load secrets from a configuration file.
 EnvironmentFile=/etc/tgfeed.conf
