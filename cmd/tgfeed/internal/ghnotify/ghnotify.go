@@ -78,67 +78,123 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		"User-Agent":    "ghnotify (+https://astrophena.name/bleep-bloop)",
 	}
 
-	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, ghAPI+"/notifications", nil)
-	if err != nil {
-		web.RespondJSONError(w, r, err)
-		return
+	var allNotifications []notification
+	page := 1
+
+	for {
+		u := fmt.Sprintf("%s/notifications?page=%d&per_page=100", ghAPI, page)
+		req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, u, nil)
+		if err != nil {
+			web.RespondJSONError(w, r, err)
+			return
+		}
+
+		for key, value := range headers {
+			req.Header.Set(key, value)
+		}
+
+		if lastModified := r.Header.Get("If-Modified-Since"); lastModified != "" {
+			req.Header.Set("If-Modified-Since", lastModified)
+		}
+
+		res, err := h.client.Do(req)
+		if err != nil {
+			web.RespondJSONError(w, r, err)
+			return
+		}
+
+		if res.StatusCode == http.StatusNotModified {
+			res.Body.Close()
+			// If the first page is not modified, then nothing is modified.
+			if page == 1 {
+				h.logger.DebugContext(r.Context(), "notifications not modified")
+				w.WriteHeader(http.StatusNotModified)
+				return
+			}
+			break
+		}
+
+		b, err := io.ReadAll(res.Body)
+		res.Body.Close()
+		if err != nil {
+			web.RespondJSONError(w, r, err)
+			return
+		}
+
+		if res.StatusCode != http.StatusOK {
+			web.RespondJSONError(w, r, fmt.Errorf("want 200, got %d: %s", res.StatusCode, b))
+			return
+		}
+
+		// GitHub docs mention that Last-Modified header is set, but for some reason
+		// it actually doesn't.
+		if page == 1 {
+			w.Header().Set("Last-Modified", res.Header.Get("Date"))
+		}
+
+		var notifications []notification
+		if err := json.Unmarshal(b, &notifications); err != nil {
+			web.RespondJSONError(w, r, err)
+			return
+		}
+
+		h.logger.DebugContext(r.Context(), "fetched notifications page",
+			slog.Int("page", page),
+			slog.Int("count", len(notifications)),
+		)
+
+		if len(notifications) == 0 {
+			break
+		}
+
+		allNotifications = append(allNotifications, notifications...)
+
+		if len(notifications) < 100 {
+			break
+		}
+		page++
+
+		// Safety brake to prevent infinite loops.
+		if page > 10 {
+			break
+		}
 	}
 
-	for key, value := range headers {
-		req.Header.Set(key, value)
-	}
-
-	if lastModified := r.Header.Get("If-Modified-Since"); lastModified != "" {
-		req.Header.Set("If-Modified-Since", lastModified)
-	}
-
-	res, err := h.client.Do(req)
-	if err != nil {
-		web.RespondJSONError(w, r, err)
-		return
-	}
-	defer res.Body.Close()
-
-	if res.StatusCode == http.StatusNotModified {
-		w.WriteHeader(http.StatusNotModified)
-		return
-	}
-
-	b, err := io.ReadAll(res.Body)
-	if err != nil {
-		web.RespondJSONError(w, r, err)
-		return
-	}
-
-	if res.StatusCode != http.StatusOK {
-		web.RespondJSONError(w, r, fmt.Errorf("want 200, got %d: %s", res.StatusCode, b))
-		return
-	}
-
-	var notifications []notification
-	if err := json.Unmarshal(b, &notifications); err != nil {
-		web.RespondJSONError(w, r, err)
-		return
-	}
+	h.logger.InfoContext(r.Context(), "fetched all notifications",
+		slog.Int("total_count", len(allNotifications)),
+	)
 
 	var items []feedItem
-	for _, n := range notifications {
+	for _, n := range allNotifications {
+		h.logger.DebugContext(r.Context(), "processing notification",
+			slog.String("id", n.ID),
+			slog.String("type", n.Subject.Type),
+			slog.String("title", n.Subject.Title),
+		)
+
 		if n.Subject.Type == "PullRequest" {
 			prURL := n.Subject.URL
 			if prURL != "" {
 				pr, err := request.Make[pullRequest](r.Context(), request.Params{
-					Method:   http.MethodGet,
-					URL:      prURL,
-					Headers:  headers,
-					Scrubber: strings.NewReplacer(h.token, "REDACTED"),
+					Method:     http.MethodGet,
+					URL:        prURL,
+					Headers:    headers,
+					HTTPClient: h.client,
+					Scrubber:   strings.NewReplacer(h.token, "REDACTED"),
 				})
 				if err == nil {
 					if slices.Contains(ignoredAuthors, pr.User.Login) {
-						h.logger.Info("skipping GitHub PR notification from ignored author", "author", pr.User.Login, "pr_url", prURL)
+						h.logger.InfoContext(r.Context(), "skipping GitHub PR notification from ignored author",
+							slog.String("author", pr.User.Login),
+							slog.String("pr_url", prURL),
+						)
 						continue
 					}
 				} else {
-					h.logger.Error("fetching GitHub PR details failed", "err", err, "pr_url", prURL)
+					h.logger.ErrorContext(r.Context(), "fetching GitHub PR details failed",
+						slog.Any("err", err),
+						slog.String("pr_url", prURL),
+					)
 				}
 			}
 		}
@@ -168,43 +224,42 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Items:       items,
 	}
 
-	if err := h.markAsRead(r.Context()); err != nil {
-		web.RespondJSONError(w, r, fmt.Errorf("marking notifications as read failed: %v", err))
+	if err := h.markAsDone(r.Context(), allNotifications); err != nil {
+		web.RespondJSONError(w, r, fmt.Errorf("marking notifications as done failed: %v", err))
 		return
 	}
 
+	h.logger.InfoContext(r.Context(), "marked notifications as done",
+		slog.Int("count", len(allNotifications)),
+	)
+
 	w.Header().Set("Content-Type", "application/json")
-	// GitHub docs mention that Last-Modified header is set, but for some reason
-	// it actually doesn't.
-	w.Header().Set("Last-Modified", res.Header.Get("Date"))
 	web.RespondJSON(w, feed)
 }
 
-func (h *handler) markAsRead(ctx context.Context) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, ghAPI+"/notifications", nil)
-	if err != nil {
-		return err
-	}
+func (h *handler) markAsDone(ctx context.Context, notifications []notification) error {
+	for _, n := range notifications {
+		u := fmt.Sprintf("%s/notifications/threads/%s", ghAPI, n.ID)
+		req, err := http.NewRequestWithContext(ctx, http.MethodDelete, u, nil)
+		if err != nil {
+			return err
+		}
 
-	req.Header.Set("Authorization", "Bearer "+h.token)
-	req.Header.Set("Accept", "application/vnd.github.v3+json")
-	req.Header.Set("User-Agent", "ghnotify (+https://astrophena.name/bleep-bloop)")
+		req.Header.Set("Authorization", "Bearer "+h.token)
+		req.Header.Set("Accept", "application/vnd.github.v3+json")
+		req.Header.Set("User-Agent", "ghnotify (+https://astrophena.name/bleep-bloop)")
 
-	res, err := h.client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer res.Body.Close()
+		res, err := h.client.Do(req)
+		if err != nil {
+			return err
+		}
+		res.Body.Close()
 
-	b, err := io.ReadAll(res.Body)
-	if err != nil {
-		return err
+		if res.StatusCode != http.StatusNoContent {
+			return fmt.Errorf("want 204, got %d", res.StatusCode)
+		}
 	}
-
-	if res.StatusCode == http.StatusResetContent || res.StatusCode == http.StatusAccepted {
-		return nil
-	}
-	return fmt.Errorf("want 205 or 202, got %d: %s", res.StatusCode, b)
+	return nil
 }
 
 func rewriteURL(url string) string {
