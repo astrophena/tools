@@ -14,6 +14,7 @@ import (
 	"net/http"
 	urlpkg "net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -116,24 +117,47 @@ func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *item) (retr
 
 		// Handle tg.i-c-a.su rate limiting.
 		if req.URL.Host == "tg.i-c-a.su" && hasBody {
-			var errors struct {
-				Errors []string `json:"errors"`
+			var response struct {
+				Errors []any `json:"errors"`
 			}
-			if err := json.Unmarshal(body, &errors); err == nil {
+			if err := json.Unmarshal(body, &response); err == nil {
 				var t time.Duration
-				for _, s := range errors.Errors {
-					const prefix = "FLOOD_WAIT_"
-					if !strings.HasPrefix(s, prefix) {
+				var found bool
+				for _, e := range response.Errors {
+					s, ok := e.(string)
+					if !ok {
 						continue
 					}
-					var err error
-					t, err = time.ParseDuration(strings.TrimPrefix(s, prefix) + "s")
-					if err != nil {
-						continue
+
+					const floodPrefix = "FLOOD_WAIT_"
+					if strings.HasPrefix(s, floodPrefix) {
+						d, err := time.ParseDuration(strings.TrimPrefix(s, floodPrefix) + "s")
+						if err == nil {
+							t = d
+							found = true
+							break
+						}
+					}
+
+					const unlockPrefix = "Time to unlock access: "
+					if strings.HasPrefix(s, unlockPrefix) {
+						parts := strings.Split(strings.TrimPrefix(s, unlockPrefix), ":")
+						if len(parts) == 3 {
+							h, err1 := strconv.Atoi(parts[0])
+							m, err2 := strconv.Atoi(parts[1])
+							sec, err3 := strconv.Atoi(parts[2])
+							if err1 == nil && err2 == nil && err3 == nil {
+								t = time.Duration(h)*time.Hour + time.Duration(m)*time.Minute + time.Duration(sec)*time.Second
+								found = true
+								break
+							}
+						}
 					}
 				}
-				f.slog.Warn("rate-limited by tg.i-c-a.su", "feed", fd.url, "retry_in", t)
-				return true, t
+				if found {
+					f.slog.Warn("rate-limited by tg.i-c-a.su", "feed", fd.url, "retry_in", t)
+					return true, t
+				}
 			}
 		}
 
