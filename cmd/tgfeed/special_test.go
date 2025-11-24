@@ -44,7 +44,7 @@ func TestGitHubNotificationsFeed(t *testing.T) {
 type roundTripper struct{ main, notifications http.RoundTripper }
 
 func (rt *roundTripper) RoundTrip(r *http.Request) (*http.Response, error) {
-	if r.URL.Host == "api.github.com" && r.URL.Path == "/notifications" {
+	if r.URL.Host == "api.github.com" {
 		r.Header.Del("Authorization")
 		return rt.notifications.RoundTrip(r)
 	}

@@ -1,0 +1,40 @@
+{
+  "version": "https://jsonfeed.org/version/1.1",
+  "title": "GitHub Notifications",
+  "home_page_url": "https://github.com",
+  "feed_url": "",
+  "items": [
+    {
+      "id": "20665040334",
+      "url": "https://github.com/astrophena/base/pull/76",
+      "title": "astrophena/base: go.mod: bump golang.org/x/term from 0.36.0 to 0.37.0",
+      "content_text": "go.mod: bump golang.org/x/term from 0.36.0 to 0.37.0 (subscribed)",
+      "date_published": "2025-11-24T13:35:13Z",
+      "external_url": "https://github.com/astrophena/base"
+    },
+    {
+      "id": "20665020813",
+      "url": "https://github.com/astrophena/base/pull/75",
+      "title": "astrophena/base: .github: Bump actions/checkout from 5 to 6",
+      "content_text": ".github: Bump actions/checkout from 5 to 6 (subscribed)",
+      "date_published": "2025-11-24T13:36:45Z",
+      "external_url": "https://github.com/astrophena/base"
+    },
+    {
+      "id": "20573835012",
+      "url": "https://github.com/astrophena/tsid/pull/48",
+      "title": "astrophena/tsid: go.mod: bump golang.org/x/crypto from 0.43.0 to 0.45.0",
+      "content_text": "go.mod: bump golang.org/x/crypto from 0.43.0 to 0.45.0 (comment)",
+      "date_published": "2025-11-20T21:15:37Z",
+      "external_url": "https://github.com/astrophena/tsid"
+    },
+    {
+      "id": "20573675833",
+      "url": "https://github.com/astrophena/tools/pull/204",
+      "title": "astrophena/tools: go.mod: bump golang.org/x/crypto from 0.41.0 to 0.45.0 in the go_modules group across 1 directory",
+      "content_text": "go.mod: bump golang.org/x/crypto from 0.41.0 to 0.45.0 in the go_modules group across 1 directory (subscribed)",
+      "date_published": "2025-11-20T21:11:42Z",
+      "external_url": "https://github.com/astrophena/tools"
+    }
+  ]
+}

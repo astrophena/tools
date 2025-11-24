@@ -5,6 +5,9 @@
 package ghnotify
 
 import (
+	"bytes"
+	"encoding/json"
+	"flag"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -15,9 +18,11 @@ import (
 	"go.astrophena.name/base/testutil"
 )
 
+var update = flag.Bool("update", false, "update golden files in testdata")
+
 // Updating this test:
 //
-//	$ GITHUB_TOKEN="$(gh auth token)" go test -httprecord testdata/handler.httprr
+//	$ GITHUB_TOKEN="$(gh auth token)" go test -update -httprecord testdata/handler.httprr
 //
 
 func TestHandler(t *testing.T) {
@@ -44,9 +49,24 @@ func TestHandler(t *testing.T) {
 
 	testutil.AssertEqual(t, w.Code, http.StatusOK)
 
-	// Check that we are got valid JSON.
-	feed := testutil.UnmarshalJSON[jsonFeed](t, w.Body.Bytes())
-	t.Logf("Feed: %+v", feed)
+	var prettyJSON bytes.Buffer
+	if err := json.Indent(&prettyJSON, w.Body.Bytes(), "", "  "); err != nil {
+		t.Fatal(err)
+	}
+
+	goldenFile := filepath.Join("testdata", "handler.golden")
+	if *update {
+		if err := os.WriteFile(goldenFile, prettyJSON.Bytes(), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	want, err := os.ReadFile(goldenFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	testutil.AssertEqual(t, prettyJSON.String(), string(want))
 }
 
 func TestRewriteURL(t *testing.T) {
