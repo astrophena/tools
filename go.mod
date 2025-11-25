@@ -3,7 +3,7 @@ module go.astrophena.name/tools
 go 1.25
 
 require (
-	github.com/arl/statsviz v0.7.2
+	github.com/arl/statsviz v0.8.0
 	github.com/dhowden/tag v0.0.0-20240417053706-3d75831295e8
 	github.com/landlock-lsm/go-landlock v0.0.0-20250303204525-1544bccde3a3
 	github.com/mmcdole/gofeed v1.3.0
