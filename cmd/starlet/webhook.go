@@ -7,12 +7,9 @@ package main
 import (
 	"context"
 	"errors"
-	"log/slog"
 	"net/http"
 	"net/url"
-	"time"
 
-	"go.astrophena.name/base/logger"
 	"go.astrophena.name/base/request"
 	"go.astrophena.name/base/version"
 )
@@ -42,27 +39,4 @@ func (e *engine) setWebhook(ctx context.Context) error {
 		Scrubber:   e.scrubber,
 	})
 	return err
-}
-
-func (e *engine) ping(ctx context.Context, interval time.Duration) {
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-			_, err := request.Make[request.IgnoreResponse](ctx, request.Params{
-				Method: http.MethodGet,
-				URL:    e.pingURL,
-				Headers: map[string]string{
-					"User-Agent": version.UserAgent(),
-				},
-			})
-			if err != nil {
-				logger.Error(ctx, "failed to send heartbeat", slog.Any("err", err))
-			}
-		case <-ctx.Done():
-			return
-		}
-	}
 }
