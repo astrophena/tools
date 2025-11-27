@@ -27,6 +27,7 @@ import (
 	"go.astrophena.name/tools/cmd/starlet/internal/logstream"
 	"go.astrophena.name/tools/internal/api/gemini"
 	"go.astrophena.name/tools/internal/api/gist"
+	"go.astrophena.name/tools/internal/idle"
 	"go.astrophena.name/tools/internal/starlark/kvcache"
 	"go.astrophena.name/tools/internal/store"
 
@@ -75,6 +76,15 @@ func (e *engine) Run(ctx context.Context) error {
 		return err
 	}
 
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	idleTracker := idle.NewTracker(cancel)
+	if idleTracker != nil {
+		idleTracker.Run(ctx)
+		e.srv.Middleware = append(e.srv.Middleware, idleTracker.Handler)
+	}
+
 	g, ctx := errgroup.WithContext(ctx)
 
 	g.Go(func() error {
@@ -88,6 +98,9 @@ func (e *engine) Run(ctx context.Context) error {
 			StaticFS:   staticFS,
 			CSP:        e.cspMux,
 			Debuggable: true,
+		}
+		if idleTracker != nil {
+			adminSrv.Middleware = append(adminSrv.Middleware, idleTracker.Handler)
 		}
 		g.Go(func() error {
 			return adminSrv.ListenAndServe(ctx)
