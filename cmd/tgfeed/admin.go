@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"go.astrophena.name/base/web"
+	"go.astrophena.name/tools/internal/idle"
 )
 
 var errConflict = web.StatusErr(http.StatusConflict)
@@ -79,6 +80,14 @@ func (f *fetcher) admin(ctx context.Context) error {
 		Addr:          f.adminAddr,
 		Debuggable:    true,
 		NotifySystemd: true,
+	}
+
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	if idleTracker := idle.NewTracker(cancel); idleTracker != nil {
+		idleTracker.Run(ctx)
+		srv.Middleware = append(srv.Middleware, idleTracker.Handler)
 	}
 
 	return srv.ListenAndServe(ctx)
