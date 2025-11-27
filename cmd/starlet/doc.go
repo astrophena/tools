@@ -81,9 +81,8 @@ Starlet provides a debug and admin interface, served on the address specified by
 The interface includes:
 
   - /debug/: Shows basic bot info, loaded Starlark modules, and links to other debug pages.
-  - /debug/bot: A bot debugger with a chat interface and a log of intercepted Telegram API calls. Available only in development mode.
   - /debug/logs: Streams the last 300 lines of logs in real-time.
-  - /debug/reload: A button to trigger an immediate reload of the bot code from the GitHub Gist.
+  - /debug/reload: Triggers an immediate reload of the bot code from the GitHub Gist.
 
 [Starlark]: https://starlark-lang.org/
 */

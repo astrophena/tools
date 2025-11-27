@@ -52,7 +52,6 @@ func (e *engine) Run(ctx context.Context) error {
 	e.ghToken = cmp.Or(e.ghToken, env.Getenv("GH_TOKEN"))
 	e.gistID = cmp.Or(e.gistID, env.Getenv("GIST_ID"))
 	e.host = cmp.Or(e.host, env.Getenv("HOST"))
-	e.pingURL = cmp.Or(e.pingURL, env.Getenv("PING_URL"))
 	e.tgOwner = cmp.Or(e.tgOwner, parseInt(env.Getenv("TG_OWNER")))
 	e.tgSecret = cmp.Or(e.tgSecret, env.Getenv("TG_SECRET"))
 	e.tgToken = cmp.Or(e.tgToken, env.Getenv("TG_TOKEN"))
@@ -70,10 +69,6 @@ func (e *engine) Run(ctx context.Context) error {
 	// Used in tests.
 	if e.noServerStart {
 		return nil
-	}
-
-	if e.pingURL != "" {
-		go e.ping(ctx, selfPingInterval)
 	}
 
 	if err := e.setWebhook(ctx); err != nil {
@@ -134,7 +129,6 @@ type engine struct {
 	gistID       string
 	host         string
 	httpc        *http.Client
-	pingURL      string
 	tgOwner      int64
 	tgSecret     string
 	tgToken      string
@@ -143,10 +137,7 @@ type engine struct {
 	ready         func() // see web.Server.Ready
 }
 
-const (
-	kvCacheTTL       = 24 * time.Hour
-	selfPingInterval = 10 * time.Minute
-)
+const kvCacheTTL = 24 * time.Hour
 
 func (e *engine) doInit(ctx context.Context) error {
 	const logLineLimit = 300
