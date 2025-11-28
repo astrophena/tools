@@ -10,7 +10,6 @@ import (
 	"context"
 	"net/http"
 	"os"
-	"strings"
 	"sync/atomic"
 	"time"
 )
@@ -51,10 +50,11 @@ func isSocketActivated() bool {
 	if os.Getenv("FORCE_SOCKET_ACTIVATED") == "1" {
 		return true
 	}
-	return os.Getenv("LISTEN_PID") != "" && (strings.Contains(os.Getenv("LISTEN_FDS"), "3"))
+	// See https://man.archlinux.org/man/sd_listen_fds.3.en#ENVIRONMENT
+	return os.Getenv("LISTEN_PID") != ""
 }
 
-// Handler is a web.Middleware that updates the last activity time.
+// Handler is a [web.Middleware] that updates the last activity time.
 func (t *Tracker) Handler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.lastActivity.Store(time.Now().Unix())
