@@ -1,6 +1,6 @@
 module go.astrophena.name/tools
 
-go 1.25
+go 1.25.1
 
 require (
 	github.com/arl/statsviz v0.8.0
@@ -9,7 +9,7 @@ require (
 	github.com/mmcdole/gofeed v1.3.0
 	github.com/tailscale/sqlite v0.0.0-20250822145721-1673cdf564b7
 	github.com/tobischo/gokeepasslib/v3 v3.6.1
-	go.astrophena.name/base v0.14.0
+	go.astrophena.name/base v0.15.0
 	go.starlark.net v0.0.0-20250906160240-bf296ed553ea
 	golang.org/x/sync v0.19.0
 	golang.org/x/term v0.38.0
@@ -20,6 +20,7 @@ require (
 	github.com/BurntSushi/toml v1.4.1-0.20240526193622-a339e1f7089c // indirect
 	github.com/PuerkitoBio/goquery v1.8.0 // indirect
 	github.com/andybalholm/cascadia v1.3.1 // indirect
+	github.com/go4org/hashtriemap v0.0.0-20251130024219-545ba229f689 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
