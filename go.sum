@@ -11,6 +11,8 @@ github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/dhowden/tag v0.0.0-20240417053706-3d75831295e8 h1:OtSeLS5y0Uy01jaKK4mA/WVIYtpzVm63vLVAPzJXigg=
 github.com/dhowden/tag v0.0.0-20240417053706-3d75831295e8/go.mod h1:apkPC/CR3s48O2D7Y++n1XWEpgPNNCjXYga3PPbJe2E=
+github.com/go4org/hashtriemap v0.0.0-20251130024219-545ba229f689 h1:0psnKZ+N2IP43/SZC8SKx6OpFJwLmQb9m9QyV9BC2f8=
+github.com/go4org/hashtriemap v0.0.0-20251130024219-545ba229f689/go.mod h1:OGmRfY/9QEK2P5zCRtmqfbCF283xPkU2dvVA4MvbvpI=
 github.com/google/go-cmp v0.7.0 h1:wk8382ETsv4JYUZwIsn6YpYiWiBsYLSJiTsyBybVuN8=
 github.com/google/go-cmp v0.7.0/go.mod h1:pXiqmnSA92OHEEa9HXL2W4E7lf9JzCmGVUdgjX3N/iU=
 github.com/google/gofuzz v1.0.0/go.mod h1:dBl0BpW6vV/+mYPU4Po3pmUjxk6FQPldtuIdl/M65Eg=
@@ -47,8 +49,8 @@ github.com/tobischo/gokeepasslib/v3 v3.6.1 h1:AShQlTypdM19glj0UUePQcUi56qQyeFI5N
 github.com/tobischo/gokeepasslib/v3 v3.6.1/go.mod h1:B31dx/dj0egameQrNtuoOx9RnwxnYaZR4kXaahRuZN8=
 github.com/yuin/goldmark v1.6.0 h1:boZcn2GTjpsynOsC0iJHnBWa4Bi0qzfJjthwauItG68=
 github.com/yuin/goldmark v1.6.0/go.mod h1:6yULJ656Px+3vBD8DxQVa3kxgyrAnzto9xy5taEt/CY=
-go.astrophena.name/base v0.14.0 h1:6Ad9XwImt9vOHsd+yQwQxoL+LXiYu2bhh/6mCOA0pCA=
-go.astrophena.name/base v0.14.0/go.mod h1:IgMlfISuZpDN1Ut7ROEgZ5GeQ4q2YT63oL38UIB7qgQ=
+go.astrophena.name/base v0.15.0 h1:JGck9piwZPHaeTS6jdzmKXwwr+LnCwcvMC/1Kz0fgrs=
+go.astrophena.name/base v0.15.0/go.mod h1:v6d81cLItRwDoTiDz2lROPL4kG3cUU2aZOSCxeXB1TI=
 go.starlark.net v0.0.0-20250906160240-bf296ed553ea h1:Rq4H4YdaOlmkqVGG+COlYFyrG/FwfB8tQa5i6mtcSe4=
 go.starlark.net v0.0.0-20250906160240-bf296ed553ea/go.mod h1:YKMCv9b1WrfWmeqdV5MAuEHWsu5iC+fe6kYl2sQjdI8=
 golang.org/x/crypto v0.45.0 h1:jMBrvKuj23MTlT0bQEOBcAE0mjg8mK9RXFhRH6nyF3Q=
