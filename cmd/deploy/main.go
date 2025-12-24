@@ -18,6 +18,7 @@ import (
 
 	"go.astrophena.name/base/cli"
 	"go.astrophena.name/base/request"
+	"go.astrophena.name/base/version"
 )
 
 func main() { cli.Main(new(app)) }
@@ -59,7 +60,7 @@ func (a *app) Run(ctx context.Context) error {
 		URL:    requestURL + "&audience=" + tokenAudience,
 		Headers: map[string]string{
 			"Authorization": "Bearer " + requestToken,
-			"User-Agent":    "actions/oidc-client",
+			"User-Agent":    version.UserAgent(),
 		},
 	})
 	if err != nil {
@@ -90,6 +91,7 @@ func (a *app) Run(ctx context.Context) error {
 		return err
 	}
 	req.Header.Set("Content-Type", mw.FormDataContentType())
+	req.Header.Set("User-Agent", version.UserAgent())
 	req.Header.Set("Authorization", "Bearer "+token)
 
 	res, err := request.DefaultClient.Do(req)
