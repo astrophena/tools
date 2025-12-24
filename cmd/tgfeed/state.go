@@ -21,6 +21,7 @@ import (
 
 	"go.astrophena.name/base/request"
 	"go.astrophena.name/base/syncx"
+	"go.astrophena.name/base/version"
 	"go.astrophena.name/tools/internal/starlark/interpreter"
 
 	"go.starlark.net/starlark"
@@ -120,7 +121,10 @@ type errorResponse struct {
 func (f *fetcher) loadStateRemote(ctx context.Context) error {
 	fetch := func(url string) ([]byte, error) {
 		b, err := request.Make[request.Bytes](ctx, request.Params{
-			Method:     http.MethodGet,
+			Method: http.MethodGet,
+			Headers: map[string]string{
+				"User-Agent": version.UserAgent(),
+			},
 			URL:        f.apiURL(url),
 			HTTPClient: f.httpClient(),
 		})
@@ -237,6 +241,7 @@ func (f *fetcher) saveStateRemote(ctx context.Context) error {
 		Body:   state,
 		Headers: map[string]string{
 			"Content-Type": "application/json",
+			"User-Agent":   version.UserAgent(),
 		},
 		WantStatusCode: http.StatusNoContent,
 		HTTPClient:     f.httpClient(),
@@ -262,6 +267,7 @@ func (f *fetcher) saveConfigRemote(ctx context.Context) error {
 		Body:   []byte(f.config),
 		Headers: map[string]string{
 			"Content-Type": "text/plain",
+			"User-Agent":   version.UserAgent(),
 		},
 		WantStatusCode: http.StatusNoContent,
 		HTTPClient:     f.httpClient(),
