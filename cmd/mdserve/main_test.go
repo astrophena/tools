@@ -137,6 +137,17 @@ This is bla bla bla.
 			wantInBody: "500 Internal Server Error",
 			failRead:   true,
 		},
+		"renders image": {
+			files: map[string]string{
+				"index.md": "![A beautiful landscape](sample.jpg)",
+			},
+			path:       "/",
+			wantStatus: http.StatusOK,
+			wantInBody: `<figure>
+<img src="sample.jpg" alt="A beautiful landscape" title="">
+<figcaption>A beautiful landscape</figcaption>
+</figure>`,
+		},
 	}
 
 	for name, tc := range cases {

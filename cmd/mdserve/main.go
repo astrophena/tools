@@ -177,6 +177,7 @@ func (e *engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	doc := e.md.Parse(string(b))
+	doc.Blocks = walk(doc.Blocks, transformImageBlock)
 	title := parseTitle(b)
 
 	var buf bytes.Buffer
@@ -227,4 +228,71 @@ func parseTitle(b []byte) string {
 		return ""
 	}
 	return title
+}
+
+func getInnerText(inlines []markdown.Inline) string {
+	var buf bytes.Buffer
+	for _, i := range inlines {
+		switch v := i.(type) {
+		case *markdown.Plain:
+			buf.WriteString(v.Text)
+		case *markdown.Emph:
+			buf.WriteString(getInnerText(v.Inner))
+		case *markdown.Strong:
+			buf.WriteString(getInnerText(v.Inner))
+		case *markdown.Code:
+			buf.WriteString(v.Text)
+		case *markdown.Link:
+			buf.WriteString(getInnerText(v.Inner))
+		case *markdown.Del:
+			buf.WriteString(getInnerText(v.Inner))
+		case *markdown.Escaped:
+			buf.WriteString(v.Plain.Text)
+		case *markdown.SoftBreak, *markdown.HardBreak:
+			buf.WriteString(" ")
+		}
+	}
+	return buf.String()
+}
+
+func transformImageBlock(b markdown.Block) markdown.Block {
+	p, ok := b.(*markdown.Paragraph)
+	if !ok {
+		return b
+	}
+	if len(p.Text.Inline) != 1 {
+		return b
+	}
+	img, ok := p.Text.Inline[0].(*markdown.Image)
+	if !ok {
+		return b
+	}
+
+	alt := getInnerText(img.Inner)
+
+	return &markdown.HTMLBlock{
+		Text: []string{
+			"<figure>",
+			fmt.Sprintf(`<img src="%s" alt="%s" title="%s">`, img.URL, alt, img.Title),
+			fmt.Sprintf("<figcaption>%s</figcaption>", alt),
+			"</figure>",
+		},
+	}
+}
+
+func walk(blocks []markdown.Block, fn func(markdown.Block) markdown.Block) []markdown.Block {
+	newBlocks := make([]markdown.Block, 0, len(blocks))
+	for _, b := range blocks {
+		b = fn(b)
+		switch b := b.(type) {
+		case *markdown.List:
+			for _, item := range b.Items {
+				item.(*markdown.Item).Blocks = walk(item.(*markdown.Item).Blocks, fn)
+			}
+		case *markdown.Quote:
+			b.Blocks = walk(b.Blocks, fn)
+		}
+		newBlocks = append(newBlocks, b)
+	}
+	return newBlocks
 }
