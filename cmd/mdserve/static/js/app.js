@@ -30,6 +30,7 @@ class Enhancer {
 
     this.createBackToTopButton();
     this.setupScrollListener(); // set up the scroll end detector
+    this.setupImageEnlarger();
   }
 
   /**
@@ -203,6 +204,52 @@ class Enhancer {
       .replace(/\-\-+/g, "-")
       .replace(/^-+/, "")
       .replace(/-+$/, "");
+  }
+
+  /**
+   * Sets up the image enlarger.
+   * @private
+   */
+  setupImageEnlarger() {
+    const images = this.mainContent.querySelectorAll("img");
+    images.forEach((img) => {
+      img.addEventListener("click", () => this.enlargeImage(img));
+    });
+  }
+
+  /**
+   * Creates and manages the image enlarger overlay.
+   * @private
+   */
+  enlargeImage(img) {
+    const overlay = document.createElement("div");
+    overlay.id = "image-overlay";
+    const enlargedImg = document.createElement("img");
+    enlargedImg.src = img.src;
+
+    overlay.appendChild(enlargedImg);
+    document.body.appendChild(overlay);
+
+    setTimeout(() => {
+      overlay.classList.add("visible");
+    }, 10);
+
+    const closeOverlay = () => {
+      overlay.classList.remove("visible");
+      setTimeout(() => {
+        document.body.removeChild(overlay);
+        document.removeEventListener("keydown", onKeyDown);
+      }, 200);
+    };
+
+    const onKeyDown = (e) => {
+      if (e.key === "Escape") {
+        closeOverlay();
+      }
+    };
+
+    overlay.addEventListener("click", closeOverlay);
+    document.addEventListener("keydown", onKeyDown);
   }
 }
 
