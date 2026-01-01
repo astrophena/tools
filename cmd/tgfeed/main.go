@@ -268,7 +268,7 @@ func (f *fetcher) edit(ctx context.Context) error {
 		}
 
 		f.logf("You've made these changes:")
-		f.logf(string(diff.Diff("old", []byte(f.config), "new", edited)))
+		f.logf("%s", diff.Diff("old", []byte(f.config), "new", edited))
 		if !f.ask("Do you want to save?", env.Stdin) {
 			return nil
 		}
