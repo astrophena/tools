@@ -91,8 +91,6 @@ UMask=0077
 
 # Deny kernel execution domain changing.
 LockPersonality=yes
-# Deny memory mappings that are both writable and executable (W^X).
-MemoryDenyWriteExecute=yes
 # Filter dangerous system calls. This denylist blocks groups of syscalls
 # not needed by the service.
 SystemCallArchitectures=native
