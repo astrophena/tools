@@ -9,7 +9,8 @@ import (
 	"database/sql"
 	"time"
 
-	_ "github.com/tailscale/sqlite"
+	_ "github.com/ncruces/go-sqlite3/driver"
+	_ "github.com/ncruces/go-sqlite3/embed"
 )
 
 // SQLiteStore is a SQLite implementation of the [Store] interface.

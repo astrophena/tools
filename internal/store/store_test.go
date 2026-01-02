@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	_ "github.com/tailscale/sqlite"
+	"github.com/ncruces/go-sqlite3/vfs/mvcc"
 )
 
 func TestMemStore(t *testing.T) {
@@ -19,7 +19,7 @@ func TestMemStore(t *testing.T) {
 }
 
 func TestSQLiteStore(t *testing.T) {
-	s, err := NewSQLiteStore(t.Context(), "file:/store-test?vfs=memdb", time.Minute)
+	s, err := NewSQLiteStore(t.Context(), mvcc.TestDB(t, mvcc.NewSnapshot("")), time.Minute)
 	if err != nil {
 		t.Fatal(err)
 	}
