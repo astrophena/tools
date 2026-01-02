@@ -25,7 +25,7 @@ jobs:
       - name: 'Build'
         run: |
           mkdir -p build/bin build/etc/systemd/system
-          go build -ldflags="-s -w -buildid=" -trimpath -o build/bin/starlet ./cmd/starlet
+          CGO_ENABLED=0 go build -ldflags="-s -w -buildid=" -trimpath -o build/bin/starlet ./cmd/starlet
           cp cmd/starlet/*.service cmd/starlet/*.socket build/etc/systemd/system
           tar -czf archive.tar.gz -C build .
       - name: 'Deploy'
@@ -46,7 +46,7 @@ jobs:
       - name: 'Build'
         run: |
           mkdir -p build/bin build/etc/systemd/system
-          go build -ldflags="-s -w -buildid=" -trimpath -o build/bin/tgfeed ./cmd/tgfeed
+          CGO_ENABLED=0 go build -ldflags="-s -w -buildid=" -trimpath -o build/bin/tgfeed ./cmd/tgfeed
           cp cmd/tgfeed/tgfeed.service build/etc/systemd/system
           cp cmd/tgfeed/tgfeed-admin.service build/etc/systemd/system
           cp cmd/tgfeed/tgfeed-admin.socket build/etc/systemd/system

@@ -7,7 +7,7 @@ require (
 	github.com/dhowden/tag v0.0.0-20240417053706-3d75831295e8
 	github.com/landlock-lsm/go-landlock v0.0.0-20250303204525-1544bccde3a3
 	github.com/mmcdole/gofeed v1.3.0
-	github.com/tailscale/sqlite v0.0.0-20250822145721-1673cdf564b7
+	github.com/ncruces/go-sqlite3 v0.30.4
 	github.com/tobischo/gokeepasslib/v3 v3.6.1
 	go.astrophena.name/base v0.15.0
 	go.starlark.net v0.0.0-20250906160240-bf296ed553ea
@@ -28,6 +28,9 @@ require (
 	github.com/mmcdole/goxpp v1.1.1-0.20240225020742-a0c311522b23 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
+	github.com/ncruces/julianday v1.0.0 // indirect
+	github.com/ncruces/wbt v0.2.0 // indirect
+	github.com/tetratelabs/wazero v1.11.0 // indirect
 	github.com/tobischo/argon2 v0.1.0 // indirect
 	golang.org/x/crypto v0.46.0 // indirect
 	golang.org/x/exp/typeparams v0.0.0-20251219203646-944ab1f22d93 // indirect
