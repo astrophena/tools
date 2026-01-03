@@ -21,7 +21,6 @@ import (
 	"sync/atomic"
 
 	"go.astrophena.name/base/request"
-	"go.astrophena.name/base/unwrap"
 	"go.astrophena.name/base/version"
 	"go.astrophena.name/base/web"
 	"go.astrophena.name/tools/internal/api/gemini"
@@ -48,8 +47,15 @@ var (
 	defaultErrorTemplate string
 	//go:embed lib/*.star
 	libRawFS embed.FS
-	libFS    = unwrap.Value(fs.Sub(libRawFS, "lib"))
+	libFS    = must(fs.Sub(libRawFS, "lib"))
 )
+
+func must[T any](val T, err error) T {
+	if err != nil {
+		panic(err)
+	}
+	return val
+}
 
 // Bot represents a Starlet bot instance.
 type Bot struct {
