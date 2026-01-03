@@ -9,7 +9,7 @@ require (
 	github.com/mmcdole/gofeed v1.3.0
 	github.com/ncruces/go-sqlite3 v0.30.4
 	github.com/tobischo/gokeepasslib/v3 v3.6.1
-	go.astrophena.name/base v0.15.0
+	go.astrophena.name/base v0.15.1-0.20260101134053-3ba1f7e085ba
 	go.starlark.net v0.0.0-20250906160240-bf296ed553ea
 	golang.org/x/sync v0.19.0
 	golang.org/x/term v0.38.0
@@ -39,7 +39,6 @@ require (
 	golang.org/x/sys v0.39.0 // indirect
 	golang.org/x/text v0.32.0 // indirect
 	golang.org/x/tools v0.40.0 // indirect
-	golang.org/x/tools/go/expect v0.1.1-deprecated // indirect
 	google.golang.org/protobuf v1.34.1 // indirect
 	honnef.co/go/tools v0.6.1 // indirect
 	kernel.org/pub/linux/libs/security/libcap/psx v1.2.70 // indirect

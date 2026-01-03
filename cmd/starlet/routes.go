@@ -53,9 +53,6 @@ func (e *engine) initRoutes() {
 	e.mux.HandleFunc("/", e.handlePublicRoot)
 	e.mux.HandleFunc("POST /telegram", e.bot.HandleTelegramWebhook)
 
-	// Health check.
-	web.Health(e.mux)
-
 	// Starlark environment documentation.
 	e.mux.HandleFunc("GET /env", func(w http.ResponseWriter, r *http.Request) {
 		var buf bytes.Buffer
@@ -120,9 +117,9 @@ func (e *engine) initRoutes() {
 		buf.WriteTo(w)
 	})
 	e.adminMux.Handle("/debug/log", e.logStream)
-	e.adminMux.Handle("GET /debug/loghistory", web.HandleJSON(func(r *http.Request, req any) ([]string, error) {
-		return e.logStream.Lines(), nil
-	}))
+	e.adminMux.HandleFunc("GET /debug/loghistory", func(w http.ResponseWriter, r *http.Request) {
+		web.RespondJSON(w, e.logStream.Lines())
+	})
 
 	dbg.HandleFunc("reload", "Reload", func(w http.ResponseWriter, r *http.Request) {
 		if err := e.loadFromGist(r.Context()); err != nil {

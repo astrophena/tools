@@ -56,18 +56,3 @@ func TestRoutes(t *testing.T) {
 		}
 	}
 }
-
-func TestHealth(t *testing.T) {
-	t.Parallel()
-
-	e := testEngine(t, testMux(t, nil))
-	health, err := request.Make[web.HealthResponse](t.Context(), request.Params{
-		Method:     http.MethodGet,
-		URL:        "/health",
-		HTTPClient: testutil.MockHTTPClient(e.mux),
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	testutil.AssertEqual(t, health.OK, true)
-}
