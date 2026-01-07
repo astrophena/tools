@@ -7,10 +7,9 @@ package store
 import (
 	"bytes"
 	"context"
+	"path/filepath"
 	"testing"
 	"time"
-
-	"github.com/ncruces/go-sqlite3/vfs/mvcc"
 )
 
 func TestMemStore(t *testing.T) {
@@ -18,18 +17,12 @@ func TestMemStore(t *testing.T) {
 	testStore(t, s)
 }
 
-func TestSQLiteStore(t *testing.T) {
-	s, err := NewSQLiteStore(t.Context(), mvcc.TestDB(t, mvcc.NewSnapshot("")), time.Minute)
+func TestJSONFile(t *testing.T) {
+	tmp := filepath.Join(t.TempDir(), "store.json")
+	s, err := NewJSONFile(t.Context(), tmp, 50*time.Millisecond)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer s.Close()
-
-	// Clean up the table before running the test.
-	if _, err := s.db.ExecContext(t.Context(), "DELETE FROM kv"); err != nil {
-		t.Fatal(err)
-	}
-
 	testStore(t, s)
 }
 

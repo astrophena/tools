@@ -192,7 +192,7 @@ func (e *engine) doInit(ctx context.Context) error {
 	}
 
 	if e.databasePath != "" {
-		s, err := store.NewSQLiteStore(ctx, "file:"+e.databasePath, kvCacheTTL)
+		s, err := store.NewJSONFile(ctx, e.databasePath, kvCacheTTL)
 		if err != nil {
 			return err
 		}
