@@ -90,6 +90,15 @@ func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *item) (retr
 	}
 	defer res.Body.Close()
 
+	f.slog.Debug(
+		"fetched feed",
+		"feed", fd.url,
+		"proto", res.Proto,
+		"len", res.ContentLength,
+		"status", res.StatusCode,
+		"headers", res.Header,
+	)
+
 	// Ignore unmodified feeds and report an error otherwise.
 	if res.StatusCode == http.StatusNotModified {
 		f.slog.Debug("unmodified feed", "feed", fd.url)
