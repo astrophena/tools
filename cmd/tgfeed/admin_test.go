@@ -37,7 +37,7 @@ func TestAdmin(t *testing.T) {
 		return f
 	}
 
-	runTest := func(t *testing.T, f *fetcher, r *http.Request, wantCode int, wantBody string) {
+	runTest := func(t *testing.T, f *fetcher, r *http.Request, wantCode int, wantBody string) *httptest.ResponseRecorder {
 		t.Helper()
 		w := httptest.NewRecorder()
 		mux := http.NewServeMux()
@@ -84,6 +84,7 @@ func TestAdmin(t *testing.T) {
 				t.Errorf("response body = %q, want to contain %q", body, wantBody)
 			}
 		}
+		return w
 	}
 
 	initialFS := fstest.MapFS{
@@ -98,10 +99,7 @@ func TestAdmin(t *testing.T) {
 	t.Run("root redirect", func(t *testing.T) {
 		f := setup(t, nil)
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
-		w := httptest.NewRecorder()
-		f.admin(t.Context())
-		http.Redirect(w, req, "/debug/", http.StatusFound)
-		testutil.AssertEqual(t, w.Code, http.StatusFound)
+		w := runTest(t, f, req, http.StatusFound, "")
 		testutil.AssertEqual(t, w.Header().Get("Location"), "/debug/")
 	})
 
