@@ -15,7 +15,7 @@ import (
 func ParseDocComment(src []byte) string {
 	s := bufio.NewScanner(bytes.NewReader(src))
 	var (
-		doc       string
+		doc       strings.Builder
 		inComment bool
 	)
 	for s.Scan() {
@@ -32,11 +32,11 @@ func ParseDocComment(src []byte) string {
 			if strings.HasPrefix(line, "Package") {
 				continue
 			}
-			doc += line + "\n"
+			doc.WriteString(line + "\n")
 		}
 	}
 	if err := s.Err(); err != nil {
 		panic(err)
 	}
-	return doc
+	return doc.String()
 }

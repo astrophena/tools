@@ -139,8 +139,8 @@ func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *item) (retr
 					}
 
 					const floodPrefix = "FLOOD_WAIT_"
-					if strings.HasPrefix(s, floodPrefix) {
-						d, err := time.ParseDuration(strings.TrimPrefix(s, floodPrefix) + "s")
+					if after, ok0 := strings.CutPrefix(s, floodPrefix); ok0 {
+						d, err := time.ParseDuration(after + "s")
 						if err == nil {
 							t = d
 							found = true
@@ -149,8 +149,8 @@ func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *item) (retr
 					}
 
 					const unlockPrefix = "Time to unlock access: "
-					if strings.HasPrefix(s, unlockPrefix) {
-						parts := strings.Split(strings.TrimPrefix(s, unlockPrefix), ":")
+					if after, ok0 := strings.CutPrefix(s, unlockPrefix); ok0 {
+						parts := strings.Split(after, ":")
 						if len(parts) == 3 {
 							h, err1 := strconv.Atoi(parts[0])
 							m, err2 := strconv.Atoi(parts[1])
