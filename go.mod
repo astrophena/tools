@@ -12,7 +12,7 @@ require (
 	go.astrophena.name/base v0.15.1-0.20260101134053-3ba1f7e085ba
 	go.starlark.net v0.0.0-20250906160240-bf296ed553ea
 	golang.org/x/sync v0.19.0
-	golang.org/x/term v0.38.0
+	golang.org/x/term v0.39.0
 	rsc.io/markdown v0.0.0-20241212154241-6bf72452917f
 )
 
@@ -33,7 +33,7 @@ require (
 	golang.org/x/exp/typeparams v0.0.0-20251219203646-944ab1f22d93 // indirect
 	golang.org/x/mod v0.31.0 // indirect
 	golang.org/x/net v0.48.0 // indirect
-	golang.org/x/sys v0.39.0 // indirect
+	golang.org/x/sys v0.40.0 // indirect
 	golang.org/x/text v0.32.0 // indirect
 	golang.org/x/tools v0.40.0 // indirect
 	google.golang.org/protobuf v1.34.1 // indirect
