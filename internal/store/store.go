@@ -2,7 +2,7 @@
 // Use of this source code is governed by the ISC
 // license that can be found in the LICENSE.md file.
 
-// Package store implements a key-value store backed in-memory or by SQLite.
+// Package store implements a key-value store backed in-memory or by JSON file.
 package store
 
 import (
