@@ -9,7 +9,7 @@ require (
 	github.com/landlock-lsm/go-landlock v0.0.0-20250303204525-1544bccde3a3
 	github.com/mmcdole/gofeed v1.3.0
 	github.com/tobischo/gokeepasslib/v3 v3.6.1
-	go.astrophena.name/base v0.15.1-0.20260101134053-3ba1f7e085ba
+	go.astrophena.name/base v0.16.1
 	go.starlark.net v0.0.0-20250906160240-bf296ed553ea
 	golang.org/x/sync v0.19.0
 	golang.org/x/term v0.39.0
