@@ -16,7 +16,9 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"go.astrophena.name/base/request"
@@ -302,8 +304,17 @@ func (f *fetcher) apiURL(endpoint string) string {
 
 func (f *fetcher) acquireRunLock() error {
 	lockPath := filepath.Join(f.stateDir, ".run.lock")
-	if _, err := os.Stat(lockPath); err == nil {
-		return fmt.Errorf("%w: lock file exists at %s", errAlreadyRunning, lockPath)
+	if b, err := os.ReadFile(lockPath); err == nil {
+		if pid, err := strconv.Atoi(strings.TrimSpace(string(b))); err == nil {
+			if process, err := os.FindProcess(pid); err == nil {
+				// Signal 0 checks if the process is still running.
+				// If it is, we can't acquire the lock.
+				if err := process.Signal(syscall.Signal(0)); err == nil {
+					return fmt.Errorf("%w: lock file exists at %s", errAlreadyRunning, lockPath)
+				}
+				// If the process is not running, we can proceed and overwrite the lock.
+			}
+		}
 	}
 	return os.WriteFile(lockPath, fmt.Append(nil, os.Getpid()), 0o644)
 }

@@ -402,7 +402,11 @@ func isSendingRateLimited(err error) (retryable bool, wait time.Duration) {
 }
 
 func (f *fetcher) errNotify(ctx context.Context, err error) error {
-	return f.send(ctx, fmt.Sprintf(f.errorTemplate, err), true, nil, f.errorThreadID)
+	tmpl := f.errorTemplate
+	if tmpl == "" {
+		tmpl = defaultErrorTemplate
+	}
+	return f.send(ctx, fmt.Sprintf(tmpl, err), true, nil, f.errorThreadID)
 }
 
 func (f *fetcher) makeTelegramRequest(ctx context.Context, method string, args any) error {
