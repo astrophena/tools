@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"go.astrophena.name/base/web"
+	"go.astrophena.name/tools/internal/atomicio"
 	"go.astrophena.name/tools/internal/idle"
 )
 
@@ -122,7 +123,7 @@ func (f *fetcher) handlePutConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := os.WriteFile(filepath.Join(f.stateDir, "config.star"), content, 0o644); err != nil {
+	if err := atomicio.WriteFile(filepath.Join(f.stateDir, "config.star"), content, 0o644); err != nil {
 		web.RespondJSONError(w, r, fmt.Errorf("failed to write config: %v", err))
 		return
 	}
@@ -159,7 +160,7 @@ func (f *fetcher) handlePutState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := os.WriteFile(filepath.Join(f.stateDir, "state.json"), content, 0o644); err != nil {
+	if err := atomicio.WriteFile(filepath.Join(f.stateDir, "state.json"), content, 0o644); err != nil {
 		web.RespondJSONError(w, r, fmt.Errorf("failed to write state: %v", err))
 		return
 	}
@@ -196,7 +197,7 @@ func (f *fetcher) handlePutErrorTemplate(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if err := os.WriteFile(filepath.Join(f.stateDir, "error.tmpl"), content, 0o644); err != nil {
+	if err := atomicio.WriteFile(filepath.Join(f.stateDir, "error.tmpl"), content, 0o644); err != nil {
 		web.RespondJSONError(w, r, fmt.Errorf("failed to write error template: %v", err))
 		return
 	}
