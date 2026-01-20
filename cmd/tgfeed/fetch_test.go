@@ -6,9 +6,9 @@ package main
 
 import (
 	_ "embed"
-	"encoding/json"
 	"net/http"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -156,32 +156,79 @@ func TestBlockAndKeepRules(t *testing.T) {
 			return compareMaps(tm.sentMessages[i], tm.sentMessages[j])
 		})
 		return toJSON(t, tm.sentMessages)
-	}, *update)
+	}, *updateGolden)
 }
 
-func compareMaps(map1, map2 map[string]any) bool {
-	text1, ok1 := map1["text"].(string)
-	text2, ok2 := map2["text"].(string)
-	if !ok1 {
-		if !ok2 {
-			// Both don't have text, consider them equal (no change in order).
-			return false
+func TestDigestAndFormat(t *testing.T) {
+	t.Parallel()
+
+	testutil.RunGolden(t, "testdata/digest/*.star", func(t *testing.T, match string) []byte {
+		t.Parallel()
+
+		config := readFile(t, match)
+
+		// Create a mock state where the feed is new (LastUpdated zero).
+		state := map[string]*feedState{
+			"https://example.com/feed.xml": {
+				LastUpdated: time.Time{},
+			},
 		}
-		// map1 doesn't have text, map2 does, so map2 comes later.
-		return false
-	}
-	if !ok2 {
-		// map1 has text, map2 doesn't, so map1 comes earlier
-		return true
-	}
-	// Compare texts alphabetically.
-	return text1 < text2
+		ar := &txtar.Archive{
+			Files: []txtar.File{
+				{Name: "config.star", Data: config},
+				{Name: "state.json", Data: toJSON(t, state)},
+			},
+		}
+
+		tm := testMux(t, txtarToFS(ar), map[string]http.HandlerFunc{
+			atomFeedRoute: func(w http.ResponseWriter, r *http.Request) {
+				w.Write(atomFeed)
+			},
+		})
+
+		f := testFetcher(t, tm)
+		if err := f.run(t.Context()); err != nil {
+			t.Fatal(err)
+		}
+
+		// Sort messages to be deterministic.
+		sort.SliceStable(tm.sentMessages, func(i, j int) bool {
+			return compareMaps(tm.sentMessages[i], tm.sentMessages[j])
+		})
+		return toJSON(t, tm.sentMessages)
+
+	}, *updateGolden)
 }
 
-func toJSON(t *testing.T, val any) []byte {
-	b, err := json.MarshalIndent(val, "", "  ")
-	if err != nil {
-		t.Fatal(err)
+func TestSplitMessage(t *testing.T) {
+	t.Parallel()
+
+	cases := map[string]struct {
+		in   string
+		want []string
+	}{
+		"short": {
+			in:   "hello",
+			want: []string{"hello"},
+		},
+		"exact": {
+			in:   strings.Repeat("a", 4096),
+			want: []string{strings.Repeat("a", 4096)},
+		},
+		"long (no newline)": {
+			in:   strings.Repeat("a", 4100),
+			want: []string{strings.Repeat("a", 4096), "aaaa"},
+		},
+		"long (newline split)": {
+			in:   strings.Repeat("a", 4000) + "\n" + strings.Repeat("b", 100),
+			want: []string{strings.Repeat("a", 4000), "\n" + strings.Repeat("b", 100)},
+		},
 	}
-	return b
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			got := splitMessage(tc.in)
+			testutil.AssertEqual(t, got, tc.want)
+		})
+	}
 }

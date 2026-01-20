@@ -42,13 +42,13 @@ const (
 //go:embed message.tmpl
 var messageTemplate string
 
-type item struct {
-	threadID int64
-	*gofeed.Item
+type update struct {
+	feed  *feed
+	items []*gofeed.Item
 }
 
 // fetch fetches a single feed. Each fetch runs in it's own goroutine.
-func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *item) (retry bool, retryIn time.Duration) {
+func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *update) (retry bool, retryIn time.Duration) {
 	startTime := time.Now()
 
 	state, exists := f.getState(fd.url)
@@ -185,6 +185,8 @@ func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *item) (retr
 		state.LastModified = lastModified
 	}
 
+	var validItems []*gofeed.Item
+
 	for _, feedItem := range feed.Items {
 		if feedItem.PublishedParsed.Before(state.LastUpdated) {
 			continue
@@ -204,9 +206,19 @@ func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *item) (retr
 			}
 		}
 
-		updates <- &item{
-			Item:     feedItem,
-			threadID: fd.messageThreadID,
+		if fd.digest {
+			validItems = append(validItems, feedItem)
+		} else {
+			updates <- &update{
+				feed:  fd,
+				items: []*gofeed.Item{feedItem},
+			}
+		}
+	}
+	if fd.digest && len(validItems) > 0 {
+		updates <- &update{
+			feed:  fd,
+			items: validItems,
 		}
 	}
 	state.LastUpdated = time.Now()
@@ -231,31 +243,12 @@ func (f *fetcher) makeFeedRequest(req *http.Request) (*http.Response, error) {
 }
 
 func (f *fetcher) applyRule(rule *starlark.Function, item *gofeed.Item) bool {
-	var categories []starlark.Value
-	for _, category := range item.Categories {
-		categories = append(categories, starlark.String(category))
-	}
-	extensions, err := go2star.To(item.Extensions)
-	if err != nil {
-		f.slog.Warn("failed to convert item extensions to Starlark", "item", item.Link, "error", err)
-		return false
-	}
 	val, err := starlark.Call(
 		&starlark.Thread{
 			Print: func(_ *starlark.Thread, msg string) { f.slog.Info(msg) },
 		},
 		rule,
-		starlark.Tuple{starlarkstruct.FromStringDict(
-			starlarkstruct.Default,
-			starlark.StringDict{
-				"title":       starlark.String(item.Title),
-				"url":         starlark.String(item.Link),
-				"description": starlark.String(item.Description),
-				"content":     starlark.String(item.Content),
-				"categories":  starlark.NewList(categories),
-				"extensions":  extensions,
-			},
-		)},
+		starlark.Tuple{f.itemToStarlark(item)},
 		[]starlark.Tuple{},
 	)
 	if err != nil {
@@ -269,6 +262,27 @@ func (f *fetcher) applyRule(rule *starlark.Function, item *gofeed.Item) bool {
 		return false
 	}
 	return bool(ret)
+}
+
+func (f *fetcher) itemToStarlark(item *gofeed.Item) starlark.Value {
+	var categories []starlark.Value
+	for _, category := range item.Categories {
+		categories = append(categories, starlark.String(category))
+	}
+	extensions, _ := go2star.To(item.Extensions)
+	return starlarkstruct.FromStringDict(
+		starlarkstruct.Default,
+		starlark.StringDict{
+			"title":       starlark.String(item.Title),
+			"url":         starlark.String(item.Link),
+			"description": starlark.String(item.Description),
+			"content":     starlark.String(item.Content),
+			"categories":  starlark.NewList(categories),
+			"extensions":  extensions,
+			"guid":        starlark.String(item.GUID),
+			"published":   starlark.String(item.Published),
+		},
+	)
 }
 
 func (f *fetcher) handleFetchFailure(ctx context.Context, state *feedState, url string, err error) {
@@ -297,40 +311,145 @@ var nonAlphaNumRe = sync.OnceValue(func() *regexp.Regexp {
 	return regexp.MustCompile("[^a-zA-Z0-9/]+")
 })
 
-func (f *fetcher) sendUpdate(ctx context.Context, feedItem *item) {
-	title := feedItem.Title
-	if feedItem.Title == "" {
-		title = feedItem.Link
-	}
+func (f *fetcher) sendUpdate(ctx context.Context, u *update) {
+	var (
+		msg          string
+		replyMarkup  *inlineKeyboard
+		items        starlark.Value
+		defaultTitle string
+	)
 
-	msg := fmt.Sprintf(messageTemplate, title, feedItem.Link)
-
-	if u, err := urlpkg.Parse(feedItem.Link); err == nil {
-		switch u.Hostname() {
-		case "t.me":
-			msg += " #tg" // Telegram
-		case "www.youtube.com":
-			msg += " #youtube" // YouTube
-		default:
-			msg += " #" + nonAlphaNumRe().ReplaceAllString(u.Hostname(), "")
+	// Prepare items for Starlark or default formatting.
+	if u.feed.digest {
+		var list []starlark.Value
+		for _, item := range u.items {
+			list = append(list, f.itemToStarlark(item))
+		}
+		items = starlark.NewList(list)
+		defaultTitle = fmt.Sprintf("Updates from %s", u.feed.title)
+		if u.feed.title == "" {
+			defaultTitle = fmt.Sprintf("Updates from %s", u.feed.url)
+		}
+	} else {
+		items = f.itemToStarlark(u.items[0])
+		defaultTitle = u.items[0].Title
+		if defaultTitle == "" {
+			defaultTitle = u.items[0].Link
 		}
 	}
 
-	inlineKeyboardButtons := []inlineKeyboardButton{}
+	// Use custom format if defined, otherwise fall back to default.
+	if u.feed.format != nil {
+		val, err := starlark.Call(
+			&starlark.Thread{
+				Print: func(_ *starlark.Thread, msg string) { f.slog.Info(msg) },
+			},
+			u.feed.format,
+			starlark.Tuple{items},
+			[]starlark.Tuple{},
+		)
+		if err != nil {
+			f.slog.Warn("formatting message", "feed", u.feed.url, "error", err)
+			return
+		}
 
-	if strings.HasPrefix(feedItem.GUID, "https://news.ycombinator.com/item?id=") {
-		inlineKeyboardButtons = append(inlineKeyboardButtons, inlineKeyboardButton{
-			Text: "↪ Hacker News",
-			URL:  feedItem.GUID,
-		})
+		switch v := val.(type) {
+		case starlark.String:
+			msg = v.GoString()
+		case starlark.Tuple:
+			if len(v) >= 1 {
+				if s, ok := v[0].(starlark.String); ok {
+					msg = s.GoString()
+				}
+			}
+			if len(v) >= 2 {
+				if k, ok := v[1].(*starlark.List); ok {
+					rows := make([][]inlineKeyboardButton, 0, k.Len())
+					iter := k.Iterate()
+					var rowValue starlark.Value
+					for iter.Next(&rowValue) {
+						if rowList, ok := rowValue.(*starlark.List); ok {
+							buttons := make([]inlineKeyboardButton, 0, rowList.Len())
+							rowIter := rowList.Iterate()
+							var buttonValue starlark.Value
+							for rowIter.Next(&buttonValue) {
+								if buttonDict, ok := buttonValue.(*starlark.Dict); ok {
+									var btn inlineKeyboardButton
+									for _, item := range buttonDict.Items() {
+										key, ok1 := item[0].(starlark.String)
+										val, ok2 := item[1].(starlark.String)
+										if ok1 && ok2 {
+											switch key.GoString() {
+											case "text":
+												btn.Text = val.GoString()
+											case "url":
+												btn.URL = val.GoString()
+											}
+										}
+									}
+									if btn.Text != "" && btn.URL != "" {
+										buttons = append(buttons, btn)
+									}
+								}
+							}
+							if len(buttons) > 0 {
+								rows = append(rows, buttons)
+							}
+						}
+					}
+					iter.Done()
+					if len(rows) > 0 {
+						kb := inlineKeyboard(rows)
+						replyMarkup = &kb
+					}
+				}
+			}
+		default:
+			f.slog.Warn("format function returned unexpected type", "feed", u.feed.url, "type", val.Type())
+			return
+		}
+	} else {
+		// Default formatting.
+		if u.feed.digest {
+			var sb strings.Builder
+			fmt.Fprintf(&sb, "<b>%s</b>\n\n", defaultTitle)
+			for _, item := range u.items {
+				title := item.Title
+				if title == "" {
+					title = item.Link
+				}
+				fmt.Fprintf(&sb, "• <a href=%q>%s</a>\n", item.Link, title)
+			}
+			msg = sb.String()
+		} else {
+			msg = fmt.Sprintf(messageTemplate, defaultTitle, u.items[0].Link)
+			if u, err := urlpkg.Parse(u.items[0].Link); err == nil {
+				switch u.Hostname() {
+				case "t.me":
+					msg += " #tg" // Telegram
+				case "www.youtube.com":
+					msg += " #youtube" // YouTube
+				default:
+					msg += " #" + nonAlphaNumRe().ReplaceAllString(u.Hostname(), "")
+				}
+			}
+			if strings.HasPrefix(u.items[0].GUID, "https://news.ycombinator.com/item?id=") {
+				replyMarkup = &inlineKeyboard{{
+					{
+						Text: "↪ Hacker News",
+						URL:  u.items[0].GUID,
+					},
+				}}
+			}
+		}
 	}
 
-	f.slog.Debug("sending message", "item", feedItem.Link, "message", msg)
+	f.slog.Debug("sending message", "feed", u.feed.url, "message", msg)
 	if f.dry {
 		return
 	}
 
-	if err := f.send(ctx, strings.TrimSpace(msg), false, &inlineKeyboard{inlineKeyboardButtons}, feedItem.threadID); err != nil {
+	if err := f.send(ctx, strings.TrimSpace(msg), false, replyMarkup, u.feed.messageThreadID); err != nil {
 		f.slog.Warn("failed to send message", "chat_id", f.chatID, "error", err)
 	}
 }
@@ -366,21 +485,47 @@ func (f *fetcher) send(ctx context.Context, text string, disableLinkPreview bool
 		msg.ReplyMarkup = &replyMarkup{inlineKeyboard}
 	}
 	msg.LinkPreviewOptions.IsDisabled = disableLinkPreview
-	msg.Message = tgmarkup.FromMarkdown(text)
-	var err error
-	for range sendRetryLimit {
-		err = f.makeTelegramRequest(ctx, "sendMessage", msg)
-		if err == nil {
-			break
+
+	chunks := splitMessage(text)
+	for _, chunk := range chunks {
+		msg.Message = tgmarkup.FromMarkdown(chunk)
+		var err error
+		for range sendRetryLimit {
+			err = f.makeTelegramRequest(ctx, "sendMessage", msg)
+			if err == nil {
+				break
+			}
+			retryable, wait := isSendingRateLimited(err)
+			if !retryable {
+				break
+			}
+			f.slog.Warn("sending rate limited, waiting", "chat_id", f.chatID, "message", chunk, "wait", wait)
+			time.Sleep(wait)
 		}
-		retryable, wait := isSendingRateLimited(err)
-		if !retryable {
-			break
+		if err != nil {
+			return err
 		}
-		f.slog.Warn("sending rate limited, waiting", "chat_id", f.chatID, "message", text, "wait", wait)
-		time.Sleep(wait)
 	}
-	return err
+	return nil
+}
+
+func splitMessage(text string) []string {
+	if len(text) <= 4096 {
+		return []string{text}
+	}
+	var chunks []string
+	for len(text) > 4096 {
+		// Try to split at the last newline before 4096.
+		splitAt := strings.LastIndex(text[:4096], "\n")
+		if splitAt == -1 {
+			// No newline found, split at 4096.
+			splitAt = 4096
+		}
+		chunks = append(chunks, text[:splitAt])
+		text = text[splitAt:]
+	}
+	chunks = append(chunks, text)
+	return chunks
 }
 
 func isSendingRateLimited(err error) (retryable bool, wait time.Duration) {

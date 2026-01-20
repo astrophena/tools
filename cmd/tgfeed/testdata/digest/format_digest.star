@@ -1,0 +1,14 @@
+# © 2026 Ilya Mateyko. All rights reserved.
+# Use of this source code is governed by the ISC
+# license that can be found in the LICENSE.md file.
+
+
+def format(items):
+    return "Digest: " + str(len(items)) + " items"
+
+
+feed(
+    url="https://example.com/feed.xml",
+    digest=True,
+    format=format,
+)

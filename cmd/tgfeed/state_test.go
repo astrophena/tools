@@ -52,5 +52,5 @@ func TestParseConfig(t *testing.T) {
 		}
 
 		return toJSON(t, f.feeds)
-	}, *update)
+	}, *updateGolden)
 }

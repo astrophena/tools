@@ -12,11 +12,6 @@
     "link_preview_options": {
       "is_disabled": false
     },
-    "reply_markup": {
-      "inline_keyboard": [
-        []
-      ]
-    },
     "text": "🔗 Block this item\n#examplecom\n\n"
   },
   {
@@ -32,11 +27,6 @@
     "link_preview_options": {
       "is_disabled": false
     },
-    "reply_markup": {
-      "inline_keyboard": [
-        []
-      ]
-    },
     "text": "🔗 Item with extensions\n#examplecom\n\n"
   },
   {
@@ -51,11 +41,6 @@
     ],
     "link_preview_options": {
       "is_disabled": false
-    },
-    "reply_markup": {
-      "inline_keyboard": [
-        []
-      ]
     },
     "text": "🔗 Keep this item\n#examplecom\n\n"
   }

@@ -336,7 +336,7 @@ func (f *fetcher) run(ctx context.Context) error {
 	}
 
 	// Recreate updates channel on each fetch.
-	updates := make(chan *item)
+	updates := make(chan *update)
 
 	var baseWg sync.WaitGroup
 
