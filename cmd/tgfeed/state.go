@@ -24,6 +24,7 @@ import (
 	"go.astrophena.name/base/request"
 	"go.astrophena.name/base/syncx"
 	"go.astrophena.name/base/version"
+	"go.astrophena.name/tools/internal/atomicio"
 	"go.astrophena.name/tools/internal/starlark/interpreter"
 
 	"go.starlark.net/starlark"
@@ -222,7 +223,7 @@ func (f *fetcher) saveState(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(f.stateDir, "state.json"), state, 0o644)
+	return atomicio.WriteFile(filepath.Join(f.stateDir, "state.json"), state, 0o644)
 }
 
 func (f *fetcher) saveStateRemote(ctx context.Context) error {
@@ -259,7 +260,7 @@ func (f *fetcher) saveConfig(ctx context.Context) error {
 	if f.remoteURL != "" {
 		return f.saveConfigRemote(ctx)
 	}
-	return os.WriteFile(filepath.Join(f.stateDir, "config.star"), []byte(f.config), 0o644)
+	return atomicio.WriteFile(filepath.Join(f.stateDir, "config.star"), []byte(f.config), 0o644)
 }
 
 func (f *fetcher) saveConfigRemote(ctx context.Context) error {
