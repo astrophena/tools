@@ -1,0 +1,36 @@
+[
+  {
+    "chat_id": "test",
+    "link_preview_options": {
+      "is_disabled": false
+    },
+    "reply_markup": {
+      "inline_keyboard": [
+        [
+          {
+            "text": "Open Link",
+            "url": "https://astrophena.name/cs"
+          }
+        ]
+      ]
+    },
+    "text": "Item with keyboard: Experimenting with intersections in Cities: Skylines\n\n"
+  },
+  {
+    "chat_id": "test",
+    "link_preview_options": {
+      "is_disabled": false
+    },
+    "reply_markup": {
+      "inline_keyboard": [
+        [
+          {
+            "text": "Open Link",
+            "url": "https://astrophena.name/hello"
+          }
+        ]
+      ]
+    },
+    "text": "Item with keyboard: Hello, world!\n\n"
+  }
+]

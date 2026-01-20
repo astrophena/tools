@@ -27,7 +27,7 @@ import (
 	"go.astrophena.name/base/web"
 )
 
-var update = flag.Bool("update", false, "update golden files in testdata")
+var updateGolden = flag.Bool("update", false, "update golden files in testdata")
 
 // Typical Telegram Bot API token, copied from docs.
 const tgToken = "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
@@ -112,7 +112,7 @@ func TestListFeeds(t *testing.T) {
 		}
 
 		return buf.Bytes()
-	}, *update)
+	}, *updateGolden)
 }
 
 func readFile(t *testing.T, path string) []byte {
@@ -232,6 +232,33 @@ func orHandler(hh ...http.HandlerFunc) http.HandlerFunc {
 
 func read(t *testing.T, r io.Reader) []byte {
 	b, err := io.ReadAll(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b
+}
+
+func compareMaps(map1, map2 map[string]any) bool {
+	text1, ok1 := map1["text"].(string)
+	text2, ok2 := map2["text"].(string)
+	if !ok1 {
+		if !ok2 {
+			// Both don't have text, consider them equal (no change in order).
+			return false
+		}
+		// map1 doesn't have text, map2 does, so map2 comes later.
+		return false
+	}
+	if !ok2 {
+		// map1 has text, map2 doesn't, so map1 comes earlier
+		return true
+	}
+	// Compare texts alphabetically.
+	return text1 < text2
+}
+
+func toJSON(t *testing.T, val any) []byte {
+	b, err := json.MarshalIndent(val, "", "  ")
 	if err != nil {
 		t.Fatal(err)
 	}

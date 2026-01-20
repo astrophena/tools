@@ -11,6 +11,7 @@ Follow the Go style for commit messages.
 - The subject line should be short and concise.
 - Do not use a trailing period.
 - Do not use Markdown in commit messages.
+- Add `Assisted-by: [AI Model/Agent Name]` trailer to all commit messages.
 
 ## Repository Structure
 

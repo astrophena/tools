@@ -1,0 +1,16 @@
+[
+  {
+    "chat_id": "test",
+    "link_preview_options": {
+      "is_disabled": false
+    },
+    "text": "Single: Experimenting with intersections in Cities: Skylines\n\n"
+  },
+  {
+    "chat_id": "test",
+    "link_preview_options": {
+      "is_disabled": false
+    },
+    "text": "Single: Hello, world!\n\n"
+  }
+]

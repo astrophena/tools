@@ -38,6 +38,8 @@ type feed struct {
 	messageThreadID int64
 	blockRule       *starlark.Function
 	keepRule        *starlark.Function
+	digest          bool
+	format          *starlark.Function
 }
 
 func newFeedBuiltin(feeds *[]*feed) *starlark.Builtin {
@@ -52,6 +54,8 @@ func newFeedBuiltin(feeds *[]*feed) *starlark.Builtin {
 			"message_thread_id?", &f.messageThreadID,
 			"block_rule?", &f.blockRule,
 			"keep_rule?", &f.keepRule,
+			"digest?", &f.digest,
+			"format?", &f.format,
 		); err != nil {
 			return nil, err
 		}

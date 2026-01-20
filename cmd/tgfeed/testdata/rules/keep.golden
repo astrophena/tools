@@ -12,11 +12,6 @@
     "link_preview_options": {
       "is_disabled": false
     },
-    "reply_markup": {
-      "inline_keyboard": [
-        []
-      ]
-    },
     "text": "🔗 Keep this item\n#examplecom\n\n"
   }
 ]

@@ -56,16 +56,27 @@ tgfeed loads its configuration from the config.star file in STATE_DIRECTORY.
 This file is written in Starlark language and defines a list of feeds, for example:
 
 	feed(
-	    url = "https://hnrss.org/newest",
-	    title = "Hacker News: Newest",
-	    block_rule = lambda item: "pdf" in item.title.lower(), # Block PDF files.
-	    message_thread_id = 123, # Send updates to a specific topic.
+	    url="https://hnrss.org/newest",
+	    title="Hacker News: Newest",
+	    block_rule=lambda item: "pdf" in item.title.lower(), # Block PDF files.
+	    message_thread_id=123, # Send updates to a specific topic.
+	    digest=True, # Bundle updates into a single message.
+	    format=lambda items: "Digest: " + str(len(items)) + " items", # Custom format.
 	)
 
 Each feed can have a title, URL, and optional block and keep rules.
 Optionally, message_thread_id can be specified to send updates from this
 feed to a specific message thread (topic) within the chat. This is applicable
 only for supergroups with topics enabled.
+
+Digest mode can be enabled by setting digest to true. In this mode, updates
+are bundled into a single message instead of sending one message per item.
+
+A custom format function can be specified using the format argument. It takes
+a single item (or a list of items in digest mode) and returns a string message.
+In digest mode, the returned string is sent as the message body. In normal mode,
+it is used as the message text. The format function can also return a tuple of
+(text, keyboard) to attach an inline keyboard to the message.
 
 Block and keep rules are Starlark functions that take a feed item as an argument
 and return a boolean value. If a block rule returns true, the item is not sent
