@@ -449,7 +449,12 @@ func (f *fetcher) sendUpdate(ctx context.Context, u *update) {
 		return
 	}
 
-	if err := f.send(ctx, strings.TrimSpace(msg), false, replyMarkup, u.feed.messageThreadID); err != nil {
+	var disableLinkPreview bool
+	if u.feed.digest {
+		disableLinkPreview = true
+	}
+
+	if err := f.send(ctx, strings.TrimSpace(msg), disableLinkPreview, replyMarkup, u.feed.messageThreadID); err != nil {
 		f.slog.Warn("failed to send message", "chat_id", f.chatID, "error", err)
 	}
 }
