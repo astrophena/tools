@@ -9,6 +9,7 @@ import (
 	"cmp"
 	"context"
 	_ "embed"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -20,6 +21,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"slices"
 	"strconv"
@@ -27,6 +29,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"unicode/utf8"
 
 	"go.astrophena.name/base/cli"
 	"go.astrophena.name/base/logger"
@@ -53,6 +56,7 @@ func main() { cli.Main(new(fetcher)) }
 
 func (f *fetcher) Flags(fs *flag.FlagSet) {
 	fs.BoolVar(&f.dry, "dry", false, "Enable dry-run mode: log actions, but don't send updates or save state.")
+	fs.BoolVar(&f.json, "json", false, "Output in JSON format (honored in supported commands).")
 	fs.StringVar(&f.remoteURL, "remote", "", "Remote admin API URL (e.g., 'http://localhost:8080' or '/run/tgfeed/admin-socket').")
 }
 
@@ -134,11 +138,14 @@ type fetcher struct {
 	adminAddr     string
 	chatID        string
 	dry           bool
+	json          bool
 	errorThreadID int64
-	ghToken       string
-	remoteURL     string
-	stateDir      string
-	tgToken       string
+	// now acts as time.Now, but can be mocked for testing.
+	now       func() time.Time
+	ghToken   string
+	remoteURL string
+	stateDir  string
+	tgToken   string
 
 	// initialized by doInit
 	fp        *gofeed.Parser
@@ -160,6 +167,9 @@ type fetcher struct {
 func (f *fetcher) doInit(ctx context.Context) {
 	env := cli.GetEnv(ctx)
 	f.logf = log.New(env.Stderr, "", 0).Printf
+	if f.now == nil {
+		f.now = time.Now
+	}
 
 	if f.httpc == nil {
 		f.httpc = request.DefaultClient
@@ -183,45 +193,148 @@ func (f *fetcher) listFeeds(ctx context.Context, w io.Writer) error {
 		return err
 	}
 
-	var sb strings.Builder
+	if f.json {
+		type feedJSON struct {
+			URL     string     `json:"url"`
+			Title   string     `json:"title,omitempty"`
+			State   *feedState `json:"state,omitempty"`
+			NoState bool       `json:"no_state,omitempty"`
+		}
 
-	for _, feed := range f.feeds {
-		state, hasState := f.getState(feed.url)
-		fmt.Fprintf(&sb, "%s", feed.url)
-		if !hasState {
-			fmt.Fprintf(&sb, " \n")
-			continue
-		}
-		fmt.Fprintf(&sb, " (")
-		if feed.title != "" {
-			fmt.Fprintf(&sb, "%q, ", feed.title)
-		}
-		fmt.Fprintf(&sb, "last updated %s", state.LastUpdated.Format(time.DateTime))
-		if state.ErrorCount > 0 {
-			fmt.Fprintf(&sb, ", failed %s, last error was %q", pluralize(int64(state.ErrorCount)), state.LastError)
-		}
-		if state.FetchCount > 0 {
-			fmt.Fprintf(&sb, ", fetched %s", pluralize(state.FetchCount))
-			if state.FetchFailCount > 0 {
-				failRate := (float32(state.FetchFailCount) / float32(state.FetchCount)) * 100
-				fmt.Fprintf(&sb, ", failure rate %.2f%%", failRate)
+		var feeds []feedJSON
+		for _, feed := range f.feeds {
+			state, hasState := f.getState(feed.url)
+			fj := feedJSON{
+				URL:   feed.url,
+				Title: feed.title,
+				State: state,
 			}
+			if !hasState {
+				fj.NoState = true
+			}
+			feeds = append(feeds, fj)
 		}
-		if state.Disabled {
-			fmt.Fprintf(&sb, ", disabled")
-		}
-		fmt.Fprintf(&sb, ")\n")
+
+		enc := json.NewEncoder(w)
+		enc.SetIndent("", "  ")
+		return enc.Encode(feeds)
 	}
 
-	io.WriteString(w, sb.String())
+	const (
+		colorReset  = "\033[0m"
+		colorRed    = "\033[31m"
+		colorGreen  = "\033[32m"
+		colorYellow = "\033[33m"
+		colorBlue   = "\033[34m"
+		colorGray   = "\033[90m"
+	)
+
+	fmt.Fprintln(w, "STATE  FEED                                      UPDATED   FAIL%")
+
+	var (
+		total    int
+		healthy  int
+		failing  int
+		disabled int
+	)
+
+	for _, feed := range f.feeds {
+		total++
+		state, hasState := f.getState(feed.url)
+
+		var (
+			stateStr   string
+			feedStr    string
+			updatedStr string
+			failRate   string
+		)
+
+		if feed.title != "" {
+			feedStr = feed.title
+		} else {
+			feedStr = feed.url
+		}
+		// Truncate feed name/URL to ~40 chars to keep it compact.
+		if utf8.RuneCountInString(feedStr) > 40 {
+			feedStr = string([]rune(feedStr)[:37]) + "..."
+		}
+
+		if !hasState {
+			updatedStr = "-"
+			stateStr = colorGray + "NO STATE" + colorReset
+		} else {
+			updatedStr = relativeTime(state.LastUpdated, f.now())
+
+			if state.Disabled {
+				disabled++
+				stateStr = colorGray + "OFF" + colorReset
+				feedStr = colorGray + feedStr + colorReset
+			} else if state.FetchFailCount > 0 || state.ErrorCount > 0 {
+				failing++
+				stateStr = colorRed + "ERR" + colorReset
+				if state.FetchFailCount > 0 && state.FetchCount > 0 {
+					rate := (float32(state.FetchFailCount) / float32(state.FetchCount)) * 100
+					if rate > 0 {
+						failRate = fmt.Sprintf("%.0f%%", rate)
+					}
+				}
+			} else {
+				healthy++
+				stateStr = colorGreen + "OK" + colorReset
+			}
+		}
+
+		// STATE (6) | FEED (42) | UPDATED (10) | FAIL%
+		fmt.Fprintf(w, "%s%s%s%s\n",
+			pad(stateStr, 7),
+			pad(feedStr, 42),
+			pad(updatedStr, 10),
+			failRate,
+		)
+	}
+
+	fmt.Fprintf(w, "\nSummary: %d total, %s%d healthy%s, %s%d failing%s, %s%d disabled%s\n",
+		total,
+		colorGreen, healthy, colorReset,
+		colorRed, failing, colorReset,
+		colorGray, disabled, colorReset,
+	)
+
 	return nil
 }
 
-func pluralize(n int64) string {
-	if n > 1 {
-		return fmt.Sprintf("%d times", n)
+var ansiRegex = regexp.MustCompile(`\x1b\[[0-9;]*m`)
+
+func stripANSI(s string) string {
+	return ansiRegex.ReplaceAllString(s, "")
+}
+
+func pad(s string, width int) string {
+	l := utf8.RuneCountInString(stripANSI(s))
+	if l >= width {
+		return s
 	}
-	return "once"
+	return s + strings.Repeat(" ", width-l)
+}
+
+func relativeTime(t, now time.Time) string {
+	d := now.Sub(t)
+	if d < time.Second {
+		return "just now"
+	}
+	if d < time.Minute {
+		return fmt.Sprintf("%ds", int(d.Seconds()))
+	}
+	if d < time.Hour {
+		return fmt.Sprintf("%dm", int(d.Minutes()))
+	}
+	if d < 24*time.Hour {
+		return fmt.Sprintf("%dh", int(d.Hours()))
+	}
+	if d < 48*time.Hour {
+		return "yesterday"
+	}
+	return fmt.Sprintf("%dd", int(d.Hours()/24))
 }
 
 func (f *fetcher) edit(ctx context.Context) error {

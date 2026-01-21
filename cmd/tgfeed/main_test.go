@@ -19,6 +19,7 @@ import (
 	"sync"
 	"testing"
 	"testing/fstest"
+	"time"
 
 	"go.astrophena.name/base/cli"
 	"go.astrophena.name/base/cli/clitest"
@@ -105,6 +106,9 @@ func TestListFeeds(t *testing.T) {
 
 		tm := testMux(t, txtarToFS(txtar.Parse(readFile(t, tc))), nil)
 		f := testFetcher(t, tm)
+		if strings.Contains(tc, "json") {
+			f.json = true
+		}
 
 		var buf bytes.Buffer
 		if err := f.listFeeds(t.Context(), &buf); err != nil {
@@ -135,6 +139,9 @@ func testFetcher(t *testing.T, m *mux) *fetcher {
 	f.init.Do(func() {
 		f.doInit(t.Context())
 	})
+	f.now = func() time.Time {
+		return time.Date(2026, 1, 22, 0, 0, 0, 0, time.UTC)
+	}
 	return f
 }
 

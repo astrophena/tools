@@ -1,0 +1,737 @@
+[
+  {
+    "url": "https://100r.co/links/rss.xml",
+    "state": {
+      "disabled": false,
+      "last_updated": "2024-05-08T09:08:42.108157614Z",
+      "last_modified": "2024-05-08T00:34:27Z",
+      "etag": "W/\"663ac893-2c4c8\"",
+      "fetch_count": 0,
+      "fetch_fail_count": 0
+    }
+  },
+  {
+    "url": "https://adnano.co/atom.xml",
+    "state": {
+      "disabled": false,
+      "last_updated": "2024-05-08T09:08:11.839118551Z",
+      "last_modified": "2024-01-11T11:48:28Z",
+      "fetch_count": 0,
+      "fetch_fail_count": 0
+    }
+  },
+  {
+    "url": "https://alexwlchan.net/atom.xml",
+    "state": {
+      "disabled": false,
+      "last_updated": "2024-05-08T09:08:24.394273677Z",
+      "last_modified": "0001-01-01T00:00:00Z",
+      "etag": "\"89e9819bceed4c6047682f5bba25cf72-ssl-df\"",
+      "fetch_count": 0,
+      "fetch_fail_count": 0
+    }
+  },
+  {
+    "url": "https://andrewkelley.me/rss.xml",
+    "state": {
+      "disabled": false,
+      "last_updated": "2024-03-26T16:18:23.585626658Z",
+      "last_modified": "2024-03-25T05:05:53Z",
+      "etag": "W/\"004a007c6ad308b84585d71a747202fd\"",
+      "fetch_count": 0,
+      "fetch_fail_count": 0
+    }
+  },
+  {
+    "url": "https://apenwarr.ca/log/rss.php",
+    "state": {
+      "disabled": false,
+      "last_updated": "2024-05-08T09:08:30.913871083Z",
+      "last_modified": "0001-01-01T00:00:00Z",
+      "etag": "W/\"df140380302d6a048932198aab534969f98aa051\"",
+      "fetch_count": 0,
+      "fetch_fail_count": 0
+    }
+  },
+  {
+    "url": "https://astrophena.name/feed.xml",
+    "state": {
+      "disabled": false,
+      "last_updated": "2024-05-08T09:08:38.180814887Z",
+      "last_modified": "2024-05-07T10:42:34Z",
+      "etag": "W/\"663a059a-73f\"",
+      "fetch_count": 0,
+      "fetch_fail_count": 0
+    }
+  },
+  {
+    "url": "https://auto.onliner.by/feed",
+    "state": {
+      "disabled": false,
+      "last_updated": "2024-05-08T09:08:35.620496991Z",
+      "last_modified": "0001-01-01T00:00:00Z",
+      "fetch_count": 0,
+      "fetch_fail_count": 0
+    }
+  },
+  {
+    "url": "https://bengarney.com/feed/",
+    "state": {
+      "disabled": false,
+      "last_updated": "2024-05-08T09:08:43.533758366Z",
+      "last_modified": "2024-04-04T05:07:53Z",
+      "fetch_count": 0,
+      "fetch_fail_count": 0
+    }
+  },
+  {
+    "url": "https://benhoyt.com/writings/rss.xml",
+    "state": {
+      "disabled": false,
+      "last_updated": "2024-05-08T09:08:14.803492319Z",
+      "last_modified": "2024-04-13T08:50:40Z",
+      "etag": "W/\"661a4760-5326\"",
+      "fetch_count": 0,
+      "fetch_fail_count": 0
+    }
+  },
+  {
+    "url": "https://blisch.by/tag/gorodskie-zarisovki/feed",
+    "state": {
+      "disabled": false,
+      "last_updated": "2024-05-08T09:08:23.085435787Z",
+      "last_modified": "2024-05-07T06:41:56Z",
+      "etag": "\"f1bd42e683ce52c1cba727f9dba00c9f\"",
+      "fetch_count": 0,
+      "fetch_fail_count": 0
+    }
+  },
+  {
+    "url": "https://blog.wesleyac.com/feed.xml",
+    "state": {
+      "disabled": false,
+      "last_updated": "2024-05-08T09:08:24.693400399Z",
+      "last_modified": "2024-02-17T03:32:49Z",
+      "etag": "W/\"65d028e1-1302d\"",
+      "fetch_count": 0,
+      "fetch_fail_count": 0
+    }
+  },
+  {
+    "url": "https://brandur.org/articles.atom",
+    "state": {
+      "disabled": false,
+      "last_updated": "2024-05-08T09:08:25.378852882Z",
+      "last_modified": "2024-05-06T11:18:18Z",
+      "etag": "W/\"8a7e494194c340b9ed7d7d62033dba81\"",
+      "fetch_count": 0,
+      "fetch_fail_count": 0
+    }
+  },
+  {
+    "url": "https://brandur.org/atoms.atom",
+    "state": {
+      "disabled": false,
+      "last_updated": "2024-05-08T09:08:35.626024393Z",
+      "last_modified": "2024-05-07T06:32:59Z",
+      "etag": "W/\"3a0a2acd77cf7719de1d6482eb1cd3bd\"",
+      "fetch_count": 0,
+      "fetch_fail_count": 0
+    }
+  },
+  {
+    "url": "https://brandur.org/fragments.atom",
+    "state": {
+      "disabled": false,
+      "last_updated": "2024-05-08T09:08:24.565140969Z",
+      "last_modified": "2024-05-07T08:33:11Z",
+      "etag": "W/\"984ab0178dd2eadd64770895787fade5\"",
+      "fetch_count": 0,
+      "fetch_fail_count": 0
+    }
+  },
+  {
+    "url": "https://brandur.org/nanoglyphs.atom",
+    "state": {
+      "disabled": false,
+      "last_updated": "2024-05-08T09:08:30.712830711Z",
+      "last_modified": "2024-05-07T08:33:11Z",
+      "etag": "W/\"021e9e38ddedae1929cb679806ef51f8\"",
+      "fetch_count": 0,
+      "fetch_fail_count": 0
+    }
+  },
+  {
+    "url": "https://bsky.app/profile/did:plc:7r2fy3b4u7mmnhgbdxnflovv/rss",
+    "no_state": true
+  },
+  {
+    "url": "https://ciechanow.ski/atom.xml",
+    "state": {
+      "disabled": false,
+      "last_updated": "2024-05-08T09:08:34.498954953Z",
+      "last_modified": "2024-04-01T23:58:05Z",
+      "etag": "W/\"660b4a0d-a70\"",
+      "fetch_count": 0,
+      "fetch_fail_count": 0
+    }
+  },
+  {
+    "url": "https://commandcenter.blogspot.com/feeds/posts/default",
+    "state": {
+      "disabled": false,
+      "last_updated": "2024-03-26T16:18:30.082895072Z",
+      "last_modified": "2024-03-13T03:59:07Z",
+      "etag": "W/\"2cb632f4d8257cdeb25411e57f979024f7f20b00ecdbd011a7989a17adbfa996\"",
+      "fetch_count": 0,
+      "fetch_fail_count": 0
+    }
+  },
+  {
+    "url": "https://crawshaw.io/atom.xml",
+    "state": {
+      "disabled": false,
+      "last_updated": "2024-05-08T09:08:24.244145782Z",
+      "last_modified": "2024-03-20T23:28:30Z",
+      "fetch_count": 0,
+      "fetch_fail_count": 0
+    }
+  },
+  {
+    "url": "https://danluu.com/atom.xml",
+    "state": {
+      "disabled": false,
+      "last_updated": "2024-05-08T09:08:25.010967267Z",
+      "last_modified": "2024-03-31T06:37:58Z",
+      "etag": "W/\"660904c6-6e8a93\"",
+      "fetch_count": 0,
+      "fetch_fail_count": 0
+    }
+  },
+  {
+    "url": "https://drewdevault.com/blog/index.xml",
+    "state": {
+      "disabled": false,
+      "last_updated": "2024-05-08T09:08:39.364307601Z",
+      "last_modified": "2024-04-25T18:36:35Z",
+      "fetch_count": 0,
+      "fetch_fail_count": 0
+    }
+  },
+  {
+    "url": "https://emersion.fr/blog/atom.xml",
+    "state": {
+      "disabled": false,
+      "last_updated": "2024-05-08T09:08:14.688058954Z",
+      "last_modified": "2024-04-17T15:05:58Z",
+      "fetch_count": 0,
+      "fetch_fail_count": 0
+    }
+  },
+  {
+    "url": "https://fasterthanli.me/index.xml",
+    "state": {
+      "disabled": false,
+      "last_updated": "2024-05-08T09:08:39.451343893Z",
+      "last_modified": "0001-01-01T00:00:00Z",
+      "fetch_count": 0,
+      "fetch_fail_count": 0
+    }
+  },
+  {
+    "url": "https://fathy.fr/atom.xml",
+    "state": {
+      "disabled": false,
+      "last_updated": "2024-05-08T09:08:46.28215741Z",
+      "last_modified": "0001-01-01T00:00:00Z",
+      "etag": "W/\"3d4009e80702a9b62776710bc8f1de6b\"",
+      "fetch_count": 0,
+      "fetch_fail_count": 0
+    }
+  },
+  {
+    "url": "https://flak.tedunangst.com/rss",
+    "state": {
+      "disabled": false,
+      "last_updated": "2024-05-08T09:08:37.726749828Z",
+      "last_modified": "2024-05-01T22:38:26Z",
+      "fetch_count": 0,
+      "fetch_fail_count": 0
+    }
+  },
+  {
+    "url": "https://go.dev/blog/feed.atom",
+    "no_state": true
+  },
+  {
+    "url": "https://habr.com/ru/rss/users/bodyawm/articles/?fl=ru",
+    "state": {
+      "disabled": false,
+      "last_updated": "2024-05-08T09:08:37.411935332Z",
+      "last_modified": "0001-01-01T00:00:00Z",
+      "fetch_count": 0,
+      "fetch_fail_count": 0
+    }
+  },
+  {
+    "url": "https://hachyderm.io/@rsc.rss",
+    "no_state": true
+  },
+  {
+    "url": "https://herman.bearblog.dev/feed/?type=rss",
+    "state": {
+      "disabled": false,
+      "last_updated": "2024-05-08T09:08:46.86974642Z",
+      "last_modified": "0001-01-01T00:00:00Z",
+      "fetch_count": 0,
+      "fetch_fail_count": 0
+    }
+  },
+  {
+    "url": "https://hnrss.org/best",
+    "state": {
+      "disabled": false,
+      "last_updated": "2024-05-08T04:08:14.273382914Z",
+      "last_modified": "2024-05-07T15:36:05Z",
+      "fetch_count": 0,
+      "fetch_fail_count": 0
+    }
+  },
+  {
+    "url": "https://infrequently.org/feed/",
+    "state": {
+      "disabled": false,
+      "last_updated": "2024-05-05T04:10:32.83399534Z",
+      "last_modified": "0001-01-01T00:00:00Z",
+      "etag": "\"5dd75ad4ba34e8925a4e385b1fcc5a07-ssl-df\"",
+      "fetch_count": 0,
+      "fetch_fail_count": 0
+    }
+  },
+  {
+    "url": "https://jcs.org/rss",
+    "state": {
+      "disabled": false,
+      "last_updated": "2024-05-08T09:08:28.928544971Z",
+      "last_modified": "0001-01-01T00:00:00Z",
+      "etag": "W/\"6632e5db-15afc\"",
+      "fetch_count": 0,
+      "fetch_fail_count": 0
+    }
+  },
+  {
+    "url": "https://jvns.ca/atom.xml",
+    "state": {
+      "disabled": false,
+      "last_updated": "2024-04-11T04:09:29.985634638Z",
+      "last_modified": "0001-01-01T00:00:00Z",
+      "etag": "\"61fd6d60720c82d37e49b33cc2f8e1f6-ssl-df\"",
+      "fetch_count": 0,
+      "fetch_fail_count": 0
+    }
+  },
+  {
+    "url": "https://ktostudent.ru/feed/",
+    "state": {
+      "disabled": false,
+      "last_updated": "2024-05-06T14:08:47.07537766Z",
+      "last_modified": "2024-05-06T10:05:34Z",
+      "etag": "\"e9b0fe0446a9a40f91ba463485409299\"",
+      "fetch_count": 0,
+      "fetch_fail_count": 0
+    }
+  },
+  {
+    "url": "https://liberda.nl/weblog/atom.xml",
+    "state": {
+      "disabled": false,
+      "last_updated": "2024-05-08T09:08:24.042872305Z",
+      "last_modified": "2024-04-10T16:08:15Z",
+      "etag": "\"6616b96f-48ec\"",
+      "fetch_count": 0,
+      "fetch_fail_count": 0
+    }
+  },
+  {
+    "url": "https://manuelmoreale.com/feed/rss",
+    "state": {
+      "disabled": false,
+      "last_updated": "2024-05-08T09:08:28.190343246Z",
+      "last_modified": "0001-01-01T00:00:00Z",
+      "fetch_count": 0,
+      "fetch_fail_count": 0
+    }
+  },
+  {
+    "url": "https://maximilyahov.ru/blog/rss/",
+    "state": {
+      "disabled": false,
+      "last_updated": "2024-05-08T09:08:46.069797438Z",
+      "last_modified": "2024-05-05T13:02:42Z",
+      "fetch_count": 0,
+      "fetch_fail_count": 0
+    }
+  },
+  {
+    "url": "https://milan.cvitkovic.net/writing/index.xml",
+    "state": {
+      "disabled": false,
+      "last_updated": "2024-05-08T09:08:26.520388365Z",
+      "last_modified": "2024-02-17T22:29:23Z",
+      "etag": "W/\"65d13343-54f39\"",
+      "fetch_count": 0,
+      "fetch_fail_count": 0
+    }
+  },
+  {
+    "url": "https://notebook.wesleyac.com/atom.xml",
+    "state": {
+      "disabled": false,
+      "last_updated": "2024-05-08T09:08:12.512795321Z",
+      "last_modified": "2024-05-03T13:50:06Z",
+      "etag": "\"6634eb8e-67ba\"",
+      "fetch_count": 0,
+      "fetch_fail_count": 0
+    }
+  },
+  {
+    "url": "https://optozorax.github.io/atom.xml",
+    "state": {
+      "disabled": false,
+      "last_updated": "2024-05-08T09:08:46.401754393Z",
+      "last_modified": "2023-08-06T12:24:35Z",
+      "etag": "W/\"64cf9103-60a1\"",
+      "fetch_count": 0,
+      "fetch_fail_count": 0
+    }
+  },
+  {
+    "url": "https://orib.dev/feed.rss",
+    "state": {
+      "disabled": false,
+      "last_updated": "2024-05-08T09:08:43.293230946Z",
+      "last_modified": "2023-04-28T15:36:32Z",
+      "fetch_count": 0,
+      "fetch_fail_count": 0
+    }
+  },
+  {
+    "url": "https://research.swtch.com/feed.atom",
+    "state": {
+      "disabled": false,
+      "last_updated": "2024-04-06T04:10:39.467948402Z",
+      "last_modified": "2024-04-05T19:43:22Z",
+      "etag": "\"0204b176344f5546d7eaede191e2f330\"",
+      "fetch_count": 0,
+      "fetch_fail_count": 0
+    }
+  },
+  {
+    "url": "https://rys.io/en/feed.rss",
+    "state": {
+      "disabled": false,
+      "last_updated": "2024-05-08T09:08:18.418764213Z",
+      "last_modified": "2024-01-07T23:38:26Z",
+      "etag": "\"659b35f2-1a9ab\"",
+      "fetch_count": 0,
+      "fetch_fail_count": 0
+    }
+  },
+  {
+    "url": "https://samwho.dev/rss.xml",
+    "state": {
+      "disabled": false,
+      "last_updated": "2024-05-08T09:08:25.363236921Z",
+      "last_modified": "2024-05-07T21:03:30Z",
+      "etag": "W/\"663a9722-5d560\"",
+      "fetch_count": 0,
+      "fetch_fail_count": 0
+    }
+  },
+  {
+    "url": "https://subpixel.space/feed.xml",
+    "state": {
+      "disabled": false,
+      "last_updated": "2024-05-08T09:08:11.896745827Z",
+      "last_modified": "2024-03-14T17:44:40Z",
+      "etag": "W/\"65f33788-39418\"",
+      "fetch_count": 0,
+      "fetch_fail_count": 0
+    }
+  },
+  {
+    "url": "https://systemstack.dev/index.xml",
+    "state": {
+      "disabled": false,
+      "last_updated": "2024-05-08T09:08:26.165351835Z",
+      "last_modified": "2023-07-02T13:12:33Z",
+      "etag": "W/\"1739-5ff80cd8cb240\"",
+      "fetch_count": 0,
+      "fetch_fail_count": 0
+    }
+  },
+  {
+    "url": "https://taylor.town/feed.xml",
+    "state": {
+      "disabled": false,
+      "last_updated": "2024-05-08T09:08:29.222664296Z",
+      "last_modified": "0001-01-01T00:00:00Z",
+      "etag": "\"55845266adffcf212c9f9db8c0cbbfbc\"",
+      "fetch_count": 0,
+      "fetch_fail_count": 0
+    }
+  },
+  {
+    "url": "https://tedinski.com/feed.xml",
+    "state": {
+      "disabled": false,
+      "last_updated": "2024-05-08T09:08:29.736882694Z",
+      "last_modified": "2023-03-15T00:21:59Z",
+      "etag": "W/\"64110fa7-2204d\"",
+      "fetch_count": 0,
+      "fetch_fail_count": 0
+    }
+  },
+  {
+    "url": "https://tg.i-c-a.su/rss/nikitonsky_pub",
+    "state": {
+      "disabled": false,
+      "last_updated": "2024-05-08T09:08:34.147041946Z",
+      "last_modified": "0001-01-01T00:00:00Z",
+      "fetch_count": 0,
+      "fetch_fail_count": 0
+    }
+  },
+  {
+    "url": "https://thesephist.com/index.xml",
+    "state": {
+      "disabled": false,
+      "last_updated": "2024-05-08T09:08:18.471947607Z",
+      "last_modified": "2023-10-28T05:05:53Z",
+      "etag": "\"653c96b1-4ea44\"",
+      "fetch_count": 0,
+      "fetch_fail_count": 0
+    }
+  },
+  {
+    "url": "https://til.simonwillison.net/tils/feed.atom",
+    "state": {
+      "disabled": false,
+      "last_updated": "2024-05-08T09:08:47.1549795Z",
+      "last_modified": "0001-01-01T00:00:00Z",
+      "fetch_count": 0,
+      "fetch_fail_count": 0
+    }
+  },
+  {
+    "url": "https://tonsky.me/atom.xml",
+    "state": {
+      "disabled": false,
+      "last_updated": "2024-05-08T09:08:31.876992156Z",
+      "last_modified": "2024-04-30T00:00:00Z",
+      "etag": "W/\"18f557ff400\"",
+      "fetch_count": 0,
+      "fetch_fail_count": 0
+    }
+  },
+  {
+    "url": "https://tudorr.ro/feed.rss",
+    "state": {
+      "disabled": false,
+      "last_updated": "2024-05-08T09:08:44.399580014Z",
+      "last_modified": "2024-04-09T16:37:59Z",
+      "etag": "\"sboovb1fz7\"",
+      "fetch_count": 0,
+      "fetch_fail_count": 0
+    }
+  },
+  {
+    "url": "https://v5.chriskrycho.com/essays/feed.xml",
+    "state": {
+      "disabled": false,
+      "last_updated": "2024-05-08T09:08:25.169735877Z",
+      "last_modified": "0001-01-01T00:00:00Z",
+      "etag": "\"b01566e5311d72cb845eec463c3732c9-ssl-df\"",
+      "fetch_count": 0,
+      "fetch_fail_count": 0
+    }
+  },
+  {
+    "url": "https://vas3k.blog/rss/",
+    "state": {
+      "disabled": false,
+      "last_updated": "2024-05-08T09:08:10.712924626Z",
+      "last_modified": "2024-03-19T18:30:40Z",
+      "fetch_count": 0,
+      "fetch_fail_count": 0
+    }
+  },
+  {
+    "url": "https://www.arp242.net/feed.xml",
+    "state": {
+      "disabled": false,
+      "last_updated": "2024-05-04T09:09:33.228478327Z",
+      "last_modified": "0001-01-01T00:00:00Z",
+      "etag": "\"afa44b8169a609b28cc6528678faba52-ssl-df\"",
+      "fetch_count": 0,
+      "fetch_fail_count": 0
+    }
+  },
+  {
+    "url": "https://www.copetti.org/index.xml",
+    "state": {
+      "disabled": false,
+      "last_updated": "2024-04-24T04:09:31.793354358Z",
+      "last_modified": "0001-01-01T00:00:00Z",
+      "etag": "\"377bd05235589b9883ff05ef1ab51c32-ssl-df\"",
+      "fetch_count": 0,
+      "fetch_fail_count": 0
+    }
+  },
+  {
+    "url": "https://www.spicyweb.dev/feed.xml",
+    "state": {
+      "disabled": false,
+      "last_updated": "2024-05-08T09:08:30.693913938Z",
+      "last_modified": "2024-04-14T23:32:14Z",
+      "etag": "\"44749991af9d0fc6eb705a024ccf6194\"",
+      "fetch_count": 0,
+      "fetch_fail_count": 0
+    }
+  },
+  {
+    "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UC3ts8coMP645hZw9JSD3pqQ",
+    "no_state": true
+  },
+  {
+    "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UC5dgoavpIertLkNDDITDoBQ",
+    "state": {
+      "disabled": false,
+      "last_updated": "2024-05-08T09:08:26.899826191Z",
+      "last_modified": "0001-01-01T00:00:00Z",
+      "fetch_count": 0,
+      "fetch_fail_count": 0
+    }
+  },
+  {
+    "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UC6cqazSR6CnVMClY0bJI0Lg",
+    "no_state": true
+  },
+  {
+    "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UC8uT9cgJorJPWu7ITLGo9Ww",
+    "state": {
+      "disabled": false,
+      "last_updated": "2024-05-08T09:08:12.069290968Z",
+      "last_modified": "0001-01-01T00:00:00Z",
+      "fetch_count": 0,
+      "fetch_fail_count": 0
+    }
+  },
+  {
+    "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCBNG0osIBAprVcZZ3ic84vw",
+    "state": {
+      "disabled": false,
+      "last_updated": "2024-05-08T09:08:44.872997492Z",
+      "last_modified": "0001-01-01T00:00:00Z",
+      "fetch_count": 0,
+      "fetch_fail_count": 0
+    }
+  },
+  {
+    "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCCzVNbWZfYpBfyofCCUD_0w",
+    "state": {
+      "disabled": false,
+      "last_updated": "2024-05-08T09:08:30.071704054Z",
+      "last_modified": "0001-01-01T00:00:00Z",
+      "fetch_count": 0,
+      "fetch_fail_count": 0
+    }
+  },
+  {
+    "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCGzfpg1YiBIlgcODQI4lDvQ",
+    "state": {
+      "disabled": false,
+      "last_updated": "2024-05-08T09:08:43.398439751Z",
+      "last_modified": "0001-01-01T00:00:00Z",
+      "fetch_count": 0,
+      "fetch_fail_count": 0
+    }
+  },
+  {
+    "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCJ8V9aiz50m6NVn0ix5v8RQ",
+    "state": {
+      "disabled": false,
+      "last_updated": "2024-05-08T09:08:39.455734342Z",
+      "last_modified": "0001-01-01T00:00:00Z",
+      "fetch_count": 0,
+      "fetch_fail_count": 0
+    }
+  },
+  {
+    "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCK8xpGAv8Oz7iMPgMw9j0LA",
+    "no_state": true
+  },
+  {
+    "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCMCgOm8GZkHp8zJ6l7_hIuA",
+    "state": {
+      "disabled": false,
+      "last_updated": "2024-05-08T09:08:34.505768344Z",
+      "last_modified": "0001-01-01T00:00:00Z",
+      "fetch_count": 0,
+      "fetch_fail_count": 0
+    }
+  },
+  {
+    "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCMiyV_Ib77XLpzHPQH_q0qQ",
+    "state": {
+      "disabled": false,
+      "last_updated": "2024-05-08T09:08:30.333955715Z",
+      "last_modified": "0001-01-01T00:00:00Z",
+      "fetch_count": 0,
+      "fetch_fail_count": 0
+    }
+  },
+  {
+    "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCUzQJ3JBuQ9w-po4TXRJHiA",
+    "no_state": true
+  },
+  {
+    "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCd1S3jp9vafRtkfkGRuhtvw",
+    "no_state": true
+  },
+  {
+    "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCfn7uyPvr5IY5pux8oyIa4Q",
+    "no_state": true
+  },
+  {
+    "url": "https://www.youtube.com/feeds/videos.xml?playlist_id=PLr0vtm6PM7z0xMS4mKgYYr6sbNG-bm9av",
+    "state": {
+      "disabled": false,
+      "last_updated": "2024-05-08T09:08:42.264104579Z",
+      "last_modified": "0001-01-01T00:00:00Z",
+      "fetch_count": 0,
+      "fetch_fail_count": 0
+    }
+  },
+  {
+    "url": "https://xeiaso.net/blog.rss",
+    "state": {
+      "disabled": false,
+      "last_updated": "2024-05-08T09:08:11.017506079Z",
+      "last_modified": "2024-05-06T17:12:52Z",
+      "fetch_count": 0,
+      "fetch_fail_count": 0
+    }
+  },
+  {
+    "url": "https://zserge.com/rss.xml",
+    "state": {
+      "disabled": false,
+      "last_updated": "2024-05-08T09:08:29.293141758Z",
+      "last_modified": "2024-01-07T18:32:14Z",
+      "etag": "W/\"659aee2e-df43\"",
+      "fetch_count": 0,
+      "fetch_fail_count": 0
+    }
+  }
+]
