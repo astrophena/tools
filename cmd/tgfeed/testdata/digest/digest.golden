@@ -10,7 +10,7 @@
       }
     ],
     "link_preview_options": {
-      "is_disabled": false
+      "is_disabled": true
     },
     "text": "Updates from https://example.com/feed.xml\n\n• Experimenting with intersections in Cities: Skylines\n• Hello, world!\n\n"
   }
