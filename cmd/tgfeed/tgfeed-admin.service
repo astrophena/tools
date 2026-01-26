@@ -15,8 +15,8 @@ WatchdogSignal=SIGKILL
 # Path to the tgfeed binary.
 ExecStart=/srv/tgfeed/current/bin/tgfeed admin
 
-# Load secrets from a configuration file.
-EnvironmentFile=/etc/tgfeed.conf
+# Managed by Ansible, see https://github.com/astrophena/infra?tab=readme-ov-file#managed-services.
+EnvironmentFile=/etc/tgfeed/secrets.env
 
 # Set the admin socket path.
 Environment=ADMIN_ADDR=sd-socket:tgfeed-admin.socket
