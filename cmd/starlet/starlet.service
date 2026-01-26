@@ -4,7 +4,8 @@ Description=starlet
 [Service]
 Type=notify
 ExecStart=/srv/starlet/current/bin/starlet
-EnvironmentFile=/etc/starlet.conf
+# Managed by Ansible, see https://github.com/astrophena/infra?tab=readme-ov-file#managed-services.
+EnvironmentFile=/etc/starlet/secrets.env
 Environment="DATABASE_PATH=/var/lib/starlet/store.json"
 Environment="ADDR=sd-socket:starlet.socket"
 Environment="ADMIN_ADDR=sd-socket:starlet-admin.socket"
