@@ -33,13 +33,14 @@ import (
 // Feed state.
 
 type feed struct {
-	url             string
-	title           string
-	messageThreadID int64
-	blockRule       *starlark.Function
-	keepRule        *starlark.Function
-	digest          bool
-	format          *starlark.Function
+	url                string
+	title              string
+	messageThreadID    int64
+	blockRule          *starlark.Function
+	keepRule           *starlark.Function
+	digest             bool
+	format             *starlark.Function
+	alwaysSendNewItems bool
 }
 
 func newFeedBuiltin(feeds *[]*feed) *starlark.Builtin {
@@ -56,6 +57,7 @@ func newFeedBuiltin(feeds *[]*feed) *starlark.Builtin {
 			"keep_rule?", &f.keepRule,
 			"digest?", &f.digest,
 			"format?", &f.format,
+			"always_send_new_items?", &f.alwaysSendNewItems,
 		); err != nil {
 			return nil, err
 		}
@@ -71,6 +73,11 @@ type feedState struct {
 	ETag         string    `json:"etag,omitempty"`
 	ErrorCount   int       `json:"error_count,omitempty"`
 	LastError    string    `json:"last_error,omitempty"`
+
+	// SeenItems tracks processed items for feeds with always_send_new_items
+	// enabled. The key is the item GUID and the value is the time it was first
+	// seen.
+	SeenItems map[string]time.Time `json:"seen_items,omitempty"`
 
 	// Stats.
 	FetchCount     int64 `json:"fetch_count"`      // successful fetches

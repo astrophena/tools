@@ -6,9 +6,11 @@ package main
 
 import (
 	_ "embed"
+	"fmt"
 	"net/http"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -231,4 +233,79 @@ func TestSplitMessage(t *testing.T) {
 			testutil.AssertEqual(t, got, tc.want)
 		})
 	}
+}
+
+func TestAlwaysSendNewItems(t *testing.T) {
+	t.Parallel()
+
+	recentDate := time.Now().Add(-24 * time.Hour).Format(time.RFC3339)
+	oldDate := time.Now().Add(-20 * 24 * time.Hour).Format(time.RFC3339) // > 14 days
+	newRecentDate := time.Now().Add(-2 * 24 * time.Hour).Format(time.RFC3339)
+
+	feedContent1 := fmt.Sprintf(string(readFile(t, "testdata/always_send_new_items/feed1.xml.tmpl")), recentDate, oldDate)
+	feedContent2 := fmt.Sprintf(string(readFile(t, "testdata/always_send_new_items/feed2.xml.tmpl")), recentDate, newRecentDate)
+
+	config := readFile(t, "testdata/always_send_new_items/config.star")
+
+	state := map[string]*feedState{}
+	ar := &txtar.Archive{
+		Files: []txtar.File{
+			{Name: "config.star", Data: config},
+			{Name: "state.json", Data: toJSON(t, state)},
+		},
+	}
+
+	var (
+		mu      sync.Mutex
+		content string
+	)
+	content = feedContent1
+
+	tm := testMux(t, txtarToFS(ar), map[string]http.HandlerFunc{
+		atomFeedRoute: func(w http.ResponseWriter, r *http.Request) {
+			mu.Lock()
+			defer mu.Unlock()
+			w.Write([]byte(content))
+		},
+	})
+
+	f := testFetcher(t, tm)
+	if err := f.run(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+
+	testutil.AssertEqual(t, len(tm.sentMessages), 0)
+
+	s := tm.state(t)[atomFeedURL]
+	if _, ok := s.SeenItems["item1"]; !ok {
+		t.Errorf("item1 should be in SeenItems")
+	}
+	if _, ok := s.SeenItems["item2"]; ok {
+		t.Errorf("item2 should NOT be in SeenItems (too old)")
+	}
+
+	// Now add a new item with an old date (but within lookback).
+	mu.Lock()
+	content = feedContent2
+	mu.Unlock()
+
+	if err := f.run(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+
+	// Should have sent item3.
+	testutil.AssertEqual(t, len(tm.sentMessages), 1)
+	got := tm.sentMessages[0]["text"].(string)
+	if !strings.Contains(got, "New item with old date") {
+		t.Errorf("sent message should contain item title, got: %q", got)
+	}
+	if !strings.Contains(got, "#examplecom") {
+		t.Errorf("sent message should contain hashtag, got: %q", got)
+	}
+
+	// Third run, same feed, should NOT send anything again.
+	if err := f.run(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	testutil.AssertEqual(t, len(tm.sentMessages), 1)
 }

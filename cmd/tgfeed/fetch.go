@@ -5,6 +5,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	_ "embed"
 	"encoding/json"
@@ -37,6 +38,15 @@ const (
 	sendConcurrencyLimit  = 2  // N sends that can run at the same time
 	retryLimit            = 3  // N attempts to retry feed fetching
 	sendRetryLimit        = 5  // N attempts to retry message sending
+
+	// lookbackPeriod is the period for which new items are processed even if
+	// they have an old publication date, but only if always_send_new_items
+	// is enabled for the feed.
+	lookbackPeriod = 14 * 24 * time.Hour
+
+	// seenItemsCleanupPeriod is the period after which an item is removed from
+	// the seen items list.
+	seenItemsCleanupPeriod = 28 * 24 * time.Hour
 )
 
 //go:embed message.tmpl
@@ -187,9 +197,43 @@ func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *update) (re
 
 	var validItems []*gofeed.Item
 
+	justEnabled := false
+	if fd.alwaysSendNewItems && state.SeenItems == nil {
+		state.SeenItems = make(map[string]time.Time)
+		justEnabled = true
+	}
+
+	if fd.alwaysSendNewItems {
+		// Clean up old seen items.
+		for guid, seenAt := range state.SeenItems {
+			if time.Since(seenAt) > seenItemsCleanupPeriod {
+				delete(state.SeenItems, guid)
+			}
+		}
+	}
+
 	for _, feedItem := range feed.Items {
-		if feedItem.PublishedParsed.Before(state.LastUpdated) {
-			continue
+		if fd.alwaysSendNewItems {
+			// Skip items older than lookbackPeriod.
+			if feedItem.PublishedParsed != nil && time.Since(*feedItem.PublishedParsed) > lookbackPeriod {
+				continue
+			}
+
+			guid := cmp.Or(feedItem.GUID, feedItem.Link)
+			if _, ok := state.SeenItems[guid]; ok {
+				continue
+			}
+			state.SeenItems[guid] = time.Now()
+
+			// Don't send anything on the first run for a new feed or if we
+			// just enabled always_send_new_items.
+			if !exists || justEnabled {
+				continue
+			}
+		} else {
+			if feedItem.PublishedParsed != nil && feedItem.PublishedParsed.Before(state.LastUpdated) {
+				continue
+			}
 		}
 
 		if fd.blockRule != nil {

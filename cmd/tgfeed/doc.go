@@ -62,12 +62,19 @@ This file is written in Starlark language and defines a list of feeds, for examp
 	    message_thread_id=123, # Send updates to a specific topic.
 	    digest=True, # Bundle updates into a single message.
 	    format=lambda items: "Digest: " + str(len(items)) + " items", # Custom format.
+	    always_send_new_items=True, # Send items even if they have an old publication date.
 	)
 
 Each feed can have a title, URL, and optional block and keep rules.
 Optionally, message_thread_id can be specified to send updates from this
 feed to a specific message thread (topic) within the chat. This is applicable
 only for supergroups with topics enabled.
+
+If always_send_new_items is set to true, tgfeed will send items even if they
+have a publication date in the past. This is useful for feeds that add items
+retrospectively, like CourtListener docket feeds. To avoid duplicates, tgfeed
+tracks seen items in its state. Only items published within the last 14 days
+are considered.
 
 Digest mode can be enabled by setting digest to true. In this mode, updates
 are bundled into a single message instead of sending one message per item.
