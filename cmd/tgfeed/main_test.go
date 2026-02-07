@@ -24,7 +24,6 @@ import (
 	"go.astrophena.name/base/cli/clitest"
 	"go.astrophena.name/base/testutil"
 	"go.astrophena.name/base/txtar"
-	"go.astrophena.name/base/web"
 )
 
 var updateGolden = flag.Bool("update", false, "update golden files in testdata")
@@ -143,7 +142,6 @@ type mux struct {
 	mu           sync.Mutex
 	stateDir     string
 	sentMessages []map[string]any
-	statsValues  [][]string
 }
 
 func (m *mux) state(t *testing.T) map[string]*feedState {
@@ -159,9 +157,7 @@ func (m *mux) state(t *testing.T) map[string]*feedState {
 }
 
 const (
-	sendTelegram   = "POST api.telegram.org/{token}/sendMessage"
-	updateSheet    = "POST sheets.googleapis.com/v4/spreadsheets/test/values/Stats:append"
-	getGoogleToken = "POST oauth2.googleapis.com/token"
+	sendTelegram = "POST api.telegram.org/{token}/sendMessage"
 )
 
 func testMux(t *testing.T, baseState fs.FS, overrides map[string]http.HandlerFunc) *mux {
@@ -182,28 +178,8 @@ func testMux(t *testing.T, baseState fs.FS, overrides map[string]http.HandlerFun
 		m.sentMessages = append(m.sentMessages, testutil.UnmarshalJSON[map[string]any](t, sentMessage))
 		w.Write([]byte("{}"))
 	}))
-	m.mux.HandleFunc(updateSheet, orHandler(overrides[updateSheet], func(w http.ResponseWriter, r *http.Request) {
-		m.mu.Lock()
-		defer m.mu.Unlock()
-		var req struct {
-			Values [][]string `json:"values"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			t.Fatal(err)
-		}
-		m.statsValues = req.Values
-		w.Write([]byte("{}"))
-	}))
-	m.mux.HandleFunc(getGoogleToken, orHandler(overrides[getGoogleToken], func(w http.ResponseWriter, r *http.Request) {
-		// Assume that authentication always succeeds.
-		var response struct {
-			AccessToken string `json:"access_token"`
-		}
-		response.AccessToken = "foobar"
-		web.RespondJSON(w, response)
-	}))
 	for pat, h := range overrides {
-		if slices.Contains([]string{sendTelegram, updateSheet, getGoogleToken}, pat) {
+		if slices.Contains([]string{sendTelegram}, pat) {
 			continue
 		}
 		m.mux.HandleFunc(pat, h)
