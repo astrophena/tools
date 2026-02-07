@@ -95,16 +95,6 @@ func TestAdmin(t *testing.T) {
 		"stats/b.json": {Data: []byte(`{"start_time":"2023-01-02T12:00:00Z"}`)},
 	}
 
-	t.Run("root redirect", func(t *testing.T) {
-		f := setup(t, nil)
-		req := httptest.NewRequest(http.MethodGet, "/", nil)
-		w := httptest.NewRecorder()
-		f.admin(t.Context())
-		http.Redirect(w, req, "/debug/", http.StatusFound)
-		testutil.AssertEqual(t, w.Code, http.StatusFound)
-		testutil.AssertEqual(t, w.Header().Get("Location"), "/debug/")
-	})
-
 	t.Run("get config", func(t *testing.T) {
 		f := setup(t, initialFS)
 		req := httptest.NewRequest(http.MethodGet, "/api/config", nil)
