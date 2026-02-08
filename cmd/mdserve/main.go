@@ -12,6 +12,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"html"
 	"html/template"
 	"io/fs"
 	"log/slog"
@@ -273,8 +274,8 @@ func transformImageBlock(b markdown.Block) markdown.Block {
 	return &markdown.HTMLBlock{
 		Text: []string{
 			"<figure>",
-			fmt.Sprintf(`<img src="%s" alt="%s" title="%s">`, img.URL, alt, img.Title),
-			fmt.Sprintf("<figcaption>%s</figcaption>", alt),
+			fmt.Sprintf(`<img src="%s" alt="%s" title="%s">`, html.EscapeString(img.URL), html.EscapeString(alt), html.EscapeString(img.Title)),
+			fmt.Sprintf("<figcaption>%s</figcaption>", html.EscapeString(alt)),
 			"</figure>",
 		},
 	}
