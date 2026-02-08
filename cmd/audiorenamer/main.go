@@ -15,7 +15,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"testing"
 	"text/template"
 
 	"github.com/dhowden/tag"
@@ -66,9 +65,7 @@ func (a *app) Run(ctx context.Context) error {
 	}
 
 	// Drop privileges if not inside tests.
-	if !testing.Testing() {
-		restrict.Do(ctx, landlock.RWDirs(dir))
-	}
+	restrict.DoUnlessTesting(ctx, landlock.RWDirs(dir))
 
 	vlog := func(msg string, attrs ...slog.Attr) {
 		if a.dry || a.verbose {
