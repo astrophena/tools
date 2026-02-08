@@ -13,7 +13,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
 	"log/slog"
 	"net/http"
@@ -190,14 +189,8 @@ func (b *Bot) HandleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		web.RespondJSONError(w, r, err)
-		return
-	}
-
 	var rawUpdate map[string]any
-	if err := json.Unmarshal(body, &rawUpdate); err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&rawUpdate); err != nil {
 		web.RespondJSONError(w, r, err)
 		return
 	}
