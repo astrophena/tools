@@ -49,6 +49,19 @@ var (
 	errNoEditor       = errors.New("environment variable EDITOR is not defined")
 )
 
+// sleep waits for the duration unless the context is canceled first.
+func sleep(ctx context.Context, d time.Duration) bool {
+	t := time.NewTimer(d)
+	defer t.Stop()
+
+	select {
+	case <-t.C:
+		return true
+	case <-ctx.Done():
+		return false
+	}
+}
+
 func main() { cli.Main(new(fetcher)) }
 
 func (f *fetcher) Flags(fs *flag.FlagSet) {
@@ -378,7 +391,9 @@ func (f *fetcher) run(ctx context.Context) error {
 						"retries", retries+1,
 						"retry_limit", retryLimit,
 					)
-					time.Sleep(retryIn)
+					if !sleep(ctx, retryIn) {
+						break
+					}
 					retries += 1
 					continue
 				}

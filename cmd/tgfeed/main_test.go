@@ -6,6 +6,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	_ "embed"
 	"encoding/json"
 	"flag"
@@ -19,6 +20,7 @@ import (
 	"sync"
 	"testing"
 	"testing/fstest"
+	"time"
 
 	"go.astrophena.name/base/cli"
 	"go.astrophena.name/base/cli/clitest"
@@ -239,4 +241,32 @@ func toJSON(t *testing.T, val any) []byte {
 		t.Fatal(err)
 	}
 	return b
+}
+
+func TestSleepReturnsTrueAfterDuration(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	start := time.Now()
+	if !sleep(ctx, 10*time.Millisecond) {
+		t.Fatal("sleep() = false, want true")
+	}
+	if elapsed := time.Since(start); elapsed < 10*time.Millisecond {
+		t.Fatalf("sleep() elapsed = %v, want >= %v", elapsed, 10*time.Millisecond)
+	}
+}
+
+func TestSleepReturnsFalseOnContextCancel(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	start := time.Now()
+	if sleep(ctx, time.Second) {
+		t.Fatal("sleep() = true, want false")
+	}
+	if elapsed := time.Since(start); elapsed > 50*time.Millisecond {
+		t.Fatalf("sleep() elapsed = %v, want quick return", elapsed)
+	}
 }
