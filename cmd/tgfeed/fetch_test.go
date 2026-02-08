@@ -20,6 +20,7 @@ import (
 	"go.astrophena.name/base/testutil"
 	"go.astrophena.name/base/txtar"
 	"go.starlark.net/starlark"
+	"go.starlark.net/syntax"
 )
 
 func TestFailingFeed(t *testing.T) {
@@ -317,46 +318,40 @@ func TestAlwaysSendNewItems(t *testing.T) {
 func TestParseTGICASURetryIn(t *testing.T) {
 	t.Parallel()
 
-	tests := []struct {
-		name  string
+	cases := map[string]struct {
 		body  string
 		want  time.Duration
 		found bool
 	}{
-		{
-			name:  "flood wait",
+		"flood wait": {
 			body:  `{"errors":["FLOOD_WAIT_42"]}`,
 			want:  42 * time.Second,
 			found: true,
 		},
-		{
-			name:  "unlock access",
+		"unlock access": {
 			body:  `{"errors":["Time to unlock access: 01:02:03"]}`,
 			want:  1*time.Hour + 2*time.Minute + 3*time.Second,
 			found: true,
 		},
-		{
-			name:  "mixed errors picks first valid",
+		"mixed errors picks first valid": {
 			body:  `{"errors":[123,"oops","FLOOD_WAIT_5"]}`,
 			want:  5 * time.Second,
 			found: true,
 		},
-		{
-			name:  "unknown format",
+		"unknown format": {
 			body:  `{"errors":["something else"]}`,
 			want:  0,
 			found: false,
 		},
-		{
-			name:  "invalid json",
+		"invalid json": {
 			body:  `{`,
 			want:  0,
 			found: false,
 		},
 	}
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
 			got, found := parseTGICASURetryIn([]byte(tc.body))
 			testutil.AssertEqual(t, found, tc.found)
 			testutil.AssertEqual(t, got, tc.want)
@@ -364,25 +359,23 @@ func TestParseTGICASURetryIn(t *testing.T) {
 	}
 }
 
-func TestShouldProcessFeedItem(t *testing.T) {
+func TestDecideFeedItem(t *testing.T) {
 	t.Parallel()
 
 	now := time.Now()
 	recent := now.Add(-1 * time.Hour)
 	old := now.Add(-15 * 24 * time.Hour)
 
-	tests := []struct {
-		name        string
-		fd          *feed
-		state       *feedState
-		item        *gofeed.Item
-		exists      bool
-		justEnabled bool
-		want        bool
-		wantSeen    bool
+	cases := map[string]struct {
+		fd            *feed
+		state         *feedState
+		item          *gofeed.Item
+		exists        bool
+		justEnabled   bool
+		wantSelection feedItemSelection
+		wantMarkSeen  string
 	}{
-		{
-			name: "always_send_new_items skips old entries",
+		"always_send_new_items skips old entries": {
 			fd: &feed{
 				alwaysSendNewItems: true,
 			},
@@ -392,13 +385,12 @@ func TestShouldProcessFeedItem(t *testing.T) {
 				Link:            "https://example.com/old",
 				PublishedParsed: &old,
 			},
-			exists:      true,
-			justEnabled: false,
-			want:        false,
-			wantSeen:    false,
+			exists:        true,
+			justEnabled:   false,
+			wantSelection: feedItemSelectionSkip,
+			wantMarkSeen:  "",
 		},
-		{
-			name: "always_send_new_items includes new entry for existing feed",
+		"always_send_new_items includes new entry for existing feed": {
 			fd: &feed{
 				alwaysSendNewItems: true,
 			},
@@ -408,13 +400,12 @@ func TestShouldProcessFeedItem(t *testing.T) {
 				Link:            "https://example.com/new",
 				PublishedParsed: &recent,
 			},
-			exists:      true,
-			justEnabled: false,
-			want:        true,
-			wantSeen:    true,
+			exists:        true,
+			justEnabled:   false,
+			wantSelection: feedItemSelectionProcess,
+			wantMarkSeen:  "new",
 		},
-		{
-			name: "always_send_new_items suppresses first run",
+		"always_send_new_items suppresses first run": {
 			fd: &feed{
 				alwaysSendNewItems: true,
 			},
@@ -424,13 +415,12 @@ func TestShouldProcessFeedItem(t *testing.T) {
 				Link:            "https://example.com/first",
 				PublishedParsed: &recent,
 			},
-			exists:      false,
-			justEnabled: false,
-			want:        false,
-			wantSeen:    true,
+			exists:        false,
+			justEnabled:   false,
+			wantSelection: feedItemSelectionMarkSeenOnly,
+			wantMarkSeen:  "first",
 		},
-		{
-			name: "always_send_new_items skips already seen",
+		"always_send_new_items skips already seen": {
 			fd: &feed{
 				alwaysSendNewItems: true,
 			},
@@ -442,14 +432,13 @@ func TestShouldProcessFeedItem(t *testing.T) {
 				Link:            "https://example.com/seen",
 				PublishedParsed: &recent,
 			},
-			exists:      true,
-			justEnabled: false,
-			want:        false,
-			wantSeen:    true,
+			exists:        true,
+			justEnabled:   false,
+			wantSelection: feedItemSelectionSkip,
+			wantMarkSeen:  "",
 		},
-		{
-			name: "published before last update is ignored in regular mode",
-			fd:   &feed{},
+		"published before last update is ignored in regular mode": {
+			fd: &feed{},
 			state: &feedState{
 				LastUpdated: now,
 			},
@@ -458,14 +447,13 @@ func TestShouldProcessFeedItem(t *testing.T) {
 				Link:            "https://example.com/regular-old",
 				PublishedParsed: &recent,
 			},
-			exists:      true,
-			justEnabled: false,
-			want:        false,
-			wantSeen:    false,
+			exists:        true,
+			justEnabled:   false,
+			wantSelection: feedItemSelectionSkip,
+			wantMarkSeen:  "",
 		},
-		{
-			name: "nil published timestamp is accepted in regular mode",
-			fd:   &feed{},
+		"nil published timestamp is accepted in regular mode": {
+			fd: &feed{},
 			state: &feedState{
 				LastUpdated: now,
 			},
@@ -473,24 +461,88 @@ func TestShouldProcessFeedItem(t *testing.T) {
 				GUID: "regular-nil",
 				Link: "https://example.com/regular-nil",
 			},
-			exists:      true,
-			justEnabled: false,
-			want:        true,
-			wantSeen:    false,
+			exists:        true,
+			justEnabled:   false,
+			wantSelection: feedItemSelectionProcess,
+			wantMarkSeen:  "",
 		},
 	}
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			got := shouldProcessFeedItem(tc.fd, tc.state, tc.item, tc.exists, tc.justEnabled)
-			testutil.AssertEqual(t, got, tc.want)
-
-			guid := tc.item.GUID
-			if guid == "" {
-				guid = tc.item.Link
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			beforeSeenCount := len(tc.state.SeenItems)
+			itemCtx := feedItemContext{
+				feed:        tc.fd,
+				state:       tc.state,
+				exists:      tc.exists,
+				justEnabled: tc.justEnabled,
 			}
-			_, hasSeen := tc.state.SeenItems[guid]
-			testutil.AssertEqual(t, hasSeen, tc.wantSeen)
+			decision := decideFeedItem(itemCtx, tc.item)
+			testutil.AssertEqual(t, decision.selection, tc.wantSelection)
+			testutil.AssertEqual(t, decision.markSeen, tc.wantMarkSeen)
+			testutil.AssertEqual(t, len(tc.state.SeenItems), beforeSeenCount)
+		})
+	}
+}
+
+func TestDecideEnqueueAction(t *testing.T) {
+	t.Parallel()
+
+	makeRule := func(t *testing.T, src string, name string) *starlark.Function {
+		t.Helper()
+		globals, err := starlark.ExecFileOptions(&syntax.FileOptions{}, &starlark.Thread{Name: "test"}, "rule.star", src, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		v, ok := globals[name]
+		if !ok {
+			t.Fatalf("rule %q not found", name)
+		}
+		fn, ok := v.(*starlark.Function)
+		if !ok {
+			t.Fatalf("rule %q is %T, want *starlark.Function", name, v)
+		}
+		return fn
+	}
+
+	cases := map[string]struct {
+		fd   *feed
+		item *gofeed.Item
+		want enqueueAction
+	}{
+		"single action for non-digest feed": {
+			fd:   &feed{digest: false},
+			item: &gofeed.Item{Link: "https://example.com/a"},
+			want: enqueueActionSingle,
+		},
+		"digest action for digest feed": {
+			fd:   &feed{digest: true},
+			item: &gofeed.Item{Link: "https://example.com/a"},
+			want: enqueueActionDigest,
+		},
+		"skip when blocked": {
+			fd: &feed{
+				digest:    false,
+				blockRule: makeRule(t, "def rule(item):\n  return True\n", "rule"),
+			},
+			item: &gofeed.Item{Link: "https://example.com/a"},
+			want: enqueueActionSkip,
+		},
+		"skip when keep rule rejects": {
+			fd: &feed{
+				digest:   true,
+				keepRule: makeRule(t, "def rule(item):\n  return False\n", "rule"),
+			},
+			item: &gofeed.Item{Link: "https://example.com/a"},
+			want: enqueueActionSkip,
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			f := testFetcher(t, testMux(t, nil, nil))
+			got := f.decideEnqueueAction(feedItemContext{feed: tc.fd}, tc.item)
+			testutil.AssertEqual(t, got, tc.want)
 		})
 	}
 }
@@ -498,97 +550,110 @@ func TestShouldProcessFeedItem(t *testing.T) {
 func TestHandleFeedStatus(t *testing.T) {
 	t.Parallel()
 
-	f := testFetcher(t, testMux(t, nil, nil))
-	f.stats = syncx.Protect(&stats{})
-	fd := &feed{url: "https://example.com/feed.xml"}
+	cases := map[string]struct {
+		reqURL                 string
+		statusCode             int
+		body                   string
+		initialState           feedState
+		wantHandled            bool
+		wantRetry              bool
+		wantRetryIn            time.Duration
+		wantErrContains        string
+		wantErrorCount         int
+		wantLastError          string
+		wantLastUpdatedNonZero bool
+		wantNotModifiedFeeds   int
+	}{
+		"not modified": {
+			reqURL:     "https://example.com/feed.xml",
+			statusCode: http.StatusNotModified,
+			initialState: feedState{
+				ErrorCount: 3,
+				LastError:  "oops",
+			},
+			wantHandled:            true,
+			wantRetry:              false,
+			wantRetryIn:            0,
+			wantErrorCount:         0,
+			wantLastError:          "",
+			wantLastUpdatedNonZero: true,
+			wantNotModifiedFeeds:   1,
+		},
+		"200 status": {
+			reqURL:         "https://example.com/feed.xml",
+			statusCode:     http.StatusOK,
+			wantHandled:    false,
+			wantRetry:      false,
+			wantRetryIn:    0,
+			wantErrorCount: 0,
+			wantLastError:  "",
+		},
+		"tg.i-c-a.su retry": {
+			reqURL:         "https://tg.i-c-a.su/feed.json",
+			statusCode:     http.StatusTooManyRequests,
+			body:           `{"errors":["FLOOD_WAIT_15"]}`,
+			wantHandled:    true,
+			wantRetry:      true,
+			wantRetryIn:    15 * time.Second,
+			wantErrorCount: 0,
+			wantLastError:  "",
+		},
+		"non-200 returns error": {
+			reqURL:          "https://example.com/feed.xml",
+			statusCode:      http.StatusTeapot,
+			body:            "teapot",
+			wantHandled:     true,
+			wantRetry:       false,
+			wantRetryIn:     0,
+			wantErrContains: "want 200, got 418: teapot",
+			wantErrorCount:  0,
+			wantLastError:   "",
+		},
+	}
 
-	t.Run("not modified", func(t *testing.T) {
-		state := &feedState{
-			ErrorCount: 3,
-			LastError:  "oops",
-		}
-		req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, fd.url, nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-		res := &http.Response{
-			StatusCode: http.StatusNotModified,
-			Body:       http.NoBody,
-			Header:     make(http.Header),
-		}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			f := testFetcher(t, testMux(t, nil, nil))
+			f.stats = syncx.Protect(&stats{})
+			fd := &feed{url: "https://example.com/feed.xml"}
 
-		result, err := f.handleFeedStatus(req, res, fd, state)
-		testutil.AssertEqual(t, err, nil)
-		testutil.AssertEqual(t, result.handled, true)
-		testutil.AssertEqual(t, result.retry, false)
-		testutil.AssertEqual(t, result.retryIn, time.Duration(0))
-		testutil.AssertEqual(t, state.ErrorCount, 0)
-		testutil.AssertEqual(t, state.LastError, "")
-		if state.LastUpdated.IsZero() {
-			t.Fatal("LastUpdated should be set")
-		}
-		f.stats.ReadAccess(func(s *stats) {
-			testutil.AssertEqual(t, s.NotModifiedFeeds, 1)
+			req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, tc.reqURL, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			rec := httptest.NewRecorder()
+			rec.WriteHeader(tc.statusCode)
+			if tc.body != "" {
+				rec.WriteString(tc.body)
+			}
+
+			state := tc.initialState
+			result, err := f.handleFeedStatus(req, rec.Result(), fd, &state)
+
+			if tc.wantErrContains != "" {
+				if err == nil {
+					t.Fatal("expected error")
+				}
+				if !strings.Contains(err.Error(), tc.wantErrContains) {
+					t.Fatalf("unexpected error: %v", err)
+				}
+			} else {
+				testutil.AssertEqual(t, err, nil)
+			}
+
+			testutil.AssertEqual(t, result.handled, tc.wantHandled)
+			testutil.AssertEqual(t, result.retry, tc.wantRetry)
+			testutil.AssertEqual(t, result.retryIn, tc.wantRetryIn)
+			testutil.AssertEqual(t, state.ErrorCount, tc.wantErrorCount)
+			testutil.AssertEqual(t, state.LastError, tc.wantLastError)
+			testutil.AssertEqual(t, !state.LastUpdated.IsZero(), tc.wantLastUpdatedNonZero)
+
+			f.stats.ReadAccess(func(s *stats) {
+				testutil.AssertEqual(t, s.NotModifiedFeeds, tc.wantNotModifiedFeeds)
+			})
 		})
-	})
-
-	t.Run("200 status", func(t *testing.T) {
-		state := &feedState{}
-		req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, fd.url, nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-		res := &http.Response{
-			StatusCode: http.StatusOK,
-			Body:       http.NoBody,
-			Header:     make(http.Header),
-		}
-
-		result, err := f.handleFeedStatus(req, res, fd, state)
-		testutil.AssertEqual(t, err, nil)
-		testutil.AssertEqual(t, result.handled, false)
-		testutil.AssertEqual(t, result.retry, false)
-		testutil.AssertEqual(t, result.retryIn, time.Duration(0))
-	})
-
-	t.Run("tg.i-c-a.su retry", func(t *testing.T) {
-		state := &feedState{}
-		req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "https://tg.i-c-a.su/feed.json", nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-		rec := httptest.NewRecorder()
-		rec.WriteHeader(http.StatusTooManyRequests)
-		rec.WriteString(`{"errors":["FLOOD_WAIT_15"]}`)
-
-		result, err := f.handleFeedStatus(req, rec.Result(), fd, state)
-		testutil.AssertEqual(t, err, nil)
-		testutil.AssertEqual(t, result.handled, true)
-		testutil.AssertEqual(t, result.retry, true)
-		testutil.AssertEqual(t, result.retryIn, 15*time.Second)
-	})
-
-	t.Run("non-200 returns error", func(t *testing.T) {
-		state := &feedState{}
-		req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, fd.url, nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-		rec := httptest.NewRecorder()
-		rec.WriteHeader(http.StatusTeapot)
-		rec.WriteString("teapot")
-
-		result, err := f.handleFeedStatus(req, rec.Result(), fd, state)
-		if err == nil {
-			t.Fatal("expected error")
-		}
-		testutil.AssertEqual(t, result.handled, true)
-		testutil.AssertEqual(t, result.retry, false)
-		testutil.AssertEqual(t, result.retryIn, time.Duration(0))
-		if !strings.Contains(err.Error(), "want 200, got 418: teapot") {
-			t.Fatalf("unexpected error: %v", err)
-		}
-	})
+	}
 }
 
 func TestParseFormattedMessage(t *testing.T) {

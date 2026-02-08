@@ -55,6 +55,12 @@ If the pre-commit tool fails because `ruff` is not installed, install it with:
 $ pip install ruff
 ```
 
+## Test Style
+
+- Prefer table-driven tests using `cases := map[string]struct{ ... }{ ... }`.
+- In table test loops, use `for name, tc := range cases { ... }` and pass `name`
+  to `t.Run(name, ...)`.
+
 ## Go Style Guide
 
 In addition to standard Go idioms, follow these specific style guidelines.

@@ -63,6 +63,34 @@ type feedStatusResult struct {
 	retryIn time.Duration
 }
 
+type feedItemDecision struct {
+	selection feedItemSelection
+	markSeen  string
+}
+
+type enqueueAction uint8
+
+const (
+	enqueueActionSkip enqueueAction = iota
+	enqueueActionSingle
+	enqueueActionDigest
+)
+
+type feedItemSelection uint8
+
+const (
+	feedItemSelectionSkip feedItemSelection = iota
+	feedItemSelectionMarkSeenOnly
+	feedItemSelectionProcess
+)
+
+type feedItemContext struct {
+	feed        *feed
+	state       *feedState
+	exists      bool
+	justEnabled bool
+}
+
 // fetch fetches one feed and either emits updates, asks caller to retry, or
 // records a failure.
 //
@@ -282,20 +310,28 @@ func (f *fetcher) updateFeedStateFromHeaders(state *feedState, res *http.Respons
 func (f *fetcher) enqueueFeedItems(fd *feed, state *feedState, exists bool, items []*gofeed.Item, updates chan *update) {
 	var validItems []*gofeed.Item
 
-	justEnabled := prepareSeenItemsState(fd, state)
+	itemCtx := feedItemContext{
+		feed:        fd,
+		state:       state,
+		exists:      exists,
+		justEnabled: prepareSeenItemsState(fd, state),
+	}
 
 	for _, feedItem := range items {
-		if !shouldProcessFeedItem(fd, state, feedItem, exists, justEnabled) {
+		decision := decideFeedItem(itemCtx, feedItem)
+		if decision.markSeen != "" {
+			state.SeenItems[decision.markSeen] = time.Now()
+		}
+		if decision.selection != feedItemSelectionProcess {
 			continue
 		}
 
-		if !f.feedItemPassesRules(fd, feedItem) {
+		switch f.decideEnqueueAction(itemCtx, feedItem) {
+		case enqueueActionSkip:
 			continue
-		}
-
-		if fd.digest {
+		case enqueueActionDigest:
 			validItems = append(validItems, feedItem)
-		} else {
+		case enqueueActionSingle:
 			updates <- &update{
 				feed:  fd,
 				items: []*gofeed.Item{feedItem},
@@ -325,33 +361,56 @@ func prepareSeenItemsState(fd *feed, state *feedState) (justEnabled bool) {
 	return justEnabled
 }
 
-func shouldProcessFeedItem(fd *feed, state *feedState, feedItem *gofeed.Item, exists bool, justEnabled bool) bool {
-	if fd.alwaysSendNewItems {
+func decideFeedItem(itemCtx feedItemContext, feedItem *gofeed.Item) feedItemDecision {
+	if itemCtx.feed.alwaysSendNewItems {
 		// Skip items older than lookbackPeriod.
 		if feedItem.PublishedParsed != nil && time.Since(*feedItem.PublishedParsed) > lookbackPeriod {
-			return false
+			return feedItemDecision{
+				selection: feedItemSelectionSkip,
+			}
 		}
 
 		guid := cmp.Or(feedItem.GUID, feedItem.Link)
-		if _, ok := state.SeenItems[guid]; ok {
-			return false
+		if _, ok := itemCtx.state.SeenItems[guid]; ok {
+			return feedItemDecision{
+				selection: feedItemSelectionSkip,
+			}
 		}
-		state.SeenItems[guid] = time.Now()
+
+		decision := feedItemDecision{
+			selection: feedItemSelectionMarkSeenOnly,
+			markSeen:  guid,
+		}
 
 		// Don't send anything on the first run for a new feed or if we
 		// just enabled always_send_new_items.
-		if !exists || justEnabled {
-			return false
+		if !itemCtx.exists || itemCtx.justEnabled {
+			return decision
 		}
 
-		return true
+		decision.selection = feedItemSelectionProcess
+		return decision
 	}
 
-	if feedItem.PublishedParsed != nil && feedItem.PublishedParsed.Before(state.LastUpdated) {
-		return false
+	if feedItem.PublishedParsed != nil && feedItem.PublishedParsed.Before(itemCtx.state.LastUpdated) {
+		return feedItemDecision{
+			selection: feedItemSelectionSkip,
+		}
 	}
 
-	return true
+	return feedItemDecision{
+		selection: feedItemSelectionProcess,
+	}
+}
+
+func (f *fetcher) decideEnqueueAction(itemCtx feedItemContext, feedItem *gofeed.Item) enqueueAction {
+	if !f.feedItemPassesRules(itemCtx.feed, feedItem) {
+		return enqueueActionSkip
+	}
+	if itemCtx.feed.digest {
+		return enqueueActionDigest
+	}
+	return enqueueActionSingle
 }
 
 func (f *fetcher) feedItemPassesRules(fd *feed, feedItem *gofeed.Item) bool {
