@@ -588,7 +588,9 @@ func (f *fetcher) send(ctx context.Context, text string, disableLinkPreview bool
 				break
 			}
 			f.slog.Warn("sending rate limited, waiting", "chat_id", f.chatID, "message", chunk, "wait", wait)
-			time.Sleep(wait)
+			if !sleep(ctx, wait) {
+				return ctx.Err()
+			}
 		}
 		if err != nil {
 			return err
