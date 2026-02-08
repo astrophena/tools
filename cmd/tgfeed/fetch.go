@@ -57,11 +57,92 @@ type update struct {
 	items []*gofeed.Item
 }
 
-// fetch fetches a single feed. Each fetch runs in it's own goroutine.
+type feedStatusResult struct {
+	handled bool
+	retry   bool
+	retryIn time.Duration
+}
+
+// fetch fetches one feed and either emits updates, asks caller to retry, or
+// records a failure.
+//
+// Flow:
+//
+//	+-------------------+
+//	| load/init state   |
+//	+-------------------+
+//	          |
+//	          v
+//	+-------------------+    yes   +------------------+
+//	| state disabled?   |--------->| return (skip)    |
+//	+-------------------+          +------------------+
+//	          |
+//	          no
+//	          v
+//	+-------------------+    +-------------------+    +-------------------+
+//	| build HTTP req    |--->| execute request   |--->| classify status   |
+//	+-------------------+    +-------------------+    +-------------------+
+//	                                                     | 304 -> reset err + return
+//	                                                     | rate-limited -> retry=true
+//	                                                     | other non-200 -> failure
+//	                                                     v
+//	                                            +-------------------+
+//	                                            | parse feed        |
+//	                                            +-------------------+
+//	                                                     |
+//	                                                     v
+//	+-------------------+    +-------------------+    +-------------------+
+//	| update headers    |--->| filter/enqueue    |--->| mark success      |
+//	+-------------------+    +-------------------+    +-------------------+
 func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *update) (retry bool, retryIn time.Duration) {
 	startTime := time.Now()
 
-	state, exists := f.getState(fd.url)
+	state, exists := f.fetchState(fd)
+
+	if state.Disabled {
+		f.slog.Debug("skipping, feed is disabled", "feed", fd.url)
+		return false, 0
+	}
+
+	req, err := f.newFeedRequest(ctx, fd, state)
+	if err != nil {
+		f.handleFetchFailure(ctx, state, fd.url, err)
+		return false, 0
+	}
+
+	res, err := f.makeFeedRequest(req)
+	if err != nil {
+		f.handleFetchFailure(ctx, state, fd.url, err)
+		return false, 0
+	}
+	defer res.Body.Close()
+
+	f.logFeedResponse(fd, res)
+
+	status, err := f.handleFeedStatus(req, res, fd, state)
+	if err != nil {
+		f.handleFetchFailure(ctx, state, fd.url, err)
+		return false, 0
+	}
+	if status.handled {
+		return status.retry, status.retryIn
+	}
+
+	parsedFeed, err := f.fp.Parse(res.Body)
+	if err != nil {
+		f.handleFetchFailure(ctx, state, fd.url, err)
+		return false, 0
+	}
+
+	f.updateFeedStateFromHeaders(state, res)
+	f.enqueueFeedItems(fd, state, exists, parsedFeed.Items, updates)
+	f.markFetchSuccess(state, len(parsedFeed.Items), startTime)
+
+	return false, 0
+}
+
+func (f *fetcher) fetchState(fd *feed) (state *feedState, exists bool) {
+	state, exists = f.getState(fd.url)
 	// If we don't remember this feed, it's probably new. Set it's last update
 	// date to current so we don't get a lot of unread articles and trigger
 	// Telegram Bot API rate limit.
@@ -73,16 +154,13 @@ func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *update) (re
 		})
 		state.LastUpdated = time.Now()
 	}
+	return state, exists
+}
 
-	if state.Disabled {
-		f.slog.Debug("skipping, feed is disabled", "feed", fd.url)
-		return false, 0
-	}
-
+func (f *fetcher) newFeedRequest(ctx context.Context, fd *feed, state *feedState) (*http.Request, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fd.url, nil)
 	if err != nil {
-		f.handleFetchFailure(ctx, state, fd.url, err)
-		return false, 0
+		return nil, err
 	}
 
 	req.Header.Set("User-Agent", version.UserAgent())
@@ -93,13 +171,10 @@ func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *update) (re
 		req.Header.Set("If-Modified-Since", state.LastModified)
 	}
 
-	res, err := f.makeFeedRequest(req)
-	if err != nil {
-		f.handleFetchFailure(ctx, state, fd.url, err)
-		return false, 0
-	}
-	defer res.Body.Close()
+	return req, nil
+}
 
+func (f *fetcher) logFeedResponse(fd *feed, res *http.Response) {
 	f.slog.Debug(
 		"fetched feed",
 		"feed", fd.url,
@@ -108,7 +183,9 @@ func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *update) (re
 		"status", res.StatusCode,
 		"headers", res.Header,
 	)
+}
 
+func (f *fetcher) handleFeedStatus(req *http.Request, res *http.Response, fd *feed, state *feedState) (feedStatusResult, error) {
 	// Ignore unmodified feeds and report an error otherwise.
 	if res.StatusCode == http.StatusNotModified {
 		f.slog.Debug("unmodified feed", "feed", fd.url)
@@ -118,136 +195,102 @@ func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *update) (re
 		state.LastUpdated = time.Now()
 		state.ErrorCount = 0
 		state.LastError = ""
-		return false, 0
+		return feedStatusResult{
+			handled: true,
+		}, nil
 	}
-	if res.StatusCode != http.StatusOK {
-		const readLimit = 16384 // 16 KB is enough for error messages (probably)
-
-		var (
-			body    []byte
-			hasBody = true
-		)
-
-		body, err = io.ReadAll(io.LimitReader(res.Body, readLimit))
-		if err != nil {
-			body = []byte("unable to read body")
-			hasBody = false
-		}
-
-		// Handle tg.i-c-a.su rate limiting.
-		if req.URL.Host == "tg.i-c-a.su" && hasBody {
-			var response struct {
-				Errors []any `json:"errors"`
-			}
-			if err := json.Unmarshal(body, &response); err == nil {
-				var t time.Duration
-				var found bool
-				for _, e := range response.Errors {
-					s, ok := e.(string)
-					if !ok {
-						continue
-					}
-
-					const floodPrefix = "FLOOD_WAIT_"
-					if after, ok0 := strings.CutPrefix(s, floodPrefix); ok0 {
-						d, err := time.ParseDuration(after + "s")
-						if err == nil {
-							t = d
-							found = true
-							break
-						}
-					}
-
-					const unlockPrefix = "Time to unlock access: "
-					if after, ok0 := strings.CutPrefix(s, unlockPrefix); ok0 {
-						parts := strings.Split(after, ":")
-						if len(parts) == 3 {
-							h, err1 := strconv.Atoi(parts[0])
-							m, err2 := strconv.Atoi(parts[1])
-							sec, err3 := strconv.Atoi(parts[2])
-							if err1 == nil && err2 == nil && err3 == nil {
-								t = time.Duration(h)*time.Hour + time.Duration(m)*time.Minute + time.Duration(sec)*time.Second
-								found = true
-								break
-							}
-						}
-					}
-				}
-				if found {
-					f.slog.Warn("rate-limited by tg.i-c-a.su", "feed", fd.url, "retry_in", t)
-					return true, t
-				}
-			}
-		}
-
-		f.handleFetchFailure(ctx, state, fd.url, fmt.Errorf("want 200, got %d: %s", res.StatusCode, body))
-		return false, 0
+	if res.StatusCode == http.StatusOK {
+		return feedStatusResult{}, nil
 	}
 
-	feed, err := f.fp.Parse(res.Body)
+	body, hasBody := readFeedErrorBody(res.Body)
+
+	// Handle tg.i-c-a.su rate limiting.
+	if req.URL.Host == "tg.i-c-a.su" && hasBody {
+		if t, found := parseTGICASURetryIn(body); found {
+			f.slog.Warn("rate-limited by tg.i-c-a.su", "feed", fd.url, "retry_in", t)
+			return feedStatusResult{
+				handled: true,
+				retry:   true,
+				retryIn: t,
+			}, nil
+		}
+	}
+
+	return feedStatusResult{
+		handled: true,
+	}, fmt.Errorf("want 200, got %d: %s", res.StatusCode, body)
+}
+
+func readFeedErrorBody(r io.Reader) (body []byte, hasBody bool) {
+	const readLimit = 16384 // 16 KB is enough for error messages (probably)
+
+	body, err := io.ReadAll(io.LimitReader(r, readLimit))
 	if err != nil {
-		f.handleFetchFailure(ctx, state, fd.url, err)
-		return false, 0
+		return []byte("unable to read body"), false
+	}
+	return body, true
+}
+
+func parseTGICASURetryIn(body []byte) (time.Duration, bool) {
+	var response struct {
+		Errors []any `json:"errors"`
+	}
+	if err := json.Unmarshal(body, &response); err != nil {
+		return 0, false
 	}
 
+	for _, e := range response.Errors {
+		s, ok := e.(string)
+		if !ok {
+			continue
+		}
+
+		const floodPrefix = "FLOOD_WAIT_"
+		if after, ok := strings.CutPrefix(s, floodPrefix); ok {
+			d, err := time.ParseDuration(after + "s")
+			if err == nil {
+				return d, true
+			}
+		}
+
+		const unlockPrefix = "Time to unlock access: "
+		if after, ok := strings.CutPrefix(s, unlockPrefix); ok {
+			parts := strings.Split(after, ":")
+			if len(parts) != 3 {
+				continue
+			}
+			h, err1 := strconv.Atoi(parts[0])
+			m, err2 := strconv.Atoi(parts[1])
+			sec, err3 := strconv.Atoi(parts[2])
+			if err1 == nil && err2 == nil && err3 == nil {
+				return time.Duration(h)*time.Hour + time.Duration(m)*time.Minute + time.Duration(sec)*time.Second, true
+			}
+		}
+	}
+
+	return 0, false
+}
+
+func (f *fetcher) updateFeedStateFromHeaders(state *feedState, res *http.Response) {
 	state.ETag = res.Header.Get("ETag")
 	if lastModified := res.Header.Get("Last-Modified"); lastModified != "" {
 		state.LastModified = lastModified
 	}
+}
 
+func (f *fetcher) enqueueFeedItems(fd *feed, state *feedState, exists bool, items []*gofeed.Item, updates chan *update) {
 	var validItems []*gofeed.Item
 
-	justEnabled := false
-	if fd.alwaysSendNewItems && state.SeenItems == nil {
-		state.SeenItems = make(map[string]time.Time)
-		justEnabled = true
-	}
+	justEnabled := prepareSeenItemsState(fd, state)
 
-	if fd.alwaysSendNewItems {
-		// Clean up old seen items.
-		for guid, seenAt := range state.SeenItems {
-			if time.Since(seenAt) > seenItemsCleanupPeriod {
-				delete(state.SeenItems, guid)
-			}
-		}
-	}
-
-	for _, feedItem := range feed.Items {
-		if fd.alwaysSendNewItems {
-			// Skip items older than lookbackPeriod.
-			if feedItem.PublishedParsed != nil && time.Since(*feedItem.PublishedParsed) > lookbackPeriod {
-				continue
-			}
-
-			guid := cmp.Or(feedItem.GUID, feedItem.Link)
-			if _, ok := state.SeenItems[guid]; ok {
-				continue
-			}
-			state.SeenItems[guid] = time.Now()
-
-			// Don't send anything on the first run for a new feed or if we
-			// just enabled always_send_new_items.
-			if !exists || justEnabled {
-				continue
-			}
-		} else {
-			if feedItem.PublishedParsed != nil && feedItem.PublishedParsed.Before(state.LastUpdated) {
-				continue
-			}
+	for _, feedItem := range items {
+		if !shouldProcessFeedItem(fd, state, feedItem, exists, justEnabled) {
+			continue
 		}
 
-		if fd.blockRule != nil {
-			if blocked := f.applyRule(fd.blockRule, feedItem); blocked {
-				f.slog.Debug("blocked by block rule", "item", feedItem.Link)
-				continue
-			}
-		}
-
-		if fd.keepRule != nil {
-			if keep := f.applyRule(fd.keepRule, feedItem); !keep {
-				f.slog.Debug("skipped by keep rule", "item", feedItem.Link)
-				continue
-			}
+		if !f.feedItemPassesRules(fd, feedItem) {
+			continue
 		}
 
 		if fd.digest {
@@ -259,24 +302,98 @@ func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *update) (re
 			}
 		}
 	}
-	if fd.digest && len(validItems) > 0 {
-		updates <- &update{
-			feed:  fd,
-			items: validItems,
+	publishDigestUpdate(fd, validItems, updates)
+}
+
+func prepareSeenItemsState(fd *feed, state *feedState) (justEnabled bool) {
+	if !fd.alwaysSendNewItems {
+		return false
+	}
+
+	if state.SeenItems == nil {
+		state.SeenItems = make(map[string]time.Time)
+		justEnabled = true
+	}
+
+	// Clean up old seen items.
+	for guid, seenAt := range state.SeenItems {
+		if time.Since(seenAt) > seenItemsCleanupPeriod {
+			delete(state.SeenItems, guid)
 		}
 	}
+
+	return justEnabled
+}
+
+func shouldProcessFeedItem(fd *feed, state *feedState, feedItem *gofeed.Item, exists bool, justEnabled bool) bool {
+	if fd.alwaysSendNewItems {
+		// Skip items older than lookbackPeriod.
+		if feedItem.PublishedParsed != nil && time.Since(*feedItem.PublishedParsed) > lookbackPeriod {
+			return false
+		}
+
+		guid := cmp.Or(feedItem.GUID, feedItem.Link)
+		if _, ok := state.SeenItems[guid]; ok {
+			return false
+		}
+		state.SeenItems[guid] = time.Now()
+
+		// Don't send anything on the first run for a new feed or if we
+		// just enabled always_send_new_items.
+		if !exists || justEnabled {
+			return false
+		}
+
+		return true
+	}
+
+	if feedItem.PublishedParsed != nil && feedItem.PublishedParsed.Before(state.LastUpdated) {
+		return false
+	}
+
+	return true
+}
+
+func (f *fetcher) feedItemPassesRules(fd *feed, feedItem *gofeed.Item) bool {
+	if fd.blockRule != nil {
+		if blocked := f.applyRule(fd.blockRule, feedItem); blocked {
+			f.slog.Debug("blocked by block rule", "item", feedItem.Link)
+			return false
+		}
+	}
+
+	if fd.keepRule != nil {
+		if keep := f.applyRule(fd.keepRule, feedItem); !keep {
+			f.slog.Debug("skipped by keep rule", "item", feedItem.Link)
+			return false
+		}
+	}
+
+	return true
+}
+
+func publishDigestUpdate(fd *feed, validItems []*gofeed.Item, updates chan *update) {
+	if !fd.digest || len(validItems) == 0 {
+		return
+	}
+
+	updates <- &update{
+		feed:  fd,
+		items: validItems,
+	}
+}
+
+func (f *fetcher) markFetchSuccess(state *feedState, parsedItems int, startTime time.Time) {
 	state.LastUpdated = time.Now()
 	state.ErrorCount = 0
 	state.LastError = ""
 	state.FetchCount += 1
 
 	f.stats.WriteAccess(func(s *stats) {
-		s.TotalItemsParsed += len(feed.Items)
+		s.TotalItemsParsed += parsedItems
 		s.SuccessFeeds += 1
 		s.TotalFetchTime += time.Since(startTime)
 	})
-
-	return false, 0
 }
 
 func (f *fetcher) makeFeedRequest(req *http.Request) (*http.Response, error) {
