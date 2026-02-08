@@ -9,6 +9,7 @@ package restrict
 import (
 	"context"
 	"log/slog"
+	"testing"
 
 	"go.astrophena.name/base/logger"
 
@@ -23,5 +24,16 @@ import (
 func Do(ctx context.Context, rules ...landlock.Rule) {
 	if err := landlock.V5.BestEffort().Restrict(rules...); err != nil {
 		logger.Warn(ctx, "sandboxing failed", slog.Any("err", err))
+	}
+}
+
+// DoUnlessTesting applies the provided set of [landlock.Rule] to restrict all
+// goroutines within the program, unless the program is running under 'go test'.
+//
+// If sandboxing fails, a log message will be generated, but the program will
+// continue execution.
+func DoUnlessTesting(ctx context.Context, rules ...landlock.Rule) {
+	if !testing.Testing() {
+		Do(ctx, rules...)
 	}
 }
