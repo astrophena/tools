@@ -24,7 +24,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"testing"
 
 	"go.astrophena.name/base/cli"
 	"go.astrophena.name/base/logger"
@@ -99,9 +98,7 @@ func (e *engine) Run(ctx context.Context) error {
 		landlock.ConnectTCP(53),
 		landlock.ROFiles("/etc/resolv.conf"),
 	)
-	if !testing.Testing() {
-		restrict.Do(ctx, rules...)
-	}
+	restrict.DoUnlessTesting(ctx, rules...)
 
 	e.init.Do(e.doInit)
 

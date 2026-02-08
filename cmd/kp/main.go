@@ -13,7 +13,6 @@ import (
 	"io"
 	"os"
 	"syscall"
-	"testing"
 	"text/template"
 
 	"go.astrophena.name/base/cli"
@@ -59,9 +58,7 @@ func (a *app) Run(ctx context.Context) error {
 	file := env.Args[0]
 
 	// Drop privileges if not inside tests.
-	if !testing.Testing() {
-		restrict.Do(ctx, landlock.ROFiles(file))
-	}
+	restrict.DoUnlessTesting(ctx, landlock.ROFiles(file))
 
 	f, err := os.Open(file)
 	if err != nil {

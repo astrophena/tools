@@ -14,3 +14,6 @@ import (
 
 // Do is a no-op on non-Linux systems and Android.
 func Do(_ context.Context, _ ...landlock.Rule) {}
+
+// DoUnlessTesting is a no-op on non-Linux systems and Android.
+func DoUnlessTesting(_ context.Context, _ ...landlock.Rule) {}

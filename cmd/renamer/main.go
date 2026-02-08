@@ -15,7 +15,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"testing"
 
 	"go.astrophena.name/base/cli"
 	"go.astrophena.name/base/logger"
@@ -52,9 +51,7 @@ func (a *app) Run(ctx context.Context) error {
 	}
 
 	// Drop privileges if not in tests.
-	if !testing.Testing() {
-		restrict.Do(ctx, landlock.RWDirs(dir))
-	}
+	restrict.DoUnlessTesting(ctx, landlock.RWDirs(dir))
 
 	files, err := os.ReadDir(dir)
 	if err != nil {

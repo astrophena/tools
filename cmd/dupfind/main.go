@@ -12,7 +12,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"testing"
 
 	"go.astrophena.name/base/cli"
 	"go.astrophena.name/tools/internal/restrict"
@@ -36,9 +35,7 @@ func run(ctx context.Context) error {
 	}
 
 	// Drop privileges if not inside tests.
-	if !testing.Testing() {
-		restrict.Do(ctx, landlock.RODirs(dir))
-	}
+	restrict.DoUnlessTesting(ctx, landlock.RODirs(dir))
 
 	dups, err := lookup(dir)
 	if err != nil {
