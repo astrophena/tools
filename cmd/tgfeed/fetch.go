@@ -12,7 +12,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/http"
 	urlpkg "net/url"
 	"regexp"
@@ -357,12 +356,8 @@ var nonAlphaNumRe = sync.OnceValue(func() *regexp.Regexp {
 })
 
 func (f *fetcher) sendUpdate(ctx context.Context, u *update) {
-	msg, replyMarkup, err := f.buildUpdateMessage(u)
-	if err != nil {
-		f.slog.Warn("building update message failed",
-			slog.String("feed", u.feed.url),
-			slog.Any("error", err),
-		)
+	msg, replyMarkup, ok := f.buildUpdateMessage(u)
+	if !ok {
 		return
 	}
 
@@ -377,30 +372,29 @@ func (f *fetcher) sendUpdate(ctx context.Context, u *update) {
 	}
 
 	if err := f.send(ctx, strings.TrimSpace(msg), disableLinkPreview, replyMarkup, u.feed.messageThreadID); err != nil {
-		f.slog.Warn("failed to send message",
-			slog.String("chat_id", f.chatID),
-			slog.Any("error", err),
-		)
+		f.slog.Warn("failed to send message", "chat_id", f.chatID, "error", err)
 	}
 }
 
-func (f *fetcher) buildUpdateMessage(u *update) (msg string, replyMarkup *inlineKeyboard, err error) {
+func (f *fetcher) buildUpdateMessage(u *update) (msg string, replyMarkup *inlineKeyboard, ok bool) {
 	items, defaultTitle := f.buildFormatInput(u)
 
 	if u.feed.format != nil {
 		val, err := f.callStarlarkFormatter(u.feed.format, items)
 		if err != nil {
-			return "", nil, fmt.Errorf("formatting message: %w", err)
+			f.slog.Warn("formatting message", "feed", u.feed.url, "error", err)
+			return "", nil, false
 		}
-		msg, replyMarkup, err = parseFormattedMessage(val)
-		if err != nil {
-			return "", nil, fmt.Errorf("parsing format result: %w", err)
+
+		msg, replyMarkup, ok = parseFormattedMessage(val)
+		if !ok {
+			f.slog.Warn("format function returned unexpected type", "feed", u.feed.url, "type", val.Type())
 		}
-		return msg, replyMarkup, nil
+		return msg, replyMarkup, ok
 	}
 
 	msg, replyMarkup = defaultUpdateMessage(u, defaultTitle)
-	return msg, replyMarkup, nil
+	return msg, replyMarkup, true
 }
 
 func (f *fetcher) buildFormatInput(u *update) (starlark.Value, string) {
@@ -427,41 +421,31 @@ func (f *fetcher) callStarlarkFormatter(format *starlark.Function, items starlar
 	)
 }
 
-func parseFormattedMessage(v starlark.Value) (msg string, replyMarkup *inlineKeyboard, err error) {
+func parseFormattedMessage(v starlark.Value) (msg string, replyMarkup *inlineKeyboard, ok bool) {
 	switch val := v.(type) {
 	case starlark.String:
-		return val.GoString(), nil, nil
+		return val.GoString(), nil, true
 	case starlark.Tuple:
-		if len(val) == 0 {
-			return "", nil, errors.New("format tuple must include message text")
-		}
-		if len(val) > 2 {
-			return "", nil, errors.New("format tuple may contain only text and keyboard")
-		}
-
-		s, ok := val[0].(starlark.String)
-		if !ok {
-			return "", nil, fmt.Errorf("format tuple text must be a string, got %s", val[0].Type())
-		}
-		msg = s.GoString()
-
-		if len(val) == 2 {
-			replyMarkup, err = parseInlineKeyboard(val[1])
-			if err != nil {
-				return "", nil, err
+		if len(val) >= 1 {
+			if s, ok := val[0].(starlark.String); ok {
+				msg = s.GoString()
 			}
 		}
-
-		return msg, replyMarkup, nil
+		if len(val) >= 2 {
+			if keyboard, ok := parseInlineKeyboard(val[1]); ok {
+				replyMarkup = keyboard
+			}
+		}
+		return msg, replyMarkup, true
 	default:
-		return "", nil, fmt.Errorf("format must return string or tuple, got %s", val.Type())
+		return "", nil, false
 	}
 }
 
-func parseInlineKeyboard(v starlark.Value) (*inlineKeyboard, error) {
+func parseInlineKeyboard(v starlark.Value) (*inlineKeyboard, bool) {
 	list, ok := v.(*starlark.List)
 	if !ok {
-		return nil, fmt.Errorf("keyboard must be a list, got %s", v.Type())
+		return nil, false
 	}
 
 	rows := make([][]inlineKeyboardButton, 0, list.Len())
@@ -472,7 +456,7 @@ func parseInlineKeyboard(v starlark.Value) (*inlineKeyboard, error) {
 	for iter.Next(&rowValue) {
 		rowList, ok := rowValue.(*starlark.List)
 		if !ok {
-			return nil, fmt.Errorf("keyboard row must be a list, got %s", rowValue.Type())
+			continue
 		}
 
 		buttons := make([]inlineKeyboardButton, 0, rowList.Len())
@@ -481,13 +465,11 @@ func parseInlineKeyboard(v starlark.Value) (*inlineKeyboard, error) {
 		for rowIter.Next(&buttonValue) {
 			buttonDict, ok := buttonValue.(*starlark.Dict)
 			if !ok {
-				return nil, fmt.Errorf("keyboard button must be a dict, got %s", buttonValue.Type())
+				continue
 			}
-			button, err := parseInlineKeyboardButton(buttonDict)
-			if err != nil {
-				return nil, err
+			if button, ok := parseInlineKeyboardButton(buttonDict); ok {
+				buttons = append(buttons, button)
 			}
-			buttons = append(buttons, button)
 		}
 		rowIter.Done()
 
@@ -497,20 +479,20 @@ func parseInlineKeyboard(v starlark.Value) (*inlineKeyboard, error) {
 	}
 
 	if len(rows) == 0 {
-		return nil, nil
+		return nil, true
 	}
 
 	kb := inlineKeyboard(rows)
-	return &kb, nil
+	return &kb, true
 }
 
-func parseInlineKeyboardButton(button *starlark.Dict) (inlineKeyboardButton, error) {
+func parseInlineKeyboardButton(button *starlark.Dict) (inlineKeyboardButton, bool) {
 	var out inlineKeyboardButton
 	for _, item := range button.Items() {
 		key, ok1 := item[0].(starlark.String)
 		val, ok2 := item[1].(starlark.String)
 		if !ok1 || !ok2 {
-			return inlineKeyboardButton{}, errors.New("keyboard button keys and values must be strings")
+			continue
 		}
 
 		switch key.GoString() {
@@ -522,9 +504,9 @@ func parseInlineKeyboardButton(button *starlark.Dict) (inlineKeyboardButton, err
 	}
 
 	if out.Text == "" || out.URL == "" {
-		return inlineKeyboardButton{}, errors.New("keyboard button must include non-empty text and url")
+		return inlineKeyboardButton{}, false
 	}
-	return out, nil
+	return out, true
 }
 
 func defaultUpdateMessage(u *update, defaultTitle string) (msg string, replyMarkup *inlineKeyboard) {

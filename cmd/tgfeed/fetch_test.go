@@ -316,8 +316,8 @@ func TestParseFormattedMessage(t *testing.T) {
 	t.Parallel()
 
 	t.Run("string", func(t *testing.T) {
-		msg, replyMarkup, err := parseFormattedMessage(starlark.String("hello"))
-		testutil.AssertEqual(t, err, nil)
+		msg, replyMarkup, ok := parseFormattedMessage(starlark.String("hello"))
+		testutil.AssertEqual(t, ok, true)
 		testutil.AssertEqual(t, msg, "hello")
 		testutil.AssertEqual(t, replyMarkup, (*inlineKeyboard)(nil))
 	})
@@ -332,8 +332,8 @@ func TestParseFormattedMessage(t *testing.T) {
 		dict.SetKey(starlark.String("text"), starlark.String("Open"))
 		dict.SetKey(starlark.String("url"), starlark.String("https://example.com"))
 
-		msg, replyMarkup, err := parseFormattedMessage(starlark.Tuple{starlark.String("formatted"), keyboard})
-		testutil.AssertEqual(t, err, nil)
+		msg, replyMarkup, ok := parseFormattedMessage(starlark.Tuple{starlark.String("formatted"), keyboard})
+		testutil.AssertEqual(t, ok, true)
 		testutil.AssertEqual(t, msg, "formatted")
 		if replyMarkup == nil {
 			t.Fatal("replyMarkup should not be nil")
@@ -345,33 +345,10 @@ func TestParseFormattedMessage(t *testing.T) {
 	})
 
 	t.Run("unsupported", func(t *testing.T) {
-		msg, replyMarkup, err := parseFormattedMessage(starlark.MakeInt(1))
-		if err == nil {
-			t.Fatal("expected error")
-		}
+		msg, replyMarkup, ok := parseFormattedMessage(starlark.MakeInt(1))
+		testutil.AssertEqual(t, ok, false)
 		testutil.AssertEqual(t, msg, "")
 		testutil.AssertEqual(t, replyMarkup, (*inlineKeyboard)(nil))
-	})
-
-	t.Run("tuple with invalid text", func(t *testing.T) {
-		_, _, err := parseFormattedMessage(starlark.Tuple{starlark.MakeInt(1)})
-		if err == nil {
-			t.Fatal("expected error")
-		}
-	})
-
-	t.Run("tuple with invalid keyboard", func(t *testing.T) {
-		_, _, err := parseFormattedMessage(starlark.Tuple{starlark.String("msg"), starlark.String("bad")})
-		if err == nil {
-			t.Fatal("expected error")
-		}
-	})
-
-	t.Run("tuple with too many elements", func(t *testing.T) {
-		_, _, err := parseFormattedMessage(starlark.Tuple{starlark.String("msg"), starlark.NewList(nil), starlark.String("x")})
-		if err == nil {
-			t.Fatal("expected error")
-		}
 	})
 }
 
