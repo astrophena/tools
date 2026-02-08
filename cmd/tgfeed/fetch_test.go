@@ -14,8 +14,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mmcdole/gofeed"
 	"go.astrophena.name/base/testutil"
 	"go.astrophena.name/base/txtar"
+	"go.starlark.net/starlark"
 )
 
 func TestFailingFeed(t *testing.T) {
@@ -308,4 +310,111 @@ func TestAlwaysSendNewItems(t *testing.T) {
 		t.Fatal(err)
 	}
 	testutil.AssertEqual(t, len(tm.sentMessages), 1)
+}
+
+func TestParseFormattedMessage(t *testing.T) {
+	t.Parallel()
+
+	t.Run("string", func(t *testing.T) {
+		msg, replyMarkup, err := parseFormattedMessage(starlark.String("hello"))
+		testutil.AssertEqual(t, err, nil)
+		testutil.AssertEqual(t, msg, "hello")
+		testutil.AssertEqual(t, replyMarkup, (*inlineKeyboard)(nil))
+	})
+
+	t.Run("tuple with keyboard", func(t *testing.T) {
+		keyboard := starlark.NewList([]starlark.Value{
+			starlark.NewList([]starlark.Value{
+				starlark.NewDict(2),
+			}),
+		})
+		dict := keyboard.Index(0).(*starlark.List).Index(0).(*starlark.Dict)
+		dict.SetKey(starlark.String("text"), starlark.String("Open"))
+		dict.SetKey(starlark.String("url"), starlark.String("https://example.com"))
+
+		msg, replyMarkup, err := parseFormattedMessage(starlark.Tuple{starlark.String("formatted"), keyboard})
+		testutil.AssertEqual(t, err, nil)
+		testutil.AssertEqual(t, msg, "formatted")
+		if replyMarkup == nil {
+			t.Fatal("replyMarkup should not be nil")
+		}
+		testutil.AssertEqual(t, len(*replyMarkup), 1)
+		testutil.AssertEqual(t, len((*replyMarkup)[0]), 1)
+		testutil.AssertEqual(t, (*replyMarkup)[0][0].Text, "Open")
+		testutil.AssertEqual(t, (*replyMarkup)[0][0].URL, "https://example.com")
+	})
+
+	t.Run("unsupported", func(t *testing.T) {
+		msg, replyMarkup, err := parseFormattedMessage(starlark.MakeInt(1))
+		if err == nil {
+			t.Fatal("expected error")
+		}
+		testutil.AssertEqual(t, msg, "")
+		testutil.AssertEqual(t, replyMarkup, (*inlineKeyboard)(nil))
+	})
+
+	t.Run("tuple with invalid text", func(t *testing.T) {
+		_, _, err := parseFormattedMessage(starlark.Tuple{starlark.MakeInt(1)})
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("tuple with invalid keyboard", func(t *testing.T) {
+		_, _, err := parseFormattedMessage(starlark.Tuple{starlark.String("msg"), starlark.String("bad")})
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("tuple with too many elements", func(t *testing.T) {
+		_, _, err := parseFormattedMessage(starlark.Tuple{starlark.String("msg"), starlark.NewList(nil), starlark.String("x")})
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+}
+
+func TestBuildFormatInput(t *testing.T) {
+	t.Parallel()
+
+	f := &fetcher{}
+
+	t.Run("single item uses fallback title", func(t *testing.T) {
+		u := &update{
+			feed:  &feed{},
+			items: []*gofeed.Item{{Title: "", Link: "https://example.com/a"}},
+		}
+
+		_, gotTitle := f.buildFormatInput(u)
+		testutil.AssertEqual(t, gotTitle, "https://example.com/a")
+	})
+
+	t.Run("digest uses feed URL when title is empty", func(t *testing.T) {
+		u := &update{
+			feed:  &feed{digest: true, url: "https://example.com/feed.xml"},
+			items: []*gofeed.Item{{Title: "Item", Link: "https://example.com/a"}},
+		}
+
+		_, gotTitle := f.buildFormatInput(u)
+		testutil.AssertEqual(t, gotTitle, "Updates from https://example.com/feed.xml")
+	})
+}
+
+func TestDefaultUpdateMessage(t *testing.T) {
+	t.Parallel()
+
+	t.Run("adds hacker news keyboard", func(t *testing.T) {
+		u := &update{feed: &feed{}, items: []*gofeed.Item{{
+			Title: "Title",
+			Link:  "https://example.com/post",
+			GUID:  "https://news.ycombinator.com/item?id=1",
+		}}}
+
+		_, replyMarkup := defaultUpdateMessage(u, "Title")
+		if replyMarkup == nil {
+			t.Fatal("replyMarkup should not be nil")
+		}
+		testutil.AssertEqual(t, (*replyMarkup)[0][0].Text, "↪ Hacker News")
+	})
 }
