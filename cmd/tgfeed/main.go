@@ -474,9 +474,7 @@ func (f *fetcher) reenable(ctx context.Context, url string) error {
 		return fmt.Errorf("%q: %w", url, errNoFeed)
 	}
 
-	state.Disabled = false
-	state.ErrorCount = 0
-	state.LastError = ""
+	state.reenable()
 
 	return f.saveState(ctx)
 }

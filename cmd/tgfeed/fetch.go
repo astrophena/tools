@@ -125,7 +125,13 @@ type feedItemContext struct {
 func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *update) (retry bool, retryIn time.Duration) {
 	startTime := time.Now()
 
-	state, exists := f.fetchState(fd)
+	state, exists := f.getOrCreateState(fd.url)
+	if !exists {
+		// If we don't remember this feed, it's probably new. Set its last update
+		// date to current so we don't get a lot of unread articles and trigger
+		// Telegram Bot API rate limit.
+		f.slog.Debug("initializing state", "feed", fd.url)
+	}
 
 	if state.Disabled {
 		f.slog.Debug("skipping, feed is disabled", "feed", fd.url)
@@ -169,22 +175,6 @@ func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *update) (re
 	return false, 0
 }
 
-func (f *fetcher) fetchState(fd *feed) (state *feedState, exists bool) {
-	state, exists = f.getState(fd.url)
-	// If we don't remember this feed, it's probably new. Set it's last update
-	// date to current so we don't get a lot of unread articles and trigger
-	// Telegram Bot API rate limit.
-	if !exists {
-		f.slog.Debug("initializing state", "feed", fd.url)
-		f.state.WriteAccess(func(s map[string]*feedState) {
-			s[fd.url] = new(feedState)
-			state = s[fd.url]
-		})
-		state.LastUpdated = time.Now()
-	}
-	return state, exists
-}
-
 func (f *fetcher) newFeedRequest(ctx context.Context, fd *feed, state *feedState) (*http.Request, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fd.url, nil)
 	if err != nil {
@@ -220,9 +210,7 @@ func (f *fetcher) handleFeedStatus(req *http.Request, res *http.Response, fd *fe
 		f.stats.WriteAccess(func(s *stats) {
 			s.NotModifiedFeeds += 1
 		})
-		state.LastUpdated = time.Now()
-		state.ErrorCount = 0
-		state.LastError = ""
+		state.markNotModified(time.Now())
 		return feedStatusResult{
 			handled: true,
 		}, nil
@@ -301,10 +289,7 @@ func parseTGICASURetryIn(body []byte) (time.Duration, bool) {
 }
 
 func (f *fetcher) updateFeedStateFromHeaders(state *feedState, res *http.Response) {
-	state.ETag = res.Header.Get("ETag")
-	if lastModified := res.Header.Get("Last-Modified"); lastModified != "" {
-		state.LastModified = lastModified
-	}
+	state.updateCacheHeaders(res.Header.Get("ETag"), res.Header.Get("Last-Modified"))
 }
 
 func (f *fetcher) enqueueFeedItems(fd *feed, state *feedState, exists bool, items []*gofeed.Item, updates chan *update) {
@@ -320,7 +305,7 @@ func (f *fetcher) enqueueFeedItems(fd *feed, state *feedState, exists bool, item
 	for _, feedItem := range items {
 		decision := decideFeedItem(itemCtx, feedItem)
 		if decision.markSeen != "" {
-			state.SeenItems[decision.markSeen] = time.Now()
+			state.markSeen(decision.markSeen, time.Now())
 		}
 		if decision.selection != feedItemSelectionProcess {
 			continue
@@ -345,62 +330,14 @@ func prepareSeenItemsState(fd *feed, state *feedState) (justEnabled bool) {
 	if !fd.alwaysSendNewItems {
 		return false
 	}
-
-	if state.SeenItems == nil {
-		state.SeenItems = make(map[string]time.Time)
-		justEnabled = true
-	}
-
-	// Clean up old seen items.
-	for guid, seenAt := range state.SeenItems {
-		if time.Since(seenAt) > seenItemsCleanupPeriod {
-			delete(state.SeenItems, guid)
-		}
-	}
-
-	return justEnabled
+	return state.prepareSeenItems(time.Now())
 }
 
 func decideFeedItem(itemCtx feedItemContext, feedItem *gofeed.Item) feedItemDecision {
 	if itemCtx.feed.alwaysSendNewItems {
-		// Skip items older than lookbackPeriod.
-		if feedItem.PublishedParsed != nil && time.Since(*feedItem.PublishedParsed) > lookbackPeriod {
-			return feedItemDecision{
-				selection: feedItemSelectionSkip,
-			}
-		}
-
-		guid := cmp.Or(feedItem.GUID, feedItem.Link)
-		if _, ok := itemCtx.state.SeenItems[guid]; ok {
-			return feedItemDecision{
-				selection: feedItemSelectionSkip,
-			}
-		}
-
-		decision := feedItemDecision{
-			selection: feedItemSelectionMarkSeenOnly,
-			markSeen:  guid,
-		}
-
-		// Don't send anything on the first run for a new feed or if we
-		// just enabled always_send_new_items.
-		if !itemCtx.exists || itemCtx.justEnabled {
-			return decision
-		}
-
-		decision.selection = feedItemSelectionProcess
-		return decision
+		return itemCtx.state.decideAlwaysSendItem(feedItem, time.Now(), itemCtx.exists, itemCtx.justEnabled)
 	}
-
-	if feedItem.PublishedParsed != nil && feedItem.PublishedParsed.Before(itemCtx.state.LastUpdated) {
-		return feedItemDecision{
-			selection: feedItemSelectionSkip,
-		}
-	}
-
-	return feedItemDecision{
-		selection: feedItemSelectionProcess,
-	}
+	return itemCtx.state.decideRegularItem(feedItem)
 }
 
 func (f *fetcher) decideEnqueueAction(itemCtx feedItemContext, feedItem *gofeed.Item) enqueueAction {
@@ -443,10 +380,7 @@ func publishDigestUpdate(fd *feed, validItems []*gofeed.Item, updates chan *upda
 }
 
 func (f *fetcher) markFetchSuccess(state *feedState, parsedItems int, startTime time.Time) {
-	state.LastUpdated = time.Now()
-	state.ErrorCount = 0
-	state.LastError = ""
-	state.FetchCount += 1
+	state.markFetchSuccess(time.Now())
 
 	f.stats.WriteAccess(func(s *stats) {
 		s.TotalItemsParsed += parsedItems
@@ -510,16 +444,13 @@ func (f *fetcher) handleFetchFailure(ctx context.Context, state *feedState, url 
 		s.FailedFeeds += 1
 	})
 
-	state.FetchFailCount += 1
-	state.ErrorCount += 1
-	state.LastError = err.Error()
+	disabled := state.markFetchFailure(err, errorThreshold)
 
 	f.slog.Debug("fetch failed", "feed", url, "error", err)
 
 	// Complain loudly and disable feed, if we failed previously enough.
-	if state.ErrorCount >= errorThreshold {
+	if disabled {
 		err = fmt.Errorf("fetching feed %q failed after %d previous attempts: %v; feed was disabled, to reenable it run 'tgfeed reenable %q'", url, state.ErrorCount, err, url)
-		state.Disabled = true
 
 		if err := f.errNotify(ctx, err); err != nil {
 			f.slog.Warn("failed to send error notification", "error", err)

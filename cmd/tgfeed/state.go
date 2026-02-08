@@ -21,6 +21,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/mmcdole/gofeed"
 	"go.astrophena.name/base/request"
 	"go.astrophena.name/base/syncx"
 	"go.astrophena.name/base/version"
@@ -84,11 +85,148 @@ type feedState struct {
 	FetchFailCount int64 `json:"fetch_fail_count"` // failed fetches
 }
 
+func newFeedState(now time.Time) *feedState {
+	return &feedState{
+		LastUpdated: now,
+	}
+}
+
+func (s *feedState) markNotModified(now time.Time) {
+	s.LastUpdated = now
+	s.ErrorCount = 0
+	s.LastError = ""
+}
+
+func (s *feedState) updateCacheHeaders(etag string, lastModified string) {
+	s.ETag = etag
+	if lastModified != "" {
+		s.LastModified = lastModified
+	}
+}
+
+func (s *feedState) markFetchSuccess(now time.Time) {
+	s.LastUpdated = now
+	s.ErrorCount = 0
+	s.LastError = ""
+	s.FetchCount += 1
+}
+
+func (s *feedState) markFetchFailure(err error, threshold int) (disabled bool) {
+	s.FetchFailCount += 1
+	s.ErrorCount += 1
+	s.LastError = err.Error()
+	if threshold > 0 && s.ErrorCount >= threshold && !s.Disabled {
+		s.Disabled = true
+		return true
+	}
+	return false
+}
+
+func (s *feedState) reenable() {
+	s.Disabled = false
+	s.ErrorCount = 0
+	s.LastError = ""
+}
+
+func (s *feedState) prepareSeenItems(now time.Time) (justEnabled bool) {
+	if s.SeenItems == nil {
+		s.SeenItems = make(map[string]time.Time)
+		justEnabled = true
+	}
+
+	for guid, seenAt := range s.SeenItems {
+		if now.Sub(seenAt) > seenItemsCleanupPeriod {
+			delete(s.SeenItems, guid)
+		}
+	}
+
+	return justEnabled
+}
+
+func (s *feedState) isSeen(guid string) bool {
+	_, ok := s.SeenItems[guid]
+	return ok
+}
+
+func (s *feedState) markSeen(guid string, now time.Time) {
+	if s.SeenItems == nil {
+		s.SeenItems = make(map[string]time.Time)
+	}
+	s.SeenItems[guid] = now
+}
+
+func (s *feedState) decideAlwaysSendItem(feedItem *gofeed.Item, now time.Time, exists bool, justEnabled bool) feedItemDecision {
+	// Skip items older than lookbackPeriod.
+	if feedItem.PublishedParsed != nil && now.Sub(*feedItem.PublishedParsed) > lookbackPeriod {
+		return feedItemDecision{
+			selection: feedItemSelectionSkip,
+		}
+	}
+
+	guid := cmp.Or(feedItem.GUID, feedItem.Link)
+	if s.isSeen(guid) {
+		return feedItemDecision{
+			selection: feedItemSelectionSkip,
+		}
+	}
+
+	decision := feedItemDecision{
+		selection: feedItemSelectionMarkSeenOnly,
+		markSeen:  guid,
+	}
+
+	// Don't send anything on the first run for a new feed or if we
+	// just enabled always_send_new_items.
+	if !exists || justEnabled {
+		return decision
+	}
+
+	decision.selection = feedItemSelectionProcess
+	return decision
+}
+
+func (s *feedState) decideRegularItem(feedItem *gofeed.Item) feedItemDecision {
+	if feedItem.PublishedParsed != nil && feedItem.PublishedParsed.Before(s.LastUpdated) {
+		return feedItemDecision{
+			selection: feedItemSelectionSkip,
+		}
+	}
+	return feedItemDecision{
+		selection: feedItemSelectionProcess,
+	}
+}
+
 func (f *fetcher) getState(url string) (state *feedState, exists bool) {
 	f.state.ReadAccess(func(s map[string]*feedState) {
 		state, exists = s[url]
 	})
 	return
+}
+
+func (f *fetcher) getOrCreateState(url string) (state *feedState, exists bool) {
+	f.state.WriteAccess(func(s map[string]*feedState) {
+		state, exists = s[url]
+		if !exists {
+			state = newFeedState(time.Now())
+			s[url] = state
+		}
+	})
+	return
+}
+
+func marshalStateMap(stateMap map[string]*feedState) ([]byte, error) {
+	return json.MarshalIndent(stateMap, "", "  ")
+}
+
+func unmarshalStateMap(b []byte) (map[string]*feedState, error) {
+	stateMap := make(map[string]*feedState)
+	if len(b) == 0 {
+		return stateMap, nil
+	}
+	if err := json.Unmarshal(b, &stateMap); err != nil {
+		return nil, err
+	}
+	return stateMap, nil
 }
 
 func (f *fetcher) loadState(ctx context.Context) error {
@@ -106,22 +244,17 @@ func (f *fetcher) loadState(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	f.config = string(configBytes)
-
-	f.feeds, err = f.parseConfig(ctx, f.config)
-	if err != nil {
+	if err := f.loadConfig(ctx, string(configBytes)); err != nil {
 		return err
 	}
 
-	stateMap := make(map[string]*feedState)
 	state, err := os.ReadFile(filepath.Join(f.stateDir, "state.json"))
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}
-	if state != nil {
-		if err := json.Unmarshal([]byte(state), &stateMap); err != nil {
-			return err
-		}
+	stateMap, err := unmarshalStateMap(state)
+	if err != nil {
+		return err
 	}
 	f.state = syncx.Protect(stateMap)
 
@@ -159,9 +292,7 @@ func (f *fetcher) loadStateRemote(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to fetch config from remote: %w", err)
 	}
-	f.config = string(configBytes)
-	f.feeds, err = f.parseConfig(ctx, f.config)
-	if err != nil {
+	if err := f.loadConfig(ctx, string(configBytes)); err != nil {
 		return err
 	}
 
@@ -169,12 +300,9 @@ func (f *fetcher) loadStateRemote(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to fetch state from remote: %w", err)
 	}
-
-	stateMap := make(map[string]*feedState)
-	if len(stateBytes) > 0 {
-		if err := json.Unmarshal(stateBytes, &stateMap); err != nil {
-			return fmt.Errorf("failed to parse state JSON: %w", err)
-		}
+	stateMap, err := unmarshalStateMap(stateBytes)
+	if err != nil {
+		return fmt.Errorf("failed to parse state JSON: %w", err)
 	}
 	f.state = syncx.Protect(stateMap)
 
@@ -184,6 +312,16 @@ func (f *fetcher) loadStateRemote(ctx context.Context) error {
 	}
 	f.errorTemplate = string(errorTemplateBytes)
 
+	return nil
+}
+
+func (f *fetcher) loadConfig(ctx context.Context, config string) error {
+	feeds, err := f.parseConfig(ctx, config)
+	if err != nil {
+		return err
+	}
+	f.config = config
+	f.feeds = feeds
 	return nil
 }
 
@@ -229,7 +367,7 @@ func (f *fetcher) saveState(ctx context.Context) error {
 		err   error
 	)
 	f.state.ReadAccess(func(s map[string]*feedState) {
-		state, err = json.MarshalIndent(s, "", "  ")
+		state, err = marshalStateMap(s)
 	})
 	if err != nil {
 		return err
@@ -243,7 +381,7 @@ func (f *fetcher) saveStateRemote(ctx context.Context) error {
 		err   error
 	)
 	f.state.ReadAccess(func(s map[string]*feedState) {
-		state, err = json.MarshalIndent(s, "", "  ")
+		state, err = marshalStateMap(s)
 	})
 	if err != nil {
 		return err
