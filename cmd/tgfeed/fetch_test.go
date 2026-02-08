@@ -8,6 +8,7 @@ import (
 	_ "embed"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"sort"
 	"strings"
 	"sync"
@@ -15,6 +16,7 @@ import (
 	"time"
 
 	"github.com/mmcdole/gofeed"
+	"go.astrophena.name/base/syncx"
 	"go.astrophena.name/base/testutil"
 	"go.astrophena.name/base/txtar"
 	"go.starlark.net/starlark"
@@ -310,6 +312,283 @@ func TestAlwaysSendNewItems(t *testing.T) {
 		t.Fatal(err)
 	}
 	testutil.AssertEqual(t, len(tm.sentMessages), 1)
+}
+
+func TestParseTGICASURetryIn(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		body  string
+		want  time.Duration
+		found bool
+	}{
+		{
+			name:  "flood wait",
+			body:  `{"errors":["FLOOD_WAIT_42"]}`,
+			want:  42 * time.Second,
+			found: true,
+		},
+		{
+			name:  "unlock access",
+			body:  `{"errors":["Time to unlock access: 01:02:03"]}`,
+			want:  1*time.Hour + 2*time.Minute + 3*time.Second,
+			found: true,
+		},
+		{
+			name:  "mixed errors picks first valid",
+			body:  `{"errors":[123,"oops","FLOOD_WAIT_5"]}`,
+			want:  5 * time.Second,
+			found: true,
+		},
+		{
+			name:  "unknown format",
+			body:  `{"errors":["something else"]}`,
+			want:  0,
+			found: false,
+		},
+		{
+			name:  "invalid json",
+			body:  `{`,
+			want:  0,
+			found: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, found := parseTGICASURetryIn([]byte(tc.body))
+			testutil.AssertEqual(t, found, tc.found)
+			testutil.AssertEqual(t, got, tc.want)
+		})
+	}
+}
+
+func TestShouldProcessFeedItem(t *testing.T) {
+	t.Parallel()
+
+	now := time.Now()
+	recent := now.Add(-1 * time.Hour)
+	old := now.Add(-15 * 24 * time.Hour)
+
+	tests := []struct {
+		name        string
+		fd          *feed
+		state       *feedState
+		item        *gofeed.Item
+		exists      bool
+		justEnabled bool
+		want        bool
+		wantSeen    bool
+	}{
+		{
+			name: "always_send_new_items skips old entries",
+			fd: &feed{
+				alwaysSendNewItems: true,
+			},
+			state: &feedState{SeenItems: map[string]time.Time{}},
+			item: &gofeed.Item{
+				GUID:            "old",
+				Link:            "https://example.com/old",
+				PublishedParsed: &old,
+			},
+			exists:      true,
+			justEnabled: false,
+			want:        false,
+			wantSeen:    false,
+		},
+		{
+			name: "always_send_new_items includes new entry for existing feed",
+			fd: &feed{
+				alwaysSendNewItems: true,
+			},
+			state: &feedState{SeenItems: map[string]time.Time{}},
+			item: &gofeed.Item{
+				GUID:            "new",
+				Link:            "https://example.com/new",
+				PublishedParsed: &recent,
+			},
+			exists:      true,
+			justEnabled: false,
+			want:        true,
+			wantSeen:    true,
+		},
+		{
+			name: "always_send_new_items suppresses first run",
+			fd: &feed{
+				alwaysSendNewItems: true,
+			},
+			state: &feedState{SeenItems: map[string]time.Time{}},
+			item: &gofeed.Item{
+				GUID:            "first",
+				Link:            "https://example.com/first",
+				PublishedParsed: &recent,
+			},
+			exists:      false,
+			justEnabled: false,
+			want:        false,
+			wantSeen:    true,
+		},
+		{
+			name: "always_send_new_items skips already seen",
+			fd: &feed{
+				alwaysSendNewItems: true,
+			},
+			state: &feedState{SeenItems: map[string]time.Time{
+				"seen": now,
+			}},
+			item: &gofeed.Item{
+				GUID:            "seen",
+				Link:            "https://example.com/seen",
+				PublishedParsed: &recent,
+			},
+			exists:      true,
+			justEnabled: false,
+			want:        false,
+			wantSeen:    true,
+		},
+		{
+			name: "published before last update is ignored in regular mode",
+			fd:   &feed{},
+			state: &feedState{
+				LastUpdated: now,
+			},
+			item: &gofeed.Item{
+				GUID:            "regular-old",
+				Link:            "https://example.com/regular-old",
+				PublishedParsed: &recent,
+			},
+			exists:      true,
+			justEnabled: false,
+			want:        false,
+			wantSeen:    false,
+		},
+		{
+			name: "nil published timestamp is accepted in regular mode",
+			fd:   &feed{},
+			state: &feedState{
+				LastUpdated: now,
+			},
+			item: &gofeed.Item{
+				GUID: "regular-nil",
+				Link: "https://example.com/regular-nil",
+			},
+			exists:      true,
+			justEnabled: false,
+			want:        true,
+			wantSeen:    false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := shouldProcessFeedItem(tc.fd, tc.state, tc.item, tc.exists, tc.justEnabled)
+			testutil.AssertEqual(t, got, tc.want)
+
+			guid := tc.item.GUID
+			if guid == "" {
+				guid = tc.item.Link
+			}
+			_, hasSeen := tc.state.SeenItems[guid]
+			testutil.AssertEqual(t, hasSeen, tc.wantSeen)
+		})
+	}
+}
+
+func TestHandleFeedStatus(t *testing.T) {
+	t.Parallel()
+
+	f := testFetcher(t, testMux(t, nil, nil))
+	f.stats = syncx.Protect(&stats{})
+	fd := &feed{url: "https://example.com/feed.xml"}
+
+	t.Run("not modified", func(t *testing.T) {
+		state := &feedState{
+			ErrorCount: 3,
+			LastError:  "oops",
+		}
+		req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, fd.url, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res := &http.Response{
+			StatusCode: http.StatusNotModified,
+			Body:       http.NoBody,
+			Header:     make(http.Header),
+		}
+
+		result, err := f.handleFeedStatus(req, res, fd, state)
+		testutil.AssertEqual(t, err, nil)
+		testutil.AssertEqual(t, result.handled, true)
+		testutil.AssertEqual(t, result.retry, false)
+		testutil.AssertEqual(t, result.retryIn, time.Duration(0))
+		testutil.AssertEqual(t, state.ErrorCount, 0)
+		testutil.AssertEqual(t, state.LastError, "")
+		if state.LastUpdated.IsZero() {
+			t.Fatal("LastUpdated should be set")
+		}
+		f.stats.ReadAccess(func(s *stats) {
+			testutil.AssertEqual(t, s.NotModifiedFeeds, 1)
+		})
+	})
+
+	t.Run("200 status", func(t *testing.T) {
+		state := &feedState{}
+		req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, fd.url, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res := &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       http.NoBody,
+			Header:     make(http.Header),
+		}
+
+		result, err := f.handleFeedStatus(req, res, fd, state)
+		testutil.AssertEqual(t, err, nil)
+		testutil.AssertEqual(t, result.handled, false)
+		testutil.AssertEqual(t, result.retry, false)
+		testutil.AssertEqual(t, result.retryIn, time.Duration(0))
+	})
+
+	t.Run("tg.i-c-a.su retry", func(t *testing.T) {
+		state := &feedState{}
+		req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "https://tg.i-c-a.su/feed.json", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		rec := httptest.NewRecorder()
+		rec.WriteHeader(http.StatusTooManyRequests)
+		rec.WriteString(`{"errors":["FLOOD_WAIT_15"]}`)
+
+		result, err := f.handleFeedStatus(req, rec.Result(), fd, state)
+		testutil.AssertEqual(t, err, nil)
+		testutil.AssertEqual(t, result.handled, true)
+		testutil.AssertEqual(t, result.retry, true)
+		testutil.AssertEqual(t, result.retryIn, 15*time.Second)
+	})
+
+	t.Run("non-200 returns error", func(t *testing.T) {
+		state := &feedState{}
+		req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, fd.url, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		rec := httptest.NewRecorder()
+		rec.WriteHeader(http.StatusTeapot)
+		rec.WriteString("teapot")
+
+		result, err := f.handleFeedStatus(req, rec.Result(), fd, state)
+		if err == nil {
+			t.Fatal("expected error")
+		}
+		testutil.AssertEqual(t, result.handled, true)
+		testutil.AssertEqual(t, result.retry, false)
+		testutil.AssertEqual(t, result.retryIn, time.Duration(0))
+		if !strings.Contains(err.Error(), "want 200, got 418: teapot") {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
 }
 
 func TestParseFormattedMessage(t *testing.T) {
