@@ -720,6 +720,20 @@ func TestParseFormattedMessage(t *testing.T) {
 		testutil.AssertEqual(t, (*replyMarkup)[0][0].URL, "https://example.com")
 	})
 
+	t.Run("tuple with malformed first element", func(t *testing.T) {
+		msg, replyMarkup, ok := parseFormattedMessage(starlark.Tuple{starlark.MakeInt(1)})
+		testutil.AssertEqual(t, ok, false)
+		testutil.AssertEqual(t, msg, "")
+		testutil.AssertEqual(t, replyMarkup, (*inlineKeyboard)(nil))
+	})
+
+	t.Run("tuple with malformed keyboard", func(t *testing.T) {
+		msg, replyMarkup, ok := parseFormattedMessage(starlark.Tuple{starlark.String("formatted"), starlark.MakeInt(1)})
+		testutil.AssertEqual(t, ok, false)
+		testutil.AssertEqual(t, msg, "")
+		testutil.AssertEqual(t, replyMarkup, (*inlineKeyboard)(nil))
+	})
+
 	t.Run("unsupported", func(t *testing.T) {
 		msg, replyMarkup, ok := parseFormattedMessage(starlark.MakeInt(1))
 		testutil.AssertEqual(t, ok, false)

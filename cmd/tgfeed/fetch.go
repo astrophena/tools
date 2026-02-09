@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	urlpkg "net/url"
 	"regexp"
@@ -497,7 +498,16 @@ func (f *fetcher) buildUpdateMessage(u *update) (msg string, replyMarkup *inline
 
 		msg, replyMarkup, ok = parseFormattedMessage(val)
 		if !ok {
-			f.slog.Warn("format function returned unexpected type", "feed", u.feed.url, "type", val.Type())
+			f.slog.Warn(
+				"format function returned invalid output",
+				slog.String("feed", u.feed.url),
+				slog.String("value_type", val.Type()),
+				slog.Bool("is_tuple", isTupleValue(val)),
+				slog.Int("tuple_len", tupleLen(val)),
+				slog.String("title_type", tupleTitleType(val)),
+				slog.Bool("title_is_empty", tupleTitleIsEmpty(val)),
+				slog.String("keyboard_type", tupleKeyboardType(val)),
+			)
 		}
 		return msg, replyMarkup, ok
 	}
@@ -535,20 +545,68 @@ func parseFormattedMessage(v starlark.Value) (msg string, replyMarkup *inlineKey
 	case starlark.String:
 		return val.GoString(), nil, true
 	case starlark.Tuple:
-		if len(val) >= 1 {
-			if s, ok := val[0].(starlark.String); ok {
-				msg = s.GoString()
-			}
+		if len(val) == 0 {
+			return "", nil, false
 		}
+
+		s, ok := val[0].(starlark.String)
+		if !ok || s.GoString() == "" {
+			return "", nil, false
+		}
+		msg = s.GoString()
+
 		if len(val) >= 2 {
-			if keyboard, ok := parseInlineKeyboard(val[1]); ok {
-				replyMarkup = keyboard
+			keyboard, ok := parseInlineKeyboard(val[1])
+			if !ok {
+				return "", nil, false
 			}
+			replyMarkup = keyboard
 		}
 		return msg, replyMarkup, true
 	default:
 		return "", nil, false
 	}
+}
+
+func isTupleValue(v starlark.Value) bool {
+	_, ok := v.(starlark.Tuple)
+	return ok
+}
+
+func tupleLen(v starlark.Value) int {
+	tuple, ok := v.(starlark.Tuple)
+	if !ok {
+		return 0
+	}
+	return len(tuple)
+}
+
+func tupleTitleType(v starlark.Value) string {
+	tuple, ok := v.(starlark.Tuple)
+	if !ok || len(tuple) == 0 {
+		return ""
+	}
+	return tuple[0].Type()
+}
+
+func tupleTitleIsEmpty(v starlark.Value) bool {
+	tuple, ok := v.(starlark.Tuple)
+	if !ok || len(tuple) == 0 {
+		return false
+	}
+	title, ok := tuple[0].(starlark.String)
+	if !ok {
+		return false
+	}
+	return title.GoString() == ""
+}
+
+func tupleKeyboardType(v starlark.Value) string {
+	tuple, ok := v.(starlark.Tuple)
+	if !ok || len(tuple) < 2 {
+		return ""
+	}
+	return tuple[1].Type()
 }
 
 func parseInlineKeyboard(v starlark.Value) (*inlineKeyboard, bool) {
