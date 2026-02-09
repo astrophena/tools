@@ -5,8 +5,10 @@
 package main
 
 import (
+	"context"
 	_ "embed"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"sort"
@@ -14,12 +16,12 @@ import (
 	"sync"
 	"testing"
 	"time"
-	"unicode/utf8"
 
 	"github.com/mmcdole/gofeed"
 	"go.astrophena.name/base/syncx"
 	"go.astrophena.name/base/testutil"
 	"go.astrophena.name/base/txtar"
+	"go.astrophena.name/tools/cmd/tgfeed/internal/sender"
 	"go.starlark.net/starlark"
 	"go.starlark.net/syntax"
 )
@@ -206,70 +208,6 @@ func TestDigestAndFormat(t *testing.T) {
 		return toJSON(t, tm.sentMessages)
 
 	}, *updateGolden)
-}
-
-func TestSplitMessage(t *testing.T) {
-	t.Parallel()
-
-	cases := map[string]struct {
-		in   string
-		want []string
-	}{
-		"short": {
-			in:   "hello",
-			want: []string{"hello"},
-		},
-		"exact": {
-			in:   strings.Repeat("a", 4096),
-			want: []string{strings.Repeat("a", 4096)},
-		},
-		"long (no newline)": {
-			in:   strings.Repeat("a", 4100),
-			want: []string{strings.Repeat("a", 4096), "aaaa"},
-		},
-		"long (single line with spaces)": {
-			in:   strings.Repeat("a", 3000) + " " + strings.Repeat("b", 1500),
-			want: []string{strings.Repeat("a", 3000), strings.Repeat("b", 1500)},
-		},
-		"long (newline split)": {
-			in:   strings.Repeat("a", 4000) + "\n" + strings.Repeat("b", 100),
-			want: []string{strings.Repeat("a", 4000), strings.Repeat("b", 100)},
-		},
-		"multi-byte unicode": {
-			in:   strings.Repeat("🙂", 4095) + "\n" + "🙂",
-			want: []string{strings.Repeat("🙂", 4095), "🙂"},
-		},
-	}
-
-	for name, tc := range cases {
-		t.Run(name, func(t *testing.T) {
-			got := splitMessage(tc.in)
-			testutil.AssertEqual(t, got, tc.want)
-		})
-	}
-}
-
-func TestSplitMessageNewlineRich(t *testing.T) {
-	t.Parallel()
-
-	in := strings.Repeat("line\n", 900)
-	got := splitMessage(in)
-
-	if len(got) < 2 {
-		t.Fatalf("want at least 2 chunks, got %d", len(got))
-	}
-
-	for i, chunk := range got {
-		if strings.TrimSpace(chunk) == "" {
-			t.Fatalf("chunk %d is empty or whitespace only", i)
-		}
-		if utf8.RuneCountInString(chunk) > 4096 {
-			t.Fatalf("chunk %d exceeds rune cap: %d", i, utf8.RuneCountInString(chunk))
-		}
-	}
-
-	joined := strings.Join(got, "\n")
-	testutil.AssertEqual(t, joined, strings.TrimSpace(in))
 }
 
 func TestAlwaysSendNewItems(t *testing.T) {
@@ -719,7 +657,7 @@ func TestParseFormattedMessage(t *testing.T) {
 		}
 		testutil.AssertEqual(t, len(*replyMarkup), 1)
 		testutil.AssertEqual(t, len((*replyMarkup)[0]), 1)
-		testutil.AssertEqual(t, (*replyMarkup)[0][0].Text, "Open")
+		testutil.AssertEqual(t, (*replyMarkup)[0][0].Label, "Open")
 		testutil.AssertEqual(t, (*replyMarkup)[0][0].URL, "https://example.com")
 	})
 
@@ -748,7 +686,7 @@ func TestParseFormattedMessage(t *testing.T) {
 func TestBuildFormatInput(t *testing.T) {
 	t.Parallel()
 
-	f := &fetcher{}
+	f := &fetcher{slog: slog.Default()}
 
 	t.Run("single item uses fallback title", func(t *testing.T) {
 		u := &update{
@@ -785,6 +723,35 @@ func TestDefaultUpdateMessage(t *testing.T) {
 		if replyMarkup == nil {
 			t.Fatal("replyMarkup should not be nil")
 		}
-		testutil.AssertEqual(t, (*replyMarkup)[0][0].Text, "↪ Hacker News")
+		testutil.AssertEqual(t, (*replyMarkup)[0][0].Label, "↪ Hacker News")
 	})
+}
+
+type captureSender struct {
+	messages []sender.Message
+}
+
+func (s *captureSender) Send(_ context.Context, msg sender.Message) error {
+	s.messages = append(s.messages, msg)
+	return nil
+}
+
+func TestSendUpdateUsesInjectedSender(t *testing.T) {
+	t.Parallel()
+
+	f := &fetcher{slog: slog.Default()}
+	mock := &captureSender{}
+	f.sender = mock
+
+	u := &update{
+		feed:  &feed{url: "https://example.com/feed.xml", messageThreadID: 7},
+		items: []*gofeed.Item{{Title: "hello", Link: "https://example.com/a"}},
+	}
+
+	f.sendUpdate(t.Context(), u)
+	testutil.AssertEqual(t, len(mock.messages), 1)
+	testutil.AssertEqual(t, mock.messages[0].Target.Topic, "7")
+	if !strings.Contains(mock.messages[0].Body, "hello") {
+		t.Fatalf("sent body %q does not include title", mock.messages[0].Body)
+	}
 }
