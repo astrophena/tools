@@ -2,14 +2,13 @@
 // Use of this source code is governed by the ISC
 // license that can be found in the LICENSE.md file.
 
-// Package telegram implements sender.Sender backed by Telegram Bot API.
+// Package telegram implements message delivery over the Telegram Bot API.
 package telegram
 
 import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -28,7 +27,7 @@ const (
 	sendRetryLimit = 5 // N attempts to retry message sending
 )
 
-// Config configures Telegram Sender.
+// Config configures a Telegram sender.
 type Config struct {
 	ChatID     string
 	Token      string
@@ -82,7 +81,7 @@ type replyMarkup struct {
 	InlineKeyboard *sender.InlineKeyboard `json:"inline_keyboard"`
 }
 
-// Send sends a message to Telegram with retry behavior on 429 errors.
+// Send sends a message to Telegram, retrying requests when rate limited.
 func (s *Sender) Send(ctx context.Context, msg sender.Message) error {
 	tgmsg := &message{
 		ChatID:          s.chatID,
@@ -224,5 +223,3 @@ func sleep(ctx context.Context, d time.Duration) bool {
 }
 
 var _ sender.Sender = (*Sender)(nil)
-
-func (s *Sender) String() string { return fmt.Sprintf("telegram sender(chat=%s)", s.chatID) }
