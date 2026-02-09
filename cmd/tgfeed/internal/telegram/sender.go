@@ -9,8 +9,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -78,21 +80,37 @@ type message struct {
 }
 
 type replyMarkup struct {
-	InlineKeyboard *sender.InlineKeyboard `json:"inline_keyboard"`
+	InlineKeyboard *inlineKeyboard `json:"inline_keyboard"`
+}
+
+type inlineKeyboard [][]inlineKeyboardButton
+
+type inlineKeyboardButton struct {
+	Text string `json:"text"`
+	URL  string `json:"url"`
 }
 
 // Send sends a message to Telegram, retrying requests when rate limited.
 func (s *Sender) Send(ctx context.Context, msg sender.Message) error {
-	tgmsg := &message{
-		ChatID:          s.chatID,
-		MessageThreadID: msg.MessageThreadID,
+	chatID := s.chatID
+	if msg.Target.Channel != "" {
+		chatID = msg.Target.Channel
 	}
-	if msg.InlineKeyboard != nil {
-		tgmsg.ReplyMarkup = &replyMarkup{msg.InlineKeyboard}
-	}
-	tgmsg.LinkPreviewOptions.IsDisabled = msg.DisableLinkPreview
 
-	chunks := splitMessage(msg.Text)
+	tgmsg := &message{ChatID: chatID}
+	if msg.Target.Topic != "" {
+		threadID, err := strconv.ParseInt(msg.Target.Topic, 10, 64)
+		if err != nil {
+			return fmt.Errorf("parsing target topic as thread id: %w", err)
+		}
+		tgmsg.MessageThreadID = threadID
+	}
+	if len(msg.Actions) > 0 {
+		tgmsg.ReplyMarkup = &replyMarkup{InlineKeyboard: toInlineKeyboard(msg.Actions)}
+	}
+	tgmsg.LinkPreviewOptions.IsDisabled = msg.Options.SuppressLinkPreview
+
+	chunks := splitMessage(msg.Body)
 	for _, chunk := range chunks {
 		tgmsg.Message = tgmarkup.FromMarkdown(chunk)
 
@@ -108,7 +126,7 @@ func (s *Sender) Send(ctx context.Context, msg sender.Message) error {
 				break
 			}
 
-			s.slog.Warn("sending rate limited, waiting", slog.String("chat_id", s.chatID), slog.String("message", chunk), slog.Duration("wait", wait))
+			s.slog.Warn("sending rate limited, waiting", slog.String("chat_id", chatID), slog.String("message", chunk), slog.Duration("wait", wait))
 			if !s.sleep(ctx, wait) {
 				return ctx.Err()
 			}
@@ -118,6 +136,26 @@ func (s *Sender) Send(ctx context.Context, msg sender.Message) error {
 		}
 	}
 	return nil
+}
+
+func toInlineKeyboard(rows []sender.ActionRow) *inlineKeyboard {
+	out := make(inlineKeyboard, 0, len(rows))
+	for _, row := range rows {
+		buttons := make([]inlineKeyboardButton, 0, len(row))
+		for _, action := range row {
+			if action.Label == "" || action.URL == "" {
+				continue
+			}
+			buttons = append(buttons, inlineKeyboardButton{Text: action.Label, URL: action.URL})
+		}
+		if len(buttons) > 0 {
+			out = append(out, buttons)
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return &out
 }
 
 func (s *Sender) makeTelegramRequest(ctx context.Context, method string, args any) error {

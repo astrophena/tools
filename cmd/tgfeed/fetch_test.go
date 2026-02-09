@@ -657,7 +657,7 @@ func TestParseFormattedMessage(t *testing.T) {
 		}
 		testutil.AssertEqual(t, len(*replyMarkup), 1)
 		testutil.AssertEqual(t, len((*replyMarkup)[0]), 1)
-		testutil.AssertEqual(t, (*replyMarkup)[0][0].Text, "Open")
+		testutil.AssertEqual(t, (*replyMarkup)[0][0].Label, "Open")
 		testutil.AssertEqual(t, (*replyMarkup)[0][0].URL, "https://example.com")
 	})
 
@@ -723,7 +723,7 @@ func TestDefaultUpdateMessage(t *testing.T) {
 		if replyMarkup == nil {
 			t.Fatal("replyMarkup should not be nil")
 		}
-		testutil.AssertEqual(t, (*replyMarkup)[0][0].Text, "↪ Hacker News")
+		testutil.AssertEqual(t, (*replyMarkup)[0][0].Label, "↪ Hacker News")
 	})
 }
 
@@ -750,8 +750,8 @@ func TestSendUpdateUsesInjectedSender(t *testing.T) {
 
 	f.sendUpdate(t.Context(), u)
 	testutil.AssertEqual(t, len(mock.messages), 1)
-	testutil.AssertEqual(t, mock.messages[0].MessageThreadID, int64(7))
-	if !strings.Contains(mock.messages[0].Text, "hello") {
-		t.Fatalf("sent text %q does not include title", mock.messages[0].Text)
+	testutil.AssertEqual(t, mock.messages[0].Target.Topic, "7")
+	if !strings.Contains(mock.messages[0].Body, "hello") {
+		t.Fatalf("sent body %q does not include title", mock.messages[0].Body)
 	}
 }

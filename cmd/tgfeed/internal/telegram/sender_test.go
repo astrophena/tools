@@ -89,7 +89,7 @@ func TestSendRateLimitRetry(t *testing.T) {
 		return true
 	}
 
-	err := s.Send(t.Context(), sender.Message{Text: "hello"})
+	err := s.Send(t.Context(), sender.Message{Body: "hello"})
 	testutil.AssertEqual(t, err, nil)
 	testutil.AssertEqual(t, calls, 2)
 	testutil.AssertEqual(t, waits, []time.Duration{time.Second})
@@ -106,7 +106,7 @@ func TestSendNonRetryableError(t *testing.T) {
 		return false
 	}
 
-	err := s.Send(t.Context(), sender.Message{Text: "hello"})
+	err := s.Send(t.Context(), sender.Message{Body: "hello"})
 	if !errors.Is(err, wantErr) {
 		t.Fatalf("Send() error = %v, want %v", err, wantErr)
 	}
@@ -145,5 +145,15 @@ func TestIsRateLimited(t *testing.T) {
 			testutil.AssertEqual(t, retry, tc.retry)
 			testutil.AssertEqual(t, wait, tc.waitTime)
 		})
+	}
+}
+
+func TestSendInvalidTopic(t *testing.T) {
+	t.Parallel()
+
+	s := New(Config{ChatID: "chat", Token: "token"})
+	err := s.Send(t.Context(), sender.Message{Body: "hello", Target: sender.Target{Topic: "not-a-number"}})
+	if err == nil {
+		t.Fatal("Send() error = nil, want non-nil")
 	}
 }

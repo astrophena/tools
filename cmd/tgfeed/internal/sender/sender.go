@@ -14,17 +14,28 @@ type Sender interface {
 
 // Message is a transport-agnostic outgoing message.
 type Message struct {
-	Text               string
-	MessageThreadID    int64
-	DisableLinkPreview bool
-	InlineKeyboard     *InlineKeyboard
+	Body    string
+	Target  Target
+	Options Options
+	Actions []ActionRow
 }
 
-// InlineKeyboard is an optional matrix of buttons attached to the message.
-type InlineKeyboard [][]InlineKeyboardButton
+// Target identifies where a message should be delivered.
+type Target struct {
+	Channel string
+	Topic   string
+}
 
-// InlineKeyboardButton is a URL button in an inline keyboard row.
-type InlineKeyboardButton struct {
-	Text string `json:"text"`
-	URL  string `json:"url"`
+// Options controls optional message delivery behavior.
+type Options struct {
+	SuppressLinkPreview bool
+}
+
+// ActionRow is a row of interactive actions.
+type ActionRow []Action
+
+// Action is an interactive message action.
+type Action struct {
+	Label string
+	URL   string
 }

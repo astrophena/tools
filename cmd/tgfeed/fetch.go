@@ -500,11 +500,20 @@ func (f *fetcher) sendUpdate(ctx context.Context, u *update) {
 		disableLinkPreview = true
 	}
 
+	actions := []sender.ActionRow(nil)
+	if replyMarkup != nil {
+		actions = *replyMarkup
+	}
+
 	if err := f.sender.Send(ctx, sender.Message{
-		Text:               strings.TrimSpace(msg),
-		MessageThreadID:    u.feed.messageThreadID,
-		DisableLinkPreview: disableLinkPreview,
-		InlineKeyboard:     replyMarkup,
+		Body: strings.TrimSpace(msg),
+		Target: sender.Target{
+			Topic: strconv.FormatInt(u.feed.messageThreadID, 10),
+		},
+		Options: sender.Options{
+			SuppressLinkPreview: disableLinkPreview,
+		},
+		Actions: actions,
 	}); err != nil {
 		f.slog.Warn("failed to send message", "chat_id", f.chatID, "error", err)
 	}
@@ -639,7 +648,7 @@ func parseInlineKeyboard(v starlark.Value) (*inlineKeyboard, bool) {
 		return nil, false
 	}
 
-	rows := make([][]inlineKeyboardButton, 0, list.Len())
+	rows := make([]sender.ActionRow, 0, list.Len())
 	iter := list.Iterate()
 	defer iter.Done()
 
@@ -688,13 +697,13 @@ func parseInlineKeyboardButton(button *starlark.Dict) (inlineKeyboardButton, boo
 
 		switch key.GoString() {
 		case "text":
-			out.Text = val.GoString()
+			out.Label = val.GoString()
 		case "url":
 			out.URL = val.GoString()
 		}
 	}
 
-	if out.Text == "" || out.URL == "" {
+	if out.Label == "" || out.URL == "" {
 		return inlineKeyboardButton{}, false
 	}
 	return out, true
@@ -724,8 +733,8 @@ func defaultUpdateMessage(u *update, defaultTitle string) (msg string, replyMark
 	if strings.HasPrefix(u.items[0].GUID, "https://news.ycombinator.com/item?id=") {
 		replyMarkup = &inlineKeyboard{{
 			{
-				Text: "↪ Hacker News",
-				URL:  u.items[0].GUID,
+				Label: "↪ Hacker News",
+				URL:   u.items[0].GUID,
 			},
 		}}
 	}
@@ -733,10 +742,10 @@ func defaultUpdateMessage(u *update, defaultTitle string) (msg string, replyMark
 	return msg, replyMarkup
 }
 
-type inlineKeyboard = sender.InlineKeyboard
+type inlineKeyboard = []sender.ActionRow
 
 // https://core.telegram.org/bots/api#inlinekeyboardbutton
-type inlineKeyboardButton = sender.InlineKeyboardButton
+type inlineKeyboardButton = sender.Action
 
 func (f *fetcher) errNotify(ctx context.Context, err error) error {
 	tmpl := f.errorTemplate
@@ -744,8 +753,12 @@ func (f *fetcher) errNotify(ctx context.Context, err error) error {
 		tmpl = defaultErrorTemplate
 	}
 	return f.sender.Send(ctx, sender.Message{
-		Text:               fmt.Sprintf(tmpl, err),
-		DisableLinkPreview: true,
-		MessageThreadID:    f.errorThreadID,
+		Body: fmt.Sprintf(tmpl, err),
+		Target: sender.Target{
+			Topic: strconv.FormatInt(f.errorThreadID, 10),
+		},
+		Options: sender.Options{
+			SuppressLinkPreview: true,
+		},
 	})
 }
