@@ -9,7 +9,6 @@ import (
 	"context"
 	_ "embed"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -20,13 +19,10 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"unicode"
-	"unicode/utf8"
 
-	"go.astrophena.name/base/request"
 	"go.astrophena.name/base/version"
+	"go.astrophena.name/tools/cmd/tgfeed/internal/sender"
 	"go.astrophena.name/tools/internal/starlark/go2star"
-	"go.astrophena.name/tools/internal/tgmarkup"
 
 	"github.com/mmcdole/gofeed"
 	"go.starlark.net/starlark"
@@ -40,7 +36,6 @@ const (
 	fetchConcurrencyLimit = 10 // N fetches that can run at the same time
 	sendConcurrencyLimit  = 2  // N sends that can run at the same time
 	retryLimit            = 3  // N attempts to retry feed fetching
-	sendRetryLimit        = 5  // N attempts to retry message sending
 
 	// lookbackPeriod is the period for which new items are processed even if
 	// they have an old publication date, but only if always_send_new_items
@@ -505,7 +500,12 @@ func (f *fetcher) sendUpdate(ctx context.Context, u *update) {
 		disableLinkPreview = true
 	}
 
-	if err := f.send(ctx, strings.TrimSpace(msg), disableLinkPreview, replyMarkup, u.feed.messageThreadID); err != nil {
+	if err := f.sender.Send(ctx, sender.Message{
+		Text:               strings.TrimSpace(msg),
+		MessageThreadID:    u.feed.messageThreadID,
+		DisableLinkPreview: disableLinkPreview,
+		InlineKeyboard:     replyMarkup,
+	}); err != nil {
 		f.slog.Warn("failed to send message", "chat_id", f.chatID, "error", err)
 	}
 }
@@ -733,160 +733,19 @@ func defaultUpdateMessage(u *update, defaultTitle string) (msg string, replyMark
 	return msg, replyMarkup
 }
 
-type message struct {
-	ChatID             string `json:"chat_id"`
-	MessageThreadID    int64  `json:"message_thread_id,omitempty"`
-	LinkPreviewOptions struct {
-		IsDisabled bool `json:"is_disabled"`
-	} `json:"link_preview_options"`
-	ReplyMarkup *replyMarkup `json:"reply_markup,omitempty"`
-	tgmarkup.Message
-}
-
-type replyMarkup struct {
-	InlineKeyboard *inlineKeyboard `json:"inline_keyboard"`
-}
-
-type inlineKeyboard = [][]inlineKeyboardButton
+type inlineKeyboard = sender.InlineKeyboard
 
 // https://core.telegram.org/bots/api#inlinekeyboardbutton
-type inlineKeyboardButton struct {
-	Text string `json:"text"`
-	URL  string `json:"url"`
-}
-
-func (f *fetcher) send(ctx context.Context, text string, disableLinkPreview bool, inlineKeyboard *inlineKeyboard, threadID int64) error {
-	msg := &message{
-		ChatID:          f.chatID,
-		MessageThreadID: threadID,
-	}
-	if inlineKeyboard != nil {
-		msg.ReplyMarkup = &replyMarkup{inlineKeyboard}
-	}
-	msg.LinkPreviewOptions.IsDisabled = disableLinkPreview
-
-	chunks := splitMessage(text)
-	for _, chunk := range chunks {
-		msg.Message = tgmarkup.FromMarkdown(chunk)
-		var err error
-		for range sendRetryLimit {
-			err = f.makeTelegramRequest(ctx, "sendMessage", msg)
-			if err == nil {
-				break
-			}
-			retryable, wait := isSendingRateLimited(err)
-			if !retryable {
-				break
-			}
-			f.slog.Warn("sending rate limited, waiting", "chat_id", f.chatID, "message", chunk, "wait", wait)
-			if !sleep(ctx, wait) {
-				return ctx.Err()
-			}
-		}
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func splitMessage(text string) []string {
-	text = strings.TrimSpace(text)
-	if text == "" {
-		return nil
-	}
-
-	if utf8.RuneCountInString(text) <= 4096 {
-		return []string{text}
-	}
-
-	var chunks []string
-	for text != "" {
-		if utf8.RuneCountInString(text) <= 4096 {
-			chunks = append(chunks, text)
-			break
-		}
-
-		var (
-			lastNewline    = -1
-			lastWhitespace = -1
-			byteCap        = len(text)
-			runeCount      int
-		)
-
-		for i, r := range text {
-			if runeCount == 4096 {
-				byteCap = i
-				break
-			}
-			runeCount++
-
-			if r == '\n' {
-				lastNewline = i
-				continue
-			}
-			if unicode.IsSpace(r) {
-				lastWhitespace = i
-			}
-		}
-
-		splitAt := byteCap
-		switch {
-		case lastNewline > 0:
-			splitAt = lastNewline
-		case lastWhitespace > 0:
-			splitAt = lastWhitespace
-		}
-
-		chunk := strings.TrimSpace(text[:splitAt])
-		if chunk != "" {
-			chunks = append(chunks, chunk)
-		}
-		text = text[splitAt:]
-		text = strings.TrimSpace(text)
-	}
-
-	return chunks
-}
-
-func isSendingRateLimited(err error) (retryable bool, wait time.Duration) {
-	var statusErr *request.StatusError
-	if !errors.As(err, &statusErr) || statusErr.StatusCode != http.StatusTooManyRequests {
-		return false, 0
-	}
-
-	var errorResponse struct {
-		Parameters struct {
-			RetryAfter int `json:"retry_after"`
-		} `json:"parameters"`
-	}
-	if err := json.Unmarshal(statusErr.Body, &errorResponse); err != nil {
-		return false, 0
-	}
-
-	return true, time.Duration(errorResponse.Parameters.RetryAfter) * time.Second
-}
+type inlineKeyboardButton = sender.InlineKeyboardButton
 
 func (f *fetcher) errNotify(ctx context.Context, err error) error {
 	tmpl := f.errorTemplate
 	if tmpl == "" {
 		tmpl = defaultErrorTemplate
 	}
-	return f.send(ctx, fmt.Sprintf(tmpl, err), true, nil, f.errorThreadID)
-}
-
-func (f *fetcher) makeTelegramRequest(ctx context.Context, method string, args any) error {
-	if _, err := request.Make[request.IgnoreResponse](ctx, request.Params{
-		Method: http.MethodPost,
-		URL:    tgAPI + "/bot" + f.tgToken + "/" + method,
-		Body:   args,
-		Headers: map[string]string{
-			"User-Agent": version.UserAgent(),
-		},
-		HTTPClient: f.httpc,
-		Scrubber:   f.scrubber,
-	}); err != nil {
-		return err
-	}
-	return nil
+	return f.sender.Send(ctx, sender.Message{
+		Text:               fmt.Sprintf(tmpl, err),
+		DisableLinkPreview: true,
+		MessageThreadID:    f.errorThreadID,
+	})
 }

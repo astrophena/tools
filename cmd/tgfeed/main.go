@@ -33,11 +33,11 @@ import (
 	"go.astrophena.name/base/request"
 	"go.astrophena.name/base/syncx"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/diff"
+	"go.astrophena.name/tools/cmd/tgfeed/internal/sender"
+	"go.astrophena.name/tools/cmd/tgfeed/internal/telegram"
 
 	"github.com/mmcdole/gofeed"
 )
-
-const tgAPI = "https://api.telegram.org"
 
 //go:embed error.tmpl
 var defaultErrorTemplate string
@@ -167,7 +167,8 @@ type fetcher struct {
 	errorTemplate string
 	state         syncx.Protected[map[string]*feedState]
 
-	stats syncx.Protected[*stats]
+	stats  syncx.Protected[*stats]
+	sender sender.Sender
 
 	runLock *os.File
 }
@@ -191,6 +192,16 @@ func (f *fetcher) doInit(ctx context.Context) {
 	l := logger.Get(ctx)
 	f.slogLevel = l.Level
 	f.slog = l.Logger
+
+	if f.sender == nil {
+		f.sender = telegram.New(telegram.Config{
+			ChatID:     f.chatID,
+			Token:      f.tgToken,
+			HTTPClient: f.httpc,
+			Scrubber:   f.scrubber,
+			Logger:     f.slog,
+		})
+	}
 }
 
 func (f *fetcher) listFeeds(ctx context.Context, w io.Writer) error {
