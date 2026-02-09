@@ -16,7 +16,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -452,28 +451,92 @@ func (f *fetcher) apiURL(endpoint string) string {
 	return f.remoteURL + endpoint
 }
 
+type runLocker struct{}
+
+func (runLocker) acquire(path string) (*os.File, error) {
+	lockFile, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o644)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := syscall.Flock(int(lockFile.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		if closeErr := lockFile.Close(); closeErr != nil {
+			return nil, errors.Join(err, closeErr)
+		}
+		if errors.Is(err, syscall.EWOULDBLOCK) || errors.Is(err, syscall.EAGAIN) {
+			return nil, errAlreadyRunning
+		}
+		return nil, err
+	}
+
+	return lockFile, nil
+}
+
+func (runLocker) writePayload(lockFile *os.File, payload string) error {
+	if payload == "" {
+		return nil
+	}
+	if err := lockFile.Truncate(0); err != nil {
+		return err
+	}
+	if _, err := lockFile.Seek(0, 0); err != nil {
+		return err
+	}
+	if _, err := lockFile.WriteString(payload); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (runLocker) release(lockFile *os.File) error {
+	if lockFile == nil {
+		return nil
+	}
+	if err := syscall.Flock(int(lockFile.Fd()), syscall.LOCK_UN); err != nil {
+		if closeErr := lockFile.Close(); closeErr != nil {
+			return errors.Join(err, closeErr)
+		}
+		return err
+	}
+	return lockFile.Close()
+}
+
+func (l runLocker) isLocked(path string) bool {
+	lockFile, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o644)
+	if err != nil {
+		return false
+	}
+	defer lockFile.Close()
+
+	err = syscall.Flock(int(lockFile.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
+	if err == nil {
+		_ = syscall.Flock(int(lockFile.Fd()), syscall.LOCK_UN)
+		return false
+	}
+
+	return errors.Is(err, syscall.EWOULDBLOCK) || errors.Is(err, syscall.EAGAIN)
+}
+
 func (f *fetcher) acquireRunLock() error {
 	lockPath := filepath.Join(f.stateDir, ".run.lock")
-	if b, err := os.ReadFile(lockPath); err == nil {
-		if pid, err := strconv.Atoi(strings.TrimSpace(string(b))); err == nil {
-			if process, err := os.FindProcess(pid); err == nil {
-				// Signal 0 checks if the process is still running.
-				// If it is, we can't acquire the lock.
-				if err := process.Signal(syscall.Signal(0)); err == nil {
-					return fmt.Errorf("%w: lock file exists at %s", errAlreadyRunning, lockPath)
-				}
-				// If the process is not running, we can proceed and overwrite the lock.
-			}
-		}
+	lockFile, err := (runLocker{}).acquire(lockPath)
+	if err != nil {
+		return fmt.Errorf("%w: lock file exists at %s", err, lockPath)
 	}
-	return os.WriteFile(lockPath, fmt.Append(nil, os.Getpid()), 0o644)
+	if err := (runLocker{}).writePayload(lockFile, fmt.Sprintf("pid=%d\n", os.Getpid())); err != nil {
+		_ = (runLocker{}).release(lockFile)
+		return err
+	}
+	f.runLock = lockFile
+	return nil
 }
 
 func (f *fetcher) releaseRunLock() error {
-	return os.Remove(filepath.Join(f.stateDir, ".run.lock"))
+	err := (runLocker{}).release(f.runLock)
+	f.runLock = nil
+	return err
 }
 
 func (f *fetcher) isRunLocked() bool {
-	_, err := os.Stat(filepath.Join(f.stateDir, ".run.lock"))
-	return err == nil
+	return (runLocker{}).isLocked(filepath.Join(f.stateDir, ".run.lock"))
 }

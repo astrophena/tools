@@ -90,7 +90,6 @@ func TestAdmin(t *testing.T) {
 		"config.star":  {Data: []byte(`feed(url="https://example.com")`)},
 		"state.json":   {Data: []byte(`{}`)},
 		"error.tmpl":   {Data: []byte(`Custom error: %v`)},
-		".run.lock":    {Data: []byte(`12345`)},
 		"stats/a.json": {Data: []byte(`{"start_time":"2023-01-01T12:00:00Z"}`)},
 		"stats/b.json": {Data: []byte(`{"start_time":"2023-01-02T12:00:00Z"}`)},
 	}
@@ -114,7 +113,17 @@ func TestAdmin(t *testing.T) {
 		runTest(t, f, req, http.StatusBadRequest, "invalid config")
 	})
 	t.Run("put config (locked)", func(t *testing.T) {
-		f := setup(t, initialFS) // Has .run.lock
+		f := setup(t, initialFS)
+		lockFile, err := (runLocker{}).acquire(filepath.Join(f.stateDir, ".run.lock"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() {
+			if err := (runLocker{}).release(lockFile); err != nil {
+				t.Fatal(err)
+			}
+		})
+
 		req := httptest.NewRequest(http.MethodPut, "/api/config", strings.NewReader(`feed()`))
 		runTest(t, f, req, http.StatusConflict, "run is in progress")
 	})
