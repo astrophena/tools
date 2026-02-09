@@ -128,7 +128,18 @@ type feedItemContext struct {
 func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *update) (retry bool, retryIn time.Duration) {
 	startTime := time.Now()
 
-	state, exists := f.getOrCreateState(fd.url)
+	var (
+		exists       bool
+		disabled     bool
+		etag         string
+		lastModified string
+	)
+	f.withFeedState(fd.url, func(state *feedState, hasState bool) {
+		exists = hasState
+		disabled = state.Disabled
+		etag = state.ETag
+		lastModified = state.LastModified
+	})
 	if !exists {
 		// If we don't remember this feed, it's probably new. Set its last update
 		// date to current so we don't get a lot of unread articles and trigger
@@ -136,29 +147,29 @@ func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *update) (re
 		f.slog.Debug("initializing state", "feed", fd.url)
 	}
 
-	if state.Disabled {
+	if disabled {
 		f.slog.Debug("skipping, feed is disabled", "feed", fd.url)
 		return false, 0
 	}
 
-	req, err := f.newFeedRequest(ctx, fd, state)
+	req, err := f.newFeedRequest(ctx, fd, etag, lastModified)
 	if err != nil {
-		f.handleFetchFailure(ctx, state, fd.url, err)
+		f.handleFetchFailure(ctx, fd.url, err)
 		return false, 0
 	}
 
 	res, err := f.makeFeedRequest(req)
 	if err != nil {
-		f.handleFetchFailure(ctx, state, fd.url, err)
+		f.handleFetchFailure(ctx, fd.url, err)
 		return false, 0
 	}
 	defer res.Body.Close()
 
 	f.logFeedResponse(fd, res)
 
-	status, err := f.handleFeedStatus(req, res, fd, state)
+	status, err := f.handleFeedStatus(req, res, fd)
 	if err != nil {
-		f.handleFetchFailure(ctx, state, fd.url, err)
+		f.handleFetchFailure(ctx, fd.url, err)
 		return false, 0
 	}
 	if status.handled {
@@ -167,29 +178,31 @@ func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *update) (re
 
 	parsedFeed, err := f.fp.Parse(res.Body)
 	if err != nil {
-		f.handleFetchFailure(ctx, state, fd.url, err)
+		f.handleFetchFailure(ctx, fd.url, err)
 		return false, 0
 	}
 
-	f.updateFeedStateFromHeaders(state, res)
-	f.enqueueFeedItems(fd, state, exists, parsedFeed.Items, updates)
-	f.markFetchSuccess(state, len(parsedFeed.Items), startTime)
+	f.withFeedState(fd.url, func(state *feedState, hasState bool) {
+		f.updateFeedStateFromHeaders(state, res)
+		f.enqueueFeedItems(fd, state, hasState, parsedFeed.Items, updates)
+	})
+	f.markFetchSuccess(fd.url, len(parsedFeed.Items), startTime)
 
 	return false, 0
 }
 
-func (f *fetcher) newFeedRequest(ctx context.Context, fd *feed, state *feedState) (*http.Request, error) {
+func (f *fetcher) newFeedRequest(ctx context.Context, fd *feed, etag string, lastModified string) (*http.Request, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fd.url, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	req.Header.Set("User-Agent", version.UserAgent())
-	if state.ETag != "" {
-		req.Header.Set("If-None-Match", state.ETag)
+	if etag != "" {
+		req.Header.Set("If-None-Match", etag)
 	}
-	if state.LastModified != "" {
-		req.Header.Set("If-Modified-Since", state.LastModified)
+	if lastModified != "" {
+		req.Header.Set("If-Modified-Since", lastModified)
 	}
 
 	return req, nil
@@ -206,14 +219,16 @@ func (f *fetcher) logFeedResponse(fd *feed, res *http.Response) {
 	)
 }
 
-func (f *fetcher) handleFeedStatus(req *http.Request, res *http.Response, fd *feed, state *feedState) (feedStatusResult, error) {
+func (f *fetcher) handleFeedStatus(req *http.Request, res *http.Response, fd *feed) (feedStatusResult, error) {
 	// Ignore unmodified feeds and report an error otherwise.
 	if res.StatusCode == http.StatusNotModified {
 		f.slog.Debug("unmodified feed", "feed", fd.url)
 		f.stats.WriteAccess(func(s *stats) {
 			s.NotModifiedFeeds += 1
 		})
-		state.markNotModified(time.Now())
+		f.withFeedState(fd.url, func(state *feedState, _ bool) {
+			state.markNotModified(time.Now())
+		})
 		return feedStatusResult{
 			handled: true,
 		}, nil
@@ -382,8 +397,10 @@ func publishDigestUpdate(fd *feed, validItems []*gofeed.Item, updates chan *upda
 	}
 }
 
-func (f *fetcher) markFetchSuccess(state *feedState, parsedItems int, startTime time.Time) {
-	state.markFetchSuccess(time.Now())
+func (f *fetcher) markFetchSuccess(url string, parsedItems int, startTime time.Time) {
+	f.withFeedState(url, func(state *feedState, _ bool) {
+		state.markFetchSuccess(time.Now())
+	})
 
 	f.stats.WriteAccess(func(s *stats) {
 		s.TotalItemsParsed += parsedItems
@@ -442,18 +459,25 @@ func (f *fetcher) itemToStarlark(item *gofeed.Item) starlark.Value {
 	)
 }
 
-func (f *fetcher) handleFetchFailure(ctx context.Context, state *feedState, url string, err error) {
+func (f *fetcher) handleFetchFailure(ctx context.Context, url string, err error) {
 	f.stats.WriteAccess(func(s *stats) {
 		s.FailedFeeds += 1
 	})
 
-	disabled := state.markFetchFailure(err, errorThreshold)
+	var (
+		disabled   bool
+		errorCount int
+	)
+	f.withFeedState(url, func(state *feedState, _ bool) {
+		disabled = state.markFetchFailure(err, errorThreshold)
+		errorCount = state.ErrorCount
+	})
 
 	f.slog.Debug("fetch failed", "feed", url, "error", err)
 
 	// Complain loudly and disable feed, if we failed previously enough.
 	if disabled {
-		err = fmt.Errorf("fetching feed %q failed after %d previous attempts: %v; feed was disabled, to reenable it run 'tgfeed reenable %q'", url, state.ErrorCount, err, url)
+		err = fmt.Errorf("fetching feed %q failed after %d previous attempts: %v; feed was disabled, to reenable it run 'tgfeed reenable %q'", url, errorCount, err, url)
 
 		if err := f.errNotify(ctx, err); err != nil {
 			f.slog.Warn("failed to send error notification", "error", err)

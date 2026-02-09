@@ -61,6 +61,22 @@ func TestParseConfig(t *testing.T) {
 	}, *updateGolden)
 }
 
+func TestParseConfigDuplicateFeedURL(t *testing.T) {
+	t.Parallel()
+
+	tm := testMux(t, nil, nil)
+	f := testFetcher(t, tm)
+
+	err := f.loadConfig(t.Context(), `
+feed(url="https://example.com/feed.xml")
+feed(url="https://example.com/feed.xml", title="Duplicate")
+`)
+	if err == nil {
+		t.Fatal("want error")
+	}
+	testutil.AssertEqual(t, err.Error(), `duplicate feed URL "https://example.com/feed.xml"`)
+}
+
 func TestFeedStateMarkFetchFailure(t *testing.T) {
 	t.Parallel()
 
@@ -288,20 +304,25 @@ func TestFeedStateItemDecisions(t *testing.T) {
 	}
 }
 
-func TestGetOrCreateState(t *testing.T) {
+func TestWithFeedState(t *testing.T) {
 	t.Parallel()
 
 	f := &fetcher{
 		state: syncx.Protect(map[string]*feedState{}),
 	}
 
-	state1, exists1 := f.getOrCreateState("https://example.com/feed.xml")
-	testutil.AssertEqual(t, exists1, false)
-	testutil.AssertEqual(t, state1.LastUpdated.IsZero(), false)
+	const feedURL = "https://example.com/feed.xml"
+	var state1 *feedState
+	f.withFeedState(feedURL, func(state *feedState, exists bool) {
+		state1 = state
+		testutil.AssertEqual(t, exists, false)
+		testutil.AssertEqual(t, state1.LastUpdated.IsZero(), false)
+	})
 
-	state2, exists2 := f.getOrCreateState("https://example.com/feed.xml")
-	testutil.AssertEqual(t, exists2, true)
-	testutil.AssertEqual(t, state2, state1)
+	f.withFeedState(feedURL, func(state2 *feedState, exists bool) {
+		testutil.AssertEqual(t, exists, true)
+		testutil.AssertEqual(t, state2, state1)
+	})
 }
 
 func TestStateMapJSON(t *testing.T) {

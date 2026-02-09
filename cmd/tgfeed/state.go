@@ -202,15 +202,15 @@ func (f *fetcher) getState(url string) (state *feedState, exists bool) {
 	return
 }
 
-func (f *fetcher) getOrCreateState(url string) (state *feedState, exists bool) {
+func (f *fetcher) withFeedState(url string, fn func(*feedState, bool)) {
 	f.state.WriteAccess(func(s map[string]*feedState) {
-		state, exists = s[url]
+		state, exists := s[url]
 		if !exists {
 			state = newFeedState(time.Now())
 			s[url] = state
 		}
+		fn(state, exists)
 	})
-	return
 }
 
 func marshalStateMap(stateMap map[string]*feedState) ([]byte, error) {
@@ -351,6 +351,14 @@ func (f *fetcher) parseConfig(ctx context.Context, config string) ([]*feed, erro
 		if _, err := url.Parse(feed.url); err != nil {
 			return nil, fmt.Errorf("invalid URL %q of feed %q", feed.url, feed.title)
 		}
+	}
+
+	seenURLs := make(map[string]struct{}, len(feeds))
+	for _, feed := range feeds {
+		if _, seen := seenURLs[feed.url]; seen {
+			return nil, fmt.Errorf("duplicate feed URL %q", feed.url)
+		}
+		seenURLs[feed.url] = struct{}{}
 	}
 
 	return feeds, nil
