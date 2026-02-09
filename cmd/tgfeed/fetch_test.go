@@ -13,8 +13,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"unicode/utf8"
 	"time"
+	"unicode/utf8"
 
 	"github.com/mmcdole/gofeed"
 	"go.astrophena.name/base/syncx"
@@ -648,6 +648,10 @@ func TestHandleFeedStatus(t *testing.T) {
 			f := testFetcher(t, testMux(t, nil, nil))
 			f.stats = syncx.Protect(&stats{})
 			fd := &feed{url: "https://example.com/feed.xml"}
+			state := tc.initialState
+			f.state = syncx.Protect(map[string]*feedState{
+				fd.url: &state,
+			})
 
 			req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, tc.reqURL, nil)
 			if err != nil {
@@ -660,8 +664,7 @@ func TestHandleFeedStatus(t *testing.T) {
 				rec.WriteString(tc.body)
 			}
 
-			state := tc.initialState
-			result, err := f.handleFeedStatus(req, rec.Result(), fd, &state)
+			result, err := f.handleFeedStatus(req, rec.Result(), fd)
 
 			if tc.wantErrContains != "" {
 				if err == nil {
