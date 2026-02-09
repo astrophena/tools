@@ -17,6 +17,7 @@ import (
 	"go.astrophena.name/base/syncx"
 	"go.astrophena.name/base/testutil"
 	"go.astrophena.name/base/txtar"
+	"go.astrophena.name/tools/cmd/tgfeed/internal/state"
 )
 
 func TestLoadState(t *testing.T) {
@@ -358,7 +359,7 @@ func TestStateMapJSON(t *testing.T) {
 				err error
 			)
 			if tc.input != nil {
-				b, err = marshalStateMap(tc.input)
+				b, err = state.MarshalStateMap(toStateMap(tc.input))
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -366,10 +367,11 @@ func TestStateMapJSON(t *testing.T) {
 				b = tc.jsonInput
 			}
 
-			got, err := unmarshalStateMap(b)
+			raw, err := state.UnmarshalStateMap(b)
 			if err != nil {
 				t.Fatal(err)
 			}
+			got := fromStateMap(raw)
 			testutil.AssertEqual(t, len(got), tc.wantMapSize)
 			if tc.input != nil {
 				testutil.AssertEqual(t, got, tc.input)
@@ -382,21 +384,21 @@ func TestRunLockerAcquireConflict(t *testing.T) {
 	t.Parallel()
 
 	lockPath := filepath.Join(t.TempDir(), ".run.lock")
-	locker := runLocker{}
+	locker := state.NewLocker()
 
-	firstLock, err := locker.acquire(lockPath)
+	firstLock, err := locker.Acquire(lockPath, "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		if err := locker.release(firstLock); err != nil {
+		if err := firstLock.Release(); err != nil {
 			t.Fatal(err)
 		}
 	})
 
-	_, err = locker.acquire(lockPath)
-	if !errors.Is(err, errAlreadyRunning) {
-		t.Fatalf("want %v, got %v", errAlreadyRunning, err)
+	_, err = locker.Acquire(lockPath, "")
+	if !errors.Is(err, state.ErrAlreadyRunning) {
+		t.Fatalf("want %v, got %v", state.ErrAlreadyRunning, err)
 	}
 }
 

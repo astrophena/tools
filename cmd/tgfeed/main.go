@@ -34,6 +34,7 @@ import (
 	"go.astrophena.name/base/syncx"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/diff"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/sender"
+	"go.astrophena.name/tools/cmd/tgfeed/internal/state"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/telegram"
 
 	"github.com/mmcdole/gofeed"
@@ -169,8 +170,10 @@ type fetcher struct {
 
 	stats  syncx.Protected[*stats]
 	sender sender.Sender
+	store  state.Store
+	locker state.Locker
 
-	runLock *os.File
+	runLock state.Lock
 }
 
 func (f *fetcher) doInit(ctx context.Context) {
@@ -201,6 +204,19 @@ func (f *fetcher) doInit(ctx context.Context) {
 			Scrubber:   f.scrubber,
 			Logger:     f.slog,
 		})
+	}
+
+	if f.store == nil {
+		f.store = state.NewStore(state.Options{
+			StateDir:             f.stateDir,
+			RemoteURL:            f.remoteURL,
+			HTTPClient:           f.httpc,
+			DefaultErrorTemplate: defaultErrorTemplate,
+		})
+	}
+
+	if f.locker == nil {
+		f.locker = state.NewLocker()
 	}
 }
 

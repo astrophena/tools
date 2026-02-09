@@ -21,7 +21,7 @@ import (
 	"time"
 
 	"go.astrophena.name/base/web"
-	"go.astrophena.name/tools/internal/atomicio"
+	"go.astrophena.name/tools/cmd/tgfeed/internal/state"
 	"go.astrophena.name/tools/internal/idle"
 )
 
@@ -95,7 +95,13 @@ func (f *fetcher) admin(ctx context.Context) error {
 }
 
 func (f *fetcher) handleGetConfig(w http.ResponseWriter, r *http.Request) {
-	respondFile(w, r, filepath.Join(f.stateDir, "config.star"), "text/plain; charset=utf-8")
+	config, err := f.store.LoadConfig(r.Context())
+	if err != nil {
+		web.RespondJSONError(w, r, fmt.Errorf("failed to read config: %v", err))
+		return
+	}
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	_, _ = w.Write([]byte(config))
 }
 
 func (f *fetcher) handlePutConfig(w http.ResponseWriter, r *http.Request) {
@@ -113,7 +119,7 @@ func (f *fetcher) handlePutConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := atomicio.WriteFile(filepath.Join(f.stateDir, "config.star"), content, 0o644); err != nil {
+	if err := f.store.SaveConfig(r.Context(), string(content)); err != nil {
 		web.RespondJSONError(w, r, fmt.Errorf("failed to write config: %v", err))
 		return
 	}
@@ -122,7 +128,18 @@ func (f *fetcher) handlePutConfig(w http.ResponseWriter, r *http.Request) {
 }
 
 func (f *fetcher) handleGetState(w http.ResponseWriter, r *http.Request) {
-	respondFile(w, r, filepath.Join(f.stateDir, "state.json"), "application/json; charset=utf-8")
+	stateMap, err := f.store.LoadState(r.Context())
+	if err != nil {
+		web.RespondJSONError(w, r, fmt.Errorf("failed to read state: %v", err))
+		return
+	}
+	content, err := state.MarshalStateMap(stateMap)
+	if err != nil {
+		web.RespondJSONError(w, r, fmt.Errorf("failed to encode state: %v", err))
+		return
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	_, _ = w.Write(content)
 }
 
 func (f *fetcher) handlePutState(w http.ResponseWriter, r *http.Request) {
@@ -140,7 +157,12 @@ func (f *fetcher) handlePutState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := atomicio.WriteFile(filepath.Join(f.stateDir, "state.json"), content, 0o644); err != nil {
+	if _, err := state.UnmarshalStateMap(content); err != nil {
+		web.RespondJSONError(w, r, fmt.Errorf("failed to parse state: %v", err))
+		return
+	}
+
+	if err := f.store.SaveStateJSON(r.Context(), content); err != nil {
 		web.RespondJSONError(w, r, fmt.Errorf("failed to write state: %v", err))
 		return
 	}
@@ -149,7 +171,13 @@ func (f *fetcher) handlePutState(w http.ResponseWriter, r *http.Request) {
 }
 
 func (f *fetcher) handleGetErrorTemplate(w http.ResponseWriter, r *http.Request) {
-	respondFile(w, r, filepath.Join(f.stateDir, "error.tmpl"), "text/plain; charset=utf-8", []byte(defaultErrorTemplate))
+	errorTemplate, err := f.store.LoadErrorTemplate(r.Context())
+	if err != nil {
+		web.RespondJSONError(w, r, fmt.Errorf("failed to read error template: %v", err))
+		return
+	}
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	_, _ = w.Write([]byte(errorTemplate))
 }
 
 func (f *fetcher) handlePutErrorTemplate(w http.ResponseWriter, r *http.Request) {
@@ -162,7 +190,7 @@ func (f *fetcher) handlePutErrorTemplate(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if err := atomicio.WriteFile(filepath.Join(f.stateDir, "error.tmpl"), content, 0o644); err != nil {
+	if err := f.store.SaveErrorTemplate(r.Context(), string(content)); err != nil {
 		web.RespondJSONError(w, r, fmt.Errorf("failed to write error template: %v", err))
 		return
 	}
@@ -202,31 +230,6 @@ func writeNoContent(w http.ResponseWriter) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func respondFile(w http.ResponseWriter, r *http.Request, path string, contentType string, notFoundFallback ...[]byte) {
-	content, err := os.ReadFile(path)
-	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) && len(notFoundFallback) > 0 {
-			w.Header().Set("Content-Type", contentType)
-			w.Write(notFoundFallback[0])
-			return
-		}
-		errPrefix := "failed to read file"
-		switch filepath.Base(path) {
-		case "config.star":
-			errPrefix = "failed to read config"
-		case "state.json":
-			errPrefix = "failed to read state"
-		case "error.tmpl":
-			errPrefix = "failed to read error template"
-		}
-		web.RespondJSONError(w, r, fmt.Errorf("%s: %v", errPrefix, err))
-		return
-	}
-
-	w.Header().Set("Content-Type", contentType)
-	w.Write(content)
-}
-
 func (f *fetcher) validateConfig(content []byte, r *http.Request) error {
 	if _, err := f.parseConfig(r.Context(), string(content)); err != nil {
 		return fmt.Errorf("%w: invalid config: %v", web.ErrBadRequest, err)
@@ -235,8 +238,8 @@ func (f *fetcher) validateConfig(content []byte, r *http.Request) error {
 }
 
 func (f *fetcher) validateState(content []byte) error {
-	var stateMap map[string]*feedState
-	if err := json.Unmarshal(content, &stateMap); err != nil {
+	stateMap, err := state.UnmarshalStateMap(content)
+	if err != nil {
 		return fmt.Errorf("%w: invalid JSON: %v", web.ErrBadRequest, err)
 	}
 	for key, value := range stateMap {

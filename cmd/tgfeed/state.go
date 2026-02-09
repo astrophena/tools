@@ -7,24 +7,16 @@ package main
 import (
 	"cmp"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io/fs"
-	"net"
-	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
-	"strings"
-	"syscall"
 	"time"
 
 	"github.com/mmcdole/gofeed"
-	"go.astrophena.name/base/request"
 	"go.astrophena.name/base/syncx"
-	"go.astrophena.name/base/version"
-	"go.astrophena.name/tools/internal/atomicio"
+	"go.astrophena.name/tools/cmd/tgfeed/internal/state"
 	"go.astrophena.name/tools/internal/starlark/interpreter"
 
 	"go.starlark.net/starlark"
@@ -74,20 +66,14 @@ type feedState struct {
 	ErrorCount   int       `json:"error_count,omitempty"`
 	LastError    string    `json:"last_error,omitempty"`
 
-	// SeenItems tracks processed items for feeds with always_send_new_items
-	// enabled. The key is the item GUID and the value is the time it was first
-	// seen.
 	SeenItems map[string]time.Time `json:"seen_items,omitempty"`
 
-	// Stats.
-	FetchCount     int64 `json:"fetch_count"`      // successful fetches
-	FetchFailCount int64 `json:"fetch_fail_count"` // failed fetches
+	FetchCount     int64 `json:"fetch_count"`
+	FetchFailCount int64 `json:"fetch_fail_count"`
 }
 
 func newFeedState(now time.Time) *feedState {
-	return &feedState{
-		LastUpdated: now,
-	}
+	return &feedState{LastUpdated: now}
 }
 
 func (s *feedState) markNotModified(now time.Time) {
@@ -213,104 +199,16 @@ func (f *fetcher) withFeedState(url string, fn func(*feedState, bool)) {
 	})
 }
 
-func marshalStateMap(stateMap map[string]*feedState) ([]byte, error) {
-	return json.MarshalIndent(stateMap, "", "  ")
-}
-
-func unmarshalStateMap(b []byte) (map[string]*feedState, error) {
-	stateMap := make(map[string]*feedState)
-	if len(b) == 0 {
-		return stateMap, nil
-	}
-	if err := json.Unmarshal(b, &stateMap); err != nil {
-		return nil, err
-	}
-	return stateMap, nil
-}
-
 func (f *fetcher) loadState(ctx context.Context) error {
-	if f.remoteURL != "" {
-		return f.loadStateRemote(ctx)
-	}
-
-	errorTemplateBytes, err := os.ReadFile(filepath.Join(f.stateDir, "error.tmpl"))
-	if err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return err
-	}
-	f.errorTemplate = cmp.Or(string(errorTemplateBytes), defaultErrorTemplate)
-
-	configBytes, err := os.ReadFile(filepath.Join(f.stateDir, "config.star"))
+	snapshot, err := f.store.LoadSnapshot(ctx)
 	if err != nil {
 		return err
 	}
-	if err := f.loadConfig(ctx, string(configBytes)); err != nil {
+	if err := f.loadConfig(ctx, snapshot.Config); err != nil {
 		return err
 	}
-
-	state, err := os.ReadFile(filepath.Join(f.stateDir, "state.json"))
-	if err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return err
-	}
-	stateMap, err := unmarshalStateMap(state)
-	if err != nil {
-		return err
-	}
-	f.state = syncx.Protect(stateMap)
-
-	return nil
-}
-
-type errorResponse struct {
-	Error string `json:"error"`
-}
-
-func (f *fetcher) loadStateRemote(ctx context.Context) error {
-	fetch := func(url string) ([]byte, error) {
-		b, err := request.Make[request.Bytes](ctx, request.Params{
-			Method: http.MethodGet,
-			Headers: map[string]string{
-				"User-Agent": version.UserAgent(),
-			},
-			URL:        f.apiURL(url),
-			HTTPClient: f.httpClient(),
-		})
-		if err != nil {
-			var statusErr *request.StatusError
-			if errors.As(err, &statusErr) {
-				var errResp *errorResponse
-				if jsonErr := json.Unmarshal(statusErr.Body, &errResp); jsonErr == nil {
-					err = errors.New(errResp.Error)
-				}
-			}
-			return nil, err
-		}
-		return b, err
-	}
-
-	configBytes, err := fetch("/api/config")
-	if err != nil {
-		return fmt.Errorf("failed to fetch config from remote: %w", err)
-	}
-	if err := f.loadConfig(ctx, string(configBytes)); err != nil {
-		return err
-	}
-
-	stateBytes, err := fetch("/api/state")
-	if err != nil {
-		return fmt.Errorf("failed to fetch state from remote: %w", err)
-	}
-	stateMap, err := unmarshalStateMap(stateBytes)
-	if err != nil {
-		return fmt.Errorf("failed to parse state JSON: %w", err)
-	}
-	f.state = syncx.Protect(stateMap)
-
-	errorTemplateBytes, err := fetch("/api/error-template")
-	if err != nil {
-		return fmt.Errorf("failed to fetch error template from remote: %w", err)
-	}
-	f.errorTemplate = string(errorTemplateBytes)
-
+	f.errorTemplate = snapshot.ErrorTemplate
+	f.state = syncx.Protect(fromStateMap(snapshot.State))
 	return nil
 }
 
@@ -365,186 +263,84 @@ func (f *fetcher) parseConfig(ctx context.Context, config string) ([]*feed, erro
 }
 
 func (f *fetcher) saveState(ctx context.Context) error {
-	if f.remoteURL != "" {
-		return f.saveStateRemote(ctx)
-	}
-
-	var (
-		state []byte
-		err   error
-	)
-	f.state.ReadAccess(func(s map[string]*feedState) {
-		state, err = marshalStateMap(s)
-	})
-	if err != nil {
-		return err
-	}
-	return atomicio.WriteFile(filepath.Join(f.stateDir, "state.json"), state, 0o644)
-}
-
-func (f *fetcher) saveStateRemote(ctx context.Context) error {
-	var (
-		state []byte
-		err   error
-	)
-	f.state.ReadAccess(func(s map[string]*feedState) {
-		state, err = marshalStateMap(s)
-	})
-	if err != nil {
-		return err
-	}
-
-	_, err = request.Make[request.IgnoreResponse](ctx, request.Params{
-		Method: http.MethodPut,
-		URL:    f.apiURL("/api/state"),
-		Body:   state,
-		Headers: map[string]string{
-			"Content-Type": "application/json",
-			"User-Agent":   version.UserAgent(),
-		},
-		WantStatusCode: http.StatusNoContent,
-		HTTPClient:     f.httpClient(),
-	})
-	if err != nil {
-		return fmt.Errorf("failed to save state to remote: %w", err)
-	}
-
-	return nil
+	var current map[string]*feedState
+	f.state.ReadAccess(func(s map[string]*feedState) { current = s })
+	return f.store.SaveState(ctx, toStateMap(current))
 }
 
 func (f *fetcher) saveConfig(ctx context.Context) error {
-	if f.remoteURL != "" {
-		return f.saveConfigRemote(ctx)
-	}
-	return atomicio.WriteFile(filepath.Join(f.stateDir, "config.star"), []byte(f.config), 0o644)
-}
-
-func (f *fetcher) saveConfigRemote(ctx context.Context) error {
-	_, err := request.Make[request.IgnoreResponse](ctx, request.Params{
-		Method: http.MethodPut,
-		URL:    f.apiURL("/api/config"),
-		Body:   []byte(f.config),
-		Headers: map[string]string{
-			"Content-Type": "text/plain",
-			"User-Agent":   version.UserAgent(),
-		},
-		WantStatusCode: http.StatusNoContent,
-		HTTPClient:     f.httpClient(),
-	})
-	if err != nil {
-		return fmt.Errorf("failed to save config to remote: %w", err)
-	}
-	return nil
-}
-
-func (f *fetcher) httpClient() *http.Client {
-	if strings.HasPrefix(f.remoteURL, "/") {
-		// Unix socket.
-		return &http.Client{
-			Transport: &http.Transport{
-				DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-					return (&net.Dialer{}).DialContext(ctx, "unix", f.remoteURL)
-				},
-			},
-		}
-	}
-	return f.httpc
-}
-
-func (f *fetcher) apiURL(endpoint string) string {
-	if strings.HasPrefix(f.remoteURL, "/") {
-		// For Unix sockets, use dummy host.
-		return "http://unix" + endpoint
-	}
-	return f.remoteURL + endpoint
-}
-
-type runLocker struct{}
-
-func (runLocker) acquire(path string) (*os.File, error) {
-	lockFile, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o644)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := syscall.Flock(int(lockFile.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
-		if closeErr := lockFile.Close(); closeErr != nil {
-			return nil, errors.Join(err, closeErr)
-		}
-		if errors.Is(err, syscall.EWOULDBLOCK) || errors.Is(err, syscall.EAGAIN) {
-			return nil, errAlreadyRunning
-		}
-		return nil, err
-	}
-
-	return lockFile, nil
-}
-
-func (runLocker) writePayload(lockFile *os.File, payload string) error {
-	if payload == "" {
-		return nil
-	}
-	if err := lockFile.Truncate(0); err != nil {
-		return err
-	}
-	if _, err := lockFile.Seek(0, 0); err != nil {
-		return err
-	}
-	if _, err := lockFile.WriteString(payload); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (runLocker) release(lockFile *os.File) error {
-	if lockFile == nil {
-		return nil
-	}
-	if err := syscall.Flock(int(lockFile.Fd()), syscall.LOCK_UN); err != nil {
-		if closeErr := lockFile.Close(); closeErr != nil {
-			return errors.Join(err, closeErr)
-		}
-		return err
-	}
-	return lockFile.Close()
-}
-
-func (l runLocker) isLocked(path string) bool {
-	lockFile, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o644)
-	if err != nil {
-		return false
-	}
-	defer lockFile.Close()
-
-	err = syscall.Flock(int(lockFile.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
-	if err == nil {
-		_ = syscall.Flock(int(lockFile.Fd()), syscall.LOCK_UN)
-		return false
-	}
-
-	return errors.Is(err, syscall.EWOULDBLOCK) || errors.Is(err, syscall.EAGAIN)
+	return f.store.SaveConfig(ctx, f.config)
 }
 
 func (f *fetcher) acquireRunLock() error {
+	if f.locker == nil {
+		f.locker = state.NewLocker()
+	}
 	lockPath := filepath.Join(f.stateDir, ".run.lock")
-	lockFile, err := (runLocker{}).acquire(lockPath)
+	lock, err := f.locker.Acquire(lockPath, fmt.Sprintf("pid=%d\n", os.Getpid()))
 	if err != nil {
+		if errors.Is(err, state.ErrAlreadyRunning) {
+			err = errAlreadyRunning
+		}
 		return fmt.Errorf("%w: lock file exists at %s", err, lockPath)
 	}
-	if err := (runLocker{}).writePayload(lockFile, fmt.Sprintf("pid=%d\n", os.Getpid())); err != nil {
-		_ = (runLocker{}).release(lockFile)
-		return err
-	}
-	f.runLock = lockFile
+	f.runLock = lock
 	return nil
 }
 
 func (f *fetcher) releaseRunLock() error {
-	err := (runLocker{}).release(f.runLock)
+	err := f.runLock.Release()
 	f.runLock = nil
 	return err
 }
 
 func (f *fetcher) isRunLocked() bool {
-	return (runLocker{}).isLocked(filepath.Join(f.stateDir, ".run.lock"))
+	if f.locker == nil {
+		f.locker = state.NewLocker()
+	}
+	return f.locker.IsLocked(filepath.Join(f.stateDir, ".run.lock"))
+}
+
+func fromStateMap(input map[string]*state.FeedState) map[string]*feedState {
+	out := make(map[string]*feedState, len(input))
+	for key, value := range input {
+		if value == nil {
+			out[key] = nil
+			continue
+		}
+		out[key] = &feedState{
+			Disabled:       value.Disabled,
+			LastUpdated:    value.LastUpdated,
+			LastModified:   value.LastModified,
+			ETag:           value.ETag,
+			ErrorCount:     value.ErrorCount,
+			LastError:      value.LastError,
+			SeenItems:      value.SeenItems,
+			FetchCount:     value.FetchCount,
+			FetchFailCount: value.FetchFailCount,
+		}
+	}
+	return out
+}
+
+func toStateMap(input map[string]*feedState) map[string]*state.FeedState {
+	out := make(map[string]*state.FeedState, len(input))
+	for key, value := range input {
+		if value == nil {
+			out[key] = nil
+			continue
+		}
+		out[key] = &state.FeedState{
+			Disabled:       value.Disabled,
+			LastUpdated:    value.LastUpdated,
+			LastModified:   value.LastModified,
+			ETag:           value.ETag,
+			ErrorCount:     value.ErrorCount,
+			LastError:      value.LastError,
+			SeenItems:      value.SeenItems,
+			FetchCount:     value.FetchCount,
+			FetchFailCount: value.FetchFailCount,
+		}
+	}
+	return out
 }
