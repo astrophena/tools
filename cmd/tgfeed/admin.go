@@ -95,31 +95,21 @@ func (f *fetcher) admin(ctx context.Context) error {
 }
 
 func (f *fetcher) handleGetConfig(w http.ResponseWriter, r *http.Request) {
-	content, err := os.ReadFile(filepath.Join(f.stateDir, "config.star"))
-	if err != nil {
-		web.RespondJSONError(w, r, fmt.Errorf("failed to read config: %v", err))
-		return
-	}
-
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	w.Write(content)
+	respondFile(w, r, filepath.Join(f.stateDir, "config.star"), "text/plain; charset=utf-8")
 }
 
 func (f *fetcher) handlePutConfig(w http.ResponseWriter, r *http.Request) {
-	if f.isRunLocked() {
-		web.RespondJSONError(w, r, fmt.Errorf("%w: cannot modify config: run is in progress", errConflict))
+	if !f.guardRunUnlocked(w, r) {
 		return
 	}
 
-	content, err := io.ReadAll(r.Body)
-	if err != nil {
-		web.RespondJSONError(w, r, fmt.Errorf("%w: failed to read request body", web.ErrBadRequest))
+	content, ok := readBody(w, r)
+	if !ok {
 		return
 	}
 
-	// Validate config by parsing.
-	if _, err := f.parseConfig(r.Context(), string(content)); err != nil {
-		web.RespondJSONError(w, r, fmt.Errorf("%w: invalid config: %v", web.ErrBadRequest, err))
+	if err := f.validateConfig(content, r); err != nil {
+		web.RespondJSONError(w, r, err)
 		return
 	}
 
@@ -128,35 +118,25 @@ func (f *fetcher) handlePutConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.WriteHeader(http.StatusNoContent)
+	writeNoContent(w)
 }
 
 func (f *fetcher) handleGetState(w http.ResponseWriter, r *http.Request) {
-	content, err := os.ReadFile(filepath.Join(f.stateDir, "state.json"))
-	if err != nil {
-		web.RespondJSONError(w, r, fmt.Errorf("failed to read state: %v", err))
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.Write(content)
+	respondFile(w, r, filepath.Join(f.stateDir, "state.json"), "application/json; charset=utf-8")
 }
 
 func (f *fetcher) handlePutState(w http.ResponseWriter, r *http.Request) {
-	if f.isRunLocked() {
-		web.RespondJSONError(w, r, fmt.Errorf("%w: cannot modify state: run is in progress", errConflict))
+	if !f.guardRunUnlocked(w, r) {
 		return
 	}
 
-	content, err := io.ReadAll(r.Body)
-	if err != nil {
-		web.RespondJSONError(w, r, fmt.Errorf("%w: failed to read request body", web.ErrBadRequest))
+	content, ok := readBody(w, r)
+	if !ok {
 		return
 	}
 
-	var stateMap map[string]*feedState
-	if err := json.Unmarshal(content, &stateMap); err != nil {
-		web.RespondJSONError(w, r, fmt.Errorf("%w: invalid JSON: %v", web.ErrBadRequest, err))
+	if err := f.validateState(content); err != nil {
+		web.RespondJSONError(w, r, err)
 		return
 	}
 
@@ -165,35 +145,20 @@ func (f *fetcher) handlePutState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.WriteHeader(http.StatusNoContent)
+	writeNoContent(w)
 }
 
 func (f *fetcher) handleGetErrorTemplate(w http.ResponseWriter, r *http.Request) {
-	content, err := os.ReadFile(filepath.Join(f.stateDir, "error.tmpl"))
-	if err != nil {
-		// If file doesn't exist, return default template.
-		if errors.Is(err, fs.ErrNotExist) {
-			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-			w.Write([]byte(defaultErrorTemplate))
-			return
-		}
-		web.RespondJSONError(w, r, fmt.Errorf("failed to read error template: %v", err))
-		return
-	}
-
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	w.Write(content)
+	respondFile(w, r, filepath.Join(f.stateDir, "error.tmpl"), "text/plain; charset=utf-8", []byte(defaultErrorTemplate))
 }
 
 func (f *fetcher) handlePutErrorTemplate(w http.ResponseWriter, r *http.Request) {
-	if f.isRunLocked() {
-		web.RespondJSONError(w, r, fmt.Errorf("%w: cannot modify error template: run is in progress", errConflict))
+	if !f.guardRunUnlocked(w, r) {
 		return
 	}
 
-	content, err := io.ReadAll(r.Body)
-	if err != nil {
-		web.RespondJSONError(w, r, fmt.Errorf("failed to read request body: %w", web.ErrBadRequest))
+	content, ok := readBody(w, r)
+	if !ok {
 		return
 	}
 
@@ -202,7 +167,84 @@ func (f *fetcher) handlePutErrorTemplate(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	writeNoContent(w)
+}
+
+func (f *fetcher) guardRunUnlocked(w http.ResponseWriter, r *http.Request) bool {
+	if !f.isRunLocked() {
+		return true
+	}
+
+	context := "cannot modify resource"
+	switch r.URL.Path {
+	case "/api/config":
+		context = "cannot modify config"
+	case "/api/state":
+		context = "cannot modify state"
+	case "/api/error-template":
+		context = "cannot modify error template"
+	}
+
+	web.RespondJSONError(w, r, fmt.Errorf("%w: %s: run is in progress", errConflict, context))
+	return false
+}
+
+func readBody(w http.ResponseWriter, r *http.Request) ([]byte, bool) {
+	content, err := io.ReadAll(r.Body)
+	if err != nil {
+		web.RespondJSONError(w, r, fmt.Errorf("%w: failed to read request body", web.ErrBadRequest))
+		return nil, false
+	}
+	return content, true
+}
+
+func writeNoContent(w http.ResponseWriter) {
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func respondFile(w http.ResponseWriter, r *http.Request, path string, contentType string, notFoundFallback ...[]byte) {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) && len(notFoundFallback) > 0 {
+			w.Header().Set("Content-Type", contentType)
+			w.Write(notFoundFallback[0])
+			return
+		}
+		errPrefix := "failed to read file"
+		switch filepath.Base(path) {
+		case "config.star":
+			errPrefix = "failed to read config"
+		case "state.json":
+			errPrefix = "failed to read state"
+		case "error.tmpl":
+			errPrefix = "failed to read error template"
+		}
+		web.RespondJSONError(w, r, fmt.Errorf("%s: %v", errPrefix, err))
+		return
+	}
+
+	w.Header().Set("Content-Type", contentType)
+	w.Write(content)
+}
+
+func (f *fetcher) validateConfig(content []byte, r *http.Request) error {
+	if _, err := f.parseConfig(r.Context(), string(content)); err != nil {
+		return fmt.Errorf("%w: invalid config: %v", web.ErrBadRequest, err)
+	}
+	return nil
+}
+
+func (f *fetcher) validateState(content []byte) error {
+	var stateMap map[string]*feedState
+	if err := json.Unmarshal(content, &stateMap); err != nil {
+		return fmt.Errorf("%w: invalid JSON: %v", web.ErrBadRequest, err)
+	}
+	for key, value := range stateMap {
+		if value == nil {
+			return fmt.Errorf("%w: invalid JSON: state entry %q must be an object", web.ErrBadRequest, key)
+		}
+	}
+	return nil
 }
 
 func (f *fetcher) handleStatsCSV(w http.ResponseWriter, r *http.Request) {
