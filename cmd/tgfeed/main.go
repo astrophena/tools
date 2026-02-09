@@ -168,6 +168,8 @@ type fetcher struct {
 	state         syncx.Protected[map[string]*feedState]
 
 	stats syncx.Protected[*stats]
+
+	runLock *os.File
 }
 
 func (f *fetcher) doInit(ctx context.Context) {

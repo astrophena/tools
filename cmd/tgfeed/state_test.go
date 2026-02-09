@@ -7,6 +7,8 @@ package main
 import (
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 	"testing/fstest"
 	"time"
@@ -352,5 +354,65 @@ func TestStateMapJSON(t *testing.T) {
 				testutil.AssertEqual(t, got, tc.input)
 			}
 		})
+	}
+}
+
+func TestRunLockerAcquireConflict(t *testing.T) {
+	t.Parallel()
+
+	lockPath := filepath.Join(t.TempDir(), ".run.lock")
+	locker := runLocker{}
+
+	firstLock, err := locker.acquire(lockPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := locker.release(firstLock); err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	_, err = locker.acquire(lockPath)
+	if !errors.Is(err, errAlreadyRunning) {
+		t.Fatalf("want %v, got %v", errAlreadyRunning, err)
+	}
+}
+
+func TestRunLockLifecycle(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	f := &fetcher{stateDir: dir}
+
+	if err := f.acquireRunLock(); err != nil {
+		t.Fatal(err)
+	}
+
+	if f.runLock == nil {
+		t.Fatal("run lock file descriptor is nil")
+	}
+	if !f.isRunLocked() {
+		t.Fatal("expected run lock to be held")
+	}
+
+	lockPath := filepath.Join(dir, ".run.lock")
+	payload, err := os.ReadFile(lockPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(payload) == 0 {
+		t.Fatal("expected lock payload to be present")
+	}
+
+	if err := f.releaseRunLock(); err != nil {
+		t.Fatal(err)
+	}
+
+	if f.runLock != nil {
+		t.Fatal("expected run lock file descriptor to be released")
+	}
+	if f.isRunLocked() {
+		t.Fatal("expected run lock to be released")
 	}
 }
