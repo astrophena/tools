@@ -19,6 +19,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"go.astrophena.name/base/request"
 	"go.astrophena.name/base/version"
@@ -707,21 +709,61 @@ func (f *fetcher) send(ctx context.Context, text string, disableLinkPreview bool
 }
 
 func splitMessage(text string) []string {
-	if len(text) <= 4096 {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return nil
+	}
+
+	if utf8.RuneCountInString(text) <= 4096 {
 		return []string{text}
 	}
+
 	var chunks []string
-	for len(text) > 4096 {
-		// Try to split at the last newline before 4096.
-		splitAt := strings.LastIndex(text[:4096], "\n")
-		if splitAt == -1 {
-			// No newline found, split at 4096.
-			splitAt = 4096
+	for text != "" {
+		if utf8.RuneCountInString(text) <= 4096 {
+			chunks = append(chunks, text)
+			break
 		}
-		chunks = append(chunks, text[:splitAt])
+
+		var (
+			lastNewline    = -1
+			lastWhitespace = -1
+			byteCap        = len(text)
+			runeCount      int
+		)
+
+		for i, r := range text {
+			if runeCount == 4096 {
+				byteCap = i
+				break
+			}
+			runeCount++
+
+			if r == '\n' {
+				lastNewline = i
+				continue
+			}
+			if unicode.IsSpace(r) {
+				lastWhitespace = i
+			}
+		}
+
+		splitAt := byteCap
+		switch {
+		case lastNewline > 0:
+			splitAt = lastNewline
+		case lastWhitespace > 0:
+			splitAt = lastWhitespace
+		}
+
+		chunk := strings.TrimSpace(text[:splitAt])
+		if chunk != "" {
+			chunks = append(chunks, chunk)
+		}
 		text = text[splitAt:]
+		text = strings.TrimSpace(text)
 	}
-	chunks = append(chunks, text)
+
 	return chunks
 }
 

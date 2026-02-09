@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"unicode/utf8"
 	"time"
 
 	"github.com/mmcdole/gofeed"
@@ -226,9 +227,17 @@ func TestSplitMessage(t *testing.T) {
 			in:   strings.Repeat("a", 4100),
 			want: []string{strings.Repeat("a", 4096), "aaaa"},
 		},
+		"long (single line with spaces)": {
+			in:   strings.Repeat("a", 3000) + " " + strings.Repeat("b", 1500),
+			want: []string{strings.Repeat("a", 3000), strings.Repeat("b", 1500)},
+		},
 		"long (newline split)": {
 			in:   strings.Repeat("a", 4000) + "\n" + strings.Repeat("b", 100),
-			want: []string{strings.Repeat("a", 4000), "\n" + strings.Repeat("b", 100)},
+			want: []string{strings.Repeat("a", 4000), strings.Repeat("b", 100)},
+		},
+		"multi-byte unicode": {
+			in:   strings.Repeat("🙂", 4095) + "\n" + "🙂",
+			want: []string{strings.Repeat("🙂", 4095), "🙂"},
 		},
 	}
 
@@ -238,6 +247,29 @@ func TestSplitMessage(t *testing.T) {
 			testutil.AssertEqual(t, got, tc.want)
 		})
 	}
+}
+
+func TestSplitMessageNewlineRich(t *testing.T) {
+	t.Parallel()
+
+	in := strings.Repeat("line\n", 900)
+	got := splitMessage(in)
+
+	if len(got) < 2 {
+		t.Fatalf("want at least 2 chunks, got %d", len(got))
+	}
+
+	for i, chunk := range got {
+		if strings.TrimSpace(chunk) == "" {
+			t.Fatalf("chunk %d is empty or whitespace only", i)
+		}
+		if utf8.RuneCountInString(chunk) > 4096 {
+			t.Fatalf("chunk %d exceeds rune cap: %d", i, utf8.RuneCountInString(chunk))
+		}
+	}
+
+	joined := strings.Join(got, "\n")
+	testutil.AssertEqual(t, joined, strings.TrimSpace(in))
 }
 
 func TestAlwaysSendNewItems(t *testing.T) {
