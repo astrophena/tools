@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"testing"
 	"time"
@@ -74,7 +75,9 @@ func TestSplitMessageNewlineRich(t *testing.T) {
 func TestSendRateLimitRetry(t *testing.T) {
 	t.Parallel()
 
-	s := New(Config{ChatID: "chat", Token: "token"})
+	logger := slog.New(slog.DiscardHandler)
+
+	s := New(Config{ChatID: "chat", Token: "token", Logger: logger})
 	var calls int
 	s.makeRequest = func(context.Context, string, any) error {
 		calls++
