@@ -6,13 +6,13 @@ require (
 	crawshaw.dev/jsonfile v0.0.0-20240206193014-699d1dad804e
 	github.com/arl/statsviz v0.8.0
 	github.com/dhowden/tag v0.0.0-20240417053706-3d75831295e8
-	github.com/landlock-lsm/go-landlock v0.0.0-20250303204525-1544bccde3a3
+	github.com/landlock-lsm/go-landlock v0.6.0
 	github.com/mmcdole/gofeed v1.3.0
 	github.com/tobischo/gokeepasslib/v3 v3.6.1
 	go.astrophena.name/base v0.16.1
 	go.starlark.net v0.0.0-20250906160240-bf296ed553ea
 	golang.org/x/sync v0.19.0
-	golang.org/x/term v0.39.0
+	golang.org/x/term v0.40.0
 	rsc.io/markdown v0.0.0-20241212154241-6bf72452917f
 )
 
@@ -33,12 +33,12 @@ require (
 	golang.org/x/exp/typeparams v0.0.0-20251219203646-944ab1f22d93 // indirect
 	golang.org/x/mod v0.31.0 // indirect
 	golang.org/x/net v0.48.0 // indirect
-	golang.org/x/sys v0.40.0 // indirect
+	golang.org/x/sys v0.41.0 // indirect
 	golang.org/x/text v0.32.0 // indirect
 	golang.org/x/tools v0.40.0 // indirect
 	google.golang.org/protobuf v1.34.1 // indirect
 	honnef.co/go/tools v0.6.1 // indirect
-	kernel.org/pub/linux/libs/security/libcap/psx v1.2.70 // indirect
+	kernel.org/pub/linux/libs/security/libcap/psx v1.2.77 // indirect
 )
 
 // Doesn't exist in this repository.
