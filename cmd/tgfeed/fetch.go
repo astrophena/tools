@@ -5,7 +5,6 @@
 package main
 
 import (
-	"cmp"
 	"context"
 	_ "embed"
 	"encoding/json"
@@ -13,20 +12,16 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	urlpkg "net/url"
-	"regexp"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"go.astrophena.name/base/version"
+	"go.astrophena.name/tools/cmd/tgfeed/internal/format"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/sender"
-	"go.astrophena.name/tools/internal/starlark/go2star"
 
 	"github.com/mmcdole/gofeed"
 	"go.starlark.net/starlark"
-	"go.starlark.net/starlarkstruct"
 )
 
 // Feed fetching and message sending.
@@ -434,24 +429,7 @@ func (f *fetcher) applyRule(rule *starlark.Function, item *gofeed.Item) bool {
 }
 
 func (f *fetcher) itemToStarlark(item *gofeed.Item) starlark.Value {
-	var categories []starlark.Value
-	for _, category := range item.Categories {
-		categories = append(categories, starlark.String(category))
-	}
-	extensions, _ := go2star.To(item.Extensions)
-	return starlarkstruct.FromStringDict(
-		starlarkstruct.Default,
-		starlark.StringDict{
-			"title":       starlark.String(item.Title),
-			"url":         starlark.String(item.Link),
-			"description": starlark.String(item.Description),
-			"content":     starlark.String(item.Content),
-			"categories":  starlark.NewList(categories),
-			"extensions":  extensions,
-			"guid":        starlark.String(item.GUID),
-			"published":   starlark.String(item.Published),
-		},
-	)
+	return format.ItemToStarlark(item)
 }
 
 func (f *fetcher) handleFetchFailure(ctx context.Context, url string, err error) {
@@ -480,272 +458,66 @@ func (f *fetcher) handleFetchFailure(ctx context.Context, url string, err error)
 	}
 }
 
-var nonAlphaNumRe = sync.OnceValue(func() *regexp.Regexp {
-	return regexp.MustCompile("[^a-zA-Z0-9/]+")
-})
-
 func (f *fetcher) sendUpdate(ctx context.Context, u *update) {
-	msg, replyMarkup, ok := f.buildUpdateMessage(u)
+	rendered, ok := f.buildUpdateMessage(u)
 	if !ok {
 		return
 	}
 
-	f.slog.Debug("sending message", "feed", u.feed.url, "message", msg)
+	f.slog.Debug("sending message", "feed", u.feed.url, "message", rendered.Body)
 	if f.dry {
 		return
 	}
 
-	var disableLinkPreview bool
-	if u.feed.digest {
-		disableLinkPreview = true
-	}
-
-	actions := []sender.ActionRow(nil)
-	if replyMarkup != nil {
-		actions = *replyMarkup
-	}
-
 	if err := f.sender.Send(ctx, sender.Message{
-		Body: strings.TrimSpace(msg),
+		Body: strings.TrimSpace(rendered.Body),
 		Target: sender.Target{
 			Topic: strconv.FormatInt(u.feed.messageThreadID, 10),
 		},
 		Options: sender.Options{
-			SuppressLinkPreview: disableLinkPreview,
+			SuppressLinkPreview: rendered.DisablePreview,
 		},
-		Actions: actions,
+		Actions: rendered.Actions,
 	}); err != nil {
 		f.slog.Warn("failed to send message", "chat_id", f.chatID, "error", err)
 	}
 }
 
-func (f *fetcher) buildUpdateMessage(u *update) (msg string, replyMarkup *inlineKeyboard, ok bool) {
-	items, defaultTitle := f.buildFormatInput(u)
+func (f *fetcher) buildUpdateMessage(u *update) (format.Rendered, bool) {
+	fmtUpdate := format.Update{
+		Feed:  format.Feed{URL: u.feed.url, Title: u.feed.title, Digest: u.feed.digest},
+		Items: u.items,
+	}
+
+	items, defaultTitle := format.BuildFormatInput(fmtUpdate)
 
 	if u.feed.format != nil {
-		val, err := f.callStarlarkFormatter(u.feed.format, items)
+		val, err := format.CallStarlarkFormatter(u.feed.format, items, func(msg string) { f.slog.Info(msg) })
 		if err != nil {
 			f.slog.Warn("formatting message", "feed", u.feed.url, "error", err)
-			return "", nil, false
+			return format.Rendered{}, false
 		}
 
-		msg, replyMarkup, ok = parseFormattedMessage(val)
-		if !ok {
-			f.slog.Warn(
-				"format function returned invalid output",
-				slog.String("feed", u.feed.url),
-				slog.String("value_type", val.Type()),
-				slog.Bool("is_tuple", isTupleValue(val)),
-				slog.Int("tuple_len", tupleLen(val)),
-				slog.String("title_type", tupleTitleType(val)),
-				slog.Bool("title_is_empty", tupleTitleIsEmpty(val)),
-				slog.String("keyboard_type", tupleKeyboardType(val)),
-			)
-		}
-		return msg, replyMarkup, ok
-	}
-
-	msg, replyMarkup = defaultUpdateMessage(u, defaultTitle)
-	return msg, replyMarkup, true
-}
-
-func (f *fetcher) buildFormatInput(u *update) (starlark.Value, string) {
-	if u.feed.digest {
-		list := make([]starlark.Value, 0, len(u.items))
-		for _, item := range u.items {
-			list = append(list, f.itemToStarlark(item))
-		}
-		return starlark.NewList(list), fmt.Sprintf("Updates from %s", cmp.Or(u.feed.title, u.feed.url))
-	}
-
-	item := u.items[0]
-	return f.itemToStarlark(item), cmp.Or(item.Title, item.Link)
-}
-
-func (f *fetcher) callStarlarkFormatter(format *starlark.Function, items starlark.Value) (starlark.Value, error) {
-	return starlark.Call(
-		&starlark.Thread{
-			Print: func(_ *starlark.Thread, msg string) { f.slog.Info(msg) },
-		},
-		format,
-		starlark.Tuple{items},
-		[]starlark.Tuple{},
-	)
-}
-
-func parseFormattedMessage(v starlark.Value) (msg string, replyMarkup *inlineKeyboard, ok bool) {
-	switch val := v.(type) {
-	case starlark.String:
-		return val.GoString(), nil, true
-	case starlark.Tuple:
-		if len(val) == 0 {
-			return "", nil, false
-		}
-
-		s, ok := val[0].(starlark.String)
-		if !ok || s.GoString() == "" {
-			return "", nil, false
-		}
-		msg = s.GoString()
-
-		if len(val) >= 2 {
-			keyboard, ok := parseInlineKeyboard(val[1])
-			if !ok {
-				return "", nil, false
+		rendered, err := format.ParseFormattedMessage(val)
+		if err != nil {
+			attrs := []any{slog.String("feed", u.feed.url), slog.String("value_type", val.Type())}
+			if vErr, ok := err.(*format.ValidationError); ok {
+				attrs = append(attrs,
+					slog.String("reason", vErr.Reason),
+					slog.Int("tuple_len", vErr.TupleLen),
+					slog.String("field", vErr.Field),
+					slog.String("field_type", vErr.FieldType),
+				)
 			}
-			replyMarkup = keyboard
+			f.slog.Warn("format function returned invalid output", attrs...)
+			return format.Rendered{}, false
 		}
-		return msg, replyMarkup, true
-	default:
-		return "", nil, false
+		rendered.DisablePreview = u.feed.digest
+		return rendered, true
 	}
+
+	return format.DefaultUpdateMessage(fmtUpdate, defaultTitle, messageTemplate), true
 }
-
-func isTupleValue(v starlark.Value) bool {
-	_, ok := v.(starlark.Tuple)
-	return ok
-}
-
-func tupleLen(v starlark.Value) int {
-	tuple, ok := v.(starlark.Tuple)
-	if !ok {
-		return 0
-	}
-	return len(tuple)
-}
-
-func tupleTitleType(v starlark.Value) string {
-	tuple, ok := v.(starlark.Tuple)
-	if !ok || len(tuple) == 0 {
-		return ""
-	}
-	return tuple[0].Type()
-}
-
-func tupleTitleIsEmpty(v starlark.Value) bool {
-	tuple, ok := v.(starlark.Tuple)
-	if !ok || len(tuple) == 0 {
-		return false
-	}
-	title, ok := tuple[0].(starlark.String)
-	if !ok {
-		return false
-	}
-	return title.GoString() == ""
-}
-
-func tupleKeyboardType(v starlark.Value) string {
-	tuple, ok := v.(starlark.Tuple)
-	if !ok || len(tuple) < 2 {
-		return ""
-	}
-	return tuple[1].Type()
-}
-
-func parseInlineKeyboard(v starlark.Value) (*inlineKeyboard, bool) {
-	list, ok := v.(*starlark.List)
-	if !ok {
-		return nil, false
-	}
-
-	rows := make([]sender.ActionRow, 0, list.Len())
-	iter := list.Iterate()
-	defer iter.Done()
-
-	var rowValue starlark.Value
-	for iter.Next(&rowValue) {
-		rowList, ok := rowValue.(*starlark.List)
-		if !ok {
-			continue
-		}
-
-		buttons := make([]inlineKeyboardButton, 0, rowList.Len())
-		rowIter := rowList.Iterate()
-		var buttonValue starlark.Value
-		for rowIter.Next(&buttonValue) {
-			buttonDict, ok := buttonValue.(*starlark.Dict)
-			if !ok {
-				continue
-			}
-			if button, ok := parseInlineKeyboardButton(buttonDict); ok {
-				buttons = append(buttons, button)
-			}
-		}
-		rowIter.Done()
-
-		if len(buttons) > 0 {
-			rows = append(rows, buttons)
-		}
-	}
-
-	if len(rows) == 0 {
-		return nil, true
-	}
-
-	kb := inlineKeyboard(rows)
-	return &kb, true
-}
-
-func parseInlineKeyboardButton(button *starlark.Dict) (inlineKeyboardButton, bool) {
-	var out inlineKeyboardButton
-	for _, item := range button.Items() {
-		key, ok1 := item[0].(starlark.String)
-		val, ok2 := item[1].(starlark.String)
-		if !ok1 || !ok2 {
-			continue
-		}
-
-		switch key.GoString() {
-		case "text":
-			out.Label = val.GoString()
-		case "url":
-			out.URL = val.GoString()
-		}
-	}
-
-	if out.Label == "" || out.URL == "" {
-		return inlineKeyboardButton{}, false
-	}
-	return out, true
-}
-
-func defaultUpdateMessage(u *update, defaultTitle string) (msg string, replyMarkup *inlineKeyboard) {
-	if u.feed.digest {
-		var sb strings.Builder
-		fmt.Fprintf(&sb, "<b>%s</b>\n\n", defaultTitle)
-		for _, item := range u.items {
-			fmt.Fprintf(&sb, "• <a href=%q>%s</a>\n", item.Link, cmp.Or(item.Title, item.Link))
-		}
-		return sb.String(), nil
-	}
-
-	msg = fmt.Sprintf(messageTemplate, defaultTitle, u.items[0].Link)
-	if u, err := urlpkg.Parse(u.items[0].Link); err == nil {
-		switch u.Hostname() {
-		case "t.me":
-			msg += " #tg" // Telegram
-		case "www.youtube.com":
-			msg += " #youtube" // YouTube
-		default:
-			msg += " #" + nonAlphaNumRe().ReplaceAllString(u.Hostname(), "")
-		}
-	}
-	if strings.HasPrefix(u.items[0].GUID, "https://news.ycombinator.com/item?id=") {
-		replyMarkup = &inlineKeyboard{{
-			{
-				Label: "↪ Hacker News",
-				URL:   u.items[0].GUID,
-			},
-		}}
-	}
-
-	return msg, replyMarkup
-}
-
-type inlineKeyboard = []sender.ActionRow
-
-// https://core.telegram.org/bots/api#inlinekeyboardbutton
-type inlineKeyboardButton = sender.Action
 
 func (f *fetcher) errNotify(ctx context.Context, err error) error {
 	tmpl := f.errorTemplate
