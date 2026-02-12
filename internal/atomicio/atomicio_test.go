@@ -78,7 +78,7 @@ func TestWriteFile(t *testing.T) {
 		file := filepath.Join(dir, "test.txt")
 
 		// Create more than maxBackups files.
-		for i := 0; i < maxBackups+2; i++ {
+		for i := range maxBackups + 2 {
 			data := []byte{byte(i)}
 			if err := WriteFile(file, data, 0o644); err != nil {
 				t.Fatal(err)
