@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/mmcdole/gofeed"
-	"go.astrophena.name/base/syncx"
 	"go.astrophena.name/base/testutil"
 	"go.astrophena.name/base/txtar"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/state"
@@ -167,7 +166,7 @@ func TestFeedStateMarkFetchFailure(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			gotDisabled := tc.state.markFetchFailure(tc.err, tc.threshold)
+			gotDisabled := tc.state.MarkFetchFailure(tc.err, tc.threshold)
 			testutil.AssertEqual(t, gotDisabled, tc.wantDisabled)
 			testutil.AssertEqual(t, tc.state.Disabled, tc.wantState)
 			testutil.AssertEqual(t, tc.state.ErrorCount, tc.wantErrorCount)
@@ -186,7 +185,7 @@ func TestFeedStateReenable(t *testing.T) {
 		LastError:  "test error",
 	}
 
-	s.reenable()
+	s.Reenable()
 
 	testutil.AssertEqual(t, s.Disabled, false)
 	testutil.AssertEqual(t, s.ErrorCount, 0)
@@ -224,7 +223,7 @@ func TestFeedStatePrepareSeenItems(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			got := tc.state.prepareSeenItems(now)
+			got := tc.state.PrepareSeenItems(now, seenItemsCleanupPeriod)
 			testutil.AssertEqual(t, got, tc.wantJustEnabled)
 
 			keys := make([]string, 0, len(tc.state.SeenItems))
@@ -333,12 +332,12 @@ func TestFeedStateItemDecisions(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			var decision feedItemDecision
-			if tc.alwaysSend {
-				decision = tc.state.decideAlwaysSendItem(tc.item, now, tc.exists, tc.justEnabled)
-			} else {
-				decision = tc.state.decideRegularItem(tc.item)
-			}
+			decision := decideFeedItem(feedItemContext{
+				feed:        &feed{alwaysSendNewItems: tc.alwaysSend},
+				state:       tc.state,
+				exists:      tc.exists,
+				justEnabled: tc.justEnabled,
+			}, tc.item)
 
 			testutil.AssertEqual(t, decision.selection, tc.wantSelection)
 			testutil.AssertEqual(t, decision.markSeen, tc.wantMarkSeen)
@@ -349,34 +348,39 @@ func TestFeedStateItemDecisions(t *testing.T) {
 func TestWithFeedState(t *testing.T) {
 	t.Parallel()
 
-	f := &fetcher{
-		state: syncx.Protect(map[string]*feedState{}),
-	}
+	f := &fetcher{store: state.NewStore(state.Options{StateDir: t.TempDir(), DefaultErrorTemplate: "x"})}
+	f.state = state.NewFeedSet(f.store, map[string]*state.Feed{})
 
 	const feedURL = "https://example.com/feed.xml"
 	var state1 *feedState
-	f.withFeedState(feedURL, func(state *feedState, exists bool) {
+	if err := f.withFeedState(t.Context(), feedURL, func(state *state.Feed, exists bool) bool {
 		state1 = state
 		testutil.AssertEqual(t, exists, false)
 		testutil.AssertEqual(t, state1.LastUpdated.IsZero(), false)
-	})
+		return false
+	}); err != nil {
+		t.Fatal(err)
+	}
 
-	f.withFeedState(feedURL, func(state2 *feedState, exists bool) {
+	if err := f.withFeedState(t.Context(), feedURL, func(state2 *state.Feed, exists bool) bool {
 		testutil.AssertEqual(t, exists, true)
 		testutil.AssertEqual(t, state2, state1)
-	})
+		return false
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestStateMapJSON(t *testing.T) {
 	t.Parallel()
 
 	cases := map[string]struct {
-		input       map[string]*feedState
+		input       map[string]*state.Feed
 		jsonInput   []byte
 		wantMapSize int
 	}{
 		"marshal and unmarshal roundtrip": {
-			input: map[string]*feedState{
+			input: map[string]*state.Feed{
 				"https://example.com/feed.xml": {
 					LastUpdated:  time.Date(2026, time.January, 1, 1, 2, 3, 0, time.UTC),
 					LastModified: "Mon, 01 Jan 2026 01:02:03 GMT",
@@ -400,7 +404,7 @@ func TestStateMapJSON(t *testing.T) {
 				err error
 			)
 			if tc.input != nil {
-				b, err = state.MarshalStateMap(toStateMap(tc.input))
+				b, err = state.MarshalStateMap(tc.input)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -412,7 +416,7 @@ func TestStateMapJSON(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			got := fromStateMap(raw)
+			got := raw
 			testutil.AssertEqual(t, len(got), tc.wantMapSize)
 			if tc.input != nil {
 				testutil.AssertEqual(t, got, tc.input)
