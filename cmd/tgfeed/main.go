@@ -41,7 +41,7 @@ import (
 	"github.com/mmcdole/gofeed"
 )
 
-//go:embed error.tmpl
+//go:embed defaults/error.tmpl
 var defaultErrorTemplate string
 
 // Some types of errors that can happen during tgfeed execution.
@@ -167,7 +167,7 @@ type fetcher struct {
 	config        string
 	feeds         []*feed
 	errorTemplate string
-	state         syncx.Protected[map[string]*feedState]
+	state         *state.FeedSet
 
 	stats  syncx.Protected[*stats]
 	sender sender.Sender
@@ -449,7 +449,9 @@ func (f *fetcher) run(ctx context.Context) error {
 		s.MemoryUsage = m.Alloc
 	})
 
-	f.state.WriteAccess(f.cleanState)
+	if err := f.cleanState(ctx); err != nil {
+		return err
+	}
 
 	f.slog.Debug("fetch finished", "fetched_count", fetchedFeeds.Load(), "all_count", len(f.feeds))
 
@@ -463,23 +465,15 @@ func (f *fetcher) run(ctx context.Context) error {
 		}
 	})
 
-	return f.saveState(ctx)
+	return nil
 }
 
-func (f *fetcher) cleanState(s map[string]*feedState) {
-	for url := range s {
-		var found bool
-		for _, existing := range f.feeds {
-			if url == existing.url {
-				found = true
-				break
-			}
-		}
-		if !found {
-			f.slog.Debug("removing state, feed no longer exists", "feed", url)
-			delete(s, url)
-		}
+func (f *fetcher) cleanState(ctx context.Context) error {
+	keep := make(map[string]struct{}, len(f.feeds))
+	for _, fd := range f.feeds {
+		keep[fd.url] = struct{}{}
 	}
+	return f.state.PruneMissing(ctx, keep)
 }
 
 func shuffle[S any](s []S) []S {
@@ -495,12 +489,13 @@ func (f *fetcher) reenable(ctx context.Context, url string) error {
 		return err
 	}
 
-	state, ok := f.getState(url)
+	_, ok := f.getState(url)
 	if !ok {
 		return fmt.Errorf("%q: %w", url, errNoFeed)
 	}
 
-	state.reenable()
-
-	return f.saveState(ctx)
+	return f.withFeedState(ctx, url, func(fdState *state.Feed, _ bool) bool {
+		fdState.Reenable()
+		return true
+	})
 }

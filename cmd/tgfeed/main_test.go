@@ -26,6 +26,7 @@ import (
 	"go.astrophena.name/base/cli/clitest"
 	"go.astrophena.name/base/testutil"
 	"go.astrophena.name/base/txtar"
+	"go.astrophena.name/tools/cmd/tgfeed/internal/state"
 )
 
 var updateGolden = flag.Bool("update", false, "update golden files in testdata")
@@ -85,9 +86,9 @@ func TestFetcherMain(t *testing.T) {
 			Args:               []string{"reenable", "https://example.com/disabled.xml"},
 			WantNothingPrinted: true,
 			CheckFunc: func(t *testing.T, f *fetcher) {
-				f.state.ReadAccess(func(s map[string]*feedState) {
-					testutil.AssertEqual(t, s["https://example.com/disabled.xml"].Disabled, false)
-				})
+				st, ok := f.getState("https://example.com/disabled.xml")
+				testutil.AssertEqual(t, ok, true)
+				testutil.AssertEqual(t, st.Disabled, false)
 			},
 		},
 		"reenable non-existent feed": {
@@ -147,16 +148,16 @@ type mux struct {
 	sentMessages []map[string]any
 }
 
-func (m *mux) state(t *testing.T) map[string]*feedState {
+func (m *mux) state(t *testing.T) map[string]*state.Feed {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	state, err := os.ReadFile(filepath.Join(m.stateDir, "state.json"))
+	content, err := os.ReadFile(filepath.Join(m.stateDir, "state.json"))
 	if err != nil {
 		t.Fatalf("reading state.json: %v", err)
 	}
 
-	return testutil.UnmarshalJSON[map[string]*feedState](t, state)
+	return testutil.UnmarshalJSON[map[string]*state.Feed](t, content)
 }
 
 const (

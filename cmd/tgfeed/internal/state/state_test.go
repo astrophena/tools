@@ -35,7 +35,7 @@ func TestStoreLoadSnapshotLocalFallbackTemplate(t *testing.T) {
 
 func TestStateMapRoundtrip(t *testing.T) {
 	t.Parallel()
-	input := map[string]*FeedState{"https://example.com": {LastUpdated: time.Date(2026, time.January, 1, 1, 2, 3, 0, time.UTC), ErrorCount: 2}}
+	input := map[string]*Feed{"https://example.com": {LastUpdated: time.Date(2026, time.January, 1, 1, 2, 3, 0, time.UTC), ErrorCount: 2}}
 	b, err := MarshalStateMap(input)
 	if err != nil {
 		t.Fatal(err)

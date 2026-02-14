@@ -22,6 +22,7 @@ import (
 	"go.astrophena.name/base/testutil"
 	"go.astrophena.name/base/txtar"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/sender"
+	"go.astrophena.name/tools/cmd/tgfeed/internal/state"
 	"go.starlark.net/starlark"
 	"go.starlark.net/syntax"
 )
@@ -586,9 +587,9 @@ func TestHandleFeedStatus(t *testing.T) {
 			f := testFetcher(t, testMux(t, nil, nil))
 			f.stats = syncx.Protect(&stats{})
 			fd := &feed{url: "https://example.com/feed.xml"}
-			state := tc.initialState
-			f.state = syncx.Protect(map[string]*feedState{
-				fd.url: &state,
+			st := tc.initialState
+			f.state = state.NewFeedSet(f.store, map[string]*state.Feed{
+				fd.url: &st,
 			})
 
 			req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, tc.reqURL, nil)
@@ -618,9 +619,9 @@ func TestHandleFeedStatus(t *testing.T) {
 			testutil.AssertEqual(t, result.handled, tc.wantHandled)
 			testutil.AssertEqual(t, result.retry, tc.wantRetry)
 			testutil.AssertEqual(t, result.retryIn, tc.wantRetryIn)
-			testutil.AssertEqual(t, state.ErrorCount, tc.wantErrorCount)
-			testutil.AssertEqual(t, state.LastError, tc.wantLastError)
-			testutil.AssertEqual(t, !state.LastUpdated.IsZero(), tc.wantLastUpdatedNonZero)
+			testutil.AssertEqual(t, st.ErrorCount, tc.wantErrorCount)
+			testutil.AssertEqual(t, st.LastError, tc.wantLastError)
+			testutil.AssertEqual(t, !st.LastUpdated.IsZero(), tc.wantLastUpdatedNonZero)
 
 			f.stats.ReadAccess(func(s *stats) {
 				testutil.AssertEqual(t, s.NotModifiedFeeds, tc.wantNotModifiedFeeds)

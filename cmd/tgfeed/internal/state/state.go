@@ -24,7 +24,11 @@ import (
 	"go.astrophena.name/tools/internal/atomicio"
 )
 
-type FeedState struct {
+// Feed stores persisted runtime information for a single feed.
+//
+// The concrete JSON representation is intentionally private to this package.
+// Callers should mutate feed state via methods rather than raw field access.
+type Feed struct {
 	Disabled       bool                 `json:"disabled"`
 	LastUpdated    time.Time            `json:"last_updated"`
 	LastModified   string               `json:"last_modified,omitempty"`
@@ -36,23 +40,24 @@ type FeedState struct {
 	FetchFailCount int64                `json:"fetch_fail_count"`
 }
 
-func NewFeedState(now time.Time) *FeedState {
-	return &FeedState{LastUpdated: now}
+// NewFeed initializes a feed state record with a non-zero LastUpdated value.
+func NewFeed(now time.Time) *Feed {
+	return &Feed{LastUpdated: now}
 }
 
 type Snapshot struct {
 	Config        string
-	State         map[string]*FeedState
+	State         map[string]*Feed
 	ErrorTemplate string
 }
 
 type Store interface {
 	LoadSnapshot(ctx context.Context) (*Snapshot, error)
 	LoadConfig(ctx context.Context) (string, error)
-	LoadState(ctx context.Context) (map[string]*FeedState, error)
+	LoadState(ctx context.Context) (map[string]*Feed, error)
 	LoadErrorTemplate(ctx context.Context) (string, error)
 	SaveConfig(ctx context.Context, config string) error
-	SaveState(ctx context.Context, state map[string]*FeedState) error
+	SaveState(ctx context.Context, state map[string]*Feed) error
 	SaveStateJSON(ctx context.Context, content []byte) error
 	SaveErrorTemplate(ctx context.Context, content string) error
 }
@@ -103,7 +108,7 @@ func (s *store) LoadConfig(ctx context.Context) (string, error) {
 	return string(b), nil
 }
 
-func (s *store) LoadState(ctx context.Context) (map[string]*FeedState, error) {
+func (s *store) LoadState(ctx context.Context) (map[string]*Feed, error) {
 	if s.opts.RemoteURL == "" {
 		stateBytes, err := os.ReadFile(filepath.Join(s.opts.StateDir, "state.json"))
 		if err != nil && !errors.Is(err, fs.ErrNotExist) {
@@ -152,7 +157,7 @@ func (s *store) fetch(ctx context.Context, url string) ([]byte, error) {
 	return b, nil
 }
 
-func (s *store) SaveState(ctx context.Context, state map[string]*FeedState) error {
+func (s *store) SaveState(ctx context.Context, state map[string]*Feed) error {
 	b, err := MarshalStateMap(state)
 	if err != nil {
 		return err
@@ -193,12 +198,12 @@ func (s *store) SaveErrorTemplate(ctx context.Context, content string) error {
 	return nil
 }
 
-func MarshalStateMap(stateMap map[string]*FeedState) ([]byte, error) {
+func MarshalStateMap(stateMap map[string]*Feed) ([]byte, error) {
 	return json.MarshalIndent(stateMap, "", "  ")
 }
 
-func UnmarshalStateMap(b []byte) (map[string]*FeedState, error) {
-	stateMap := make(map[string]*FeedState)
+func UnmarshalStateMap(b []byte) (map[string]*Feed, error) {
+	stateMap := make(map[string]*Feed)
 	if len(b) == 0 {
 		return stateMap, nil
 	}
