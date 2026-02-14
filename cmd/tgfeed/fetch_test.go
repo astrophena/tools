@@ -29,7 +29,7 @@ import (
 func TestFailingFeed(t *testing.T) {
 	t.Parallel()
 
-	tm := testMux(t, txtarToFS(txtar.Parse(defaultGistTxtar)), map[string]http.HandlerFunc{
+	tm := testMux(t, txtarToFS(txtar.Parse(defaultTxtar)), map[string]http.HandlerFunc{
 		atomFeedRoute: func(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "I'm a teapot.", http.StatusTeapot)
 		},
@@ -48,7 +48,7 @@ func TestFailingFeed(t *testing.T) {
 func TestDisablingAndReenablingFailingFeed(t *testing.T) {
 	t.Parallel()
 
-	tm := testMux(t, txtarToFS(txtar.Parse(defaultGistTxtar)), map[string]http.HandlerFunc{
+	tm := testMux(t, txtarToFS(txtar.Parse(defaultTxtar)), map[string]http.HandlerFunc{
 		atomFeedRoute: func(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "I'm a teapot.", http.StatusTeapot)
 		},
@@ -88,7 +88,7 @@ func TestFetchWithIfModifiedSinceAndETag(t *testing.T) {
 		eTag            = "test"
 	)
 
-	tm := testMux(t, txtarToFS(txtar.Parse(defaultGistTxtar)), map[string]http.HandlerFunc{
+	tm := testMux(t, txtarToFS(txtar.Parse(defaultTxtar)), map[string]http.HandlerFunc{
 		atomFeedRoute: func(w http.ResponseWriter, r *http.Request) {
 			if r.Header.Get("If-Modified-Since") == ifModifiedSince && r.Header.Get("If-None-Match") == eTag {
 				w.WriteHeader(http.StatusNotModified)
@@ -217,10 +217,10 @@ func TestAlwaysSendNewItems(t *testing.T) {
 	oldDate := time.Now().Add(-20 * 24 * time.Hour).Format(time.RFC3339) // > 14 days
 	newRecentDate := time.Now().Add(-2 * 24 * time.Hour).Format(time.RFC3339)
 
-	feedContent1 := fmt.Sprintf(string(readFile(t, "testdata/always_send_new_items/feed1.xml.tmpl")), recentDate, oldDate)
-	feedContent2 := fmt.Sprintf(string(readFile(t, "testdata/always_send_new_items/feed2.xml.tmpl")), recentDate, newRecentDate)
+	feedContent1 := fmt.Sprintf(string(readFile(t, "testdata/new_items/feed1.xml.tmpl")), recentDate, oldDate)
+	feedContent2 := fmt.Sprintf(string(readFile(t, "testdata/new_items/feed2.xml.tmpl")), recentDate, newRecentDate)
 
-	config := readFile(t, "testdata/always_send_new_items/config.star")
+	config := readFile(t, "testdata/new_items/config.star")
 
 	state := map[string]*feedState{}
 	ar := &txtar.Archive{
