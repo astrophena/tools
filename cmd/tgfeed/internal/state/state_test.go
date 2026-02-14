@@ -66,19 +66,3 @@ func TestStoreRemoteErrorPropagation(t *testing.T) {
 		t.Fatalf("expected propagated remote error, got %v", err)
 	}
 }
-
-func TestLockerConflict(t *testing.T) {
-	t.Parallel()
-	path := filepath.Join(t.TempDir(), ".run.lock")
-	locker := NewLocker()
-	first, err := locker.Acquire(path, "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer first.Release()
-	_, err = locker.Acquire(path, "")
-	if err == nil {
-		t.Fatal("expected lock conflict")
-	}
-	testutil.AssertEqual(t, err == ErrAlreadyRunning, true)
-}

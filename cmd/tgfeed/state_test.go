@@ -18,6 +18,7 @@ import (
 	"go.astrophena.name/base/testutil"
 	"go.astrophena.name/base/txtar"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/state"
+	"go.astrophena.name/tools/internal/filelock"
 )
 
 func TestLoadState(t *testing.T) {
@@ -384,9 +385,7 @@ func TestRunLockerAcquireConflict(t *testing.T) {
 	t.Parallel()
 
 	lockPath := filepath.Join(t.TempDir(), ".run.lock")
-	locker := state.NewLocker()
-
-	firstLock, err := locker.Acquire(lockPath, "")
+	firstLock, err := filelock.Acquire(lockPath, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -396,9 +395,9 @@ func TestRunLockerAcquireConflict(t *testing.T) {
 		}
 	})
 
-	_, err = locker.Acquire(lockPath, "")
-	if !errors.Is(err, state.ErrAlreadyRunning) {
-		t.Fatalf("want %v, got %v", state.ErrAlreadyRunning, err)
+	_, err = filelock.Acquire(lockPath, "")
+	if !errors.Is(err, filelock.ErrAlreadyLocked) {
+		t.Fatalf("want %v, got %v", filelock.ErrAlreadyLocked, err)
 	}
 }
 
