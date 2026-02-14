@@ -16,6 +16,7 @@ import (
 
 	"github.com/mmcdole/gofeed"
 	"go.astrophena.name/base/syncx"
+	"go.astrophena.name/tools/cmd/tgfeed/internal/format"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/state"
 	"go.astrophena.name/tools/internal/filelock"
 	"go.astrophena.name/tools/internal/starlark/interpreter"
@@ -260,7 +261,46 @@ func (f *fetcher) parseConfig(ctx context.Context, config string) ([]*feed, erro
 		seenURLs[feed.url] = struct{}{}
 	}
 
+	for _, feed := range feeds {
+		if err := f.validateFeedFormat(feed); err != nil {
+			return nil, err
+		}
+	}
+
 	return feeds, nil
+}
+
+func (f *fetcher) validateFeedFormat(fd *feed) error {
+	if fd.format == nil {
+		return nil
+	}
+
+	update := format.Update{
+		Feed: format.Feed{
+			URL:    fd.url,
+			Title:  fd.title,
+			Digest: fd.digest,
+		},
+		Items: []*gofeed.Item{{
+			Title:       "Sample title",
+			Description: "Sample description",
+			Link:        "https://example.com/item",
+			GUID:        "sample-guid",
+			Published:   time.Now().Format(time.RFC3339),
+		}},
+	}
+	items, _ := format.BuildFormatInput(update)
+
+	value, err := format.CallStarlarkFormatter(fd.format, items, func(msg string) { f.slog.Info(msg) })
+	if err != nil {
+		return fmt.Errorf("format() for feed %q failed: %w", fd.url, err)
+	}
+
+	if _, err := format.ParseFormattedMessage(value); err != nil {
+		return fmt.Errorf("format() for feed %q returned invalid output: %w", fd.url, err)
+	}
+
+	return nil
 }
 
 func (f *fetcher) saveState(ctx context.Context) error {
