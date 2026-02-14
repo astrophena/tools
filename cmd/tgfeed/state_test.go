@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"testing/fstest"
 	"time"
@@ -77,6 +78,45 @@ feed(url="https://example.com/feed.xml", title="Duplicate")
 		t.Fatal("want error")
 	}
 	testutil.AssertEqual(t, err.Error(), `duplicate feed URL "https://example.com/feed.xml"`)
+}
+
+func TestParseConfigFormatValidation(t *testing.T) {
+	t.Parallel()
+
+	cases := map[string]struct {
+		config       string
+		wantContains string
+	}{
+		"runtime error in formatter call": {
+			config: `feed(
+	url="https://example.com/feed.xml",
+	format=lambda item: "oops" (item.title),
+)`,
+			wantContains: "invalid call of non-function (string)",
+		},
+		"invalid formatter output type": {
+			config: `feed(
+	url="https://example.com/feed.xml",
+	format=lambda item: 123,
+)`,
+			wantContains: `format() for feed "https://example.com/feed.xml" returned invalid output: invalid value type "int"`,
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			tm := testMux(t, nil, nil)
+			f := testFetcher(t, tm)
+
+			err := f.loadConfig(t.Context(), tc.config)
+			if err == nil {
+				t.Fatal("want error")
+			}
+			if !strings.Contains(err.Error(), tc.wantContains) {
+				t.Fatalf("error %q does not contain %q", err, tc.wantContains)
+			}
+		})
+	}
 }
 
 func TestFeedStateMarkFetchFailure(t *testing.T) {
