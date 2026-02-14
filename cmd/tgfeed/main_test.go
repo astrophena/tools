@@ -34,9 +34,9 @@ var updateGolden = flag.Bool("update", false, "update golden files in testdata")
 const tgToken = "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
 
 var (
-	//go:embed testdata/gists/default.txtar
-	defaultGistTxtar []byte
-	//go:embed testdata/gists/github_notifications.txtar
+	//go:embed testdata/data/default.txtar
+	defaultTxtar []byte
+	//go:embed testdata/data/github_notifications.txtar
 	githubNotificationsTxtar []byte
 
 	//go:embed testdata/feeds/atom.xml
@@ -49,7 +49,7 @@ func TestFetcherMain(t *testing.T) {
 	t.Parallel()
 
 	clitest.Run(t, func(t *testing.T) *fetcher {
-		return testFetcher(t, testMux(t, txtarToFS(txtar.Parse(defaultGistTxtar)), map[string]http.HandlerFunc{
+		return testFetcher(t, testMux(t, txtarToFS(txtar.Parse(defaultTxtar)), map[string]http.HandlerFunc{
 			atomFeedRoute: func(w http.ResponseWriter, r *http.Request) {
 				w.Write(atomFeed)
 			},
@@ -117,6 +117,7 @@ func TestListFeeds(t *testing.T) {
 }
 
 func readFile(t *testing.T, path string) []byte {
+	t.Helper()
 	b, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)

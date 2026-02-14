@@ -47,10 +47,7 @@ jobs:
         run: |
           mkdir -p build/bin build/etc/systemd/system
           CGO_ENABLED=0 go build -ldflags="-s -w -buildid=" -trimpath -o build/bin/tgfeed ./cmd/tgfeed
-          cp cmd/tgfeed/tgfeed.service build/etc/systemd/system
-          cp cmd/tgfeed/tgfeed-admin.service build/etc/systemd/system
-          cp cmd/tgfeed/tgfeed-admin.socket build/etc/systemd/system
-          cp cmd/tgfeed/tgfeed.timer build/etc/systemd/system
+          cp cmd/tgfeed/systemd/* build/etc/systemd/system
           tar -czf archive.tar.gz -C build .
       - name: 'Deploy'
         run: 'go tool deploy -type service tgfeed archive.tar.gz'
