@@ -17,6 +17,7 @@ import (
 	"github.com/mmcdole/gofeed"
 	"go.astrophena.name/base/syncx"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/state"
+	"go.astrophena.name/tools/internal/filelock"
 	"go.astrophena.name/tools/internal/starlark/interpreter"
 
 	"go.starlark.net/starlark"
@@ -273,13 +274,10 @@ func (f *fetcher) saveConfig(ctx context.Context) error {
 }
 
 func (f *fetcher) acquireRunLock() error {
-	if f.locker == nil {
-		f.locker = state.NewLocker()
-	}
 	lockPath := filepath.Join(f.stateDir, ".run.lock")
-	lock, err := f.locker.Acquire(lockPath, fmt.Sprintf("pid=%d\n", os.Getpid()))
+	lock, err := filelock.Acquire(lockPath, fmt.Sprintf("pid=%d\n", os.Getpid()))
 	if err != nil {
-		if errors.Is(err, state.ErrAlreadyRunning) {
+		if errors.Is(err, filelock.ErrAlreadyLocked) {
 			err = errAlreadyRunning
 		}
 		return fmt.Errorf("%w: lock file exists at %s", err, lockPath)
@@ -295,10 +293,7 @@ func (f *fetcher) releaseRunLock() error {
 }
 
 func (f *fetcher) isRunLocked() bool {
-	if f.locker == nil {
-		f.locker = state.NewLocker()
-	}
-	return f.locker.IsLocked(filepath.Join(f.stateDir, ".run.lock"))
+	return filelock.IsLocked(filepath.Join(f.stateDir, ".run.lock"))
 }
 
 func fromStateMap(input map[string]*state.FeedState) map[string]*feedState {

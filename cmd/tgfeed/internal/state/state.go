@@ -2,7 +2,7 @@
 // Use of this source code is governed by the ISC
 // license that can be found in the LICENSE.md file.
 
-// Package state provides persistence and run-lock primitives used by tgfeed.
+// Package state provides persistence primitives used by tgfeed.
 package state
 
 import (
@@ -17,7 +17,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"time"
 
 	"go.astrophena.name/base/request"
@@ -58,15 +57,6 @@ type Store interface {
 	SaveErrorTemplate(ctx context.Context, content string) error
 }
 
-type Lock interface{ Release() error }
-
-type Locker interface {
-	Acquire(path string, payload string) (Lock, error)
-	IsLocked(path string) bool
-}
-
-var ErrAlreadyRunning = errors.New("already running")
-
 type Options struct {
 	StateDir             string
 	RemoteURL            string
@@ -75,7 +65,6 @@ type Options struct {
 }
 
 func NewStore(opts Options) Store { return &store{opts: opts} }
-func NewLocker() Locker           { return fileLocker{} }
 
 type store struct{ opts Options }
 
@@ -233,68 +222,4 @@ func (s *store) apiURL(endpoint string) string {
 		return "http://unix" + endpoint
 	}
 	return s.opts.RemoteURL + endpoint
-}
-
-type fileLock struct{ file *os.File }
-
-func (l *fileLock) Release() error {
-	if l == nil || l.file == nil {
-		return nil
-	}
-	if err := syscall.Flock(int(l.file.Fd()), syscall.LOCK_UN); err != nil {
-		if closeErr := l.file.Close(); closeErr != nil {
-			return errors.Join(err, closeErr)
-		}
-		return err
-	}
-	return l.file.Close()
-}
-
-type fileLocker struct{}
-
-func (fileLocker) Acquire(path string, payload string) (Lock, error) {
-	lockFile, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o644)
-	if err != nil {
-		return nil, err
-	}
-	if err := syscall.Flock(int(lockFile.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
-		if closeErr := lockFile.Close(); closeErr != nil {
-			return nil, errors.Join(err, closeErr)
-		}
-		if errors.Is(err, syscall.EWOULDBLOCK) || errors.Is(err, syscall.EAGAIN) {
-			return nil, ErrAlreadyRunning
-		}
-		return nil, err
-	}
-	if payload != "" {
-		if err := lockFile.Truncate(0); err != nil {
-			_ = (&fileLock{file: lockFile}).Release()
-			return nil, err
-		}
-		if _, err := lockFile.Seek(0, 0); err != nil {
-			_ = (&fileLock{file: lockFile}).Release()
-			return nil, err
-		}
-		if _, err := lockFile.WriteString(payload); err != nil {
-			_ = (&fileLock{file: lockFile}).Release()
-			return nil, err
-		}
-	}
-	return &fileLock{file: lockFile}, nil
-}
-
-func (fileLocker) IsLocked(path string) bool {
-	lockFile, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o644)
-	if err != nil {
-		return false
-	}
-	defer lockFile.Close()
-
-	err = syscall.Flock(int(lockFile.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
-	if err == nil {
-		_ = syscall.Flock(int(lockFile.Fd()), syscall.LOCK_UN)
-		return false
-	}
-
-	return errors.Is(err, syscall.EWOULDBLOCK) || errors.Is(err, syscall.EAGAIN)
 }

@@ -36,6 +36,7 @@ import (
 	"go.astrophena.name/tools/cmd/tgfeed/internal/sender"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/state"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/telegram"
+	"go.astrophena.name/tools/internal/filelock"
 
 	"github.com/mmcdole/gofeed"
 )
@@ -171,9 +172,8 @@ type fetcher struct {
 	stats  syncx.Protected[*stats]
 	sender sender.Sender
 	store  state.Store
-	locker state.Locker
 
-	runLock state.Lock
+	runLock filelock.Lock
 }
 
 func (f *fetcher) doInit(ctx context.Context) {
@@ -215,9 +215,6 @@ func (f *fetcher) doInit(ctx context.Context) {
 		})
 	}
 
-	if f.locker == nil {
-		f.locker = state.NewLocker()
-	}
 }
 
 func (f *fetcher) listFeeds(ctx context.Context, w io.Writer) error {

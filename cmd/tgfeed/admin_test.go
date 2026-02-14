@@ -16,7 +16,7 @@ import (
 	"testing/fstest"
 
 	"go.astrophena.name/base/testutil"
-	"go.astrophena.name/tools/cmd/tgfeed/internal/state"
+	"go.astrophena.name/tools/internal/filelock"
 )
 
 func TestAdmin(t *testing.T) {
@@ -115,7 +115,7 @@ func TestAdmin(t *testing.T) {
 	})
 	t.Run("put config (locked)", func(t *testing.T) {
 		f := setup(t, initialFS)
-		lockFile, err := state.NewLocker().Acquire(filepath.Join(f.stateDir, ".run.lock"), "")
+		lockFile, err := filelock.Acquire(filepath.Join(f.stateDir, ".run.lock"), "")
 		if err != nil {
 			t.Fatal(err)
 		}
