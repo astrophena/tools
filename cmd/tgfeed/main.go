@@ -408,9 +408,17 @@ func (f *fetcher) run(ctx context.Context) error {
 			defer fetchedFeeds.Add(1)
 
 			var retries int
+			var feedRetried bool
 
 			for {
 				if retry, retryIn := f.fetch(ctx, feed, updates); retry && retries < retryLimit {
+					feedRetried = true
+					f.stats.WriteAccess(func(s *stats) {
+						s.FetchRetriesTotal += 1
+						s.BackoffSleepTotal += retryIn
+						s.feedStats(feed.url).Retries += 1
+						s.SpecialRateLimitRetries += 1
+					})
 					f.slog.Warn("retrying feed",
 						"feed", feed.url,
 						"retry_in", retryIn,
@@ -424,6 +432,12 @@ func (f *fetcher) run(ctx context.Context) error {
 					continue
 				}
 				break
+			}
+
+			if feedRetried {
+				f.stats.WriteAccess(func(s *stats) {
+					s.FeedsRetriedCount += 1
+				})
 			}
 		})
 	}
@@ -446,6 +460,44 @@ func (f *fetcher) run(ctx context.Context) error {
 		if s.SuccessFeeds > 0 {
 			s.AvgFetchTime = s.TotalFetchTime / time.Duration(s.SuccessFeeds)
 		}
+		s.FetchLatencyMS = quantilesMS(s.fetchLatencySamples)
+		s.SendLatencyMS = quantilesMS(s.sendLatencySamples)
+
+		stateSnapshot := f.state.Snapshot()
+		for _, feedState := range stateSnapshot {
+			s.SeenItemsEntriesTotal += len(feedState.SeenItems)
+		}
+		if stateBytes, err := state.MarshalStateMap(stateSnapshot); err == nil {
+			s.StateBytesWritten = len(stateBytes)
+		}
+
+		s.TopSlowestFeeds = topFeedStats(s.FeedStatsByURL, func(a *feedStats, b *feedStats) int {
+			if a.FetchDuration == b.FetchDuration {
+				return strings.Compare(a.URL, b.URL)
+			}
+			if a.FetchDuration > b.FetchDuration {
+				return -1
+			}
+			return 1
+		})
+		s.TopErrorFeeds = topFeedStats(s.FeedStatsByURL, func(a *feedStats, b *feedStats) int {
+			if a.Failures == b.Failures {
+				return strings.Compare(a.URL, b.URL)
+			}
+			if a.Failures > b.Failures {
+				return -1
+			}
+			return 1
+		})
+		s.TopNewItemFeeds = topFeedStats(s.FeedStatsByURL, func(a *feedStats, b *feedStats) int {
+			if a.ItemsEnqueued == b.ItemsEnqueued {
+				return strings.Compare(a.URL, b.URL)
+			}
+			if a.ItemsEnqueued > b.ItemsEnqueued {
+				return -1
+			}
+			return 1
+		})
 		s.MemoryUsage = m.Alloc
 	})
 

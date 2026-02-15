@@ -73,7 +73,9 @@ func (f *Feed) Reenable() {
 }
 
 // PrepareSeenItems initializes seen-items storage and drops stale entries.
-func (f *Feed) PrepareSeenItems(now time.Time, cleanupPeriod time.Duration) (justEnabled bool) {
+//
+// It reports whether the map was initialized and how many entries were pruned.
+func (f *Feed) PrepareSeenItems(now time.Time, cleanupPeriod time.Duration) (justEnabled bool, pruned int) {
 	if f.SeenItems == nil {
 		f.SeenItems = make(map[string]time.Time)
 		justEnabled = true
@@ -81,9 +83,10 @@ func (f *Feed) PrepareSeenItems(now time.Time, cleanupPeriod time.Duration) (jus
 	for guid, seenAt := range f.SeenItems {
 		if now.Sub(seenAt) > cleanupPeriod {
 			delete(f.SeenItems, guid)
+			pruned += 1
 		}
 	}
-	return justEnabled
+	return justEnabled, pruned
 }
 
 // IsSeen reports whether guid was already processed.

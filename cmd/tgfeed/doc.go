@@ -145,9 +145,9 @@ Stats include:
   - Average fetch time per successful feed
   - Memory usage at the end of the run
 
-These stats can be downloaded in bulk as a single CSV file from the admin
-server's /debug/stats.csv endpoint. This is useful for analyzing feed
-performance and identifying problematic feeds over time.
+These stats can be fetched in bulk as JSON from the admin server's
+/api/stats endpoint. This is useful for custom dashboards and for analyzing
+feed performance over time.
 
 # Administration
 
@@ -180,8 +180,8 @@ To start the admin API server:
 
 The server listens on the address specified by ADMIN_ADDR (defaults to
 /run/tgfeed/admin-socket). It provides a simple web interface for viewing and
-editing the configuration and state, and for downloading run statistics via
-/debug/stats.csv.
+editing the configuration and state, and for reading run statistics via
+/api/stats.
 
 To manage tgfeed remotely, use the -remote flag with any command:
 

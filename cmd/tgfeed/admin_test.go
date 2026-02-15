@@ -5,7 +5,7 @@
 package main
 
 import (
-	"encoding/csv"
+	"encoding/json"
 	"io/fs"
 	"net/http"
 	"net/http/httptest"
@@ -67,7 +67,7 @@ func TestAdmin(t *testing.T) {
 				f.handlePutErrorTemplate(w, r)
 			}
 		})
-		mux.HandleFunc("/debug/stats.csv", f.handleStatsCSV)
+		mux.HandleFunc("/api/stats", f.handleGetStats)
 		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 			if r.URL.Path == "/" {
 				http.Redirect(w, r, "/debug/", http.StatusFound)
@@ -167,33 +167,30 @@ func TestAdmin(t *testing.T) {
 		testutil.AssertEqual(t, string(content), body)
 	})
 
-	t.Run("get stats CSV", func(t *testing.T) {
+	t.Run("get stats JSON", func(t *testing.T) {
 		f := setup(t, initialFS)
-		req := httptest.NewRequest(http.MethodGet, "/debug/stats.csv", nil)
+		req := httptest.NewRequest(http.MethodGet, "/api/stats", nil)
 		w := httptest.NewRecorder()
-		f.handleStatsCSV(w, req)
+		f.handleGetStats(w, req)
 
 		testutil.AssertEqual(t, w.Code, http.StatusOK)
-		testutil.AssertEqual(t, w.Header().Get("Content-Type"), "text/csv")
+		testutil.AssertEqual(t, w.Header().Get("Content-Type"), "application/json; charset=utf-8")
 
-		r := csv.NewReader(w.Body)
-		records, err := r.ReadAll()
-		if err != nil {
+		var got []stats
+		if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
 			t.Fatal(err)
 		}
 
-		if len(records) != 3 {
-			t.Fatalf("expected 3 records (header + 2 data), got %d", len(records))
+		if len(got) != 2 {
+			t.Fatalf("expected 2 stats entries, got %d", len(got))
 		}
-		// Check header.
-		testutil.AssertEqual(t, records[0][0], "StartTime")
 		// Check sorting (newest first).
-		testutil.AssertEqual(t, records[1][0], "2023-01-02T12:00:00Z")
-		testutil.AssertEqual(t, records[2][0], "2023-01-01T12:00:00Z")
+		testutil.AssertEqual(t, got[0].StartTime.Format("2006-01-02T15:04:05Z07:00"), "2023-01-02T12:00:00Z")
+		testutil.AssertEqual(t, got[1].StartTime.Format("2006-01-02T15:04:05Z07:00"), "2023-01-01T12:00:00Z")
 	})
-	t.Run("get stats CSV (no stats)", func(t *testing.T) {
+	t.Run("get stats JSON (no stats)", func(t *testing.T) {
 		f := setup(t, nil)
-		req := httptest.NewRequest(http.MethodGet, "/debug/stats.csv", nil)
+		req := httptest.NewRequest(http.MethodGet, "/api/stats", nil)
 		runTest(t, f, req, http.StatusNotFound, "No stats available")
 	})
 }

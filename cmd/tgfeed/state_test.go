@@ -202,11 +202,13 @@ func TestFeedStatePrepareSeenItems(t *testing.T) {
 	cases := map[string]struct {
 		state            *state.Feed
 		wantJustEnabled  bool
+		wantPruned       int
 		wantSeenItemKeys []string
 	}{
 		"initializes nil map": {
 			state:            &state.Feed{},
 			wantJustEnabled:  true,
+			wantPruned:       0,
 			wantSeenItemKeys: []string{},
 		},
 		"keeps recent and removes stale": {
@@ -217,14 +219,16 @@ func TestFeedStatePrepareSeenItems(t *testing.T) {
 				},
 			},
 			wantJustEnabled:  false,
+			wantPruned:       1,
 			wantSeenItemKeys: []string{"recent"},
 		},
 	}
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			got := tc.state.PrepareSeenItems(now, seenItemsCleanupPeriod)
-			testutil.AssertEqual(t, got, tc.wantJustEnabled)
+			gotJustEnabled, gotPruned := tc.state.PrepareSeenItems(now, seenItemsCleanupPeriod)
+			testutil.AssertEqual(t, gotJustEnabled, tc.wantJustEnabled)
+			testutil.AssertEqual(t, gotPruned, tc.wantPruned)
 
 			keys := make([]string, 0, len(tc.state.SeenItems))
 			for key := range tc.state.SeenItems {
@@ -250,6 +254,7 @@ func TestFeedStateItemDecisions(t *testing.T) {
 		alwaysSend    bool
 		wantSelection feedItemSelection
 		wantMarkSeen  string
+		wantReason    feedItemSkipReason
 	}{
 		"always-send skips old entries": {
 			state: &state.Feed{
@@ -263,6 +268,7 @@ func TestFeedStateItemDecisions(t *testing.T) {
 			exists:        true,
 			alwaysSend:    true,
 			wantSelection: feedItemSelectionSkip,
+			wantReason:    feedItemSkipReasonOld,
 		},
 		"always-send processes unseen item for existing feed": {
 			state: &state.Feed{
@@ -306,6 +312,7 @@ func TestFeedStateItemDecisions(t *testing.T) {
 			exists:        true,
 			alwaysSend:    true,
 			wantSelection: feedItemSelectionSkip,
+			wantReason:    feedItemSkipReasonSeen,
 		},
 		"regular mode skips published before last update": {
 			state: &state.Feed{
@@ -317,6 +324,7 @@ func TestFeedStateItemDecisions(t *testing.T) {
 				PublishedParsed: &recent,
 			},
 			wantSelection: feedItemSelectionSkip,
+			wantReason:    feedItemSkipReasonOld,
 		},
 		"regular mode accepts nil published timestamp": {
 			state: &state.Feed{
@@ -341,6 +349,7 @@ func TestFeedStateItemDecisions(t *testing.T) {
 
 			testutil.AssertEqual(t, decision.selection, tc.wantSelection)
 			testutil.AssertEqual(t, decision.markSeen, tc.wantMarkSeen)
+			testutil.AssertEqual(t, decision.reason, tc.wantReason)
 		})
 	}
 }
