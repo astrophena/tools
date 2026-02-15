@@ -2,7 +2,24 @@
 // Use of this source code is governed by the ISC
 // license that can be found in the LICENSE.md file.
 
-// Package state provides persistence primitives used by tgfeed.
+// Package state persists tgfeed configuration, per-feed runtime state, and
+// error templates.
+//
+// Use [NewStore] with [Options] to select where data is stored:
+//
+//   - local files in [Options.StateDir] (config.star, state.json, error.tmpl)
+//   - a remote admin API at [Options.RemoteURL]
+//
+// A typical flow is:
+//
+//   - call [Store.LoadSnapshot] during startup
+//   - build a [FeedSet] with [NewFeedSet]
+//   - mutate feed state with [FeedSet.Update] and [Feed] methods such as
+//     [Feed.MarkFetchSuccess], [Feed.MarkNotModified], and
+//     [Feed.MarkFetchFailure]
+//
+// For admin endpoints that accept raw JSON, [Store.SaveStateJSON] and
+// [UnmarshalStateMap] avoid duplicate encoding/decoding paths.
 package state
 
 import (
@@ -45,30 +62,56 @@ func NewFeed(now time.Time) *Feed {
 	return &Feed{LastUpdated: now}
 }
 
+// Snapshot is the full persisted state returned by [Store.LoadSnapshot].
 type Snapshot struct {
-	Config        string
-	State         map[string]*Feed
+	// Config is tgfeed Starlark configuration content.
+	Config string
+	// State maps feed URL to persisted feed runtime state.
+	State map[string]*Feed
+	// ErrorTemplate is the template used for fetch failure notifications.
 	ErrorTemplate string
 }
 
+// Store reads and writes tgfeed persisted state.
+//
+// It is constructed with [NewStore].
 type Store interface {
+	// LoadSnapshot loads config, feed state, and error template in one call.
 	LoadSnapshot(ctx context.Context) (*Snapshot, error)
+	// LoadConfig loads tgfeed Starlark configuration.
 	LoadConfig(ctx context.Context) (string, error)
+	// LoadState loads persisted feed runtime state.
 	LoadState(ctx context.Context) (map[string]*Feed, error)
+	// LoadErrorTemplate loads the current error template.
 	LoadErrorTemplate(ctx context.Context) (string, error)
+	// SaveConfig persists tgfeed Starlark configuration.
 	SaveConfig(ctx context.Context, config string) error
+	// SaveState persists feed runtime state as formatted JSON.
 	SaveState(ctx context.Context, state map[string]*Feed) error
+	// SaveStateJSON persists pre-encoded state JSON.
 	SaveStateJSON(ctx context.Context, content []byte) error
+	// SaveErrorTemplate persists the error template.
 	SaveErrorTemplate(ctx context.Context, content string) error
 }
 
+// Options configures [NewStore].
 type Options struct {
-	StateDir             string
-	RemoteURL            string
-	HTTPClient           *http.Client
+	// StateDir is a local directory used when [RemoteURL] is empty.
+	StateDir string
+	// RemoteURL enables remote mode when non-empty.
+	//
+	// If it starts with "/", it is treated as a Unix socket path.
+	RemoteURL string
+	// HTTPClient is used for remote HTTP mode.
+	//
+	// It is ignored for Unix socket mode.
+	HTTPClient *http.Client
+	// DefaultErrorTemplate is used when error.tmpl does not exist.
 	DefaultErrorTemplate string
 }
 
+// NewStore constructs a [Store] that persists state locally or remotely,
+// depending on [Options].
 func NewStore(opts Options) Store { return &store{opts: opts} }
 
 type store struct{ opts Options }
@@ -198,10 +241,14 @@ func (s *store) SaveErrorTemplate(ctx context.Context, content string) error {
 	return nil
 }
 
+// MarshalStateMap encodes feed state as stable, indented JSON for persistence.
 func MarshalStateMap(stateMap map[string]*Feed) ([]byte, error) {
 	return json.MarshalIndent(stateMap, "", "  ")
 }
 
+// UnmarshalStateMap decodes feed state JSON.
+//
+// Empty input returns an empty map.
 func UnmarshalStateMap(b []byte) (map[string]*Feed, error) {
 	stateMap := make(map[string]*Feed)
 	if len(b) == 0 {

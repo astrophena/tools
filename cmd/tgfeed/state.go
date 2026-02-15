@@ -13,15 +13,14 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/mmcdole/gofeed"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/format"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/state"
 	"go.astrophena.name/tools/internal/filelock"
 	"go.astrophena.name/tools/internal/starlark/interpreter"
+
+	"github.com/mmcdole/gofeed"
 	"go.starlark.net/starlark"
 )
-
-type feedState = state.Feed
 
 // Feed state.
 
@@ -57,10 +56,6 @@ func newFeedBuiltin(feeds *[]*feed) *starlark.Builtin {
 		*feeds = append(*feeds, f)
 		return starlark.None, nil
 	})
-}
-
-func (f *fetcher) getState(url string) (fdState *state.Feed, exists bool) {
-	return f.state.Get(url)
 }
 
 func (f *fetcher) withFeedState(ctx context.Context, url string, fn func(*state.Feed, bool) bool) error {
@@ -169,10 +164,6 @@ func (f *fetcher) validateFeedFormat(fd *feed) error {
 	}
 
 	return nil
-}
-
-func (f *fetcher) saveConfig(ctx context.Context) error {
-	return f.store.SaveConfig(ctx, f.config)
 }
 
 func (f *fetcher) acquireRunLock() error {
