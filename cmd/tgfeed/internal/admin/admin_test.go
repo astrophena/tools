@@ -2,10 +2,12 @@
 // Use of this source code is governed by the ISC
 // license that can be found in the LICENSE.md file.
 
-package main
+package admin
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"io/fs"
 	"net/http"
 	"net/http/httptest"
@@ -14,69 +16,55 @@ import (
 	"strings"
 	"testing"
 	"testing/fstest"
+	"time"
 
 	"go.astrophena.name/base/testutil"
+	"go.astrophena.name/tools/cmd/tgfeed/internal/state"
 	"go.astrophena.name/tools/internal/filelock"
 )
+
+const testDefaultErrorTemplate = "Default error template."
+
+type statsView struct {
+	StartTime time.Time `json:"start_time"`
+}
 
 func TestAdmin(t *testing.T) {
 	t.Parallel()
 
-	setup := func(t *testing.T, fs fs.FS) *fetcher {
+	setup := func(t *testing.T, fs fs.FS) Config {
 		t.Helper()
-		f := &fetcher{
-			stateDir: t.TempDir(),
-			logf:     t.Logf,
-		}
-		f.init.Do(func() { f.doInit(t.Context()) })
+		stateDir := t.TempDir()
 
 		if fs != nil {
-			if err := os.CopyFS(f.stateDir, fs); err != nil {
+			if err := os.CopyFS(stateDir, fs); err != nil {
 				t.Fatalf("initializing state directory: %v", err)
 			}
 		}
-		return f
+
+		return Config{
+			StateDir: stateDir,
+			Store: state.NewStore(state.Options{
+				StateDir:             stateDir,
+				DefaultErrorTemplate: testDefaultErrorTemplate,
+			}),
+			ValidateConfig: func(context.Context, string) error {
+				return errors.New("broken config")
+			},
+			IsRunLocked: func() bool {
+				return filelock.IsLocked(filepath.Join(stateDir, ".run.lock"))
+			},
+		}
 	}
 
-	runTest := func(t *testing.T, f *fetcher, r *http.Request, wantCode int, wantBody string) {
+	runTest := func(t *testing.T, cfg Config, r *http.Request, wantCode int, wantBody string) {
 		t.Helper()
+		h, err := Handler(cfg)
+		if err != nil {
+			t.Fatalf("creating handler: %v", err)
+		}
 		w := httptest.NewRecorder()
-		mux := http.NewServeMux()
-		// Re-register handlers to ensure they use the test's fetcher instance.
-		mux.HandleFunc("/api/config", func(w http.ResponseWriter, r *http.Request) {
-			switch r.Method {
-			case http.MethodGet:
-				f.handleGetConfig(w, r)
-			case http.MethodPut:
-				f.handlePutConfig(w, r)
-			}
-		})
-		mux.HandleFunc("/api/state", func(w http.ResponseWriter, r *http.Request) {
-			switch r.Method {
-			case http.MethodGet:
-				f.handleGetState(w, r)
-			case http.MethodPut:
-				f.handlePutState(w, r)
-			}
-		})
-		mux.HandleFunc("/api/error-template", func(w http.ResponseWriter, r *http.Request) {
-			switch r.Method {
-			case http.MethodGet:
-				f.handleGetErrorTemplate(w, r)
-			case http.MethodPut:
-				f.handlePutErrorTemplate(w, r)
-			}
-		})
-		mux.HandleFunc("/api/stats", f.handleGetStats)
-		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Path == "/" {
-				http.Redirect(w, r, "/debug/", http.StatusFound)
-				return
-			}
-			http.NotFound(w, r)
-		})
-
-		mux.ServeHTTP(w, r)
+		h.ServeHTTP(w, r)
 
 		testutil.AssertEqual(t, w.Code, wantCode)
 		if wantBody != "" {
@@ -96,26 +84,27 @@ func TestAdmin(t *testing.T) {
 	}
 
 	t.Run("get config", func(t *testing.T) {
-		f := setup(t, initialFS)
+		cfg := setup(t, initialFS)
 		req := httptest.NewRequest(http.MethodGet, "/api/config", nil)
-		runTest(t, f, req, http.StatusOK, `feed(url="https://example.com")`)
+		runTest(t, cfg, req, http.StatusOK, `feed(url="https://example.com")`)
 	})
 	t.Run("put config (success)", func(t *testing.T) {
-		f := setup(t, nil) // Start with empty state dir
+		cfg := setup(t, nil)
+		cfg.ValidateConfig = func(context.Context, string) error { return nil }
 		body := `feed(url="https://new.example.com")`
 		req := httptest.NewRequest(http.MethodPut, "/api/config", strings.NewReader(body))
-		runTest(t, f, req, http.StatusNoContent, "")
-		content, _ := os.ReadFile(filepath.Join(f.stateDir, "config.star"))
+		runTest(t, cfg, req, http.StatusNoContent, "")
+		content, _ := os.ReadFile(filepath.Join(cfg.StateDir, "config.star"))
 		testutil.AssertEqual(t, string(content), body)
 	})
 	t.Run("put config (invalid)", func(t *testing.T) {
-		f := setup(t, nil)
+		cfg := setup(t, nil)
 		req := httptest.NewRequest(http.MethodPut, "/api/config", strings.NewReader(`invalid starlark`))
-		runTest(t, f, req, http.StatusBadRequest, "invalid config")
+		runTest(t, cfg, req, http.StatusBadRequest, "invalid config")
 	})
 	t.Run("put config (locked)", func(t *testing.T) {
-		f := setup(t, initialFS)
-		lockFile, err := filelock.Acquire(filepath.Join(f.stateDir, ".run.lock"), "")
+		cfg := setup(t, initialFS)
+		lockFile, err := filelock.Acquire(filepath.Join(cfg.StateDir, ".run.lock"), "")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -126,57 +115,61 @@ func TestAdmin(t *testing.T) {
 		})
 
 		req := httptest.NewRequest(http.MethodPut, "/api/config", strings.NewReader(`feed()`))
-		runTest(t, f, req, http.StatusConflict, "run is in progress")
+		runTest(t, cfg, req, http.StatusConflict, "run is in progress")
 	})
 
 	t.Run("get state", func(t *testing.T) {
-		f := setup(t, initialFS)
+		cfg := setup(t, initialFS)
 		req := httptest.NewRequest(http.MethodGet, "/api/state", nil)
-		runTest(t, f, req, http.StatusOK, `{}`)
+		runTest(t, cfg, req, http.StatusOK, `{}`)
 	})
 	t.Run("put state (success)", func(t *testing.T) {
-		f := setup(t, nil)
+		cfg := setup(t, nil)
 		body := `{"https://new.example.com":{}}`
 		req := httptest.NewRequest(http.MethodPut, "/api/state", strings.NewReader(body))
-		runTest(t, f, req, http.StatusNoContent, "")
-		content, _ := os.ReadFile(filepath.Join(f.stateDir, "state.json"))
+		runTest(t, cfg, req, http.StatusNoContent, "")
+		content, _ := os.ReadFile(filepath.Join(cfg.StateDir, "state.json"))
 		testutil.AssertEqual(t, string(content), body)
 	})
 	t.Run("put state (invalid JSON)", func(t *testing.T) {
-		f := setup(t, nil)
+		cfg := setup(t, nil)
 		req := httptest.NewRequest(http.MethodPut, "/api/state", strings.NewReader(`{invalid`))
-		runTest(t, f, req, http.StatusBadRequest, "invalid JSON")
+		runTest(t, cfg, req, http.StatusBadRequest, "invalid JSON")
 	})
 
 	t.Run("get error template", func(t *testing.T) {
-		f := setup(t, initialFS)
+		cfg := setup(t, initialFS)
 		req := httptest.NewRequest(http.MethodGet, "/api/error-template", nil)
-		runTest(t, f, req, http.StatusOK, "Custom error: %v")
+		runTest(t, cfg, req, http.StatusOK, "Custom error: %v")
 	})
 	t.Run("get error template (default)", func(t *testing.T) {
-		f := setup(t, nil)
+		cfg := setup(t, nil)
 		req := httptest.NewRequest(http.MethodGet, "/api/error-template", nil)
-		runTest(t, f, req, http.StatusOK, defaultErrorTemplate)
+		runTest(t, cfg, req, http.StatusOK, testDefaultErrorTemplate)
 	})
 	t.Run("put error template", func(t *testing.T) {
-		f := setup(t, nil)
+		cfg := setup(t, nil)
 		body := "New template"
 		req := httptest.NewRequest(http.MethodPut, "/api/error-template", strings.NewReader(body))
-		runTest(t, f, req, http.StatusNoContent, "")
-		content, _ := os.ReadFile(filepath.Join(f.stateDir, "error.tmpl"))
+		runTest(t, cfg, req, http.StatusNoContent, "")
+		content, _ := os.ReadFile(filepath.Join(cfg.StateDir, "error.tmpl"))
 		testutil.AssertEqual(t, string(content), body)
 	})
 
 	t.Run("get stats JSON", func(t *testing.T) {
-		f := setup(t, initialFS)
+		cfg := setup(t, initialFS)
 		req := httptest.NewRequest(http.MethodGet, "/api/stats", nil)
+		h, err := Handler(cfg)
+		if err != nil {
+			t.Fatalf("creating handler: %v", err)
+		}
 		w := httptest.NewRecorder()
-		f.handleGetStats(w, req)
+		h.ServeHTTP(w, req)
 
 		testutil.AssertEqual(t, w.Code, http.StatusOK)
 		testutil.AssertEqual(t, w.Header().Get("Content-Type"), "application/json; charset=utf-8")
 
-		var got []stats
+		var got []statsView
 		if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
 			t.Fatal(err)
 		}
@@ -189,8 +182,8 @@ func TestAdmin(t *testing.T) {
 		testutil.AssertEqual(t, got[1].StartTime.Format("2006-01-02T15:04:05Z07:00"), "2023-01-01T12:00:00Z")
 	})
 	t.Run("get stats JSON (no stats)", func(t *testing.T) {
-		f := setup(t, nil)
+		cfg := setup(t, nil)
 		req := httptest.NewRequest(http.MethodGet, "/api/stats", nil)
-		runTest(t, f, req, http.StatusNotFound, "No stats available")
+		runTest(t, cfg, req, http.StatusNotFound, "No stats available")
 	})
 }
