@@ -643,6 +643,7 @@ func TestSendUpdateUsesInjectedSender(t *testing.T) {
 	t.Parallel()
 
 	f := &fetcher{slog: slog.Default()}
+	f.stats = syncx.Protect(&stats{})
 	mock := &captureSender{}
 	f.sender = mock
 

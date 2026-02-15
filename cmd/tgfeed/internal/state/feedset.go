@@ -96,6 +96,13 @@ func (s *FeedSet) Save(ctx context.Context) error {
 	return s.store.SaveState(ctx, snapshot)
 }
 
+// Snapshot returns a deep copy of all current feed state entries.
+func (s *FeedSet) Snapshot() map[string]*Feed {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return cloneFeedMap(s.feeds)
+}
+
 func cloneFeedMap(input map[string]*Feed) map[string]*Feed {
 	out := make(map[string]*Feed, len(input))
 	for k, v := range input {

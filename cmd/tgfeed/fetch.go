@@ -9,9 +9,11 @@ import (
 	"context"
 	_ "embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -65,6 +67,7 @@ type feedStatusResult struct {
 	handled bool
 	retry   bool
 	retryIn time.Duration
+	class   int
 }
 
 // feedItemDecision captures both item processing and seen-state updates.
@@ -74,6 +77,7 @@ type feedStatusResult struct {
 type feedItemDecision struct {
 	selection feedItemSelection
 	markSeen  string
+	reason    feedItemSkipReason
 }
 
 // enqueueAction determines how an accepted item is emitted to the updates
@@ -94,6 +98,14 @@ const (
 	feedItemSelectionSkip feedItemSelection = iota
 	feedItemSelectionMarkSeenOnly
 	feedItemSelectionProcess
+)
+
+type feedItemSkipReason uint8
+
+const (
+	feedItemSkipReasonNone feedItemSkipReason = iota
+	feedItemSkipReasonOld
+	feedItemSkipReasonSeen
 )
 
 // feedItemContext groups immutable fetch-time context used while deciding how
@@ -170,6 +182,9 @@ func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *update) (re
 
 	parsedFeed, err := f.fp.Parse(res.Body)
 	if err != nil {
+		f.stats.WriteAccess(func(s *stats) {
+			s.ParseErrorCount += 1
+		})
 		f.handleFetchFailure(ctx, fd.url, err)
 		return false, 0
 	}
@@ -183,7 +198,7 @@ func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *update) (re
 		f.handleFetchFailure(ctx, fd.url, err)
 		return false, 0
 	}
-	f.markFetchSuccess(len(parsedFeed.Items), startTime)
+	f.markFetchSuccess(fd.url, len(parsedFeed.Items), startTime)
 
 	return false, 0
 }
@@ -222,6 +237,8 @@ func (f *fetcher) handleFeedStatus(req *http.Request, res *http.Response, fd *fe
 		f.slog.Debug("unmodified feed", "feed", fd.url)
 		f.stats.WriteAccess(func(s *stats) {
 			s.NotModifiedFeeds += 1
+			s.HTTP3xxCount += 1
+			s.feedStats(fd.url).LastStatusClass = 3
 		})
 		_ = f.withFeedState(req.Context(), fd.url, func(state *state.Feed, _ bool) bool {
 			state.MarkNotModified(time.Now())
@@ -229,11 +246,20 @@ func (f *fetcher) handleFeedStatus(req *http.Request, res *http.Response, fd *fe
 		})
 		return feedStatusResult{
 			handled: true,
+			class:   3,
 		}, nil
 	}
 	if res.StatusCode == http.StatusOK {
-		return feedStatusResult{}, nil
+		f.stats.WriteAccess(func(s *stats) {
+			s.HTTP2xxCount += 1
+			s.feedStats(fd.url).LastStatusClass = 2
+		})
+		return feedStatusResult{class: 2}, nil
 	}
+
+	f.stats.WriteAccess(func(s *stats) {
+		s.addHTTPStatusClass(fd.url, res.StatusCode)
+	})
 
 	body, hasBody := readFeedErrorBody(res.Body)
 
@@ -248,12 +274,14 @@ func (f *fetcher) handleFeedStatus(req *http.Request, res *http.Response, fd *fe
 				handled: true,
 				retry:   true,
 				retryIn: t,
+				class:   4,
 			}, nil
 		}
 	}
 
 	return feedStatusResult{
 		handled: true,
+		class:   res.StatusCode / 100,
 	}, fmt.Errorf("want 200, got %d: %s", res.StatusCode, body)
 }
 
@@ -318,8 +346,12 @@ func (f *fetcher) enqueueFeedItems(fd *feed, state *state.Feed, exists bool, ite
 		feed:        fd,
 		state:       state,
 		exists:      exists,
-		justEnabled: prepareSeenItemsState(fd, state),
+		justEnabled: f.prepareSeenItemsState(fd, state),
 	}
+
+	f.stats.WriteAccess(func(s *stats) {
+		s.ItemsSeenTotal += len(items)
+	})
 
 	for _, feedItem := range items {
 		decision := decideFeedItem(itemCtx, feedItem)
@@ -329,6 +361,9 @@ func (f *fetcher) enqueueFeedItems(fd *feed, state *state.Feed, exists bool, ite
 			state.MarkSeen(decision.markSeen, time.Now())
 		}
 		if decision.selection != feedItemSelectionProcess {
+			f.stats.WriteAccess(func(s *stats) {
+				s.recordItemDecision(decision)
+			})
 			continue
 		}
 
@@ -337,32 +372,46 @@ func (f *fetcher) enqueueFeedItems(fd *feed, state *state.Feed, exists bool, ite
 			continue
 		case enqueueActionDigest:
 			validItems = append(validItems, feedItem)
+			f.stats.WriteAccess(func(s *stats) {
+				s.ItemsKeptTotal += 1
+				s.ItemsEnqueuedTotal += 1
+				s.feedStats(fd.url).ItemsEnqueued += 1
+			})
 		case enqueueActionSingle:
 			updates <- &update{
 				feed:  fd,
 				items: []*gofeed.Item{feedItem},
 			}
+			f.stats.WriteAccess(func(s *stats) {
+				s.ItemsKeptTotal += 1
+				s.ItemsEnqueuedTotal += 1
+				s.feedStats(fd.url).ItemsEnqueued += 1
+			})
 		}
 	}
 	publishDigestUpdate(fd, validItems, updates)
 }
 
-func prepareSeenItemsState(fd *feed, state *state.Feed) (justEnabled bool) {
+func (f *fetcher) prepareSeenItemsState(fd *feed, state *state.Feed) (justEnabled bool) {
 	if !fd.alwaysSendNewItems {
 		return false
 	}
-	return state.PrepareSeenItems(time.Now(), seenItemsCleanupPeriod)
+	justEnabled, pruned := state.PrepareSeenItems(time.Now(), seenItemsCleanupPeriod)
+	f.stats.WriteAccess(func(s *stats) {
+		s.SeenItemsPrunedTotal += pruned
+	})
+	return justEnabled
 }
 
 func decideFeedItem(itemCtx feedItemContext, feedItem *gofeed.Item) feedItemDecision {
 	if itemCtx.feed.alwaysSendNewItems {
 		now := time.Now()
 		if feedItem.PublishedParsed != nil && now.Sub(*feedItem.PublishedParsed) > lookbackPeriod {
-			return feedItemDecision{selection: feedItemSelectionSkip}
+			return feedItemDecision{selection: feedItemSelectionSkip, reason: feedItemSkipReasonOld}
 		}
 		guid := cmp.Or(feedItem.GUID, feedItem.Link)
 		if itemCtx.state.IsSeen(guid) {
-			return feedItemDecision{selection: feedItemSelectionSkip}
+			return feedItemDecision{selection: feedItemSelectionSkip, reason: feedItemSkipReasonSeen}
 		}
 		decision := feedItemDecision{selection: feedItemSelectionMarkSeenOnly, markSeen: guid}
 		if !itemCtx.exists || itemCtx.justEnabled {
@@ -373,7 +422,7 @@ func decideFeedItem(itemCtx feedItemContext, feedItem *gofeed.Item) feedItemDeci
 	}
 
 	if feedItem.PublishedParsed != nil && feedItem.PublishedParsed.Before(itemCtx.state.LastUpdated) {
-		return feedItemDecision{selection: feedItemSelectionSkip}
+		return feedItemDecision{selection: feedItemSelectionSkip, reason: feedItemSkipReasonOld}
 	}
 	return feedItemDecision{selection: feedItemSelectionProcess}
 }
@@ -417,11 +466,14 @@ func publishDigestUpdate(fd *feed, validItems []*gofeed.Item, updates chan *upda
 	}
 }
 
-func (f *fetcher) markFetchSuccess(parsedItems int, startTime time.Time) {
+func (f *fetcher) markFetchSuccess(url string, parsedItems int, startTime time.Time) {
 	f.stats.WriteAccess(func(s *stats) {
+		elapsed := time.Since(startTime)
 		s.TotalItemsParsed += parsedItems
 		s.SuccessFeeds += 1
-		s.TotalFetchTime += time.Since(startTime)
+		s.TotalFetchTime += elapsed
+		s.fetchLatencySamples = append(s.fetchLatencySamples, elapsed)
+		s.feedStats(url).FetchDuration += elapsed
 	})
 }
 
@@ -461,6 +513,8 @@ func (f *fetcher) itemToStarlark(item *gofeed.Item) starlark.Value {
 func (f *fetcher) handleFetchFailure(ctx context.Context, url string, err error) {
 	f.stats.WriteAccess(func(s *stats) {
 		s.FailedFeeds += 1
+		s.classifyFailure(url, err)
+		s.feedStats(url).Failures += 1
 	})
 
 	var (
@@ -487,6 +541,49 @@ func (f *fetcher) handleFetchFailure(ctx context.Context, url string, err error)
 	}
 }
 
+func (s *stats) addHTTPStatusClass(url string, statusCode int) {
+	class := statusCode / 100
+	s.feedStats(url).LastStatusClass = class
+	switch class {
+	case 2:
+		s.HTTP2xxCount += 1
+	case 3:
+		s.HTTP3xxCount += 1
+	case 4:
+		s.HTTP4xxCount += 1
+	case 5:
+		s.HTTP5xxCount += 1
+	}
+}
+
+func (s *stats) classifyFailure(url string, err error) {
+	var netErr net.Error
+	if errors.As(err, &netErr) {
+		s.NetworkErrorCount += 1
+		if netErr.Timeout() {
+			s.TimeoutCount += 1
+		}
+		s.feedStats(url).LastStatusClass = 0
+		return
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		s.TimeoutCount += 1
+		s.NetworkErrorCount += 1
+		s.feedStats(url).LastStatusClass = 0
+		return
+	}
+	s.feedStats(url).LastStatusClass = 0
+}
+
+func (s *stats) recordItemDecision(decision feedItemDecision) {
+	switch decision.reason {
+	case feedItemSkipReasonOld:
+		s.ItemsSkippedOldTotal += 1
+	case feedItemSkipReasonSeen:
+		s.ItemsDedupedTotal += 1
+	}
+}
+
 func (f *fetcher) sendUpdate(ctx context.Context, u *update) {
 	rendered, ok := f.buildUpdateMessage(u)
 	if !ok {
@@ -498,6 +595,12 @@ func (f *fetcher) sendUpdate(ctx context.Context, u *update) {
 		return
 	}
 
+	f.stats.WriteAccess(func(s *stats) {
+		s.MessagesAttempted += 1
+	})
+
+	start := time.Now()
+
 	if err := f.sender.Send(ctx, sender.Message{
 		Body: strings.TrimSpace(rendered.Body),
 		Target: sender.Target{
@@ -508,8 +611,18 @@ func (f *fetcher) sendUpdate(ctx context.Context, u *update) {
 		},
 		Actions: rendered.Actions,
 	}); err != nil {
+		f.stats.WriteAccess(func(s *stats) {
+			s.MessagesFailed += 1
+			s.sendLatencySamples = append(s.sendLatencySamples, time.Since(start))
+		})
 		f.slog.Warn("failed to send message", "chat_id", f.chatID, "error", err)
+		return
 	}
+
+	f.stats.WriteAccess(func(s *stats) {
+		s.MessagesSent += 1
+		s.sendLatencySamples = append(s.sendLatencySamples, time.Since(start))
+	})
 }
 
 func (f *fetcher) buildUpdateMessage(u *update) (format.Rendered, bool) {
