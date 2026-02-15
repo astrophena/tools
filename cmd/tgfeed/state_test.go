@@ -122,7 +122,7 @@ func TestFeedStateMarkFetchFailure(t *testing.T) {
 	t.Parallel()
 
 	cases := map[string]struct {
-		state            *feedState
+		state            *state.Feed
 		threshold        int
 		err              error
 		wantDisabled     bool
@@ -131,7 +131,7 @@ func TestFeedStateMarkFetchFailure(t *testing.T) {
 		wantFetchFailure int64
 	}{
 		"below threshold does not disable": {
-			state:            &feedState{},
+			state:            &state.Feed{},
 			threshold:        3,
 			err:              errors.New("boom"),
 			wantDisabled:     false,
@@ -140,7 +140,7 @@ func TestFeedStateMarkFetchFailure(t *testing.T) {
 			wantFetchFailure: 1,
 		},
 		"reaching threshold disables": {
-			state: &feedState{
+			state: &state.Feed{
 				ErrorCount: 2,
 			},
 			threshold:        3,
@@ -151,7 +151,7 @@ func TestFeedStateMarkFetchFailure(t *testing.T) {
 			wantFetchFailure: 1,
 		},
 		"already disabled does not trigger disable transition again": {
-			state: &feedState{
+			state: &state.Feed{
 				Disabled:   true,
 				ErrorCount: 5,
 			},
@@ -179,7 +179,7 @@ func TestFeedStateMarkFetchFailure(t *testing.T) {
 func TestFeedStateReenable(t *testing.T) {
 	t.Parallel()
 
-	s := &feedState{
+	s := &state.Feed{
 		Disabled:   true,
 		ErrorCount: 8,
 		LastError:  "test error",
@@ -200,17 +200,17 @@ func TestFeedStatePrepareSeenItems(t *testing.T) {
 	recent := now.Add(-time.Hour)
 
 	cases := map[string]struct {
-		state            *feedState
+		state            *state.Feed
 		wantJustEnabled  bool
 		wantSeenItemKeys []string
 	}{
 		"initializes nil map": {
-			state:            &feedState{},
+			state:            &state.Feed{},
 			wantJustEnabled:  true,
 			wantSeenItemKeys: []string{},
 		},
 		"keeps recent and removes stale": {
-			state: &feedState{
+			state: &state.Feed{
 				SeenItems: map[string]time.Time{
 					"stale":  old,
 					"recent": recent,
@@ -243,7 +243,7 @@ func TestFeedStateItemDecisions(t *testing.T) {
 	old := now.Add(-15 * 24 * time.Hour)
 
 	cases := map[string]struct {
-		state         *feedState
+		state         *state.Feed
 		item          *gofeed.Item
 		exists        bool
 		justEnabled   bool
@@ -252,7 +252,7 @@ func TestFeedStateItemDecisions(t *testing.T) {
 		wantMarkSeen  string
 	}{
 		"always-send skips old entries": {
-			state: &feedState{
+			state: &state.Feed{
 				SeenItems: map[string]time.Time{},
 			},
 			item: &gofeed.Item{
@@ -265,7 +265,7 @@ func TestFeedStateItemDecisions(t *testing.T) {
 			wantSelection: feedItemSelectionSkip,
 		},
 		"always-send processes unseen item for existing feed": {
-			state: &feedState{
+			state: &state.Feed{
 				SeenItems: map[string]time.Time{},
 			},
 			item: &gofeed.Item{
@@ -279,7 +279,7 @@ func TestFeedStateItemDecisions(t *testing.T) {
 			wantMarkSeen:  "new",
 		},
 		"always-send marks-only on first run": {
-			state: &feedState{
+			state: &state.Feed{
 				SeenItems: map[string]time.Time{},
 			},
 			item: &gofeed.Item{
@@ -293,7 +293,7 @@ func TestFeedStateItemDecisions(t *testing.T) {
 			wantMarkSeen:  "first",
 		},
 		"always-send skips already seen": {
-			state: &feedState{
+			state: &state.Feed{
 				SeenItems: map[string]time.Time{
 					"seen": now,
 				},
@@ -308,7 +308,7 @@ func TestFeedStateItemDecisions(t *testing.T) {
 			wantSelection: feedItemSelectionSkip,
 		},
 		"regular mode skips published before last update": {
-			state: &feedState{
+			state: &state.Feed{
 				LastUpdated: now,
 			},
 			item: &gofeed.Item{
@@ -319,7 +319,7 @@ func TestFeedStateItemDecisions(t *testing.T) {
 			wantSelection: feedItemSelectionSkip,
 		},
 		"regular mode accepts nil published timestamp": {
-			state: &feedState{
+			state: &state.Feed{
 				LastUpdated: now,
 			},
 			item: &gofeed.Item{
@@ -352,7 +352,7 @@ func TestWithFeedState(t *testing.T) {
 	f.state = state.NewFeedSet(f.store, map[string]*state.Feed{})
 
 	const feedURL = "https://example.com/feed.xml"
-	var state1 *feedState
+	var state1 *state.Feed
 	if err := f.withFeedState(t.Context(), feedURL, func(state *state.Feed, exists bool) bool {
 		state1 = state
 		testutil.AssertEqual(t, exists, false)

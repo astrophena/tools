@@ -225,7 +225,7 @@ func (f *fetcher) listFeeds(ctx context.Context, w io.Writer) error {
 	var sb strings.Builder
 
 	for _, feed := range f.feeds {
-		state, hasState := f.getState(feed.url)
+		state, hasState := f.state.Get(feed.url)
 		fmt.Fprintf(&sb, "%s", feed.url)
 		if !hasState {
 			fmt.Fprintf(&sb, " \n")
@@ -325,7 +325,7 @@ func (f *fetcher) edit(ctx context.Context) error {
 		break
 	}
 
-	return f.saveConfig(ctx)
+	return f.store.SaveConfig(ctx, f.config)
 }
 
 // ask prompts the user for a yes or no answer.
@@ -489,7 +489,7 @@ func (f *fetcher) reenable(ctx context.Context, url string) error {
 		return err
 	}
 
-	_, ok := f.getState(url)
+	_, ok := f.state.Get(url)
 	if !ok {
 		return fmt.Errorf("%q: %w", url, errNoFeed)
 	}

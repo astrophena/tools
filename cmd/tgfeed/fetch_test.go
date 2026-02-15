@@ -140,7 +140,7 @@ func TestBlockAndKeepRules(t *testing.T) {
 
 		config := readFile(t, match)
 
-		state := map[string]*feedState{
+		state := map[string]*state.Feed{
 			"https://example.com/feed.xml": {
 				LastUpdated: time.Time{},
 			},
@@ -179,7 +179,7 @@ func TestDigestAndFormat(t *testing.T) {
 		config := readFile(t, match)
 
 		// Create a mock state where the feed is new (LastUpdated zero).
-		state := map[string]*feedState{
+		state := map[string]*state.Feed{
 			"https://example.com/feed.xml": {
 				LastUpdated: time.Time{},
 			},
@@ -223,7 +223,7 @@ func TestAlwaysSendNewItems(t *testing.T) {
 
 	config := readFile(t, "testdata/new_items/config.star")
 
-	state := map[string]*feedState{}
+	state := map[string]*state.Feed{}
 	ar := &txtar.Archive{
 		Files: []txtar.File{
 			{Name: "config.star", Data: config},
@@ -339,7 +339,7 @@ func TestDecideFeedItem(t *testing.T) {
 
 	cases := map[string]struct {
 		fd            *feed
-		state         *feedState
+		state         *state.Feed
 		item          *gofeed.Item
 		exists        bool
 		justEnabled   bool
@@ -350,7 +350,7 @@ func TestDecideFeedItem(t *testing.T) {
 			fd: &feed{
 				alwaysSendNewItems: true,
 			},
-			state: &feedState{SeenItems: map[string]time.Time{}},
+			state: &state.Feed{SeenItems: map[string]time.Time{}},
 			item: &gofeed.Item{
 				GUID:            "old",
 				Link:            "https://example.com/old",
@@ -365,7 +365,7 @@ func TestDecideFeedItem(t *testing.T) {
 			fd: &feed{
 				alwaysSendNewItems: true,
 			},
-			state: &feedState{SeenItems: map[string]time.Time{}},
+			state: &state.Feed{SeenItems: map[string]time.Time{}},
 			item: &gofeed.Item{
 				GUID:            "new",
 				Link:            "https://example.com/new",
@@ -380,7 +380,7 @@ func TestDecideFeedItem(t *testing.T) {
 			fd: &feed{
 				alwaysSendNewItems: true,
 			},
-			state: &feedState{SeenItems: map[string]time.Time{}},
+			state: &state.Feed{SeenItems: map[string]time.Time{}},
 			item: &gofeed.Item{
 				GUID:            "first",
 				Link:            "https://example.com/first",
@@ -395,7 +395,7 @@ func TestDecideFeedItem(t *testing.T) {
 			fd: &feed{
 				alwaysSendNewItems: true,
 			},
-			state: &feedState{SeenItems: map[string]time.Time{
+			state: &state.Feed{SeenItems: map[string]time.Time{
 				"seen": now,
 			}},
 			item: &gofeed.Item{
@@ -410,7 +410,7 @@ func TestDecideFeedItem(t *testing.T) {
 		},
 		"published before last update is ignored in regular mode": {
 			fd: &feed{},
-			state: &feedState{
+			state: &state.Feed{
 				LastUpdated: now,
 			},
 			item: &gofeed.Item{
@@ -425,7 +425,7 @@ func TestDecideFeedItem(t *testing.T) {
 		},
 		"nil published timestamp is accepted in regular mode": {
 			fd: &feed{},
-			state: &feedState{
+			state: &state.Feed{
 				LastUpdated: now,
 			},
 			item: &gofeed.Item{
@@ -525,7 +525,7 @@ func TestHandleFeedStatus(t *testing.T) {
 		reqURL                 string
 		statusCode             int
 		body                   string
-		initialState           feedState
+		initialState           state.Feed
 		wantHandled            bool
 		wantRetry              bool
 		wantRetryIn            time.Duration
@@ -538,7 +538,7 @@ func TestHandleFeedStatus(t *testing.T) {
 		"not modified": {
 			reqURL:     "https://example.com/feed.xml",
 			statusCode: http.StatusNotModified,
-			initialState: feedState{
+			initialState: state.Feed{
 				ErrorCount: 3,
 				LastError:  "oops",
 			},

@@ -2,7 +2,21 @@
 // Use of this source code is governed by the ISC
 // license that can be found in the LICENSE.md file.
 
-// Package format builds and validates tgfeed message render output.
+// Package format builds, validates, and parses tgfeed message render output.
+//
+// The formatter pipeline is:
+//
+//   - build formatter input with [BuildFormatInput]
+//   - call a Starlark format function using [CallStarlarkFormatter]
+//   - validate output with [ParseFormattedMessage]
+//   - fall back to [DefaultUpdateMessage] when custom formatting is missing
+//     or invalid
+//
+// Formatter output accepted by [ParseFormattedMessage] is either:
+//
+//   - a string body
+//   - a tuple of (body, keyboard) where keyboard is a list of rows and each
+//     row is a list of dictionaries with text and url fields
 package format
 
 import (
@@ -27,30 +41,44 @@ var nonAlphaNumRe = sync.OnceValue(func() *regexp.Regexp {
 
 // Feed carries formatting-relevant feed metadata.
 type Feed struct {
-	URL    string
-	Title  string
+	// URL is the feed source URL.
+	URL string
+	// Title is the human-readable feed title.
+	Title string
+	// Digest controls digest-style rendering.
 	Digest bool
 }
 
 // Update contains feed metadata and items to render.
 type Update struct {
-	Feed  Feed
+	// Feed holds metadata for the current feed.
+	Feed Feed
+	// Items are parsed feed items to render.
 	Items []*gofeed.Item
 }
 
 // Rendered is a fully rendered outgoing message.
 type Rendered struct {
-	Body           string
-	Actions        []sender.ActionRow
+	// Body is the final message body.
+	Body string
+	// Actions are optional inline keyboard rows.
+	Actions []sender.ActionRow
+	// DisablePreview controls link preview rendering.
 	DisablePreview bool
 }
 
 // ValidationError indicates invalid formatter output.
 type ValidationError struct {
-	Reason    string
+	// Reason is a stable category, such as "invalid_type" or
+	// "invalid_field_type".
+	Reason string
+	// ValueType is the unexpected Starlark type name.
 	ValueType string
-	TupleLen  int
-	Field     string
+	// TupleLen is the invalid tuple length.
+	TupleLen int
+	// Field names the invalid logical field.
+	Field string
+	// FieldType is the unexpected type for Field.
 	FieldType string
 }
 
@@ -70,7 +98,10 @@ func (e *ValidationError) Error() string {
 	}
 }
 
-// BuildFormatInput builds starlark formatter input and fallback title.
+// BuildFormatInput builds formatter input for [CallStarlarkFormatter] and a
+// fallback title for [DefaultUpdateMessage].
+//
+// Update.Items must contain at least one item.
 func BuildFormatInput(u Update) (starlark.Value, string) {
 	if u.Feed.Digest {
 		list := make([]starlark.Value, 0, len(u.Items))
@@ -85,6 +116,8 @@ func BuildFormatInput(u Update) (starlark.Value, string) {
 }
 
 // CallStarlarkFormatter evaluates the feed format function.
+//
+// Parse the returned value with [ParseFormattedMessage].
 func CallStarlarkFormatter(formatFn *starlark.Function, items starlark.Value, print func(msg string)) (starlark.Value, error) {
 	return starlark.Call(
 		&starlark.Thread{Print: func(_ *starlark.Thread, msg string) { print(msg) }},
@@ -95,6 +128,9 @@ func CallStarlarkFormatter(formatFn *starlark.Function, items starlark.Value, pr
 }
 
 // ParseFormattedMessage validates and parses formatter output.
+//
+// It returns [ValidationError] when the output shape or field types are
+// invalid.
 func ParseFormattedMessage(v starlark.Value) (Rendered, error) {
 	switch val := v.(type) {
 	case starlark.String:
@@ -189,13 +225,16 @@ func parseInlineKeyboardButton(button *starlark.Dict) (sender.Action, bool) {
 }
 
 // DefaultUpdateMessage renders the built-in fallback message.
+//
+// It is intended for cases where custom formatting is unavailable.
 func DefaultUpdateMessage(u Update, defaultTitle string, messageTemplate string) Rendered {
 	if u.Feed.Digest {
-		msg := fmt.Sprintf("<b>%s</b>\n\n", defaultTitle)
+		var msg strings.Builder
+		msg.WriteString(fmt.Sprintf("<b>%s</b>\n\n", defaultTitle))
 		for _, item := range u.Items {
-			msg += fmt.Sprintf("• <a href=%q>%s</a>\n", item.Link, cmp.Or(item.Title, item.Link))
+			msg.WriteString(fmt.Sprintf("• <a href=%q>%s</a>\n", item.Link, cmp.Or(item.Title, item.Link)))
 		}
-		return Rendered{Body: msg, DisablePreview: true}
+		return Rendered{Body: msg.String(), DisablePreview: true}
 	}
 
 	msg := fmt.Sprintf(messageTemplate, defaultTitle, u.Items[0].Link)
@@ -220,7 +259,8 @@ func DefaultUpdateMessage(u Update, defaultTitle string, messageTemplate string)
 	return Rendered{Body: msg, Actions: actions, DisablePreview: u.Feed.Digest}
 }
 
-// ItemToStarlark converts an RSS item into a starlark item object.
+// ItemToStarlark converts an RSS item into a Starlark struct used by feed
+// formatter functions.
 func ItemToStarlark(item *gofeed.Item) starlark.Value {
 	var categories []starlark.Value
 	for _, category := range item.Categories {

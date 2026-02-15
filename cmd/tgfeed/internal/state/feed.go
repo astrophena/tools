@@ -4,6 +4,8 @@
 
 package state
 
+import "maps"
+
 import "time"
 
 // Clone returns a deep copy of feed state.
@@ -14,9 +16,7 @@ func (f *Feed) Clone() *Feed {
 	cp := *f
 	if f.SeenItems != nil {
 		cp.SeenItems = make(map[string]time.Time, len(f.SeenItems))
-		for k, v := range f.SeenItems {
-			cp.SeenItems[k] = v
-		}
+		maps.Copy(cp.SeenItems, f.SeenItems)
 	}
 	return &cp
 }
