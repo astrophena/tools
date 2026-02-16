@@ -6,7 +6,7 @@ require (
 	crawshaw.dev/jsonfile v0.0.0-20240206193014-699d1dad804e
 	github.com/arl/statsviz v0.8.0
 	github.com/dhowden/tag v0.0.0-20240417053706-3d75831295e8
-	github.com/landlock-lsm/go-landlock v0.6.0
+	github.com/landlock-lsm/go-landlock v0.7.0
 	github.com/mmcdole/gofeed v1.3.0
 	github.com/tobischo/gokeepasslib/v3 v3.6.1
 	go.astrophena.name/base v0.16.1
