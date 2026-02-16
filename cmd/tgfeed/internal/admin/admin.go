@@ -2,10 +2,14 @@
 // Use of this source code is governed by the ISC
 // license that can be found in the LICENSE.md file.
 
-package main
+//go:generate deno bundle frontend/app.tsx --platform=browser --minify --output=static/js/app.min.js
+
+package admin
 
 import (
+	"bytes"
 	"context"
+	"embed"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,6 +20,8 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"text/template"
+	"time"
 
 	"go.astrophena.name/base/web"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/state"
@@ -24,53 +30,85 @@ import (
 
 var errConflict = web.StatusErr(http.StatusConflict)
 
-func (f *fetcher) admin(ctx context.Context) error {
+// Config configures the tgfeed admin HTTP API.
+type Config struct {
+	// Addr is the network address passed to [web.Server].
+	Addr string
+	// StateDir is tgfeed's local state directory.
+	StateDir string
+	// Store reads and writes tgfeed persisted state.
+	Store state.Store
+	// ValidateConfig validates a Starlark config before persisting it.
+	ValidateConfig func(ctx context.Context, content string) error
+	// IsRunLocked reports whether tgfeed run lock is currently held.
+	IsRunLocked func() bool
+}
+
+// Handler returns an HTTP handler serving the tgfeed admin API.
+func Handler(cfg Config) (*http.ServeMux, error) {
+	cfg, err := normalizeConfig(cfg)
+	if err != nil {
+		return nil, err
+	}
+	api := newAPI(cfg)
+
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/" {
+		if !slices.Contains([]string{"/", "/stats", "/config", "/configuration"}, r.URL.Path) {
 			web.RespondJSONError(w, r, web.ErrNotFound)
 			return
 		}
-		http.Redirect(w, r, "/debug/", http.StatusFound)
+		var buf bytes.Buffer
+		if err := appTemplate.Execute(&buf, struct {
+			JS  string
+			CSS string
+		}{
+			JS:  web.StaticHashName(r.Context(), "static/js/app.min.js"),
+			CSS: web.StaticHashName(r.Context(), "static/css/app.css"),
+		}); err != nil {
+			web.RespondError(w, r, err)
+			return
+		}
+		buf.WriteTo(w)
 	})
 
 	mux.HandleFunc("/api/config", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
-			f.handleGetConfig(w, r)
+			api.handleGetConfig(w, r)
 		case http.MethodPut:
-			f.handlePutConfig(w, r)
+			api.handlePutConfig(w, r)
 		default:
-			web.RespondJSONError(w, r, fmt.Errorf("method not allowed: %w", web.ErrMethodNotAllowed))
+			web.RespondJSONError(w, r, fmt.Errorf("%w: method not allowed", web.ErrMethodNotAllowed))
 		}
 	})
 	mux.HandleFunc("/api/state", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
-			f.handleGetState(w, r)
+			api.handleGetState(w, r)
 		case http.MethodPut:
-			f.handlePutState(w, r)
+			api.handlePutState(w, r)
 		default:
-			web.RespondJSONError(w, r, fmt.Errorf("method not allowed: %w", web.ErrMethodNotAllowed))
+			web.RespondJSONError(w, r, fmt.Errorf("%w: method not allowed", web.ErrMethodNotAllowed))
 		}
 	})
 	mux.HandleFunc("/api/error-template", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
-			f.handleGetErrorTemplate(w, r)
+			api.handleGetErrorTemplate(w, r)
 		case http.MethodPut:
-			f.handlePutErrorTemplate(w, r)
+			api.handlePutErrorTemplate(w, r)
 		default:
-			web.RespondJSONError(w, r, fmt.Errorf("method not allowed: %w", web.ErrMethodNotAllowed))
+			web.RespondJSONError(w, r, fmt.Errorf("%w: method not allowed", web.ErrMethodNotAllowed))
 		}
 	})
 	mux.HandleFunc("/api/stats", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
-			f.handleGetStats(w, r)
+			api.handleGetStats(w, r)
 		default:
-			web.RespondJSONError(w, r, fmt.Errorf("method not allowed: %w", web.ErrMethodNotAllowed))
+			web.RespondJSONError(w, r, fmt.Errorf("%w: method not allowed", web.ErrMethodNotAllowed))
 		}
 	})
 
@@ -80,11 +118,30 @@ func (f *fetcher) admin(ctx context.Context) error {
 	dbg.Link("/api/error-template", "Error template")
 	dbg.Link("/api/stats", "Stats")
 
+	return mux, nil
+}
+
+//go:embed static/*
+var staticFS embed.FS
+
+var (
+	//go:embed static/app.tmpl
+	appTemplateStr string
+	appTemplate    = template.Must(template.New("").Parse(appTemplateStr))
+)
+
+// Run starts the tgfeed admin HTTP API.
+func Run(ctx context.Context, cfg Config) error {
+	mux, err := Handler(cfg)
+	if err != nil {
+		return err
+	}
 	srv := &web.Server{
 		Mux:           mux,
-		Addr:          f.adminAddr,
+		Addr:          cfg.Addr,
 		Debuggable:    true,
 		NotifySystemd: true,
+		StaticFS:      staticFS,
 	}
 
 	ctx, cancel := context.WithCancel(ctx)
@@ -98,8 +155,42 @@ func (f *fetcher) admin(ctx context.Context) error {
 	return srv.ListenAndServe(ctx)
 }
 
-func (f *fetcher) handleGetConfig(w http.ResponseWriter, r *http.Request) {
-	config, err := f.store.LoadConfig(r.Context())
+func normalizeConfig(cfg Config) (Config, error) {
+	if cfg.Store == nil {
+		return Config{}, errors.New("admin: store must not be nil")
+	}
+	if cfg.ValidateConfig == nil {
+		cfg.ValidateConfig = func(context.Context, string) error { return nil }
+	}
+	if cfg.IsRunLocked == nil {
+		cfg.IsRunLocked = func() bool { return false }
+	}
+	return cfg, nil
+}
+
+type api struct {
+	store            state.Store
+	validateConfigFn func(context.Context, string) error
+	isRunLocked      func() bool
+	statsDir         string
+}
+
+type statsItem struct {
+	StartTime time.Time
+	Raw       json.RawMessage
+}
+
+func newAPI(cfg Config) *api {
+	return &api{
+		store:            cfg.Store,
+		validateConfigFn: cfg.ValidateConfig,
+		isRunLocked:      cfg.IsRunLocked,
+		statsDir:         filepath.Join(cfg.StateDir, "stats"),
+	}
+}
+
+func (a *api) handleGetConfig(w http.ResponseWriter, r *http.Request) {
+	config, err := a.store.LoadConfig(r.Context())
 	if err != nil {
 		web.RespondJSONError(w, r, fmt.Errorf("failed to read config: %v", err))
 		return
@@ -108,8 +199,8 @@ func (f *fetcher) handleGetConfig(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte(config))
 }
 
-func (f *fetcher) handlePutConfig(w http.ResponseWriter, r *http.Request) {
-	if !f.guardRunUnlocked(w, r) {
+func (a *api) handlePutConfig(w http.ResponseWriter, r *http.Request) {
+	if !a.guardRunUnlocked(w, r) {
 		return
 	}
 
@@ -118,12 +209,12 @@ func (f *fetcher) handlePutConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := f.validateConfig(content, r); err != nil {
+	if err := a.validateConfig(content, r); err != nil {
 		web.RespondJSONError(w, r, err)
 		return
 	}
 
-	if err := f.store.SaveConfig(r.Context(), string(content)); err != nil {
+	if err := a.store.SaveConfig(r.Context(), string(content)); err != nil {
 		web.RespondJSONError(w, r, fmt.Errorf("failed to write config: %v", err))
 		return
 	}
@@ -131,8 +222,8 @@ func (f *fetcher) handlePutConfig(w http.ResponseWriter, r *http.Request) {
 	writeNoContent(w)
 }
 
-func (f *fetcher) handleGetState(w http.ResponseWriter, r *http.Request) {
-	stateMap, err := f.store.LoadState(r.Context())
+func (a *api) handleGetState(w http.ResponseWriter, r *http.Request) {
+	stateMap, err := a.store.LoadState(r.Context())
 	if err != nil {
 		web.RespondJSONError(w, r, fmt.Errorf("failed to read state: %v", err))
 		return
@@ -146,8 +237,8 @@ func (f *fetcher) handleGetState(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(content)
 }
 
-func (f *fetcher) handlePutState(w http.ResponseWriter, r *http.Request) {
-	if !f.guardRunUnlocked(w, r) {
+func (a *api) handlePutState(w http.ResponseWriter, r *http.Request) {
+	if !a.guardRunUnlocked(w, r) {
 		return
 	}
 
@@ -156,17 +247,12 @@ func (f *fetcher) handlePutState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := f.validateState(content); err != nil {
+	if err := validateState(content); err != nil {
 		web.RespondJSONError(w, r, err)
 		return
 	}
 
-	if _, err := state.UnmarshalStateMap(content); err != nil {
-		web.RespondJSONError(w, r, fmt.Errorf("failed to parse state: %v", err))
-		return
-	}
-
-	if err := f.store.SaveStateJSON(r.Context(), content); err != nil {
+	if err := a.store.SaveStateJSON(r.Context(), content); err != nil {
 		web.RespondJSONError(w, r, fmt.Errorf("failed to write state: %v", err))
 		return
 	}
@@ -174,8 +260,8 @@ func (f *fetcher) handlePutState(w http.ResponseWriter, r *http.Request) {
 	writeNoContent(w)
 }
 
-func (f *fetcher) handleGetErrorTemplate(w http.ResponseWriter, r *http.Request) {
-	errorTemplate, err := f.store.LoadErrorTemplate(r.Context())
+func (a *api) handleGetErrorTemplate(w http.ResponseWriter, r *http.Request) {
+	errorTemplate, err := a.store.LoadErrorTemplate(r.Context())
 	if err != nil {
 		web.RespondJSONError(w, r, fmt.Errorf("failed to read error template: %v", err))
 		return
@@ -184,8 +270,8 @@ func (f *fetcher) handleGetErrorTemplate(w http.ResponseWriter, r *http.Request)
 	_, _ = w.Write([]byte(errorTemplate))
 }
 
-func (f *fetcher) handlePutErrorTemplate(w http.ResponseWriter, r *http.Request) {
-	if !f.guardRunUnlocked(w, r) {
+func (a *api) handlePutErrorTemplate(w http.ResponseWriter, r *http.Request) {
+	if !a.guardRunUnlocked(w, r) {
 		return
 	}
 
@@ -194,7 +280,7 @@ func (f *fetcher) handlePutErrorTemplate(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if err := f.store.SaveErrorTemplate(r.Context(), string(content)); err != nil {
+	if err := a.store.SaveErrorTemplate(r.Context(), string(content)); err != nil {
 		web.RespondJSONError(w, r, fmt.Errorf("failed to write error template: %v", err))
 		return
 	}
@@ -202,8 +288,8 @@ func (f *fetcher) handlePutErrorTemplate(w http.ResponseWriter, r *http.Request)
 	writeNoContent(w)
 }
 
-func (f *fetcher) guardRunUnlocked(w http.ResponseWriter, r *http.Request) bool {
-	if !f.isRunLocked() {
+func (a *api) guardRunUnlocked(w http.ResponseWriter, r *http.Request) bool {
+	if !a.isRunLocked() {
 		return true
 	}
 
@@ -234,14 +320,14 @@ func writeNoContent(w http.ResponseWriter) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (f *fetcher) validateConfig(content []byte, r *http.Request) error {
-	if _, err := f.parseConfig(r.Context(), string(content)); err != nil {
+func (a *api) validateConfig(content []byte, r *http.Request) error {
+	if err := a.validateConfigFn(r.Context(), string(content)); err != nil {
 		return fmt.Errorf("%w: invalid config: %v", web.ErrBadRequest, err)
 	}
 	return nil
 }
 
-func (f *fetcher) validateState(content []byte) error {
+func validateState(content []byte) error {
 	stateMap, err := state.UnmarshalStateMap(content)
 	if err != nil {
 		return fmt.Errorf("%w: invalid JSON: %v", web.ErrBadRequest, err)
@@ -254,9 +340,8 @@ func (f *fetcher) validateState(content []byte) error {
 	return nil
 }
 
-func (f *fetcher) handleGetStats(w http.ResponseWriter, r *http.Request) {
-	statsDir := filepath.Join(f.stateDir, "stats")
-	entries, err := os.ReadDir(statsDir)
+func (a *api) handleGetStats(w http.ResponseWriter, r *http.Request) {
+	entries, err := os.ReadDir(a.statsDir)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
 			http.Error(w, "No stats available.", http.StatusNotFound)
@@ -266,33 +351,43 @@ func (f *fetcher) handleGetStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var allStats []stats
+	var allStats []statsItem
 	for _, entry := range entries {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
 			continue
 		}
-		path := filepath.Join(statsDir, entry.Name())
+		path := filepath.Join(a.statsDir, entry.Name())
 		b, err := os.ReadFile(path)
 		if err != nil {
 			web.RespondJSONError(w, r, fmt.Errorf("reading stats file %s: %w", path, err))
 			return
 		}
 
-		var s stats
+		var s struct {
+			StartTime time.Time `json:"start_time"`
+		}
 		if err := json.Unmarshal(b, &s); err != nil {
 			web.RespondJSONError(w, r, fmt.Errorf("parsing stats file %s: %w", path, err))
 			return
 		}
-		allStats = append(allStats, s)
+		allStats = append(allStats, statsItem{
+			StartTime: s.StartTime,
+			Raw:       append(json.RawMessage(nil), b...),
+		})
 	}
 
 	// Sort by start time, newest first.
-	slices.SortFunc(allStats, func(a, b stats) int {
+	slices.SortFunc(allStats, func(a, b statsItem) int {
 		return b.StartTime.Compare(a.StartTime)
 	})
 
+	response := make([]json.RawMessage, len(allStats))
+	for i, item := range allStats {
+		response[i] = item.Raw
+	}
+
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	if err := json.NewEncoder(w).Encode(allStats); err != nil {
+	if err := json.NewEncoder(w).Encode(response); err != nil {
 		web.RespondJSONError(w, r, fmt.Errorf("encoding stats response: %w", err))
 	}
 }

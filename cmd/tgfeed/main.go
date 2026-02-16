@@ -32,6 +32,7 @@ import (
 	"go.astrophena.name/base/logger"
 	"go.astrophena.name/base/request"
 	"go.astrophena.name/base/syncx"
+	"go.astrophena.name/tools/cmd/tgfeed/internal/admin"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/diff"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/sender"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/state"
@@ -113,7 +114,16 @@ func (f *fetcher) Run(ctx context.Context) error {
 
 	switch command {
 	case "admin":
-		return f.admin(ctx)
+		return admin.Run(ctx, admin.Config{
+			Addr:     f.adminAddr,
+			StateDir: f.stateDir,
+			Store:    f.store,
+			ValidateConfig: func(ctx context.Context, content string) error {
+				_, err := f.parseConfig(ctx, content)
+				return err
+			},
+			IsRunLocked: f.isRunLocked,
+		})
 	case "feeds":
 		return f.listFeeds(ctx, env.Stdout)
 	case "edit":

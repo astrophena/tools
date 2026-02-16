@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>tgfeed</title>
+    <link
+      rel="stylesheet"
+      href="/{{ .CSS }}"
+    />
+    <noscript>
+      <style>
+        #initial-loading {
+          display: none;
+        }
+      </style>
+    </noscript>
+  </head>
+  <body>
+    <noscript>
+      <div class="container">
+        <div class="error-message noscript-error">
+          Enable JavaScript to run this application.
+        </div>
+      </div>
+    </noscript>
+    <div id="root"></div>
+    <script src="/{{ .JS }}"></script>
+  </body>
+</html>
