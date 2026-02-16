@@ -15,7 +15,7 @@ import {
   PointElement,
   Tooltip,
 } from "npm:chart.js";
-import { Bar, Doughnut, Line, getElementAtEvent } from "npm:react-chartjs-2";
+import { Bar, Doughnut, Line } from "npm:react-chartjs-2";
 
 import { formatDateTime, formatDuration } from "../format.ts";
 import { StatsRun } from "../types.ts";
@@ -177,20 +177,23 @@ export function RunChart(props: {
       },
     },
     onClick: (event: ChartEvent) => {
-      if (!lineChartRef.current || !event.native) {
+      if (!lineChartRef.current) {
         return;
       }
-      const points = getElementAtEvent(lineChartRef.current, {
-        nativeEvent: event.native,
-      } as React.MouseEvent<HTMLCanvasElement>);
+      const points = lineChartRef.current.getElementsAtEventForMode(
+        event,
+        "nearest",
+        { intersect: true },
+        false,
+      );
       if (points.length === 0) {
         return;
       }
       const indexFromRecentRuns = points[0]?.index ?? 0;
-      const indexFromLatestRuns = stats.length - 1 - indexFromRecentRuns;
+      const indexFromLatestRuns = recentRuns.length - 1 - indexFromRecentRuns;
       setSelectedStatsIndex(indexFromLatestRuns);
     },
-  }), [recentRuns, setSelectedStatsIndex, stats.length]);
+  }), [recentRuns, setSelectedStatsIndex]);
 
   const feedOutcomeData = useMemo<ChartData<"bar">>(() => ({
     labels: timelineLabels,
