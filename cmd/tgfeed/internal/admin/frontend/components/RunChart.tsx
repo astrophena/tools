@@ -177,10 +177,12 @@ export function RunChart(props: {
       },
     },
     onClick: (event: ChartEvent) => {
-      if (!lineChartRef.current) {
+      if (!lineChartRef.current || !event.native) {
         return;
       }
-      const points = getElementAtEvent(lineChartRef.current, event.native as MouseEvent);
+      const points = getElementAtEvent(lineChartRef.current, {
+        nativeEvent: event.native,
+      } as React.MouseEvent<HTMLCanvasElement>);
       if (points.length === 0) {
         return;
       }
