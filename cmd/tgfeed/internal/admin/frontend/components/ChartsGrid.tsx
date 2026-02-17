@@ -1,4 +1,4 @@
-import React from "npm:react";
+import React from "react";
 
 export function ChartsGrid(props: {
   children: React.ReactNode;

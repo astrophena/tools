@@ -1,4 +1,4 @@
-import React from "npm:react";
+import React from "react";
 
 /** Lightweight summary for top feed lists in stats payloads. */
 export type FeedSummary = {

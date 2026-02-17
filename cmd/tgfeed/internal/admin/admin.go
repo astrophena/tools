@@ -4,6 +4,7 @@
 
 //go:generate deno bundle frontend/app.tsx --platform=browser --minify --output=static/js/app.min.js
 
+// Package admin implements the administrative web UI and API for tgfeed.
 package admin
 
 import (

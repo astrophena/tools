@@ -1,4 +1,4 @@
-import React, { useMemo } from "npm:react";
+import React, { useMemo } from "react";
 import {
   BarElement,
   CategoryScale,
@@ -8,8 +8,8 @@ import {
   Legend,
   LinearScale,
   Tooltip,
-} from "npm:chart.js";
-import { Bar } from "npm:react-chartjs-2";
+} from "chart.js";
+import { Bar } from "react-chartjs-2";
 
 import { StatsRun } from "../types.ts";
 
@@ -99,7 +99,9 @@ export function PerformanceCharts(props: {
     <>
       <article className="chart-card">
         <h3>Latency percentiles</h3>
-        <p className="chart-note">Fetch and send latency percentiles in seconds.</p>
+        <p className="chart-note">
+          Fetch and send latency percentiles in seconds.
+        </p>
         <div className="chart-canvas">
           <Bar data={latencyData} options={compactBarOptions} />
         </div>
@@ -107,7 +109,9 @@ export function PerformanceCharts(props: {
 
       <article className="chart-card chart-card-wide">
         <h3>Error and retry sources</h3>
-        <p className="chart-note">Timeout, network and parse errors, plus retry pressure indicators.</p>
+        <p className="chart-note">
+          Timeout, network and parse errors, plus retry pressure indicators.
+        </p>
         <div className="chart-canvas">
           <Bar data={errorData} options={compactBarOptions} />
         </div>

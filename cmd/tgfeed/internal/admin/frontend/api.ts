@@ -12,7 +12,9 @@ export class APIError extends Error {
  * Converts a failed fetch response into a normalized APIError.
  */
 export async function toAPIError(response: Response): Promise<APIError> {
-  const fallback = `${response.status} ${response.statusText || "Request failed"}`;
+  const fallback = `${response.status} ${
+    response.statusText || "Request failed"
+  }`;
   const contentType = response.headers.get("Content-Type") ?? "";
   try {
     if (contentType.includes("application/json")) {
@@ -58,7 +60,11 @@ export async function getText(path: string): Promise<string> {
 /**
  * Sends text data to a writable endpoint.
  */
-export async function putText(path: string, content: string, contentType: string): Promise<void> {
+export async function putText(
+  path: string,
+  content: string,
+  contentType: string,
+): Promise<void> {
   const response = await fetch(path, {
     method: "PUT",
     headers: { "Content-Type": contentType },
