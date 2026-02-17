@@ -8,6 +8,7 @@
       rel="stylesheet"
       href="/{{ .CSS }}"
     />
+    <link rel="icon" href="/{{ .Icon }}" />
     <noscript>
       <style>
         #initial-loading {
@@ -24,7 +25,7 @@
         </div>
       </div>
     </noscript>
-    <div id="root"></div>
+    <div id="root" data-logo="/{{ .Logo }}"></div>
     <script src="/{{ .JS }}"></script>
   </body>
 </html>

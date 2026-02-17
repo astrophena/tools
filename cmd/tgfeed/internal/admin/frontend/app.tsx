@@ -30,6 +30,9 @@ function pathnameForRoute(route: RouteTab): string {
   return "/stats";
 }
 
+const rootContainer = document.getElementById("root");
+const dashboardLogo = rootContainer?.dataset.logo ?? "/static/icons/logo.webp";
+
 /**
  * Main tgfeed admin dashboard root component.
  */
@@ -164,8 +167,13 @@ function App() {
     <div className="app-shell">
       <header className="panel hero">
         <div className="hero-title">
-          <p className="eyebrow">tgfeed</p>
-          <h1>Admin Dashboard</h1>
+          <div className="hero-brand">
+            <img className="hero-logo" src={dashboardLogo} alt="tgfeed logo" />
+            <div>
+              <p className="eyebrow">tgfeed</p>
+              <h1>Admin Dashboard</h1>
+            </div>
+          </div>
           <p className="subtitle">
             Inspect run metrics and edit tgfeed configuration from one place.
           </p>
@@ -247,8 +255,7 @@ function App() {
   );
 }
 
-const container = document.getElementById("root");
-if (container) {
-  const root = createRoot(container);
+if (rootContainer) {
+  const root = createRoot(rootContainer);
   root.render(<App />);
 }
