@@ -27,9 +27,7 @@ ChartJS.register(
   Legend,
 );
 
-/**
- * Formats chart X-axis labels as day.month and 24-hour time.
- */
+/** Formats chart X-axis labels as day.month and 24-hour time. */
 function formatRunLabel(value: string | undefined): string {
   if (!value) {
     return "unknown";
@@ -45,66 +43,67 @@ function formatRunLabel(value: string | undefined): string {
   }`;
 }
 
-/**
- * Converts nanoseconds into seconds for chart display.
- */
-function toSeconds(valueNs: number | undefined): number {
-  return (valueNs ?? 0) / 1_000_000_000;
+function toNumber(value: number | undefined): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return 0;
+  }
+  return value;
+}
+
+function healthyFeeds(run: StatsRun): number {
+  return toNumber(run.success_feeds) + toNumber(run.not_modified_feeds);
+}
+
+function healthyRate(run: StatsRun): number {
+  const total = toNumber(run.total_feeds);
+  if (total <= 0) {
+    return 0;
+  }
+  return (healthyFeeds(run) / total) * 100;
 }
 
 export function TimelineChart(props: {
   stats: StatsRun[];
-  setSelectedStatsIndex: (index: number) => void;
+  selectedStatsIndex: number;
+  onSelectRun: (index: number) => void;
 }) {
-  const { stats, setSelectedStatsIndex } = props;
+  const { stats, selectedStatsIndex, onSelectRun } = props;
   const lineChartRef = useRef<ChartJS<"line">>(null);
 
-  // Take top 20 runs for the timeline, reversed so time goes left to right.
   const recentRuns = useMemo(() => stats.slice(0, 20).reverse(), [stats]);
   const timelineLabels = useMemo(
     () => recentRuns.map((run) => formatRunLabel(run.start_time)),
     [recentRuns],
   );
 
+  const selectedRecentIndex = useMemo(() => {
+    const idx = recentRuns.length - 1 - selectedStatsIndex;
+    if (idx < 0 || idx >= recentRuns.length) {
+      return -1;
+    }
+    return idx;
+  }, [recentRuns.length, selectedStatsIndex]);
+
   const trendData = useMemo<ChartData<"line">>(() => ({
     labels: timelineLabels,
     datasets: [
       {
-        label: "Duration (s)",
-        data: recentRuns.map((run) => toSeconds(run.duration)),
+        label: "Healthy feeds (%)",
+        data: recentRuns.map((run) => healthyRate(run)),
         borderColor: "#6fe1b7",
-        backgroundColor: "rgba(111, 225, 183, 0.18)",
-        yAxisID: "yDuration",
-        tension: 0.35,
+        backgroundColor: "rgba(111, 225, 183, 0.2)",
+        tension: 0.32,
         fill: true,
-        pointRadius: 3,
+        pointRadius: recentRuns.map((_, index) =>
+          index === selectedRecentIndex ? 5 : 3
+        ),
         pointHoverRadius: 6,
-      },
-      {
-        label: "Messages sent",
-        data: recentRuns.map((run) => run.messages_sent ?? 0),
-        borderColor: "#7ea7ff",
-        backgroundColor: "rgba(126, 167, 255, 0.15)",
-        yAxisID: "yCount",
-        tension: 0.35,
-        borderDash: [5, 4],
-        fill: false,
-        pointRadius: 3,
-        pointHoverRadius: 6,
-      },
-      {
-        label: "Failed feeds",
-        data: recentRuns.map((run) => run.failed_feeds ?? 0),
-        borderColor: "#ff8a94",
-        backgroundColor: "rgba(255, 138, 148, 0.12)",
-        yAxisID: "yCount",
-        tension: 0.35,
-        fill: false,
-        pointRadius: 3,
-        pointHoverRadius: 6,
+        pointBackgroundColor: recentRuns.map((_, index) =>
+          index === selectedRecentIndex ? "#fff" : "#6fe1b7"
+        ),
       },
     ],
-  }), [recentRuns, timelineLabels]);
+  }), [recentRuns, selectedRecentIndex, timelineLabels]);
 
   const trendOptions = useMemo<ChartOptions<"line">>(() => ({
     responsive: true,
@@ -128,10 +127,16 @@ export function TimelineChart(props: {
             return formatDateTime(recentRuns[index]?.start_time);
           },
           label: (item) => {
-            if (item.dataset.yAxisID === "yDuration") {
-              return `Duration: ${Number(item.parsed.y).toFixed(1)} s`;
+            const index = item.dataIndex;
+            const run = recentRuns[index];
+            if (!run) {
+              return "Healthy feeds: n/a";
             }
-            return `${item.dataset.label}: ${Number(item.parsed.y).toFixed(0)}`;
+            const healthy = healthyFeeds(run);
+            const total = toNumber(run?.total_feeds);
+            return `Healthy feeds: ${healthy}/${total} (${
+              Number(item.parsed.y).toFixed(1)
+            }%)`;
           },
         },
       },
@@ -146,31 +151,26 @@ export function TimelineChart(props: {
         },
         grid: { color: "rgba(157, 177, 190, 0.08)" },
       },
-      yDuration: {
-        position: "left",
+      y: {
         beginAtZero: true,
+        max: 100,
         ticks: {
           color: "#9db1be",
-          callback: (value) => `${value} s`,
+          callback: (value) => `${value}%`,
         },
         grid: { color: "rgba(157, 177, 190, 0.14)" },
-      },
-      yCount: {
-        position: "right",
-        beginAtZero: true,
-        ticks: {
-          color: "#9db1be",
-          precision: 0,
-        },
-        grid: { drawOnChartArea: false },
       },
     },
     onClick: (event: ChartEvent) => {
       if (!lineChartRef.current) {
         return;
       }
+      const nativeEvent = event.native;
+      if (!nativeEvent) {
+        return;
+      }
       const points = lineChartRef.current.getElementsAtEventForMode(
-        event,
+        nativeEvent,
         "nearest",
         { intersect: true },
         false,
@@ -180,15 +180,16 @@ export function TimelineChart(props: {
       }
       const indexFromRecentRuns = points[0]?.index ?? 0;
       const indexFromLatestRuns = recentRuns.length - 1 - indexFromRecentRuns;
-      setSelectedStatsIndex(indexFromLatestRuns);
+      onSelectRun(indexFromLatestRuns);
     },
-  }), [recentRuns, setSelectedStatsIndex]);
+  }), [onSelectRun, recentRuns]);
 
   return (
     <article className="chart-card">
-      <h3>Timeline</h3>
+      <h3>Health Trend</h3>
       <p className="chart-note">
-        Duration in seconds, messages sent, and failed feeds over recent runs.
+        Healthy feed rate across recent runs. Not changed feeds count as
+        healthy.
       </p>
       <div className="chart-canvas chart-canvas-lg">
         <Line ref={lineChartRef} data={trendData} options={trendOptions} />

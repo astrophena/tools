@@ -56,6 +56,10 @@ function App() {
   const [statsLoading, setStatsLoading] = useState(false);
   const [statsError, setStatsError] = useState("");
   const [selectedStatsIndex, setSelectedStatsIndex] = useState(0);
+  const [lastStatsRefreshedAt, setLastStatsRefreshedAt] = useState<
+    number | null
+  >(null);
+  const [autoRefreshStats, setAutoRefreshStats] = useState(false);
   const [banner, setBanner] = useState("");
 
   /** Loads persisted run stats used by dashboard charts and indicators. */
@@ -69,6 +73,7 @@ function App() {
       });
       if (response.status === 404) {
         setStats([]);
+        setLastStatsRefreshedAt(Date.now());
         return;
       }
       if (!response.ok) {
@@ -80,6 +85,7 @@ function App() {
       } else {
         setStats([]);
       }
+      setLastStatsRefreshedAt(Date.now());
     } catch (err) {
       setStatsError(err instanceof Error ? err.message : "Unexpected error");
       setStats([]);
@@ -122,6 +128,18 @@ function App() {
   useEffect(() => {
     setSelectedStatsIndex(0);
   }, [stats]);
+
+  useEffect(() => {
+    if (!autoRefreshStats || route !== "stats") {
+      return;
+    }
+    const timer = window.setInterval(() => {
+      void loadStats();
+    }, 30_000);
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [autoRefreshStats, loadStats, route]);
 
   useEffect(() => {
     function onPopState(): void {
@@ -200,6 +218,9 @@ function App() {
             selectedStatsIndex={selectedStatsIndex}
             setSelectedStatsIndex={setSelectedStatsIndex}
             loadStats={loadStats}
+            lastStatsRefreshedAt={lastStatsRefreshedAt}
+            autoRefreshStats={autoRefreshStats}
+            setAutoRefreshStats={setAutoRefreshStats}
           />
         )}
 

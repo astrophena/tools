@@ -1,6 +1,8 @@
 {
   "version": "5",
   "specifiers": {
+    "npm:@types/react-dom@^19.2.3": "19.2.3_@types+react@19.2.14",
+    "npm:@types/react@^19.2.14": "19.2.14",
     "npm:chart.js@^4.5.1": "4.5.1",
     "npm:react-chartjs-2@^5.3.1": "5.3.1_chart.js@4.5.1_react@19.2.4",
     "npm:react-dom@^19.2.4": "19.2.4_react@19.2.4",
@@ -10,11 +12,26 @@
     "@kurkle/color@0.3.4": {
       "integrity": "sha512-M5UknZPHRu3DEDWoipU6sE8PdkZ6Z/S+v4dD+Ke8IaNlpdSQah50lz1KtcFBa2vsdOnwbbnxJwVM4wty6udA5w=="
     },
+    "@types/react-dom@19.2.3_@types+react@19.2.14": {
+      "integrity": "sha512-jp2L/eY6fn+KgVVQAOqYItbF0VY/YApe5Mz2F0aykSO8gx31bYCZyvSeYxCHKvzHG5eZjc+zyaS5BrBWya2+kQ==",
+      "dependencies": [
+        "@types/react"
+      ]
+    },
+    "@types/react@19.2.14": {
+      "integrity": "sha512-ilcTH/UniCkMdtexkoCN0bI7pMcJDvmQFPvuPvmEaYA/NSfFTAgdUSLAoVjaRJm7+6PvcM+q1zYOwS4wTYMF9w==",
+      "dependencies": [
+        "csstype"
+      ]
+    },
     "chart.js@4.5.1": {
       "integrity": "sha512-GIjfiT9dbmHRiYi6Nl2yFCq7kkwdkp1W/lp2J99rX0yo9tgJGn3lKQATztIjb5tVtevcBtIdICNWqlq5+E8/Pw==",
       "dependencies": [
         "@kurkle/color"
       ]
+    },
+    "csstype@3.2.3": {
+      "integrity": "sha512-z1HGKcYy2xA8AGQfwrn0PAy+PB7X/GSj3UVJW9qKyn43xWa+gl5nXmU4qqLMRzWVLFC8KusUX8T/0kCiOYpAIQ=="
     },
     "react-chartjs-2@5.3.1_chart.js@4.5.1_react@19.2.4": {
       "integrity": "sha512-h5IPXKg9EXpjoBzUfyWJvllMjG2mQ4EiuHQFhms/AjUm0XSZHhyRy2xVmLXHKrtcdrPO4mnGqRtYoD0vp95A0A==",
@@ -39,6 +56,8 @@
   },
   "workspace": {
     "dependencies": [
+      "npm:@types/react-dom@^19.2.3",
+      "npm:@types/react@^19.2.14",
       "npm:chart.js@^4.5.1",
       "npm:react-chartjs-2@^5.3.1",
       "npm:react-dom@^19.2.4",

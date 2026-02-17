@@ -1,8 +1,23 @@
 {
   "imports": {
+    "@types/react": "npm:@types/react@^19.2.14",
+    "@types/react-dom": "npm:@types/react-dom@^19.2.3",
     "chart.js": "npm:chart.js@^4.5.1",
     "react": "npm:react@^19.2.4",
     "react-chartjs-2": "npm:react-chartjs-2@^5.3.1",
     "react-dom": "npm:react-dom@^19.2.4"
+  },
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "react",
+    "strict": true,
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "dom.asynciterable",
+      "deno.ns",
+      "deno.unstable"
+    ],
+    "types": ["@types/react", "@types/react-dom"]
   }
 }
