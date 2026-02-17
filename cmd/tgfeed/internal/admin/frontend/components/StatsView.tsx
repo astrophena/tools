@@ -2,7 +2,11 @@ import React, { useMemo } from "npm:react";
 
 import { formatBytes, formatDateTime, formatDuration } from "../format.ts";
 import { StatsRun } from "../types.ts";
-import { RunChart } from "./RunChart.tsx";
+import { ChartsGrid } from "./ChartsGrid.tsx";
+import { NetworkCharts } from "./NetworkCharts.tsx";
+import { OutcomeCharts } from "./OutcomeCharts.tsx";
+import { PerformanceCharts } from "./PerformanceCharts.tsx";
+import { TimelineChart } from "./TimelineChart.tsx";
 
 /**
  * Formats an ISO timestamp into a short relative string.
@@ -66,13 +70,46 @@ export function StatsView(props: {
     return `${ratio.toFixed(1)}%`;
   }, [latestStats]);
 
+  const selectedRunFeedSuccess = useMemo(() => {
+    const total = selectedStats?.total_feeds ?? 0;
+    if (total === 0) {
+      return "n/a";
+    }
+    return `${(((selectedStats?.success_feeds ?? 0) / total) * 100).toFixed(1)}%`;
+  }, [selectedStats]);
+
   return (
     <div className="column">
-      <RunChart
-        stats={stats}
-        selectedStatsIndex={selectedStatsIndex}
-        setSelectedStatsIndex={setSelectedStatsIndex}
-      />
+      <section className="panel chart-panel">
+        <header className="panel-header">
+          <div>
+            <h2>Interactive Run Analytics</h2>
+            <p>Click any point in the timeline chart to inspect that run and keep all analytics blocks in sync.</p>
+          </div>
+        </header>
+
+        {selectedStats && (
+          <div className="chart-kpis">
+            <span className="chart-kpi"><b>Selected run</b>{formatDateTime(selectedStats.start_time)}</span>
+            <span className="chart-kpi"><b>Total feeds</b>{selectedStats.total_feeds ?? 0}</span>
+            <span className="chart-kpi"><b>Failed feeds</b>{selectedStats.failed_feeds ?? 0}</span>
+            <span className="chart-kpi"><b>Feed success</b>{selectedRunFeedSuccess}</span>
+            <span className="chart-kpi"><b>Run duration</b>{formatDuration(selectedStats.duration)}</span>
+          </div>
+        )}
+
+        {stats.length === 0 && !statsLoading && <p className="message message-info">No chart data yet.</p>}
+        {stats.length > 0 && (
+          <div className="chart-stack">
+            <TimelineChart stats={stats} setSelectedStatsIndex={setSelectedStatsIndex} />
+            <ChartsGrid>
+              <OutcomeCharts stats={stats} selectedRun={selectedStats} />
+              <NetworkCharts selectedRun={selectedStats} />
+              <PerformanceCharts selectedRun={selectedStats} />
+            </ChartsGrid>
+          </div>
+        )}
+      </section>
 
       <section className="panel stats-panel">
         <header className="panel-header">

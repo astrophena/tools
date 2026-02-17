@@ -351,12 +351,27 @@ func (a *api) handleGetStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var allStats []statsItem
+	// Filter for JSON files.
+	var statsFiles []string
 	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
-			continue
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".json") {
+			statsFiles = append(statsFiles, entry.Name())
 		}
-		path := filepath.Join(a.statsDir, entry.Name())
+	}
+
+	// Sort by filename, descending (newest first).
+	slices.SortFunc(statsFiles, func(a, b string) int {
+		return strings.Compare(b, a)
+	})
+
+	// Limit to the latest 100 entries.
+	if len(statsFiles) > 100 {
+		statsFiles = statsFiles[:100]
+	}
+
+	var allStats []statsItem
+	for _, name := range statsFiles {
+		path := filepath.Join(a.statsDir, name)
 		b, err := os.ReadFile(path)
 		if err != nil {
 			web.RespondJSONError(w, r, fmt.Errorf("reading stats file %s: %w", path, err))
@@ -375,11 +390,6 @@ func (a *api) handleGetStats(w http.ResponseWriter, r *http.Request) {
 			Raw:       append(json.RawMessage(nil), b...),
 		})
 	}
-
-	// Sort by start time, newest first.
-	slices.SortFunc(allStats, func(a, b statsItem) int {
-		return b.StartTime.Compare(a.StartTime)
-	})
 
 	response := make([]json.RawMessage, len(allStats))
 	for i, item := range allStats {
