@@ -1,4 +1,4 @@
-import React, { useMemo } from "npm:react";
+import React, { useMemo } from "react";
 import {
   BarElement,
   CategoryScale,
@@ -8,8 +8,8 @@ import {
   Legend,
   LinearScale,
   Tooltip,
-} from "npm:chart.js";
-import { Bar } from "npm:react-chartjs-2";
+} from "chart.js";
+import { Bar } from "react-chartjs-2";
 
 import { formatDateTime } from "../format.ts";
 import { StatsRun } from "../types.ts";
@@ -30,7 +30,11 @@ function formatRunLabel(value: string | undefined): string {
   if (Number.isNaN(date.getTime())) {
     return value;
   }
-  return `${date.getDate().toString().padStart(2, "0")}.${(date.getMonth() + 1).toString().padStart(2, "0")} ${date.getHours().toString().padStart(2, "0")}:${date.getMinutes().toString().padStart(2, "0")}`;
+  return `${date.getDate().toString().padStart(2, "0")}.${
+    (date.getMonth() + 1).toString().padStart(2, "0")
+  } ${date.getHours().toString().padStart(2, "0")}:${
+    date.getMinutes().toString().padStart(2, "0")
+  }`;
 }
 
 export function OutcomeCharts(props: {
@@ -39,7 +43,10 @@ export function OutcomeCharts(props: {
 }) {
   const { stats, selectedRun } = props;
   const recentRuns = useMemo(() => stats.slice(0, 20).reverse(), [stats]);
-  const timelineLabels = useMemo(() => recentRuns.map((run) => formatRunLabel(run.start_time)), [recentRuns]);
+  const timelineLabels = useMemo(
+    () => recentRuns.map((run) => formatRunLabel(run.start_time)),
+    [recentRuns],
+  );
 
   const feedOutcomeData = useMemo<ChartData<"bar">>(() => ({
     labels: timelineLabels,
@@ -83,10 +90,17 @@ export function OutcomeCharts(props: {
             return formatDateTime(recentRuns[index]?.start_time);
           },
           footer: (items) => {
-            const total = items.reduce((sum, item) => sum + Number(item.parsed.y ?? 0), 0);
-            const failed = Number(items.find((item) => item.datasetIndex === 2)?.parsed.y ?? 0);
+            const total = items.reduce(
+              (sum, item) => sum + Number(item.parsed.y ?? 0),
+              0,
+            );
+            const failed = Number(
+              items.find((item) => item.datasetIndex === 2)?.parsed.y ?? 0,
+            );
             const failureRate = total > 0 ? (failed / total) * 100 : 0;
-            return `Total feeds: ${total} · Failure rate: ${failureRate.toFixed(1)}%`;
+            return `Total feeds: ${total} · Failure rate: ${
+              failureRate.toFixed(1)
+            }%`;
           },
         },
       },
@@ -152,7 +166,9 @@ export function OutcomeCharts(props: {
     <>
       <article className="chart-card">
         <h3>Feed outcomes by run</h3>
-        <p className="chart-note">Stacked breakdown of success, not-modified, and failed feeds.</p>
+        <p className="chart-note">
+          Stacked breakdown of success, not-modified, and failed feeds.
+        </p>
         <div className="chart-canvas">
           <Bar data={feedOutcomeData} options={feedOutcomeOptions} />
         </div>
@@ -160,7 +176,9 @@ export function OutcomeCharts(props: {
 
       <article className="chart-card">
         <h3>Item pipeline</h3>
-        <p className="chart-note">How fetched items moved through filtering and enqueue stages.</p>
+        <p className="chart-note">
+          How fetched items moved through filtering and enqueue stages.
+        </p>
         <div className="chart-canvas">
           <Bar data={itemFlowData} options={compactBarOptions} />
         </div>

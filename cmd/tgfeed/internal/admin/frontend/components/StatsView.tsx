@@ -1,4 +1,4 @@
-import React, { useMemo } from "npm:react";
+import React, { useMemo } from "react";
 
 import { formatBytes, formatDateTime, formatDuration } from "../format.ts";
 import { StatsRun } from "../types.ts";
@@ -50,23 +50,36 @@ export function StatsView(props: {
   setSelectedStatsIndex: (index: number) => void;
   loadStats: () => Promise<void>;
 }) {
-  const { stats, statsLoading, statsError, selectedStatsIndex, setSelectedStatsIndex, loadStats } = props;
+  const {
+    stats,
+    statsLoading,
+    statsError,
+    selectedStatsIndex,
+    setSelectedStatsIndex,
+    loadStats,
+  } = props;
   const latestStats = stats.length > 0 ? stats[0] : undefined;
   const selectedStats = stats[selectedStatsIndex] ?? latestStats;
 
   const successRate = useMemo(() => {
-    if (!latestStats || !latestStats.total_feeds || latestStats.total_feeds === 0) {
+    if (
+      !latestStats || !latestStats.total_feeds || latestStats.total_feeds === 0
+    ) {
       return "n/a";
     }
-    const ratio = ((latestStats.success_feeds ?? 0) / latestStats.total_feeds) * 100;
+    const ratio = ((latestStats.success_feeds ?? 0) / latestStats.total_feeds) *
+      100;
     return `${ratio.toFixed(1)}%`;
   }, [latestStats]);
 
   const failureRate = useMemo(() => {
-    if (!latestStats || !latestStats.total_feeds || latestStats.total_feeds === 0) {
+    if (
+      !latestStats || !latestStats.total_feeds || latestStats.total_feeds === 0
+    ) {
       return "n/a";
     }
-    const ratio = ((latestStats.failed_feeds ?? 0) / latestStats.total_feeds) * 100;
+    const ratio = ((latestStats.failed_feeds ?? 0) / latestStats.total_feeds) *
+      100;
     return `${ratio.toFixed(1)}%`;
   }, [latestStats]);
 
@@ -75,7 +88,9 @@ export function StatsView(props: {
     if (total === 0) {
       return "n/a";
     }
-    return `${(((selectedStats?.success_feeds ?? 0) / total) * 100).toFixed(1)}%`;
+    return `${
+      (((selectedStats?.success_feeds ?? 0) / total) * 100).toFixed(1)
+    }%`;
   }, [selectedStats]);
 
   return (
@@ -84,24 +99,47 @@ export function StatsView(props: {
         <header className="panel-header">
           <div>
             <h2>Interactive Run Analytics</h2>
-            <p>Click any point in the timeline chart to inspect that run and keep all analytics blocks in sync.</p>
+            <p>
+              Click any point in the timeline chart to inspect that run and keep
+              all analytics blocks in sync.
+            </p>
           </div>
         </header>
 
         {selectedStats && (
           <div className="chart-kpis">
-            <span className="chart-kpi"><b>Selected run</b>{formatDateTime(selectedStats.start_time)}</span>
-            <span className="chart-kpi"><b>Total feeds</b>{selectedStats.total_feeds ?? 0}</span>
-            <span className="chart-kpi"><b>Failed feeds</b>{selectedStats.failed_feeds ?? 0}</span>
-            <span className="chart-kpi"><b>Feed success</b>{selectedRunFeedSuccess}</span>
-            <span className="chart-kpi"><b>Run duration</b>{formatDuration(selectedStats.duration)}</span>
+            <span className="chart-kpi">
+              <b>Selected run</b>
+              {formatDateTime(selectedStats.start_time)}
+            </span>
+            <span className="chart-kpi">
+              <b>Total feeds</b>
+              {selectedStats.total_feeds ?? 0}
+            </span>
+            <span className="chart-kpi">
+              <b>Failed feeds</b>
+              {selectedStats.failed_feeds ?? 0}
+            </span>
+            <span className="chart-kpi">
+              <b>Feed success</b>
+              {selectedRunFeedSuccess}
+            </span>
+            <span className="chart-kpi">
+              <b>Run duration</b>
+              {formatDuration(selectedStats.duration)}
+            </span>
           </div>
         )}
 
-        {stats.length === 0 && !statsLoading && <p className="message message-info">No chart data yet.</p>}
+        {stats.length === 0 && !statsLoading && (
+          <p className="message message-info">No chart data yet.</p>
+        )}
         {stats.length > 0 && (
           <div className="chart-stack">
-            <TimelineChart stats={stats} setSelectedStatsIndex={setSelectedStatsIndex} />
+            <TimelineChart
+              stats={stats}
+              setSelectedStatsIndex={setSelectedStatsIndex}
+            />
             <ChartsGrid>
               <OutcomeCharts stats={stats} selectedRun={selectedStats} />
               <NetworkCharts selectedRun={selectedStats} />
@@ -117,13 +155,20 @@ export function StatsView(props: {
             <h2>Run Overview</h2>
             <p>Aggregated metrics from persisted run snapshots.</p>
           </div>
-          <button className="button button-ghost" type="button" onClick={() => void loadStats()} disabled={statsLoading}>
+          <button
+            className="button button-ghost"
+            type="button"
+            onClick={() => void loadStats()}
+            disabled={statsLoading}
+          >
             {statsLoading ? "Loading..." : "Refresh stats"}
           </button>
         </header>
 
         {statsError && <p className="message message-error">{statsError}</p>}
-        {!statsError && stats.length === 0 && !statsLoading && <p className="message message-info">No stats available yet.</p>}
+        {!statsError && stats.length === 0 && !statsLoading && (
+          <p className="message message-info">No stats available yet.</p>
+        )}
 
         {latestStats && (
           <>
@@ -229,7 +274,9 @@ export function StatsView(props: {
                 <b>{formatDuration(item.fetch_duration)}</b>
               </li>
             ))}
-            {(selectedStats.top_slowest_feeds ?? []).length === 0 && <li className="empty-line">No entries</li>}
+            {(selectedStats.top_slowest_feeds ?? []).length === 0 && (
+              <li className="empty-line">No entries</li>
+            )}
           </ol>
         </section>
       )}

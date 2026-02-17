@@ -1,4 +1,4 @@
-import React from "npm:react";
+import React from "react";
 
 import { EditableResource } from "../types.ts";
 
@@ -20,7 +20,9 @@ export function EditorPanel(props: EditorPanelProps) {
   /**
    * Inserts spaces instead of moving focus when Tab is pressed inside the editor.
    */
-  function onEditorKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>): void {
+  function onEditorKeyDown(
+    event: React.KeyboardEvent<HTMLTextAreaElement>,
+  ): void {
     if (event.key !== "Tab") {
       return;
     }
@@ -31,7 +33,9 @@ export function EditorPanel(props: EditorPanelProps) {
     const start = target.selectionStart;
     const end = target.selectionEnd;
 
-    const nextValue = `${resource.value.slice(0, start)}${indent}${resource.value.slice(end)}`;
+    const nextValue = `${resource.value.slice(0, start)}${indent}${
+      resource.value.slice(end)
+    }`;
     resource.setValue(nextValue);
 
     requestAnimationFrame(() => {
@@ -48,7 +52,9 @@ export function EditorPanel(props: EditorPanelProps) {
           <p>{description}</p>
         </div>
         <div className="status-cluster">
-          {resource.dirty ? <span className="pill pill-warning">Unsaved</span> : <span className="pill">Synced</span>}
+          {resource.dirty
+            ? <span className="pill pill-warning">Unsaved</span>
+            : <span className="pill">Synced</span>}
           <span className="pill pill-subtle">{languageHint}</span>
         </div>
       </header>
@@ -84,7 +90,9 @@ export function EditorPanel(props: EditorPanelProps) {
           resource.setValue(event.target.value);
         }}
       />
-      {resource.error && <p className="message message-error">{resource.error}</p>}
+      {resource.error && (
+        <p className="message message-error">{resource.error}</p>
+      )}
     </section>
   );
 }

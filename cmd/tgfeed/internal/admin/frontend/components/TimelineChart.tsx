@@ -1,4 +1,4 @@
-import React, { useMemo, useRef } from "npm:react";
+import React, { useMemo, useRef } from "react";
 import {
   CategoryScale,
   Chart as ChartJS,
@@ -7,12 +7,12 @@ import {
   ChartOptions,
   Filler,
   Legend,
-  LineElement,
   LinearScale,
+  LineElement,
   PointElement,
   Tooltip,
-} from "npm:chart.js";
-import { Line } from "npm:react-chartjs-2";
+} from "chart.js";
+import { Line } from "react-chartjs-2";
 
 import { formatDateTime } from "../format.ts";
 import { StatsRun } from "../types.ts";
@@ -38,7 +38,11 @@ function formatRunLabel(value: string | undefined): string {
   if (Number.isNaN(date.getTime())) {
     return value;
   }
-  return `${date.getDate().toString().padStart(2, "0")}.${(date.getMonth() + 1).toString().padStart(2, "0")} ${date.getHours().toString().padStart(2, "0")}:${date.getMinutes().toString().padStart(2, "0")}`;
+  return `${date.getDate().toString().padStart(2, "0")}.${
+    (date.getMonth() + 1).toString().padStart(2, "0")
+  } ${date.getHours().toString().padStart(2, "0")}:${
+    date.getMinutes().toString().padStart(2, "0")
+  }`;
 }
 
 /**
@@ -57,7 +61,10 @@ export function TimelineChart(props: {
 
   // Take top 20 runs for the timeline, reversed so time goes left to right.
   const recentRuns = useMemo(() => stats.slice(0, 20).reverse(), [stats]);
-  const timelineLabels = useMemo(() => recentRuns.map((run) => formatRunLabel(run.start_time)), [recentRuns]);
+  const timelineLabels = useMemo(
+    () => recentRuns.map((run) => formatRunLabel(run.start_time)),
+    [recentRuns],
+  );
 
   const trendData = useMemo<ChartData<"line">>(() => ({
     labels: timelineLabels,
@@ -180,7 +187,9 @@ export function TimelineChart(props: {
   return (
     <article className="chart-card">
       <h3>Timeline</h3>
-      <p className="chart-note">Duration in seconds, messages sent, and failed feeds over recent runs.</p>
+      <p className="chart-note">
+        Duration in seconds, messages sent, and failed feeds over recent runs.
+      </p>
       <div className="chart-canvas chart-canvas-lg">
         <Line ref={lineChartRef} data={trendData} options={trendOptions} />
       </div>

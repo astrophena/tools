@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useState } from "npm:react";
-import { createRoot } from "npm:react-dom/client";
+import React, { useCallback, useEffect, useState } from "react";
+import { createRoot } from "react-dom/client";
 
 import { getText, putText, toAPIError } from "./api.ts";
 import { EditorPanel } from "./components/EditorPanel.tsx";
@@ -34,7 +34,9 @@ function pathnameForRoute(route: RouteTab): string {
  * Main tgfeed admin dashboard root component.
  */
 function App() {
-  const [route, setRoute] = useState<RouteTab>(() => routeFromPathname(window.location.pathname));
+  const [route, setRoute] = useState<RouteTab>(() =>
+    routeFromPathname(window.location.pathname)
+  );
 
   const config = useEditableResource({
     load: async () => await getText("/api/config"),
@@ -146,25 +148,41 @@ function App() {
         <div className="hero-title">
           <p className="eyebrow">tgfeed</p>
           <h1>Admin Dashboard</h1>
-          <p className="subtitle">Inspect run metrics and edit tgfeed configuration from one place.</p>
+          <p className="subtitle">
+            Inspect run metrics and edit tgfeed configuration from one place.
+          </p>
         </div>
         <div className="hero-actions">
-          <button className="button button-ghost" type="button" onClick={() => void refreshAll()}>
+          <button
+            className="button button-ghost"
+            type="button"
+            onClick={() => void refreshAll()}
+          >
             Refresh all
           </button>
-          <button className="button button-solid" type="button" onClick={() => void saveAll()}>
+          <button
+            className="button button-solid"
+            type="button"
+            onClick={() => void saveAll()}
+          >
             Save all
           </button>
         </div>
       </header>
 
       <nav className="tab-nav" aria-label="Dashboard sections">
-        <button type="button" className={route === "stats" ? "tab-button active" : "tab-button"} onClick={() => navigate("stats")}>
+        <button
+          type="button"
+          className={route === "stats" ? "tab-button active" : "tab-button"}
+          onClick={() => navigate("stats")}
+        >
           Stats
         </button>
         <button
           type="button"
-          className={route === "configuration" ? "tab-button active" : "tab-button"}
+          className={route === "configuration"
+            ? "tab-button active"
+            : "tab-button"}
           onClick={() => navigate("configuration")}
         >
           Configuration

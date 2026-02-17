@@ -1,4 +1,4 @@
-import { useCallback, useState } from "npm:react";
+import { useCallback, useState } from "react";
 
 import { errorMessage } from "../api.ts";
 import { EditableResource } from "../types.ts";
@@ -12,7 +12,9 @@ type UseEditableResourceOptions = {
 /**
  * Manages editable text resources with baseline tracking and save/load state.
  */
-export function useEditableResource(options: UseEditableResourceOptions): EditableResource {
+export function useEditableResource(
+  options: UseEditableResourceOptions,
+): EditableResource {
   const [value, setValue] = useState("");
   const [baseline, setBaseline] = useState("");
   const [loading, setLoading] = useState(false);

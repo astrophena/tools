@@ -1,4 +1,4 @@
-import React, { useMemo } from "npm:react";
+import React, { useMemo } from "react";
 import {
   ArcElement,
   Chart as ChartJS,
@@ -7,8 +7,8 @@ import {
   DoughnutController,
   Legend,
   Tooltip,
-} from "npm:chart.js";
-import { Doughnut } from "npm:react-chartjs-2";
+} from "chart.js";
+import { Doughnut } from "react-chartjs-2";
 
 import { StatsRun } from "../types.ts";
 
@@ -81,7 +81,9 @@ export function NetworkCharts(props: {
     <>
       <article className="chart-card">
         <h3>Delivery outcome</h3>
-        <p className="chart-note">Attempted messages split by sent, failed, and pending.</p>
+        <p className="chart-note">
+          Attempted messages split by sent, failed, and pending.
+        </p>
         <div className="chart-canvas">
           <Doughnut data={selectedRunDeliveryData} options={doughnutOptions} />
         </div>
@@ -89,7 +91,9 @@ export function NetworkCharts(props: {
 
       <article className="chart-card">
         <h3>HTTP status classes</h3>
-        <p className="chart-note">Request result classes from the selected run.</p>
+        <p className="chart-note">
+          Request result classes from the selected run.
+        </p>
         <div className="chart-canvas">
           <Doughnut data={selectedRunHTTPData} options={doughnutOptions} />
         </div>

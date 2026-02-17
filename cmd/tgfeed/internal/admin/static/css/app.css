@@ -33,8 +33,16 @@ body {
   color: var(--text-main);
   font-family: "Sora", "Avenir Next", "Trebuchet MS", sans-serif;
   background:
-    radial-gradient(1200px 600px at -10% -20%, rgba(50, 134, 109, 0.25), transparent 70%),
-    radial-gradient(1000px 600px at 100% 0%, rgba(53, 80, 117, 0.3), transparent 68%),
+    radial-gradient(
+      1200px 600px at -10% -20%,
+      rgba(50, 134, 109, 0.25),
+      transparent 70%
+    ),
+    radial-gradient(
+    1000px 600px at 100% 0%,
+    rgba(53, 80, 117, 0.3),
+    transparent 68%
+  ),
     linear-gradient(165deg, var(--bg-1), var(--bg-2));
 }
 
@@ -134,7 +142,10 @@ body {
   font-weight: 600;
   line-height: 1;
   padding: 0.75rem 1.2rem;
-  transition: transform 120ms ease, box-shadow 120ms ease, background-color 120ms ease;
+  transition:
+    transform 120ms ease,
+    box-shadow 120ms ease,
+    background-color 120ms ease;
 }
 
 .button:disabled {
@@ -273,7 +284,6 @@ body {
   border-color: rgba(112, 223, 182, 0.45);
 }
 
-
 .indicator-grid {
   margin-top: 1.2rem;
   display: grid;
@@ -386,7 +396,6 @@ body {
 .runs-table tbody tr.selected {
   background: rgba(88, 211, 167, 0.15);
 }
-
 
 .chart-kpis {
   margin-top: 1rem;
