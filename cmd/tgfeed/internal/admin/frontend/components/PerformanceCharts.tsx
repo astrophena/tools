@@ -26,9 +26,9 @@ function msToSeconds(valueMs: number | undefined): number {
 }
 
 export function PerformanceCharts(props: {
-  selectedRun: StatsRun | undefined;
+  activeRun: StatsRun | undefined;
 }) {
-  const { selectedRun } = props;
+  const { activeRun } = props;
 
   const latencyData = useMemo<ChartData<"bar">>(() => ({
     labels: ["P50", "P90", "P99", "Max"],
@@ -36,10 +36,10 @@ export function PerformanceCharts(props: {
       {
         label: "Fetch latency (s)",
         data: [
-          msToSeconds(selectedRun?.fetch_latency_ms?.p50),
-          msToSeconds(selectedRun?.fetch_latency_ms?.p90),
-          msToSeconds(selectedRun?.fetch_latency_ms?.p99),
-          msToSeconds(selectedRun?.fetch_latency_ms?.max),
+          msToSeconds(activeRun?.fetch_latency_ms?.p50),
+          msToSeconds(activeRun?.fetch_latency_ms?.p90),
+          msToSeconds(activeRun?.fetch_latency_ms?.p99),
+          msToSeconds(activeRun?.fetch_latency_ms?.max),
         ],
         backgroundColor: "rgba(111, 225, 183, 0.72)",
         borderRadius: 6,
@@ -47,32 +47,32 @@ export function PerformanceCharts(props: {
       {
         label: "Send latency (s)",
         data: [
-          msToSeconds(selectedRun?.send_latency_ms?.p50),
-          msToSeconds(selectedRun?.send_latency_ms?.p90),
-          msToSeconds(selectedRun?.send_latency_ms?.p99),
-          msToSeconds(selectedRun?.send_latency_ms?.max),
+          msToSeconds(activeRun?.send_latency_ms?.p50),
+          msToSeconds(activeRun?.send_latency_ms?.p90),
+          msToSeconds(activeRun?.send_latency_ms?.p99),
+          msToSeconds(activeRun?.send_latency_ms?.max),
         ],
         backgroundColor: "rgba(126, 167, 255, 0.7)",
         borderRadius: 6,
       },
     ],
-  }), [selectedRun]);
+  }), [activeRun]);
 
   const errorData = useMemo<ChartData<"bar">>(() => ({
     labels: ["Timeout", "Network", "Parse", "Retries", "Rate limit retries"],
     datasets: [{
       label: "Counts",
       data: [
-        selectedRun?.timeout_count ?? 0,
-        selectedRun?.network_error_count ?? 0,
-        selectedRun?.parse_error_count ?? 0,
-        selectedRun?.fetch_retries_total ?? 0,
-        selectedRun?.special_rate_limit_retries ?? 0,
+        activeRun?.timeout_count ?? 0,
+        activeRun?.network_error_count ?? 0,
+        activeRun?.parse_error_count ?? 0,
+        activeRun?.fetch_retries_total ?? 0,
+        activeRun?.special_rate_limit_retries ?? 0,
       ],
       backgroundColor: "rgba(255, 142, 149, 0.72)",
       borderRadius: 7,
     }],
-  }), [selectedRun]);
+  }), [activeRun]);
 
   const compactBarOptions = useMemo<ChartOptions<"bar">>(() => ({
     responsive: true,

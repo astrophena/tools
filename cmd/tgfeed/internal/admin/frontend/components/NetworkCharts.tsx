@@ -1,102 +1,183 @@
 import React, { useMemo } from "react";
 import {
-  ArcElement,
+  BarElement,
+  CategoryScale,
   Chart as ChartJS,
   ChartData,
   ChartOptions,
-  DoughnutController,
-  Legend,
+  LinearScale,
   Tooltip,
 } from "chart.js";
-import { Doughnut } from "react-chartjs-2";
+import { Bar } from "react-chartjs-2";
 
 import { StatsRun } from "../types.ts";
 
 ChartJS.register(
-  ArcElement,
-  DoughnutController,
+  CategoryScale,
+  LinearScale,
+  BarElement,
   Tooltip,
-  Legend,
 );
 
-export function NetworkCharts(props: {
-  selectedRun: StatsRun | undefined;
-}) {
-  const { selectedRun } = props;
+type Segment = {
+  label: string;
+  count: number;
+  color: string;
+};
 
-  const selectedRunDeliveryData = useMemo<ChartData<"doughnut">>(() => {
-    const sent = selectedRun?.messages_sent ?? 0;
-    const failed = selectedRun?.messages_failed ?? 0;
-    const attempted = selectedRun?.messages_attempted ?? 0;
-    const pending = Math.max(attempted - sent - failed, 0);
-    return {
-      labels: ["Sent", "Failed", "Pending"],
-      datasets: [{
-        data: [sent, failed, pending],
-        backgroundColor: ["#6de2b7", "#ff8e95", "#6b93f7"],
-        borderColor: "rgba(7, 14, 18, 0.75)",
-        borderWidth: 2,
-      }],
-    };
-  }, [selectedRun]);
+function toNumber(value: number | undefined): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return 0;
+  }
+  return value;
+}
 
-  const selectedRunHTTPData = useMemo<ChartData<"doughnut">>(() => ({
-    labels: ["2xx", "3xx", "4xx", "5xx"],
+function percent(part: number, total: number): number {
+  if (total <= 0) {
+    return 0;
+  }
+  return (part / total) * 100;
+}
+
+function compactBarData(label: string, segments: Segment[]): ChartData<"bar"> {
+  return {
+    labels: segments.map((segment) => segment.label),
     datasets: [{
-      data: [
-        selectedRun?.http_2xx_count ?? 0,
-        selectedRun?.http_3xx_count ?? 0,
-        selectedRun?.http_4xx_count ?? 0,
-        selectedRun?.http_5xx_count ?? 0,
-      ],
-      backgroundColor: ["#6de2b7", "#72d7f6", "#f0be6e", "#ff8e95"],
-      borderColor: "rgba(7, 14, 18, 0.75)",
-      borderWidth: 2,
+      label,
+      data: segments.map((segment) => segment.count),
+      backgroundColor: segments.map((segment) => segment.color),
+      borderRadius: 7,
     }],
-  }), [selectedRun]);
+  };
+}
 
-  const doughnutOptions = useMemo<ChartOptions<"doughnut">>(() => ({
+function compactBarOptions(
+  total: number,
+  segments: Segment[],
+): ChartOptions<"bar"> {
+  return {
     responsive: true,
     maintainAspectRatio: false,
-    cutout: "62%",
+    indexAxis: "y",
     plugins: {
       legend: {
-        position: "bottom",
-        labels: {
-          color: "#dbe8ef",
-          padding: 12,
-          usePointStyle: true,
-          boxWidth: 10,
-        },
+        display: false,
       },
       tooltip: {
         callbacks: {
-          label: (item) => `${item.label}: ${Number(item.raw ?? 0)}`,
+          label: (item) => {
+            const label = item.label ?? "";
+            const count = Number(item.raw ?? 0);
+            return `${label}: ${count} (${percent(count, total).toFixed(1)}%)`;
+          },
         },
       },
     },
-  }), []);
+    scales: {
+      x: {
+        beginAtZero: true,
+        ticks: { color: "#9db1be", precision: 0 },
+        grid: { color: "rgba(157, 177, 190, 0.08)" },
+      },
+      y: {
+        ticks: { color: "#9db1be", maxRotation: 0, autoSkip: false },
+        grid: { display: false },
+      },
+    },
+  };
+}
+
+function summaryList(segments: Segment[], total: number) {
+  return (
+    <ul className="bar-summary">
+      {segments.map((segment) => (
+        <li key={segment.label}>
+          <span>{segment.label}</span>
+          <b>{segment.count} ({percent(segment.count, total).toFixed(1)}%)</b>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+export function NetworkCharts(props: {
+  activeRun: StatsRun | undefined;
+}) {
+  const { activeRun } = props;
+
+  const deliverySegments = useMemo<Segment[]>(() => {
+    const sent = toNumber(activeRun?.messages_sent);
+    const failed = toNumber(activeRun?.messages_failed);
+    const attempted = toNumber(activeRun?.messages_attempted);
+    const pending = Math.max(attempted - sent - failed, 0);
+    return [
+      { label: "Sent", count: sent, color: "#6de2b7" },
+      { label: "Failed", count: failed, color: "#ff8e95" },
+      { label: "Pending", count: pending, color: "#6b93f7" },
+    ];
+  }, [activeRun]);
+
+  const deliveryTotal = useMemo(
+    () => deliverySegments.reduce((sum, item) => sum + item.count, 0),
+    [deliverySegments],
+  );
+
+  const httpSegments = useMemo<Segment[]>(() => [
+    {
+      label: "2xx",
+      count: toNumber(activeRun?.http_2xx_count),
+      color: "#6de2b7",
+    },
+    {
+      label: "3xx",
+      count: toNumber(activeRun?.http_3xx_count),
+      color: "#72d7f6",
+    },
+    {
+      label: "4xx",
+      count: toNumber(activeRun?.http_4xx_count),
+      color: "#f0be6e",
+    },
+    {
+      label: "5xx",
+      count: toNumber(activeRun?.http_5xx_count),
+      color: "#ff8e95",
+    },
+  ], [activeRun]);
+
+  const httpTotal = useMemo(
+    () => httpSegments.reduce((sum, item) => sum + item.count, 0),
+    [httpSegments],
+  );
 
   return (
     <>
       <article className="chart-card">
         <h3>Delivery outcome</h3>
         <p className="chart-note">
-          Attempted messages split by sent, failed, and pending.
+          Counts and percentages for sent, failed, and pending messages.
         </p>
-        <div className="chart-canvas">
-          <Doughnut data={selectedRunDeliveryData} options={doughnutOptions} />
+        <div className="chart-canvas chart-canvas-compact">
+          <Bar
+            data={compactBarData("Delivery", deliverySegments)}
+            options={compactBarOptions(deliveryTotal, deliverySegments)}
+          />
         </div>
+        {summaryList(deliverySegments, deliveryTotal)}
       </article>
 
       <article className="chart-card">
         <h3>HTTP status classes</h3>
         <p className="chart-note">
-          Request result classes from the selected run.
+          Response class distribution for the active run.
         </p>
-        <div className="chart-canvas">
-          <Doughnut data={selectedRunHTTPData} options={doughnutOptions} />
+        <div className="chart-canvas chart-canvas-compact">
+          <Bar
+            data={compactBarData("HTTP", httpSegments)}
+            options={compactBarOptions(httpTotal, httpSegments)}
+          />
         </div>
+        {summaryList(httpSegments, httpTotal)}
       </article>
     </>
   );

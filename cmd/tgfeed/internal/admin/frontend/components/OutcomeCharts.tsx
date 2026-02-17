@@ -22,6 +22,13 @@ ChartJS.register(
   Legend,
 );
 
+function toNumber(value: number | undefined): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return 0;
+  }
+  return value;
+}
+
 function formatRunLabel(value: string | undefined): string {
   if (!value) {
     return "unknown";
@@ -37,11 +44,22 @@ function formatRunLabel(value: string | undefined): string {
   }`;
 }
 
+function healthyFeeds(run: StatsRun): number {
+  return toNumber(run.success_feeds) + toNumber(run.not_modified_feeds);
+}
+
+function feedRate(part: number, total: number): number {
+  if (total <= 0) {
+    return 0;
+  }
+  return (part / total) * 100;
+}
+
 export function OutcomeCharts(props: {
   stats: StatsRun[];
-  selectedRun: StatsRun | undefined;
+  activeRun: StatsRun | undefined;
 }) {
-  const { stats, selectedRun } = props;
+  const { stats, activeRun } = props;
   const recentRuns = useMemo(() => stats.slice(0, 20).reverse(), [stats]);
   const timelineLabels = useMemo(
     () => recentRuns.map((run) => formatRunLabel(run.start_time)),
@@ -52,21 +70,15 @@ export function OutcomeCharts(props: {
     labels: timelineLabels,
     datasets: [
       {
-        label: "Success",
-        data: recentRuns.map((run) => run.success_feeds ?? 0),
-        backgroundColor: "rgba(122, 223, 172, 0.78)",
-        borderRadius: 6,
-      },
-      {
-        label: "Not modified",
-        data: recentRuns.map((run) => run.not_modified_feeds ?? 0),
-        backgroundColor: "rgba(228, 164, 77, 0.78)",
+        label: "Healthy",
+        data: recentRuns.map((run) => healthyFeeds(run)),
+        backgroundColor: "rgba(122, 223, 172, 0.8)",
         borderRadius: 6,
       },
       {
         label: "Failed",
-        data: recentRuns.map((run) => run.failed_feeds ?? 0),
-        backgroundColor: "rgba(255, 127, 136, 0.82)",
+        data: recentRuns.map((run) => toNumber(run.failed_feeds)),
+        backgroundColor: "rgba(255, 127, 136, 0.85)",
         borderRadius: 6,
       },
     ],
@@ -90,17 +102,14 @@ export function OutcomeCharts(props: {
             return formatDateTime(recentRuns[index]?.start_time);
           },
           footer: (items) => {
-            const total = items.reduce(
-              (sum, item) => sum + Number(item.parsed.y ?? 0),
-              0,
+            const healthy = Number(
+              items.find((item) => item.datasetIndex === 0)?.parsed.y ?? 0,
             );
             const failed = Number(
-              items.find((item) => item.datasetIndex === 2)?.parsed.y ?? 0,
+              items.find((item) => item.datasetIndex === 1)?.parsed.y ?? 0,
             );
-            const failureRate = total > 0 ? (failed / total) * 100 : 0;
-            return `Total feeds: ${total} · Failure rate: ${
-              failureRate.toFixed(1)
-            }%`;
+            const total = healthy + failed;
+            return `Healthy rate: ${feedRate(healthy, total).toFixed(1)}%`;
           },
         },
       },
@@ -125,49 +134,62 @@ export function OutcomeCharts(props: {
     },
   }), [recentRuns]);
 
-  const itemFlowData = useMemo<ChartData<"bar">>(() => ({
-    labels: ["Seen", "Kept", "Deduped", "Skipped old", "Enqueued"],
+  const selectedRunBreakdown = useMemo<ChartData<"bar">>(() => ({
+    labels: ["Success", "Not changed", "Failed"],
     datasets: [{
-      label: "Items",
+      label: "Feeds",
       data: [
-        selectedRun?.items_seen_total ?? 0,
-        selectedRun?.items_kept_total ?? 0,
-        selectedRun?.items_deduped_total ?? 0,
-        selectedRun?.items_skipped_old_total ?? 0,
-        selectedRun?.items_enqueued_total ?? 0,
+        toNumber(activeRun?.success_feeds),
+        toNumber(activeRun?.not_modified_feeds),
+        toNumber(activeRun?.failed_feeds),
       ],
-      backgroundColor: ["#7ea7ff", "#6de2b7", "#f0be6e", "#c994ff", "#72d7f6"],
+      backgroundColor: ["#6de2b7", "#72d7f6", "#ff8e95"],
       borderRadius: 7,
     }],
-  }), [selectedRun]);
+  }), [activeRun]);
+
+  const selectedTotalFeeds = toNumber(activeRun?.success_feeds) +
+    toNumber(activeRun?.not_modified_feeds) +
+    toNumber(activeRun?.failed_feeds);
 
   const compactBarOptions = useMemo<ChartOptions<"bar">>(() => ({
     responsive: true,
     maintainAspectRatio: false,
+    indexAxis: "y",
     plugins: {
       legend: {
         display: false,
       },
+      tooltip: {
+        callbacks: {
+          label: (item) => {
+            const count = Number(item.raw ?? 0);
+            return `${item.label}: ${count} (${
+              feedRate(count, selectedTotalFeeds).toFixed(1)
+            }%)`;
+          },
+        },
+      },
     },
     scales: {
       x: {
-        ticks: { color: "#9db1be", maxRotation: 0, autoSkip: false },
+        beginAtZero: true,
+        ticks: { color: "#9db1be", precision: 0 },
         grid: { color: "rgba(157, 177, 190, 0.08)" },
       },
       y: {
-        beginAtZero: true,
-        ticks: { color: "#9db1be", precision: 0 },
-        grid: { color: "rgba(157, 177, 190, 0.14)" },
+        ticks: { color: "#9db1be", maxRotation: 0, autoSkip: false },
+        grid: { display: false },
       },
     },
-  }), []);
+  }), [selectedTotalFeeds]);
 
   return (
     <>
       <article className="chart-card">
-        <h3>Feed outcomes by run</h3>
+        <h3>Feed health by run</h3>
         <p className="chart-note">
-          Stacked breakdown of success, not-modified, and failed feeds.
+          Healthy feeds include successful and not changed feeds.
         </p>
         <div className="chart-canvas">
           <Bar data={feedOutcomeData} options={feedOutcomeOptions} />
@@ -175,12 +197,12 @@ export function OutcomeCharts(props: {
       </article>
 
       <article className="chart-card">
-        <h3>Item pipeline</h3>
+        <h3>Healthy feed composition</h3>
         <p className="chart-note">
-          How fetched items moved through filtering and enqueue stages.
+          Active run split into success, not changed, and failed feeds.
         </p>
         <div className="chart-canvas">
-          <Bar data={itemFlowData} options={compactBarOptions} />
+          <Bar data={selectedRunBreakdown} options={compactBarOptions} />
         </div>
       </article>
     </>
