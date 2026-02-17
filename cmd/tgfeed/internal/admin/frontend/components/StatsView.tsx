@@ -276,8 +276,7 @@ export function StatsView(props: {
           <div>
             <h2>System Health</h2>
             <p>
-              Triage view from the latest run. Not changed feeds are treated as
-              healthy.
+              Latest-run triage. Not changed feeds count as healthy.
             </p>
           </div>
           <div className="panel-header-actions">
@@ -298,7 +297,7 @@ export function StatsView(props: {
                   setAutoRefreshStats(event.target.checked);
                 }}
               />
-              Auto-refresh every 30s
+              Auto-refresh (30s)
             </label>
           </div>
         </header>
