@@ -100,7 +100,7 @@ function summaryList(segments: Segment[], total: number) {
   );
 }
 
-export function NetworkCharts(props: {
+export const NetworkCharts = React.memo(function NetworkCharts(props: {
   activeRun: StatsRun | undefined;
 }) {
   const { activeRun } = props;
@@ -181,4 +181,4 @@ export function NetworkCharts(props: {
       </article>
     </>
   );
-}
+});

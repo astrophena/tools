@@ -55,7 +55,7 @@ function feedRate(part: number, total: number): number {
   return (part / total) * 100;
 }
 
-export function OutcomeCharts(props: {
+export const OutcomeCharts = React.memo(function OutcomeCharts(props: {
   stats: StatsRun[];
   activeRun: StatsRun | undefined;
 }) {
@@ -207,4 +207,4 @@ export function OutcomeCharts(props: {
       </article>
     </>
   );
-}
+});

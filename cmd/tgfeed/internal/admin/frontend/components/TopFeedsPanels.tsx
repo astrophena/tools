@@ -15,7 +15,9 @@ function feedMetric(value: number | undefined): number {
 }
 
 /** Renders top-feed summaries for the selected run context. */
-export function TopFeedsPanels(props: { activeRun: StatsRun | undefined }) {
+export const TopFeedsPanels = React.memo(function TopFeedsPanels(props: {
+  activeRun: StatsRun | undefined;
+}) {
   const { activeRun } = props;
   const slowest = activeRun?.top_slowest_feeds ?? [];
   const errors = activeRun?.top_error_feeds ?? [];
@@ -90,4 +92,4 @@ export function TopFeedsPanels(props: { activeRun: StatsRun | undefined }) {
       </div>
     </section>
   );
-}
+});

@@ -62,7 +62,7 @@ function healthyRate(run: StatsRun): number {
   return (healthyFeeds(run) / total) * 100;
 }
 
-export function TimelineChart(props: {
+export const TimelineChart = React.memo(function TimelineChart(props: {
   stats: StatsRun[];
   selectedStatsIndex: number;
   onSelectRun: (index: number) => void;
@@ -196,4 +196,4 @@ export function TimelineChart(props: {
       </div>
     </article>
   );
-}
+});
