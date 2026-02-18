@@ -84,7 +84,16 @@ function App() {
       }
       const payload: unknown = await response.json();
       if (Array.isArray(payload)) {
-        setStats(payload as StatsRun[]);
+        const newStats = payload as StatsRun[];
+        if (
+          stats.length > 0 &&
+          newStats.length === stats.length &&
+          newStats[0]?.start_time === stats[0]?.start_time
+        ) {
+          setLastStatsRefreshedAt(Date.now());
+          return;
+        }
+        setStats(newStats);
       } else {
         setStats([]);
       }
@@ -95,7 +104,7 @@ function App() {
     } finally {
       setStatsLoading(false);
     }
-  }, []);
+  }, [stats]);
 
   /** Refreshes all editable resources and stats in one action. */
   async function refreshAll(): Promise<void> {

@@ -25,7 +25,7 @@ function msToSeconds(valueMs: number | undefined): number {
   return (valueMs ?? 0) / 1000;
 }
 
-export function PerformanceCharts(props: {
+export const PerformanceCharts = React.memo(function PerformanceCharts(props: {
   activeRun: StatsRun | undefined;
 }) {
   const { activeRun } = props;
@@ -118,4 +118,4 @@ export function PerformanceCharts(props: {
       </article>
     </>
   );
-}
+});

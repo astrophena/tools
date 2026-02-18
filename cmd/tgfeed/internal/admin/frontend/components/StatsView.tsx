@@ -3,6 +3,7 @@ import React, { useMemo, useState } from "react";
 import { formatDateTime, formatDuration } from "../format.ts";
 import { StatsRun } from "../types.ts";
 import { ChartsGrid } from "./ChartsGrid.tsx";
+import { LazyDetails } from "./LazyDetails.tsx";
 import { NetworkCharts } from "./NetworkCharts.tsx";
 import { OutcomeCharts } from "./OutcomeCharts.tsx";
 import { PerformanceCharts } from "./PerformanceCharts.tsx";
@@ -478,14 +479,13 @@ export function StatsView(props: {
               </table>
             </div>
 
-            <details className="detail-toggle">
-              <summary>Show detailed analytics for this run</summary>
+            <LazyDetails summary="Show detailed analytics for this run">
               <ChartsGrid>
                 <OutcomeCharts stats={stats} activeRun={activeRun} />
                 <NetworkCharts activeRun={activeRun} />
                 <PerformanceCharts activeRun={activeRun} />
               </ChartsGrid>
-            </details>
+            </LazyDetails>
           </div>
         )}
       </section>
