@@ -3,6 +3,7 @@
 // license that can be found in the LICENSE.md file.
 
 //go:generate deno bundle frontend/app.tsx --platform=browser --minify --output=static/js/app.min.js
+//go:generate deno bundle styles/app.css --minify --output=static/css/app.min.css
 
 // Package admin implements the administrative web UI and API for tgfeed.
 package admin
@@ -71,7 +72,7 @@ func Handler(cfg Config) (*http.ServeMux, error) {
 			Logo string
 		}{
 			JS:   web.StaticHashName(r.Context(), "static/js/app.min.js"),
-			CSS:  web.StaticHashName(r.Context(), "static/css/app.css"),
+			CSS:  web.StaticHashName(r.Context(), "static/css/app.min.css"),
 			Icon: web.StaticHashName(r.Context(), "static/icons/icon.webp"),
 			Logo: web.StaticHashName(r.Context(), "static/icons/logo.webp"),
 		}); err != nil {
