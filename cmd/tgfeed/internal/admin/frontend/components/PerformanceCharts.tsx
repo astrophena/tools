@@ -107,7 +107,7 @@ export const PerformanceCharts = React.memo(function PerformanceCharts(props: {
         </div>
       </article>
 
-      <article className="chart-card chart-card-wide">
+      <article className="chart-card">
         <h3>Error and retry sources</h3>
         <p className="chart-note">
           Timeout, network and parse errors, plus retry pressure indicators.
