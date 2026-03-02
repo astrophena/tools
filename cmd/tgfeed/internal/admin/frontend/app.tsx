@@ -57,6 +57,7 @@ function App() {
 
   const [stats, setStats] = useState<StatsRun[]>([]);
   const [statsLoading, setStatsLoading] = useState(false);
+  const [statsPromise, setStatsPromise] = useState<Promise<void> | null>(null);
   const [statsError, setStatsError] = useState("");
   const [selectedStatsIndex, setSelectedStatsIndex] = useState(0);
   const [lastStatsRefreshedAt, setLastStatsRefreshedAt] = useState<
@@ -69,7 +70,7 @@ function App() {
   const loadStats = useCallback(async () => {
     setStatsLoading(true);
     setStatsError("");
-    try {
+    const loadPromise = (async () => {
       const response = await fetch("/api/stats", {
         method: "GET",
         headers: { Accept: "application/json" },
@@ -98,12 +99,18 @@ function App() {
         setStats([]);
       }
       setLastStatsRefreshedAt(Date.now());
-    } catch (err) {
-      setStatsError(err instanceof Error ? err.message : "Unexpected error");
-      setStats([]);
-    } finally {
-      setStatsLoading(false);
-    }
+    })();
+
+    setStatsPromise(
+      loadPromise.catch((err) => {
+        setStatsError(err instanceof Error ? err.message : "Unexpected error");
+        setStats([]);
+      }).finally(() => {
+        setStatsLoading(false);
+      }),
+    );
+
+    await loadPromise.catch(() => {});
   }, [stats]);
 
   /** Refreshes all editable resources and stats in one action. */
@@ -239,6 +246,7 @@ function App() {
           <StatsView
             stats={stats}
             statsLoading={statsLoading}
+            statsPromise={statsPromise}
             statsError={statsError}
             selectedStatsIndex={selectedStatsIndex}
             setSelectedStatsIndex={setSelectedStatsIndex}
