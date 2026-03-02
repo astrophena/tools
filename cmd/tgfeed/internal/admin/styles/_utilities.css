@@ -1,0 +1,4 @@
+.empty-line {
+  color: var(--text-muted);
+  justify-content: center !important;
+}

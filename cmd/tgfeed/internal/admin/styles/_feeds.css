@@ -1,0 +1,57 @@
+.feed-list {
+  list-style: none;
+  margin: 1rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.feed-groups {
+  margin-top: 0.9rem;
+  display: grid;
+  gap: 0.9rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.feed-group {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: rgba(7, 14, 18, 0.6);
+  padding: 0.8rem;
+}
+
+.feed-group h3 {
+  margin: 0;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.8rem;
+}
+
+.feed-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 0.8rem;
+  background: rgba(10, 18, 24, 0.68);
+}
+
+.feed-list li strong {
+  display: block;
+  font-size: 0.9rem;
+  word-break: break-word;
+}
+
+.feed-list li span {
+  display: block;
+  margin-top: 0.3rem;
+  color: var(--text-muted);
+  font-size: 0.76rem;
+}
+
+.feed-list li b {
+  white-space: nowrap;
+  font-size: 0.88rem;
+}

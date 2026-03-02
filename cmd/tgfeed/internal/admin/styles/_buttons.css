@@ -1,0 +1,86 @@
+.tab-nav {
+  display: flex;
+  gap: 0.8rem;
+  margin: 0 0 1.2rem;
+}
+
+.tab-button {
+  border: 1px solid var(--line);
+  color: var(--text-muted);
+  background: rgba(17, 26, 32, 0.78);
+  border-radius: 999px;
+  font-size: 0.86rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.6rem 1rem;
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+
+.tab-button:hover {
+  background: rgba(25, 38, 46, 0.9);
+  color: var(--text-main);
+  border-color: rgba(157, 177, 190, 0.3);
+}
+
+.tab-button.active {
+  color: #04120d;
+  background: linear-gradient(135deg, #70dfb6, #5bcda4);
+  border-color: rgba(112, 223, 182, 0.45);
+}
+
+.button {
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.92rem;
+  font-weight: 600;
+  line-height: 1;
+  padding: 0.75rem 1.2rem;
+  transition:
+    transform 120ms ease,
+    box-shadow 120ms ease,
+    background-color 120ms ease;
+}
+
+.button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.button:not(:disabled):hover {
+  transform: translateY(-1px);
+}
+
+.button-solid {
+  color: #04120d;
+  background: linear-gradient(135deg, #70dfb6, #56c89f);
+  box-shadow: 0 8px 20px rgba(77, 184, 145, 0.25);
+}
+
+.button-ghost {
+  color: var(--brand);
+  background: rgba(88, 211, 167, 0.12);
+  border: 1px solid rgba(88, 211, 167, 0.2);
+}
+
+.auto-refresh-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(10, 18, 24, 0.66);
+  color: var(--text-muted);
+  font-size: 0.76rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 0.42rem 0.75rem;
+}
+
+.auto-refresh-toggle input {
+  accent-color: var(--brand);
+}
