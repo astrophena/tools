@@ -142,9 +142,24 @@ func Run(ctx context.Context, cfg Config) error {
 	if err != nil {
 		return err
 	}
+
+	csp := web.NewCSPMux()
+	csp.Handle("/", web.CSP{
+		DefaultSrc:           []string{web.CSPSelf},
+		ScriptSrc:            []string{web.CSPSelf},
+		FrameAncestors:       []string{web.CSPNone},
+		FormAction:           []string{web.CSPSelf},
+		BaseURI:              []string{web.CSPSelf},
+		ObjectSrc:            []string{web.CSPSelf},
+		BlockAllMixedContent: true,
+		// Needed to allow inline CSS for CodeMirror editor.
+		StyleSrc: []string{web.CSPSelf, web.CSPUnsafeInline},
+	})
+
 	srv := &web.Server{
 		Mux:           mux,
 		Addr:          cfg.Addr,
+		CSP:           csp,
 		Debuggable:    true,
 		NotifySystemd: true,
 		StaticFS:      staticFS,
