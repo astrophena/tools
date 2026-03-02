@@ -163,6 +163,14 @@ function App() {
     };
   }, []);
 
+  useEffect(() => {
+    if (route === "stats") {
+      document.title = "Stats · tgfeed";
+    } else if (route === "configuration") {
+      document.title = "Configuration · tgfeed";
+    }
+  }, [route]);
+
   /** Navigates between stats and configuration tabs using pathname URLs. */
   function navigate(next: RouteTab): void {
     const nextPath = pathnameForRoute(next);
