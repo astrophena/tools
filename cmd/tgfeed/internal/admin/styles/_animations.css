@@ -9,3 +9,75 @@
     transform: translateY(0) scale(1);
   }
 }
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(20, 27, 33, 0.92) 25%,
+    rgba(26, 34, 41, 0.98) 50%,
+    rgba(20, 27, 33, 0.92) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite linear;
+  border-radius: var(--radius-sm);
+}
+
+.skeleton-text {
+  height: 1em;
+  width: 100%;
+  margin-bottom: 0.5rem;
+  border-radius: var(--radius-sm);
+}
+
+.skeleton-text.short {
+  width: 50%;
+}
+
+.skeleton-text.o-50 {
+  opacity: 0.5;
+}
+
+.skeleton-text.o-70 {
+  opacity: 0.7;
+}
+
+.skeleton-text.o-10 {
+  opacity: 0.1;
+}
+
+.skeleton-text.h-1-5em {
+  height: 1.5em;
+}
+
+.skeleton-text.h-1-2em {
+  height: 1.2em;
+}
+
+.skeleton-text.h-180px {
+  height: 180px;
+}
+
+.skeleton-text.w-80 {
+  width: 80%;
+}
+
+.skeleton-text.mt-0-3rem {
+  margin-top: 0.3rem;
+}
+
+.skeleton-text.mt-0-45rem {
+  margin-top: 0.45rem;
+}
+
+.skeleton-text.mt-1rem {
+  margin-top: 1rem;
+}
