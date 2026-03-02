@@ -2,6 +2,8 @@
 // Use of this source code is governed by the ISC
 // license that can be found in the LICENSE.md file.
 
+// Package retry implements logic for parsing feed source errors to determine
+// whether a request should be retried later, and if so, what backoff to use.
 package retry
 
 import (
@@ -11,6 +13,9 @@ import (
 	"time"
 )
 
+// Retryable analyzes the response body from the given host and returns
+// the duration to wait before retrying, and a boolean indicating whether
+// the request should be retried at all.
 func Retryable(host string, body []byte) (time.Duration, bool) {
 	f, ok := handlers[host]
 	if !ok {
@@ -36,23 +41,17 @@ var handlers = map[string]func([]byte) (time.Duration, bool){
 
 			const floodPrefix = "FLOOD_WAIT_"
 			if after, ok := strings.CutPrefix(s, floodPrefix); ok {
-				d, err := time.ParseDuration(after + "s")
+				d, err := strconv.Atoi(after)
 				if err == nil {
-					return d, true
+					return time.Duration(d) * time.Second, true
 				}
 			}
 
 			const unlockPrefix = "Time to unlock access: "
 			if after, ok := strings.CutPrefix(s, unlockPrefix); ok {
-				parts := strings.Split(after, ":")
-				if len(parts) != 3 {
-					continue
-				}
-				h, err1 := strconv.Atoi(parts[0])
-				m, err2 := strconv.Atoi(parts[1])
-				sec, err3 := strconv.Atoi(parts[2])
-				if err1 == nil && err2 == nil && err3 == nil {
-					return time.Duration(h)*time.Hour + time.Duration(m)*time.Minute + time.Duration(sec)*time.Second, true
+				t, err := time.Parse(time.TimeOnly, after)
+				if err == nil {
+					return time.Duration(t.Hour())*time.Hour + time.Duration(t.Minute())*time.Minute + time.Duration(t.Second())*time.Second, true
 				}
 			}
 		}
