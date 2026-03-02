@@ -12,6 +12,12 @@
   "imports": {
     "@types/react": "npm:@types/react@^19.2.14",
     "@types/react-dom": "npm:@types/react-dom@^19.2.3",
+    "@codemirror/autocomplete": "npm:@codemirror/autocomplete@^6",
+    "@codemirror/lang-python": "npm:@codemirror/lang-python@^6",
+    "@codemirror/lint": "npm:@codemirror/lint@^6",
+    "@codemirror/state": "npm:@codemirror/state@^6",
+    "@codemirror/view": "npm:@codemirror/view@^6",
+    "@uiw/react-codemirror": "npm:@uiw/react-codemirror@^4.25.7",
     "chart.js": "npm:chart.js@^4.5.1",
     "react": "npm:react@^19.2.4",
     "react-chartjs-2": "npm:react-chartjs-2@^5.3.1",

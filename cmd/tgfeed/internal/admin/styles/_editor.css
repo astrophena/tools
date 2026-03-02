@@ -1,19 +1,20 @@
 .editor {
   margin-top: 0.9rem;
   width: 100%;
-  min-height: 320px;
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
-  padding: 1rem;
-  resize: vertical;
-  background: rgba(11, 19, 24, 0.82);
-  color: #dce9f0;
-  font-family: "IBM Plex Mono", "Cascadia Mono", "Consolas", monospace;
   font-size: 0.86rem;
-  line-height: 1.5;
+  overflow: hidden;
+  /* background and color are provided by CodeMirror dark theme */
 }
 
-.editor:focus {
+/* Use cm-focused instead of :focus-visible since CodeMirror manages focus on lower elements */
+.editor.cm-focused {
   outline: 2px solid rgba(112, 223, 182, 0.3);
   border-color: rgba(112, 223, 182, 0.45);
+}
+
+.editor .cm-scroller {
+  font-family: "IBM Plex Mono", "Cascadia Mono", "Consolas", monospace;
+  line-height: 1.5;
 }
