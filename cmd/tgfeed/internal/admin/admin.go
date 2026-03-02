@@ -32,9 +32,6 @@ import (
 
 var errConflict = web.StatusErr(http.StatusConflict)
 
-//go:embed static/favicon.ico
-var faviconIco []byte
-
 // Config configures the tgfeed admin HTTP API.
 type Config struct {
 	// Addr is the network address passed to [web.Server].
@@ -80,11 +77,6 @@ func Handler(cfg Config) (*http.ServeMux, error) {
 			return
 		}
 		buf.WriteTo(w)
-	})
-
-	mux.HandleFunc("GET /favicon.ico", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "image/x-icon")
-		http.ServeContent(w, r, "favicon.ico", time.Now(), bytes.NewReader(faviconIco))
 	})
 
 	mux.HandleFunc("/api/config", func(w http.ResponseWriter, r *http.Request) {
@@ -139,7 +131,7 @@ func Handler(cfg Config) (*http.ServeMux, error) {
 var staticFS embed.FS
 
 var (
-	//go:embed static/app.tmpl
+	//go:embed templates/app.tmpl
 	appTemplateStr string
 	appTemplate    = template.Must(template.New("").Parse(appTemplateStr))
 )
