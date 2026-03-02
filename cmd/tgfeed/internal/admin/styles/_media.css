@@ -1,17 +1,7 @@
 @media (max-width: 900px) {
-  .metric-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
+  .metric-grid,
   .indicator-grid {
-    display: flex;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-  }
-
-  .indicator {
-    flex: 0 0 auto;
-    min-width: 180px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .feed-groups {
