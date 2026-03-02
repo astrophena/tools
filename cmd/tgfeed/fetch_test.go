@@ -286,50 +286,6 @@ func TestAlwaysSendNewItems(t *testing.T) {
 	testutil.AssertEqual(t, len(tm.sentMessages), 1)
 }
 
-func TestParseTGICASURetryIn(t *testing.T) {
-	t.Parallel()
-
-	cases := map[string]struct {
-		body  string
-		want  time.Duration
-		found bool
-	}{
-		"flood wait": {
-			body:  `{"errors":["FLOOD_WAIT_42"]}`,
-			want:  42 * time.Second,
-			found: true,
-		},
-		"unlock access": {
-			body:  `{"errors":["Time to unlock access: 01:02:03"]}`,
-			want:  1*time.Hour + 2*time.Minute + 3*time.Second,
-			found: true,
-		},
-		"mixed errors picks first valid": {
-			body:  `{"errors":[123,"oops","FLOOD_WAIT_5"]}`,
-			want:  5 * time.Second,
-			found: true,
-		},
-		"unknown format": {
-			body:  `{"errors":["something else"]}`,
-			want:  0,
-			found: false,
-		},
-		"invalid json": {
-			body:  `{`,
-			want:  0,
-			found: false,
-		},
-	}
-
-	for name, tc := range cases {
-		t.Run(name, func(t *testing.T) {
-			got, found := parseTGICASURetryIn([]byte(tc.body))
-			testutil.AssertEqual(t, found, tc.found)
-			testutil.AssertEqual(t, got, tc.want)
-		})
-	}
-}
-
 func TestDecideFeedItem(t *testing.T) {
 	t.Parallel()
 

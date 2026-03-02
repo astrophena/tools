@@ -8,7 +8,6 @@ import (
 	"cmp"
 	"context"
 	_ "embed"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -21,6 +20,7 @@ import (
 
 	"go.astrophena.name/base/version"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/format"
+	"go.astrophena.name/tools/cmd/tgfeed/internal/retry"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/sender"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/state"
 
@@ -263,13 +263,10 @@ func (f *fetcher) handleFeedStatus(req *http.Request, res *http.Response, fd *fe
 
 	body, hasBody := readFeedErrorBody(res.Body)
 
-	// Handle tg.i-c-a.su rate limiting.
-	//
-	// This host encodes backoff information in a JSON payload. If present, we
-	// treat the response as handled and ask the caller to retry later.
-	if req.URL.Host == "tg.i-c-a.su" && hasBody {
-		if t, found := parseTGICASURetryIn(body); found {
-			f.slog.Warn("rate-limited by tg.i-c-a.su", "feed", fd.url, "retry_in", t)
+	// Handle custom rate limiting.
+	if hasBody {
+		if t, found := retry.Retryable(req.URL.Host, body); found {
+			f.slog.Warn("rate-limited", "host", req.URL.Host, "feed", fd.url, "retry_in", t)
 			return feedStatusResult{
 				handled: true,
 				retry:   true,
@@ -293,46 +290,6 @@ func readFeedErrorBody(r io.Reader) (body []byte, hasBody bool) {
 		return []byte("unable to read body"), false
 	}
 	return body, true
-}
-
-func parseTGICASURetryIn(body []byte) (time.Duration, bool) {
-	var response struct {
-		Errors []any `json:"errors"`
-	}
-	if err := json.Unmarshal(body, &response); err != nil {
-		return 0, false
-	}
-
-	for _, e := range response.Errors {
-		s, ok := e.(string)
-		if !ok {
-			continue
-		}
-
-		const floodPrefix = "FLOOD_WAIT_"
-		if after, ok := strings.CutPrefix(s, floodPrefix); ok {
-			d, err := time.ParseDuration(after + "s")
-			if err == nil {
-				return d, true
-			}
-		}
-
-		const unlockPrefix = "Time to unlock access: "
-		if after, ok := strings.CutPrefix(s, unlockPrefix); ok {
-			parts := strings.Split(after, ":")
-			if len(parts) != 3 {
-				continue
-			}
-			h, err1 := strconv.Atoi(parts[0])
-			m, err2 := strconv.Atoi(parts[1])
-			sec, err3 := strconv.Atoi(parts[2])
-			if err1 == nil && err2 == nil && err3 == nil {
-				return time.Duration(h)*time.Hour + time.Duration(m)*time.Minute + time.Duration(sec)*time.Second, true
-			}
-		}
-	}
-
-	return 0, false
 }
 
 func (f *fetcher) updateFeedStateFromHeaders(state *state.Feed, res *http.Response) {
