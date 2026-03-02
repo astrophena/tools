@@ -1,0 +1,19 @@
+.editor {
+  margin-top: 0.9rem;
+  width: 100%;
+  min-height: 320px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 1rem;
+  resize: vertical;
+  background: rgba(11, 19, 24, 0.82);
+  color: #dce9f0;
+  font-family: "IBM Plex Mono", "Cascadia Mono", "Consolas", monospace;
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+.editor:focus {
+  outline: 2px solid rgba(112, 223, 182, 0.3);
+  border-color: rgba(112, 223, 182, 0.45);
+}

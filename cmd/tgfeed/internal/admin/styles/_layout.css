@@ -1,0 +1,31 @@
+.app-shell {
+  width: min(1200px, 100% - 3rem);
+  margin: 0 auto;
+  padding: 2rem 0 3.2rem;
+}
+
+.dashboard-grid,
+.column {
+  display: grid;
+  gap: 1.2rem;
+}
+
+.indicator-grid {
+  margin-top: 1.2rem;
+  display: grid;
+  gap: 0.8rem;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.metric-grid {
+  margin-top: 1rem;
+  display: grid;
+  gap: 0.8rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.container {
+  width: min(880px, 100% - 3rem);
+  margin: 0 auto;
+  padding: 2rem 0;
+}

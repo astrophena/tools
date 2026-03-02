@@ -1,0 +1,74 @@
+.indicator {
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line);
+  padding: 0.9rem;
+  background: rgba(10, 18, 24, 0.75);
+}
+
+.indicator p {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.indicator h3 {
+  margin: 0.3rem 0 0.2rem;
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.indicator span {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.delta {
+  display: block;
+  margin-top: 0.45rem;
+  font-size: 0.76rem !important;
+  font-weight: 600;
+}
+
+.delta-good {
+  color: var(--ok) !important;
+}
+
+.delta-bad {
+  color: var(--danger) !important;
+}
+
+.delta-neutral {
+  color: var(--text-muted) !important;
+}
+
+.indicator-primary {
+  border-color: rgba(111, 225, 183, 0.35);
+  box-shadow: inset 0 0 0 1px rgba(111, 225, 183, 0.08);
+}
+
+.indicator-danger {
+  border-color: rgba(255, 127, 136, 0.35);
+  box-shadow: inset 0 0 0 1px rgba(255, 127, 136, 0.09);
+}
+
+.metric {
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line);
+  padding: 0.9rem;
+  background: rgba(10, 18, 24, 0.68);
+}
+
+.metric p {
+  margin: 0 0 0.4rem;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.metric h3 {
+  margin: 0;
+  font-size: 1.1rem;
+}

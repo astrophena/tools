@@ -1,0 +1,34 @@
+.message {
+  margin: 0.8rem 0 0;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  padding: 0.6rem 0.8rem;
+  font-size: 0.88rem;
+}
+
+.message-error {
+  color: var(--danger);
+  background: rgba(255, 127, 136, 0.08);
+  border-color: rgba(255, 127, 136, 0.24);
+}
+
+.message-info {
+  color: var(--ok);
+  background: rgba(122, 223, 172, 0.08);
+  border-color: rgba(122, 223, 172, 0.22);
+}
+
+.message-banner {
+  margin: 0 0 1.2rem;
+  color: #8ff2c8;
+  background: rgba(91, 205, 164, 0.11);
+  border-color: rgba(91, 205, 164, 0.3);
+}
+
+.error-message {
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(255, 127, 136, 0.24);
+  color: var(--danger);
+  background: rgba(255, 127, 136, 0.1);
+  padding: 0.9rem 1rem;
+}

@@ -1,0 +1,29 @@
+.status-cluster {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.pill {
+  border-radius: 999px;
+  padding: 0.35rem 0.65rem;
+  font-size: 0.74rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #80dbba;
+  background: rgba(88, 211, 167, 0.14);
+  border: 1px solid rgba(88, 211, 167, 0.24);
+}
+
+.pill-warning {
+  color: #ffd18f;
+  background: rgba(228, 164, 77, 0.15);
+  border-color: rgba(228, 164, 77, 0.32);
+}
+
+.pill-subtle {
+  color: var(--text-muted);
+  background: rgba(157, 177, 190, 0.12);
+  border-color: rgba(157, 177, 190, 0.18);
+}
