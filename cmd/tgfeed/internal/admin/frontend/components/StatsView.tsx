@@ -4,11 +4,26 @@ import { formatDateTime, formatDuration } from "../format.ts";
 import { StatsRun } from "../types.ts";
 import { ChartsGrid } from "./ChartsGrid.tsx";
 import { LazyDetails } from "./LazyDetails.tsx";
-import { NetworkCharts } from "./NetworkCharts.tsx";
-import { OutcomeCharts } from "./OutcomeCharts.tsx";
-import { PerformanceCharts } from "./PerformanceCharts.tsx";
 import { TimelineChart } from "./TimelineChart.tsx";
 import { TopFeedsPanels } from "./TopFeedsPanels.tsx";
+import { ChartSkeleton, IndicatorGridSkeleton } from "./Skeletons.tsx";
+import { Suspender } from "./SuspenseWrapper.tsx";
+
+const NetworkCharts = React.lazy(() =>
+  import("./NetworkCharts.tsx").then((module) => ({
+    default: module.NetworkCharts,
+  }))
+);
+const OutcomeCharts = React.lazy(() =>
+  import("./OutcomeCharts.tsx").then((module) => ({
+    default: module.OutcomeCharts,
+  }))
+);
+const PerformanceCharts = React.lazy(() =>
+  import("./PerformanceCharts.tsx").then((module) => ({
+    default: module.PerformanceCharts,
+  }))
+);
 
 /** Relative trend quality for run-over-run metric changes. */
 type DeltaTone = "good" | "bad" | "neutral";
@@ -169,6 +184,7 @@ function formatRefreshTime(value: number | null): string {
 export function StatsView(props: {
   stats: StatsRun[];
   statsLoading: boolean;
+  statsPromise: Promise<void> | null;
   statsError: string;
   selectedStatsIndex: number;
   setSelectedStatsIndex: (index: number) => void;
@@ -180,6 +196,7 @@ export function StatsView(props: {
   const {
     stats,
     statsLoading,
+    statsPromise,
     statsError,
     selectedStatsIndex,
     setSelectedStatsIndex,
@@ -316,71 +333,84 @@ export function StatsView(props: {
           <p className="message message-info">No stats available yet.</p>
         )}
 
-        {latestStats && (
-          <div className="indicator-grid">
-            <article className="indicator indicator-primary">
-              <p>Last run</p>
-              <h3>{formatRelativeTime(latestStats.start_time)}</h3>
-              <span>{formatDateTime(latestStats.start_time)}</span>
-              <span className="delta delta-neutral">Context: latest run</span>
-            </article>
-            <article className="indicator">
-              <p>Healthy feeds</p>
-              <h3>{latestHealthyFeeds}/{latestTotalFeeds}</h3>
-              <span>Rate: {formatPercent(latestHealthyRate)}</span>
-              <span
-                className={`delta delta-${
-                  deltaTone(healthyRateDelta, "higher")
-                }`}
-              >
-                {deltaText(healthyRateDelta, { precision: 1, unit: " pp" })}
-              </span>
-            </article>
-            <article className="indicator indicator-danger">
-              <p>Failed feeds</p>
-              <h3>{latestFailedFeeds}</h3>
-              <span>From total: {latestTotalFeeds}</span>
-              <span
-                className={`delta delta-${deltaTone(failedDelta, "lower")}`}
-              >
-                {deltaText(failedDelta, { precision: 0, unit: "" })}
-              </span>
-            </article>
-            <article className="indicator">
-              <p>Delivery success</p>
-              <h3>{formatPercent(latestDeliveryRate)}</h3>
-              <span>
-                Sent {toNumber(latestStats.messages_sent)}/
-                {toNumber(latestStats.messages_attempted)}
-              </span>
-              <span
-                className={`delta delta-${
-                  deltaTone(deliveryRateDelta, "higher")
-                }`}
-              >
-                {deltaText(deliveryRateDelta, { precision: 1, unit: " pp" })}
-              </span>
-            </article>
-            <article className="indicator">
-              <p>Fetch latency p99</p>
-              <h3>{latestP99.toFixed(0)} ms</h3>
-              <span>Lower is better</span>
-              <span className={`delta delta-${deltaTone(p99Delta, "lower")}`}>
-                {deltaText(p99Delta, { precision: 0, unit: " ms" })}
-              </span>
-            </article>
-            <article className="indicator">
-              <p>Run duration</p>
-              <h3>{formatDuration(latestStats.duration)}</h3>
-              <span>Lower is better</span>
-              <span
-                className={`delta delta-${deltaTone(durationDelta, "lower")}`}
-              >
-                {deltaText(durationDelta, { precision: 1, unit: " s" })}
-              </span>
-            </article>
-          </div>
-        )}
+        <React.Suspense fallback={<IndicatorGridSkeleton />}>
+          <Suspender loading={statsLoading} promise={statsPromise}>
+            {latestStats && (
+              <div className="indicator-grid">
+                <article className="indicator indicator-primary">
+                  <p>Last run</p>
+                  <h3>{formatRelativeTime(latestStats.start_time)}</h3>
+                  <span>{formatDateTime(latestStats.start_time)}</span>
+                  <span className="delta delta-neutral">
+                    Context: latest run
+                  </span>
+                </article>
+                <article className="indicator">
+                  <p>Healthy feeds</p>
+                  <h3>{latestHealthyFeeds}/{latestTotalFeeds}</h3>
+                  <span>Rate: {formatPercent(latestHealthyRate)}</span>
+                  <span
+                    className={`delta delta-${
+                      deltaTone(healthyRateDelta, "higher")
+                    }`}
+                  >
+                    {deltaText(healthyRateDelta, { precision: 1, unit: " pp" })}
+                  </span>
+                </article>
+                <article className="indicator indicator-danger">
+                  <p>Failed feeds</p>
+                  <h3>{latestFailedFeeds}</h3>
+                  <span>From total: {latestTotalFeeds}</span>
+                  <span
+                    className={`delta delta-${deltaTone(failedDelta, "lower")}`}
+                  >
+                    {deltaText(failedDelta, { precision: 0, unit: "" })}
+                  </span>
+                </article>
+                <article className="indicator">
+                  <p>Delivery success</p>
+                  <h3>{formatPercent(latestDeliveryRate)}</h3>
+                  <span>
+                    Sent {toNumber(latestStats.messages_sent)}/
+                    {toNumber(latestStats.messages_attempted)}
+                  </span>
+                  <span
+                    className={`delta delta-${
+                      deltaTone(deliveryRateDelta, "higher")
+                    }`}
+                  >
+                    {deltaText(deliveryRateDelta, {
+                      precision: 1,
+                      unit: " pp",
+                    })}
+                  </span>
+                </article>
+                <article className="indicator">
+                  <p>Fetch latency p99</p>
+                  <h3>{latestP99.toFixed(0)} ms</h3>
+                  <span>Lower is better</span>
+                  <span
+                    className={`delta delta-${deltaTone(p99Delta, "lower")}`}
+                  >
+                    {deltaText(p99Delta, { precision: 0, unit: " ms" })}
+                  </span>
+                </article>
+                <article className="indicator">
+                  <p>Run duration</p>
+                  <h3>{formatDuration(latestStats.duration)}</h3>
+                  <span>Lower is better</span>
+                  <span
+                    className={`delta delta-${
+                      deltaTone(durationDelta, "lower")
+                    }`}
+                  >
+                    {deltaText(durationDelta, { precision: 1, unit: " s" })}
+                  </span>
+                </article>
+              </div>
+            )}
+          </Suspender>
+        </React.Suspense>
       </section>
 
       <section className="panel chart-panel">
@@ -480,11 +510,20 @@ export function StatsView(props: {
             </div>
 
             <LazyDetails summary="Show detailed analytics for this run">
-              <ChartsGrid>
-                <OutcomeCharts stats={stats} activeRun={activeRun} />
-                <NetworkCharts activeRun={activeRun} />
-                <PerformanceCharts activeRun={activeRun} />
-              </ChartsGrid>
+              <React.Suspense
+                fallback={
+                  <ChartsGrid>
+                    <ChartSkeleton />
+                    <ChartSkeleton />
+                  </ChartsGrid>
+                }
+              >
+                <ChartsGrid>
+                  <OutcomeCharts stats={stats} activeRun={activeRun} />
+                  <NetworkCharts activeRun={activeRun} />
+                  <PerformanceCharts activeRun={activeRun} />
+                </ChartsGrid>
+              </React.Suspense>
             </LazyDetails>
           </div>
         )}

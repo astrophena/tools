@@ -107,3 +107,15 @@
   color: var(--text-main);
   font-size: 0.82rem;
 }
+
+.chart-card.skeleton {
+  min-height: 250px;
+  background: linear-gradient(
+    90deg,
+    rgba(20, 27, 33, 0.92) 25%,
+    rgba(26, 34, 41, 0.98) 50%,
+    rgba(20, 27, 33, 0.92) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite linear;
+}

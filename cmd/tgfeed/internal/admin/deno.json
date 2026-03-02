@@ -1,6 +1,13 @@
 {
+  "lint": {
+    "exclude": [
+      "static/*/*.min.*"
+    ]
+  },
   "fmt": {
-    "exclude": "static/*/*.min.*"
+    "exclude": [
+      "static/*/*.min.*"
+    ]
   },
   "imports": {
     "@types/react": "npm:@types/react@^19.2.14",
