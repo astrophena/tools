@@ -11,7 +11,7 @@ require (
 	github.com/tobischo/gokeepasslib/v3 v3.6.2
 	go.astrophena.name/base v0.16.2
 	go.starlark.net v0.0.0-20260210143700-b62fd896b91b
-	golang.org/x/sync v0.19.0
+	golang.org/x/sync v0.20.0
 	golang.org/x/term v0.40.0
 	rsc.io/markdown v0.0.0-20241212154241-6bf72452917f
 )
