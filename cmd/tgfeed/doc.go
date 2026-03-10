@@ -83,7 +83,8 @@ A custom format function can be specified using the format argument. It takes
 a single item (or a list of items in digest mode) and returns a string message.
 In digest mode, the returned string is sent as the message body. In normal mode,
 it is used as the message text. The format function can also return a tuple of
-(text, keyboard) to attach an inline keyboard to the message.
+(text, keyboard) to attach an inline keyboard to the message, or a 3-element tuple
+(text, keyboard, media_list) to send the output as native Telegram media.
 
 Block and keep rules are Starlark functions that take a feed item as an argument
 and return a boolean value. If a block rule returns true, the item is not sent
@@ -98,6 +99,22 @@ keys:
   - description: The description of the item.
   - content: The content of the item.
   - categories: A list of categories the item belongs to.
+  - enclosures: A list of media enclosures (each with a url, type, and length).
+
+# Media Support
+
+tgfeed supports sending native Telegram media (photos, videos, and media groups).
+To send an item with media attached, your custom format Starlark function should extract
+the media URLs (e.g., from item.enclosures) and return a 3-element tuple:
+(message_text, inline_keyboard, media_list).
+
+The media_list must be a list of dictionaries, where each dictionary represents one media item,
+for example:
+
+	{"type": "photo", "url": "https://example.com/image.jpg"}
+
+If the list contains multiple media items, tgfeed automatically bundles them into a
+Telegram media album (media group), respecting Telegram's limits by batching when necessary.
 
 # Special Feeds
 

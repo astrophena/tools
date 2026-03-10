@@ -16,7 +16,6 @@ import (
 	"strings"
 	"time"
 	"unicode"
-	"unicode/utf8"
 
 	"go.astrophena.name/base/request"
 	"go.astrophena.name/base/version"
@@ -154,25 +153,32 @@ func (s *Sender) Send(ctx context.Context, msg sender.Message) error {
 		chunks = splitMessageCap(msg.Body, 4096)
 	}
 
+	// Send media group.
 	if len(msg.Media) > 1 {
-		req := &sendMediaGroupRequest{
-			ChatID:          chatID,
-			MessageThreadID: threadID,
-		}
-		for i, m := range msg.Media {
-			mediaType := "photo"
-			if strings.Contains(m.Type, "video") || strings.HasSuffix(m.URL, ".mp4") {
-				mediaType = "video"
+		const maxMediaGroupSize = 10
+		for start := 0; start < len(msg.Media); start += maxMediaGroupSize {
+			end := min(start+maxMediaGroupSize, len(msg.Media))
+			batch := msg.Media[start:end]
+
+			req := &sendMediaGroupRequest{
+				ChatID:          chatID,
+				MessageThreadID: threadID,
 			}
-			im := inputMedia{Type: mediaType, Media: m.URL}
-			if i == 0 && len(chunks) > 0 {
-				im.captionPayload = parseCaption(chunks[0])
-				chunks = chunks[1:] // consume the first chunk for the caption
+			for i, m := range batch {
+				mediaType := "photo"
+				if strings.Contains(m.Type, "video") || strings.HasSuffix(m.URL, ".mp4") {
+					mediaType = "video"
+				}
+				im := inputMedia{Type: mediaType, Media: m.URL}
+				if start == 0 && i == 0 && len(chunks) > 0 {
+					im.captionPayload = parseCaption(chunks[0])
+					chunks = chunks[1:] // consume the first chunk for the caption
+				}
+				req.Media = append(req.Media, im)
 			}
-			req.Media = append(req.Media, im)
-		}
-		if err := s.doRequest(ctx, "sendMediaGroup", req); err != nil {
-			return err
+			if err := s.doRequest(ctx, "sendMediaGroup", req); err != nil {
+				return err
+			}
 		}
 	} else if len(msg.Media) == 1 {
 		req := &sendMediaRequest{
@@ -286,56 +292,63 @@ func splitMessageCap(text string, firstChunkCap int) []string {
 	if text == "" {
 		return nil
 	}
-	if utf8.RuneCountInString(text) <= firstChunkCap {
+
+	runes := []rune(text)
+	if len(runes) <= firstChunkCap {
 		return []string{text}
 	}
 
 	var chunks []string
 	limit := firstChunkCap
-	for text != "" {
-		if utf8.RuneCountInString(text) <= limit {
-			chunks = append(chunks, text)
+
+	start := 0
+	for start < len(runes) {
+		remaining := len(runes) - start
+		if remaining <= limit {
+			chunk := strings.TrimSpace(string(runes[start:]))
+			if chunk != "" {
+				chunks = append(chunks, chunk)
+			}
 			break
 		}
 
-		var (
-			lastNewline    = -1
-			lastWhitespace = -1
-			byteCap        = len(text)
-			runeCount      int
-		)
+		endIndex := start + limit
+		// search back for space or newline
+		splitAt := endIndex
+		lastNewline := -1
+		lastSpace := -1
 
-		for i, r := range text {
-			if runeCount == limit {
-				byteCap = i
-				break
-			}
-			runeCount++
-
+		for i := endIndex - 1; i >= start; i-- {
+			r := runes[i]
 			if r == '\n' {
 				lastNewline = i
-				continue
+				break
 			}
-			if unicode.IsSpace(r) {
-				lastWhitespace = i
+			if unicode.IsSpace(r) && lastSpace == -1 {
+				lastSpace = i
 			}
 		}
 
-		splitAt := byteCap
-		switch {
-		case lastNewline > 0:
+		if lastNewline != -1 {
 			splitAt = lastNewline
-		case lastWhitespace > 0:
-			splitAt = lastWhitespace
+		} else if lastSpace != -1 {
+			splitAt = lastSpace
 		}
 
-		chunk := strings.TrimSpace(text[:splitAt])
+		chunk := strings.TrimSpace(string(runes[start:splitAt]))
 		if chunk != "" {
 			chunks = append(chunks, chunk)
 		}
-		text = strings.TrimSpace(text[splitAt:])
 
-		// All subsequent chunks will always be bounded by the standard 4096 length limit.
+		start = splitAt
+		// advance manually over the split char so it doesn't get padded at start
+		if start < len(runes) && unicode.IsSpace(runes[start]) {
+			// Find the first non-space character
+			for start < len(runes) && unicode.IsSpace(runes[start]) {
+				start++
+			}
+		}
+
 		limit = 4096
 	}
 

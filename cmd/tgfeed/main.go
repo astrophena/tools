@@ -384,8 +384,9 @@ func (f *fetcher) run(ctx context.Context) error {
 		return fmt.Errorf("loading state failed: %w", err)
 	}
 
-	// Recreate updates channel on each fetch.
-	updates := make(chan *update)
+	// Recreate updates channel on each fetch with a buffer to prevent
+	// Telegram rate-limits from deadlocking concurrent fetches.
+	updates := make(chan *update, 100)
 
 	var baseWg sync.WaitGroup
 
