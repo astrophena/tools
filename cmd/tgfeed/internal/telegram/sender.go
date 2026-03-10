@@ -79,6 +79,43 @@ type message struct {
 	tgmarkup.Message
 }
 
+type captionPayload struct {
+	Caption         string            `json:"caption,omitempty"`
+	CaptionEntities []tgmarkup.Entity `json:"caption_entities,omitempty"`
+}
+
+func parseCaption(text string) captionPayload {
+	if text == "" {
+		return captionPayload{}
+	}
+	m := tgmarkup.FromMarkdown(text)
+	return captionPayload{
+		Caption:         m.Text,
+		CaptionEntities: m.Entities,
+	}
+}
+
+type sendMediaRequest struct {
+	ChatID          string       `json:"chat_id"`
+	MessageThreadID int64        `json:"message_thread_id,omitempty"`
+	Photo           string       `json:"photo,omitempty"`
+	Video           string       `json:"video,omitempty"`
+	ReplyMarkup     *replyMarkup `json:"reply_markup,omitempty"`
+	captionPayload
+}
+
+type inputMedia struct {
+	Type  string `json:"type"`
+	Media string `json:"media"`
+	captionPayload
+}
+
+type sendMediaGroupRequest struct {
+	ChatID          string       `json:"chat_id"`
+	MessageThreadID int64        `json:"message_thread_id,omitempty"`
+	Media           []inputMedia `json:"media"`
+}
+
 type replyMarkup struct {
 	InlineKeyboard *inlineKeyboard `json:"inline_keyboard"`
 }
@@ -96,46 +133,112 @@ func (s *Sender) Send(ctx context.Context, msg sender.Message) error {
 	if msg.Target.Channel != "" {
 		chatID = msg.Target.Channel
 	}
-
-	tgmsg := &message{ChatID: chatID}
+	var threadID int64
 	if msg.Target.Topic != "" {
-		threadID, err := strconv.ParseInt(msg.Target.Topic, 10, 64)
+		tid, err := strconv.ParseInt(msg.Target.Topic, 10, 64)
 		if err != nil {
 			return fmt.Errorf("parsing target topic as thread id: %w", err)
 		}
-		tgmsg.MessageThreadID = threadID
+		threadID = tid
 	}
+
+	var replyMarkupStruct *replyMarkup
 	if len(msg.Actions) > 0 {
-		tgmsg.ReplyMarkup = &replyMarkup{InlineKeyboard: toInlineKeyboard(msg.Actions)}
+		replyMarkupStruct = &replyMarkup{InlineKeyboard: toInlineKeyboard(msg.Actions)}
 	}
-	tgmsg.LinkPreviewOptions.IsDisabled = msg.Options.SuppressLinkPreview
 
-	chunks := splitMessage(msg.Body)
-	for _, chunk := range chunks {
-		tgmsg.Message = tgmarkup.FromMarkdown(chunk)
+	var chunks []string
+	if len(msg.Media) > 0 {
+		chunks = splitMessageCap(msg.Body, 1024)
+	} else {
+		chunks = splitMessageCap(msg.Body, 4096)
+	}
 
-		var err error
-		for range sendRetryLimit {
-			err = s.makeRequest(ctx, "sendMessage", tgmsg)
-			if err == nil {
-				break
-			}
-
-			retryable, wait := isRateLimited(err)
-			if !retryable {
-				break
-			}
-
-			s.slog.Warn("sending rate limited, waiting", slog.String("chat_id", chatID), slog.String("message", chunk), slog.Duration("wait", wait))
-			if !s.sleep(ctx, wait) {
-				return ctx.Err()
-			}
+	if len(msg.Media) > 1 {
+		req := &sendMediaGroupRequest{
+			ChatID:          chatID,
+			MessageThreadID: threadID,
 		}
-		if err != nil {
+		for i, m := range msg.Media {
+			mediaType := "photo"
+			if strings.Contains(m.Type, "video") || strings.HasSuffix(m.URL, ".mp4") {
+				mediaType = "video"
+			}
+			im := inputMedia{Type: mediaType, Media: m.URL}
+			if i == 0 && len(chunks) > 0 {
+				im.captionPayload = parseCaption(chunks[0])
+				chunks = chunks[1:] // consume the first chunk for the caption
+			}
+			req.Media = append(req.Media, im)
+		}
+		if err := s.doRequest(ctx, "sendMediaGroup", req); err != nil {
+			return err
+		}
+	} else if len(msg.Media) == 1 {
+		req := &sendMediaRequest{
+			ChatID:          chatID,
+			MessageThreadID: threadID,
+			ReplyMarkup:     replyMarkupStruct, // single media supports reply markup
+		}
+		m := msg.Media[0]
+		mediaType := "photo"
+		if strings.Contains(m.Type, "video") || strings.HasSuffix(m.URL, ".mp4") {
+			mediaType = "video"
+		}
+		if mediaType == "video" {
+			req.Video = m.URL
+		} else {
+			req.Photo = m.URL
+		}
+		var method = "sendPhoto"
+		if mediaType == "video" {
+			method = "sendVideo"
+		}
+		if len(chunks) > 0 {
+			req.captionPayload = parseCaption(chunks[0])
+			chunks = chunks[1:]
+		}
+		if err := s.doRequest(ctx, method, req); err != nil {
 			return err
 		}
 	}
+
+	// Send remaining text chunks or standard text.
+	for _, chunk := range chunks {
+		tgmsg := &message{
+			ChatID:          chatID,
+			MessageThreadID: threadID,
+			ReplyMarkup:     replyMarkupStruct,
+		}
+		tgmsg.LinkPreviewOptions.IsDisabled = msg.Options.SuppressLinkPreview
+		tgmsg.Message = tgmarkup.FromMarkdown(chunk)
+		if err := s.doRequest(ctx, "sendMessage", tgmsg); err != nil {
+			return err
+		}
+	}
+
 	return nil
+}
+
+func (s *Sender) doRequest(ctx context.Context, method string, req any) error {
+	var err error
+	for range sendRetryLimit {
+		err = s.makeRequest(ctx, method, req)
+		if err == nil {
+			return nil
+		}
+
+		retryable, wait := isRateLimited(err)
+		if !retryable {
+			break
+		}
+
+		s.slog.Warn("sending rate limited, waiting", slog.String("method", method), slog.Duration("wait", wait))
+		if !s.sleep(ctx, wait) {
+			return ctx.Err()
+		}
+	}
+	return err
 }
 
 func toInlineKeyboard(rows []sender.ActionRow) *inlineKeyboard {
@@ -175,17 +278,22 @@ func (s *Sender) makeTelegramRequest(ctx context.Context, method string, args an
 }
 
 func splitMessage(text string) []string {
+	return splitMessageCap(text, 4096)
+}
+
+func splitMessageCap(text string, firstChunkCap int) []string {
 	text = strings.TrimSpace(text)
 	if text == "" {
 		return nil
 	}
-	if utf8.RuneCountInString(text) <= 4096 {
+	if utf8.RuneCountInString(text) <= firstChunkCap {
 		return []string{text}
 	}
 
 	var chunks []string
+	limit := firstChunkCap
 	for text != "" {
-		if utf8.RuneCountInString(text) <= 4096 {
+		if utf8.RuneCountInString(text) <= limit {
 			chunks = append(chunks, text)
 			break
 		}
@@ -198,7 +306,7 @@ func splitMessage(text string) []string {
 		)
 
 		for i, r := range text {
-			if runeCount == 4096 {
+			if runeCount == limit {
 				byteCap = i
 				break
 			}
@@ -226,6 +334,9 @@ func splitMessage(text string) []string {
 			chunks = append(chunks, chunk)
 		}
 		text = strings.TrimSpace(text[splitAt:])
+
+		// All subsequent chunks will always be bounded by the standard 4096 length limit.
+		limit = 4096
 	}
 
 	return chunks

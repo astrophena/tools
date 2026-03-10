@@ -27,6 +27,7 @@ func TestParseFormattedMessage(t *testing.T) {
 		input      starlark.Value
 		wantBody   string
 		wantAction bool
+		wantMedia  bool
 		wantReason string
 	}{
 		"string": {
@@ -46,12 +47,28 @@ func TestParseFormattedMessage(t *testing.T) {
 			input:      starlark.Tuple{starlark.String("")},
 			wantReason: "empty_title",
 		},
+		"tuple with media": {
+			input: starlark.Tuple{
+				starlark.String("formatted"),
+				starlark.NewList(nil), // empty actions
+				starlark.NewList([]starlark.Value{
+					func() starlark.Value {
+						d := starlark.NewDict(2)
+						d.SetKey(starlark.String("type"), starlark.String("image/jpeg"))
+						d.SetKey(starlark.String("url"), starlark.String("https://example.com/a.jpg"))
+						return d
+					}(),
+				}),
+			},
+			wantBody:  "formatted",
+			wantMedia: true,
+		},
 		"tuple malformed keyboard": {
 			input:      starlark.Tuple{starlark.String("formatted"), starlark.MakeInt(1)},
 			wantReason: "invalid_field_type",
 		},
 		"tuple invalid length": {
-			input:      starlark.Tuple{starlark.String("one"), starlark.NewList(nil), starlark.String("three")},
+			input:      starlark.Tuple{starlark.String("one"), starlark.NewList(nil), starlark.NewList(nil), starlark.String("four")},
 			wantReason: "invalid_tuple_length",
 		},
 		"unsupported": {
@@ -78,9 +95,14 @@ func TestParseFormattedMessage(t *testing.T) {
 			testutil.AssertEqual(t, err, nil)
 			testutil.AssertEqual(t, got.Body, tc.wantBody)
 			testutil.AssertEqual(t, len(got.Actions) > 0, tc.wantAction)
+			testutil.AssertEqual(t, len(got.Media) > 0, tc.wantMedia)
 			if tc.wantAction {
 				testutil.AssertEqual(t, got.Actions[0][0].Label, "Open")
 				testutil.AssertEqual(t, got.Actions[0][0].URL, "https://example.com")
+			}
+			if tc.wantMedia {
+				testutil.AssertEqual(t, got.Media[0].Type, "image/jpeg")
+				testutil.AssertEqual(t, got.Media[0].URL, "https://example.com/a.jpg")
 			}
 		})
 	}
