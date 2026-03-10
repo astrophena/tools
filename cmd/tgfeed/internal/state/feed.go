@@ -60,6 +60,7 @@ func (f *Feed) MarkFetchFailure(err error, threshold int) (disabled bool) {
 	f.LastError = err.Error()
 	if threshold > 0 && f.ErrorCount >= threshold && !f.Disabled {
 		f.Disabled = true
+		f.DisabledNotifyPending = true
 		return true
 	}
 	return false
@@ -68,6 +69,7 @@ func (f *Feed) MarkFetchFailure(err error, threshold int) (disabled bool) {
 // Reenable clears failure markers and enables future fetching.
 func (f *Feed) Reenable() {
 	f.Disabled = false
+	f.DisabledNotifyPending = false
 	f.ErrorCount = 0
 	f.LastError = ""
 }

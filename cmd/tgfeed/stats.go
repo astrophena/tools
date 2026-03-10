@@ -5,7 +5,6 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"math"
 	"os"
@@ -149,7 +148,7 @@ func topFeedStats(input map[string]*feedStats, less func(a *feedStats, b *feedSt
 	return result
 }
 
-func (f *fetcher) putStats(ctx context.Context, s *stats) error {
+func (f *fetcher) putStats(s *stats) error {
 	statsDir := filepath.Join(f.stateDir, "stats")
 	if err := os.MkdirAll(statsDir, 0o755); err != nil {
 		return err

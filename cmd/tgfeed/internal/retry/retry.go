@@ -24,6 +24,29 @@ func Retryable(host string, body []byte) (time.Duration, bool) {
 	return f(body)
 }
 
+// RetryAfter parses the standard HTTP Retry-After header and returns the duration
+// to wait before retrying, and a boolean indicating whether the header was valid.
+func RetryAfter(header string) (time.Duration, bool) {
+	if header == "" {
+		return 0, false
+	}
+
+	// Try parsing as delay-seconds.
+	if delay, err := strconv.Atoi(header); err == nil && delay >= 0 {
+		return time.Duration(delay) * time.Second, true
+	}
+
+	// Try parsing as HTTP-date.
+	if t, err := time.Parse(time.RFC1123, header); err == nil {
+		if d := time.Until(t); d >= 0 {
+			return d, true
+		}
+		return 0, true // Past date means retry immediately.
+	}
+
+	return 0, false
+}
+
 var handlers = map[string]func([]byte) (time.Duration, bool){
 	"tg.i-c-a.su": func(body []byte) (time.Duration, bool) {
 		var response struct {
