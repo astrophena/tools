@@ -615,6 +615,7 @@ func (f *fetcher) sendUpdate(ctx context.Context, u *update) {
 			SuppressLinkPreview: rendered.DisablePreview,
 		},
 		Actions: rendered.Actions,
+		Media:   rendered.Media,
 	}); err != nil {
 		f.stats.WriteAccess(func(s *stats) {
 			s.MessagesFailed += 1

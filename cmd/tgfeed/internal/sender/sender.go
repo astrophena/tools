@@ -18,6 +18,13 @@ type Message struct {
 	Target  Target
 	Options Options
 	Actions []ActionRow
+	Media   []Media
+}
+
+// Media is an optional media attachment.
+type Media struct {
+	Type string
+	URL  string
 }
 
 // Target identifies where a message should be delivered.

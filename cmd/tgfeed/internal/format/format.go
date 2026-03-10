@@ -65,6 +65,8 @@ type Rendered struct {
 	Actions []sender.ActionRow
 	// DisablePreview controls link preview rendering.
 	DisablePreview bool
+	// Media are optional media attachments (photos, videos).
+	Media []sender.Media
 }
 
 // ValidationError indicates invalid formatter output.
@@ -136,7 +138,7 @@ func ParseFormattedMessage(v starlark.Value) (Rendered, error) {
 	case starlark.String:
 		return Rendered{Body: val.GoString()}, nil
 	case starlark.Tuple:
-		if len(val) < 1 || len(val) > 2 {
+		if len(val) < 1 || len(val) > 3 {
 			return Rendered{}, &ValidationError{Reason: "invalid_tuple_length", TupleLen: len(val)}
 		}
 
@@ -149,17 +151,65 @@ func ParseFormattedMessage(v starlark.Value) (Rendered, error) {
 		}
 
 		r := Rendered{Body: s.GoString()}
-		if len(val) == 2 {
+		if len(val) >= 2 {
 			actions, err := parseInlineKeyboard(val[1])
 			if err != nil {
 				return Rendered{}, err
 			}
 			r.Actions = actions
 		}
+		if len(val) >= 3 {
+			media, err := parseMediaList(val[2])
+			if err != nil {
+				return Rendered{}, err
+			}
+			r.Media = media
+		}
 		return r, nil
 	default:
 		return Rendered{}, &ValidationError{Reason: "invalid_type", ValueType: v.Type()}
 	}
+}
+
+func parseMediaList(v starlark.Value) ([]sender.Media, error) {
+	list, ok := v.(*starlark.List)
+	if !ok {
+		return nil, &ValidationError{Reason: "invalid_field_type", Field: "media", FieldType: v.Type()}
+	}
+
+	media := make([]sender.Media, 0, list.Len())
+	iter := list.Iterate()
+	defer iter.Done()
+
+	var mediaValue starlark.Value
+	for iter.Next(&mediaValue) {
+		mediaDict, ok := mediaValue.(*starlark.Dict)
+		if !ok {
+			continue
+		}
+		var out sender.Media
+		for _, item := range mediaDict.Items() {
+			key, ok1 := item[0].(starlark.String)
+			val, ok2 := item[1].(starlark.String)
+			if !ok1 || !ok2 {
+				continue
+			}
+
+			switch key.GoString() {
+			case "type":
+				out.Type = val.GoString()
+			case "url":
+				out.URL = val.GoString()
+			}
+		}
+
+		if out.Type == "" || out.URL == "" {
+			continue
+		}
+		media = append(media, out)
+	}
+
+	return media, nil
 }
 
 func parseInlineKeyboard(v starlark.Value) ([]sender.ActionRow, error) {
@@ -266,6 +316,16 @@ func ItemToStarlark(item *gofeed.Item) starlark.Value {
 	for _, category := range item.Categories {
 		categories = append(categories, starlark.String(category))
 	}
+	var enclosures []starlark.Value
+	for _, enc := range item.Enclosures {
+		enclosures = append(enclosures, starlarkstruct.FromStringDict(
+			starlarkstruct.Default,
+			starlark.StringDict{
+				"url":    starlark.String(enc.URL),
+				"type":   starlark.String(enc.Type),
+				"length": starlark.String(enc.Length),
+			}))
+	}
 	extensions, _ := go2star.To(item.Extensions)
 	return starlarkstruct.FromStringDict(
 		starlarkstruct.Default,
@@ -275,6 +335,7 @@ func ItemToStarlark(item *gofeed.Item) starlark.Value {
 			"description": starlark.String(item.Description),
 			"content":     starlark.String(item.Content),
 			"categories":  starlark.NewList(categories),
+			"enclosures":  starlark.NewList(enclosures),
 			"extensions":  extensions,
 			"guid":        starlark.String(item.GUID),
 			"published":   starlark.String(item.Published),
