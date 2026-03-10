@@ -411,6 +411,24 @@ func (f *fetcher) run(ctx context.Context) error {
 
 	var fetchedFeeds atomic.Int64
 
+	// Send pending notifications for feeds that failed and were disabled,
+	// but the notification failed to send.
+	for _, feed := range f.feeds {
+		if fdState, ok := f.state.Get(feed.url); ok && fdState.DisabledNotifyPending {
+			err := fmt.Errorf("fetching feed %q failed after %d previous attempts: feed was disabled, to reenable it run 'tgfeed reenable %q'", feed.url, fdState.ErrorCount, feed.url)
+			if nErr := f.errNotify(ctx, err); nErr != nil {
+				f.slog.Warn("failed to send pending error notification", "feed", feed.url, "error", nErr)
+			} else {
+				if updateErr := f.withFeedState(ctx, feed.url, func(state *state.Feed, _ bool) bool {
+					state.DisabledNotifyPending = false
+					return true
+				}); updateErr != nil {
+					f.slog.Warn("failed to persist feed failure state (DisabledNotifyPending)", "feed", feed.url, "error", updateErr)
+				}
+			}
+		}
+	}
+
 	// Enqueue fetches.
 	fetchWg := syncx.NewLimitedWaitGroup(fetchConcurrencyLimit)
 	for _, feed := range shuffle(f.feeds) {
@@ -522,7 +540,7 @@ func (f *fetcher) run(ctx context.Context) error {
 	}
 
 	f.stats.ReadAccess(func(s *stats) {
-		if err := f.putStats(ctx, s); err != nil {
+		if err := f.putStats(s); err != nil {
 			f.slog.Warn("failed to upload stats", "error", err)
 		}
 	})

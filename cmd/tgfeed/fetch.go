@@ -164,6 +164,10 @@ func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *update) (re
 
 	res, err := f.makeFeedRequest(req)
 	if err != nil {
+		if isTransientError(err) {
+			f.slog.Warn("transient network error, retrying", "feed", fd.url, "error", err)
+			return true, 5 * time.Second
+		}
 		f.handleFetchFailure(ctx, fd.url, err)
 		return false, 0
 	}
@@ -276,10 +280,46 @@ func (f *fetcher) handleFeedStatus(req *http.Request, res *http.Response, fd *fe
 		}
 	}
 
+	// Handle standard HTTP Retry-After for Too Many Requests and Service Unavailable.
+	if res.StatusCode == http.StatusTooManyRequests || res.StatusCode == http.StatusServiceUnavailable {
+		if t, found := retry.RetryAfter(res.Header.Get("Retry-After")); found {
+			// Limit backoff to a reasonable maximum (context deadline or 5 minutes),
+			// as Retry-After could be hours or days which would block the goroutine.
+			const maxRetryAfter = 5 * time.Minute
+			if t <= maxRetryAfter {
+				f.slog.Warn("rate-limited (Retry-After)", "feed", fd.url, "retry_in", t)
+				return feedStatusResult{
+					handled: true,
+					retry:   true,
+					retryIn: t,
+					class:   res.StatusCode / 100,
+				}, nil
+			}
+			f.slog.Warn("rate-limited (Retry-After), but wait time is too long", "feed", fd.url, "retry_in", t, "max_retry_in", maxRetryAfter)
+		}
+	}
+
+	// Retry on generic 5xx server errors without Retry-After header.
+	if res.StatusCode >= 500 && res.StatusCode < 600 {
+		return feedStatusResult{
+			handled: true,
+			retry:   true,
+			retryIn: 5 * time.Second,
+			class:   res.StatusCode / 100,
+		}, nil
+	}
+
 	return feedStatusResult{
 		handled: true,
 		class:   res.StatusCode / 100,
 	}, fmt.Errorf("want 200, got %d: %s", res.StatusCode, body)
+}
+
+func isTransientError(err error) bool {
+	if netErr, ok := errors.AsType[net.Error](err); ok {
+		return netErr.Timeout() || strings.Contains(err.Error(), "connection reset by peer")
+	}
+	return errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled)
 }
 
 func readFeedErrorBody(r io.Reader) (body []byte, hasBody bool) {
@@ -494,6 +534,14 @@ func (f *fetcher) handleFetchFailure(ctx context.Context, url string, err error)
 
 		if err := f.errNotify(ctx, err); err != nil {
 			f.slog.Warn("failed to send error notification", "error", err)
+		} else {
+			// Successfully notified, clear the pending flag.
+			if updateErr := f.withFeedState(ctx, url, func(state *state.Feed, _ bool) bool {
+				state.DisabledNotifyPending = false
+				return true
+			}); updateErr != nil {
+				f.slog.Warn("failed to persist feed failure state (DisabledNotifyPending)", "feed", url, "error", updateErr)
+			}
 		}
 	}
 }

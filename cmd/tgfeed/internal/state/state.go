@@ -46,15 +46,16 @@ import (
 // The concrete JSON representation is intentionally private to this package.
 // Callers should mutate feed state via methods rather than raw field access.
 type Feed struct {
-	Disabled       bool                 `json:"disabled"`
-	LastUpdated    time.Time            `json:"last_updated"`
-	LastModified   string               `json:"last_modified,omitempty"`
-	ETag           string               `json:"etag,omitempty"`
-	ErrorCount     int                  `json:"error_count,omitempty"`
-	LastError      string               `json:"last_error,omitempty"`
-	SeenItems      map[string]time.Time `json:"seen_items,omitempty"`
-	FetchCount     int64                `json:"fetch_count"`
-	FetchFailCount int64                `json:"fetch_fail_count"`
+	Disabled              bool                 `json:"disabled"`
+	DisabledNotifyPending bool                 `json:"disabled_notify_pending,omitempty"`
+	LastUpdated           time.Time            `json:"last_updated"`
+	LastModified          string               `json:"last_modified,omitempty"`
+	ETag                  string               `json:"etag,omitempty"`
+	ErrorCount            int                  `json:"error_count,omitempty"`
+	LastError             string               `json:"last_error,omitempty"`
+	SeenItems             map[string]time.Time `json:"seen_items,omitempty"`
+	FetchCount            int64                `json:"fetch_count"`
+	FetchFailCount        int64                `json:"fetch_fail_count"`
 }
 
 // NewFeed initializes a feed state record with a non-zero LastUpdated value.

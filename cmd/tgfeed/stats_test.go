@@ -34,7 +34,7 @@ func TestPutStats(t *testing.T) {
 		MemoryUsage:      9,
 	}
 
-	if err := f.putStats(t.Context(), s); err != nil {
+	if err := f.putStats(s); err != nil {
 		t.Fatal(err)
 	}
 
