@@ -615,3 +615,45 @@ func TestSendUpdateUsesInjectedSender(t *testing.T) {
 		t.Fatalf("sent body %q does not include title", mock.messages[0].Body)
 	}
 }
+
+func TestItemToStarlarkStripsHTML(t *testing.T) {
+	t.Parallel()
+
+	f := &fetcher{}
+	item := &gofeed.Item{
+		Title:       "Test",
+		Link:        "https://example.com",
+		Description: "<p>This is a <b>description</b>.</p>",
+		Content:     `<div>Some <a href="https://go.dev">content</a> here.</div>`,
+	}
+
+	val := f.itemToStarlark(item)
+
+	hasAttrs, ok := val.(starlark.HasAttrs)
+	if !ok {
+		t.Fatalf("expected starlark.HasAttrs, got %T", val)
+	}
+
+	contentVal, err := hasAttrs.Attr("content")
+	if err != nil {
+		t.Fatalf("missing content attr: %v", err)
+	}
+	contentStr, ok := starlark.AsString(contentVal)
+	if !ok {
+		t.Fatalf("content is not string")
+	}
+
+	descVal, err := hasAttrs.Attr("description")
+	if err != nil {
+		t.Fatalf("missing description attr: %v", err)
+	}
+	descStr, ok := starlark.AsString(descVal)
+	if !ok {
+		t.Fatalf("description is not string")
+	}
+
+	// bluemonday's StrictPolicy completely removes the HTML tags without
+	// altering the inner textual data.
+	testutil.AssertEqual(t, contentStr, "Some content here.")
+	testutil.AssertEqual(t, descStr, "This is a description.")
+}

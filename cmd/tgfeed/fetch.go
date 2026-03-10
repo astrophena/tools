@@ -24,6 +24,7 @@ import (
 	"go.astrophena.name/tools/cmd/tgfeed/internal/sender"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/state"
 
+	"github.com/microcosm-cc/bluemonday"
 	"github.com/mmcdole/gofeed"
 	"go.starlark.net/starlark"
 )
@@ -115,6 +116,7 @@ type feedItemContext struct {
 	state       *state.Feed
 	exists      bool
 	justEnabled bool
+	starlarkVal starlark.Value
 }
 
 // fetch fetches one feed and either emits updates, asks caller to retry, or
@@ -364,6 +366,8 @@ func (f *fetcher) enqueueFeedItems(fd *feed, state *state.Feed, exists bool, ite
 			continue
 		}
 
+		itemCtx.starlarkVal = f.itemToStarlark(feedItem)
+
 		switch f.decideEnqueueAction(itemCtx, feedItem) {
 		case enqueueActionSkip:
 			continue
@@ -425,7 +429,7 @@ func decideFeedItem(itemCtx feedItemContext, feedItem *gofeed.Item) feedItemDeci
 }
 
 func (f *fetcher) decideEnqueueAction(itemCtx feedItemContext, feedItem *gofeed.Item) enqueueAction {
-	if !f.feedItemPassesRules(itemCtx.feed, feedItem) {
+	if !f.feedItemPassesRules(itemCtx.feed, feedItem, itemCtx.starlarkVal) {
 		return enqueueActionSkip
 	}
 	if itemCtx.feed.digest {
@@ -434,16 +438,16 @@ func (f *fetcher) decideEnqueueAction(itemCtx feedItemContext, feedItem *gofeed.
 	return enqueueActionSingle
 }
 
-func (f *fetcher) feedItemPassesRules(fd *feed, feedItem *gofeed.Item) bool {
+func (f *fetcher) feedItemPassesRules(fd *feed, feedItem *gofeed.Item, starlarkVal starlark.Value) bool {
 	if fd.blockRule != nil {
-		if blocked := f.applyRule(fd.blockRule, feedItem); blocked {
+		if blocked := f.applyRule(fd.blockRule, feedItem, starlarkVal); blocked {
 			f.slog.Debug("blocked by block rule", "item", feedItem.Link)
 			return false
 		}
 	}
 
 	if fd.keepRule != nil {
-		if keep := f.applyRule(fd.keepRule, feedItem); !keep {
+		if keep := f.applyRule(fd.keepRule, feedItem, starlarkVal); !keep {
 			f.slog.Debug("skipped by keep rule", "item", feedItem.Link)
 			return false
 		}
@@ -481,13 +485,13 @@ func (f *fetcher) makeFeedRequest(req *http.Request) (*http.Response, error) {
 	return f.httpc.Do(req)
 }
 
-func (f *fetcher) applyRule(rule *starlark.Function, item *gofeed.Item) bool {
+func (f *fetcher) applyRule(rule *starlark.Function, item *gofeed.Item, starlarkVal starlark.Value) bool {
 	val, err := starlark.Call(
 		&starlark.Thread{
 			Print: func(_ *starlark.Thread, msg string) { f.slog.Info(msg) },
 		},
 		rule,
-		starlark.Tuple{f.itemToStarlark(item)},
+		starlark.Tuple{starlarkVal},
 		[]starlark.Tuple{},
 	)
 	if err != nil {
@@ -503,8 +507,14 @@ func (f *fetcher) applyRule(rule *starlark.Function, item *gofeed.Item) bool {
 	return bool(ret)
 }
 
+var bmStripper = bluemonday.StrictPolicy()
+
 func (f *fetcher) itemToStarlark(item *gofeed.Item) starlark.Value {
-	return format.ItemToStarlark(item)
+	// Let's create a copy so we don't mutate the original parsed item structure.
+	cleanedItem := *item
+	cleanedItem.Content = bmStripper.Sanitize(cleanedItem.Content)
+	cleanedItem.Description = bmStripper.Sanitize(cleanedItem.Description)
+	return format.ItemToStarlark(&cleanedItem)
 }
 
 func (f *fetcher) handleFetchFailure(ctx context.Context, url string, err error) {
@@ -562,8 +572,7 @@ func (s *stats) addHTTPStatusClass(url string, statusCode int) {
 }
 
 func (s *stats) classifyFailure(url string, err error) {
-	var netErr net.Error
-	if errors.As(err, &netErr) {
+	if netErr, ok := errors.AsType[net.Error](err); ok {
 		s.NetworkErrorCount += 1
 		if netErr.Timeout() {
 			s.TimeoutCount += 1

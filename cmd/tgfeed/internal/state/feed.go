@@ -4,9 +4,10 @@
 
 package state
 
-import "maps"
-
-import "time"
+import (
+	"maps"
+	"time"
+)
 
 // Clone returns a deep copy of feed state.
 func (f *Feed) Clone() *Feed {
