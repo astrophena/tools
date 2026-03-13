@@ -3,9 +3,12 @@ import { createRoot } from "react-dom/client";
 
 import { getText, putText, toAPIError } from "./api.ts";
 import { EditorPanel } from "./components/EditorPanel.tsx";
-import { StatsView } from "./components/StatsView.tsx";
 import { useEditableResource } from "./hooks/useEditableResource.ts";
 import { StatsRun } from "./types.ts";
+
+const StatsView = React.lazy(() =>
+  import("./components/StatsView.tsx").then((m) => ({ default: m.StatsView }))
+);
 
 /** Available primary dashboard tabs. */
 type RouteTab = "stats" | "configuration";
@@ -41,18 +44,36 @@ function App() {
     routeFromPathname(window.location.pathname)
   );
 
-  const config = useEditableResource({
-    load: async () => await getText("/api/config"),
-    save: async (value) => {
+  const loadConfig = useCallback(
+    async () => await getText("/api/config"),
+    [],
+  );
+  const saveConfig = useCallback(
+    async (value: string) => {
       await putText("/api/config", value, "text/plain; charset=utf-8");
     },
+    [],
+  );
+
+  const config = useEditableResource({
+    load: loadConfig,
+    save: saveConfig,
   });
 
-  const errorTemplate = useEditableResource({
-    load: async () => await getText("/api/error-template"),
-    save: async (value) => {
+  const loadErrorTemplate = useCallback(
+    async () => await getText("/api/error-template"),
+    [],
+  );
+  const saveErrorTemplate = useCallback(
+    async (value: string) => {
       await putText("/api/error-template", value, "text/plain; charset=utf-8");
     },
+    [],
+  );
+
+  const errorTemplate = useEditableResource({
+    load: loadErrorTemplate,
+    save: saveErrorTemplate,
   });
 
   const [stats, setStats] = useState<StatsRun[]>([]);
@@ -86,15 +107,16 @@ function App() {
       const payload: unknown = await response.json();
       if (Array.isArray(payload)) {
         const newStats = payload as StatsRun[];
-        if (
-          stats.length > 0 &&
-          newStats.length === stats.length &&
-          newStats[0]?.start_time === stats[0]?.start_time
-        ) {
-          setLastStatsRefreshedAt(Date.now());
-          return;
-        }
-        setStats(newStats);
+        setStats((prevStats) => {
+          if (
+            prevStats.length > 0 &&
+            newStats.length === prevStats.length &&
+            newStats[0]?.start_time === prevStats[0]?.start_time
+          ) {
+            return prevStats;
+          }
+          return newStats;
+        });
       } else {
         setStats([]);
       }
@@ -111,7 +133,7 @@ function App() {
     );
 
     await loadPromise.catch(() => {});
-  }, [stats]);
+  }, []);
 
   /** Refreshes all editable resources and stats in one action. */
   async function refreshAll(): Promise<void> {
@@ -243,18 +265,22 @@ function App() {
 
       <main className="dashboard-grid">
         {route === "stats" && (
-          <StatsView
-            stats={stats}
-            statsLoading={statsLoading}
-            statsPromise={statsPromise}
-            statsError={statsError}
-            selectedStatsIndex={selectedStatsIndex}
-            setSelectedStatsIndex={setSelectedStatsIndex}
-            loadStats={loadStats}
-            lastStatsRefreshedAt={lastStatsRefreshedAt}
-            autoRefreshStats={autoRefreshStats}
-            setAutoRefreshStats={setAutoRefreshStats}
-          />
+          <React.Suspense
+            fallback={<p className="message message-info">Loading components...</p>}
+          >
+            <StatsView
+              stats={stats}
+              statsLoading={statsLoading}
+              statsPromise={statsPromise}
+              statsError={statsError}
+              selectedStatsIndex={selectedStatsIndex}
+              setSelectedStatsIndex={setSelectedStatsIndex}
+              loadStats={loadStats}
+              lastStatsRefreshedAt={lastStatsRefreshedAt}
+              autoRefreshStats={autoRefreshStats}
+              setAutoRefreshStats={setAutoRefreshStats}
+            />
+          </React.Suspense>
         )}
 
         {route === "configuration" && (

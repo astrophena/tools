@@ -2,8 +2,7 @@
 // Use of this source code is governed by the ISC
 // license that can be found in the LICENSE.md file.
 
-//go:generate deno bundle frontend/app.tsx --platform=browser --minify --output=static/js/app.min.js
-//go:generate deno bundle styles/app.css --minify --output=static/css/app.min.css
+//go:generate deno run -A build.ts
 
 // Package admin implements the administrative web UI and API for tgfeed.
 package admin

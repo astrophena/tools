@@ -4,10 +4,15 @@ import { formatDateTime, formatDuration } from "../format.ts";
 import { StatsRun } from "../types.ts";
 import { ChartsGrid } from "./ChartsGrid.tsx";
 import { LazyDetails } from "./LazyDetails.tsx";
-import { TimelineChart } from "./TimelineChart.tsx";
 import { TopFeedsPanels } from "./TopFeedsPanels.tsx";
 import { ChartSkeleton, IndicatorGridSkeleton } from "./Skeletons.tsx";
 import { Suspender } from "./SuspenseWrapper.tsx";
+
+const TimelineChart = React.lazy(() =>
+  import("./TimelineChart.tsx").then((module) => ({
+    default: module.TimelineChart,
+  }))
+);
 
 const NetworkCharts = React.lazy(() =>
   import("./NetworkCharts.tsx").then((module) => ({
@@ -225,67 +230,100 @@ export function StatsView(props: {
 
   const health = useMemo(() => healthBadge(latestStats), [latestStats]);
 
-  const latestTotalFeeds = toNumber(latestStats?.total_feeds);
-  const previousTotalFeeds = toNumber(previousStats?.total_feeds);
-  const latestHealthyFeeds = healthyFeedCount(latestStats);
-  const previousHealthyFeeds = healthyFeedCount(previousStats);
+  const metrics = useMemo(() => {
+    const latestTotalFeeds = toNumber(latestStats?.total_feeds);
+    const previousTotalFeeds = toNumber(previousStats?.total_feeds);
+    const latestHealthyFeeds = healthyFeedCount(latestStats);
+    const previousHealthyFeeds = healthyFeedCount(previousStats);
 
-  const latestHealthyRate = percent(latestHealthyFeeds, latestTotalFeeds);
-  const previousHealthyRate = previousStats
-    ? percent(previousHealthyFeeds, previousTotalFeeds)
-    : undefined;
-  const healthyRateDelta =
-    latestHealthyRate !== undefined && previousHealthyRate !== undefined
-      ? latestHealthyRate - previousHealthyRate
+    const latestHealthyRate = percent(latestHealthyFeeds, latestTotalFeeds);
+    const previousHealthyRate = previousStats
+      ? percent(previousHealthyFeeds, previousTotalFeeds)
       : undefined;
+    const healthyRateDelta =
+      latestHealthyRate !== undefined && previousHealthyRate !== undefined
+        ? latestHealthyRate - previousHealthyRate
+        : undefined;
 
-  const latestFailedFeeds = toNumber(latestStats?.failed_feeds);
-  const previousFailedFeeds = previousStats
-    ? toNumber(previousStats.failed_feeds)
-    : undefined;
-  const failedDelta = previousFailedFeeds === undefined
-    ? undefined
-    : latestFailedFeeds - previousFailedFeeds;
+    const latestFailedFeeds = toNumber(latestStats?.failed_feeds);
+    const previousFailedFeeds = previousStats
+      ? toNumber(previousStats.failed_feeds)
+      : undefined;
+    const failedDelta = previousFailedFeeds === undefined
+      ? undefined
+      : latestFailedFeeds - previousFailedFeeds;
 
-  const latestDeliveryRate = percent(
-    toNumber(latestStats?.messages_sent),
-    toNumber(latestStats?.messages_attempted),
+    const latestDeliveryRate = percent(
+      toNumber(latestStats?.messages_sent),
+      toNumber(latestStats?.messages_attempted),
+    );
+    const previousDeliveryRate = previousStats
+      ? percent(
+        toNumber(previousStats.messages_sent),
+        toNumber(previousStats.messages_attempted),
+      )
+      : undefined;
+    const deliveryRateDelta =
+      latestDeliveryRate !== undefined && previousDeliveryRate !== undefined
+        ? latestDeliveryRate - previousDeliveryRate
+        : undefined;
+
+    const latestP99 = toNumber(latestStats?.fetch_latency_ms?.p99);
+    const previousP99 = previousStats
+      ? toNumber(previousStats.fetch_latency_ms?.p99)
+      : undefined;
+    const p99Delta = previousP99 === undefined
+      ? undefined
+      : latestP99 - previousP99;
+
+    const latestDurationSec = toNumber(latestStats?.duration) / 1_000_000_000;
+    const previousDurationSec = previousStats
+      ? toNumber(previousStats.duration) / 1_000_000_000
+      : undefined;
+    const durationDelta = previousDurationSec === undefined
+      ? undefined
+      : latestDurationSec - previousDurationSec;
+
+    return {
+      latestTotalFeeds,
+      latestHealthyFeeds,
+      latestHealthyRate,
+      healthyRateDelta,
+      latestFailedFeeds,
+      failedDelta,
+      latestDeliveryRate,
+      deliveryRateDelta,
+      latestP99,
+      p99Delta,
+      durationDelta,
+    };
+  }, [latestStats, previousStats]);
+
+  const {
+    latestTotalFeeds,
+    latestHealthyFeeds,
+    latestHealthyRate,
+    healthyRateDelta,
+    latestFailedFeeds,
+    failedDelta,
+    latestDeliveryRate,
+    deliveryRateDelta,
+    latestP99,
+    p99Delta,
+    durationDelta,
+  } = metrics;
+
+  const selectRun = React.useCallback(
+    (index: number) => {
+      setSelectedStatsIndex(index);
+      if (index === 0) {
+        setRunContextMode("latest");
+        return;
+      }
+      setRunContextMode("selected");
+    },
+    [setSelectedStatsIndex]
   );
-  const previousDeliveryRate = previousStats
-    ? percent(
-      toNumber(previousStats.messages_sent),
-      toNumber(previousStats.messages_attempted),
-    )
-    : undefined;
-  const deliveryRateDelta =
-    latestDeliveryRate !== undefined && previousDeliveryRate !== undefined
-      ? latestDeliveryRate - previousDeliveryRate
-      : undefined;
-
-  const latestP99 = toNumber(latestStats?.fetch_latency_ms?.p99);
-  const previousP99 = previousStats
-    ? toNumber(previousStats.fetch_latency_ms?.p99)
-    : undefined;
-  const p99Delta = previousP99 === undefined
-    ? undefined
-    : latestP99 - previousP99;
-
-  const latestDurationSec = toNumber(latestStats?.duration) / 1_000_000_000;
-  const previousDurationSec = previousStats
-    ? toNumber(previousStats.duration) / 1_000_000_000
-    : undefined;
-  const durationDelta = previousDurationSec === undefined
-    ? undefined
-    : latestDurationSec - previousDurationSec;
-
-  function selectRun(index: number): void {
-    setSelectedStatsIndex(index);
-    if (index === 0) {
-      setRunContextMode("latest");
-      return;
-    }
-    setRunContextMode("selected");
-  }
 
   return (
     <div className="column">
@@ -469,11 +507,13 @@ export function StatsView(props: {
 
         {stats.length > 0 && (
           <div className="chart-stack">
-            <TimelineChart
-              stats={stats}
-              selectedStatsIndex={selectedStatsIndex}
-              onSelectRun={selectRun}
-            />
+            <React.Suspense fallback={<ChartSkeleton />}>
+              <TimelineChart
+                stats={stats}
+                selectedStatsIndex={selectedStatsIndex}
+                onSelectRun={selectRun}
+              />
+            </React.Suspense>
 
             <div className="runs-table-wrap">
               <table className="runs-table">
