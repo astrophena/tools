@@ -29,3 +29,20 @@ export function ChartSkeleton() {
     </article>
   );
 }
+
+export function GlobalSkeleton() {
+  return (
+    <div className="column" style={{ width: "100%" }}>
+      <article className="panel skeleton" style={{ minHeight: "200px" }}>
+        <div className="skeleton-text short h-1-5em o-70"></div>
+        <div className="skeleton-text o-50 mt-0-45rem"></div>
+        <div className="skeleton-text h-180px mt-1rem o-10"></div>
+      </article>
+      <article className="panel skeleton" style={{ minHeight: "200px" }}>
+        <div className="skeleton-text short h-1-5em o-70"></div>
+        <div className="skeleton-text o-50 mt-0-45rem"></div>
+        <div className="skeleton-text h-180px mt-1rem o-10"></div>
+      </article>
+    </div>
+  );
+}
