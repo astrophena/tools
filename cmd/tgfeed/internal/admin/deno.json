@@ -10,6 +10,7 @@
     ]
   },
   "imports": {
+    "@deno/esbuild-plugin": "jsr:@deno/esbuild-plugin@^1.2.1",
     "@types/react": "npm:@types/react@^19.2.14",
     "@types/react-dom": "npm:@types/react-dom@^19.2.3",
     "@codemirror/autocomplete": "npm:@codemirror/autocomplete@^6",
@@ -19,6 +20,7 @@
     "@codemirror/view": "npm:@codemirror/view@^6",
     "@uiw/react-codemirror": "npm:@uiw/react-codemirror@^4.25.7",
     "chart.js": "npm:chart.js@^4.5.1",
+    "esbuild": "npm:esbuild@^0.27.4",
     "react": "npm:react@^19.2.4",
     "react-chartjs-2": "npm:react-chartjs-2@^5.3.1",
     "react-dom": "npm:react-dom@^19.2.4"

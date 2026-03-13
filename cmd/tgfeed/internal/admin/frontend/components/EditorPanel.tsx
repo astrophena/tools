@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import React, { useEffect, useRef } from "react";
 import CodeMirror, { ReactCodeMirrorRef } from "@uiw/react-codemirror";
 import { python } from "@codemirror/lang-python";
 import { EditorView, Decoration, DecorationSet, WidgetType } from "@codemirror/view";
@@ -106,7 +106,7 @@ type EditorPanelProps = {
 /**
  * Renders a save/reload editor panel for a mutable backend resource.
  */
-export function EditorPanel(props: EditorPanelProps) {
+export const EditorPanel = React.memo(function EditorPanel(props: EditorPanelProps) {
   const { title, description, placeholder, languageHint, resource } = props;
   const editorRef = useRef<ReactCodeMirrorRef>(null);
 
@@ -216,4 +216,4 @@ export function EditorPanel(props: EditorPanelProps) {
       )}
     </section>
   );
-}
+});
