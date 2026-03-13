@@ -2,12 +2,16 @@ import React, { useCallback, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 
 import { getText, putText, toAPIError } from "./api.ts";
-import { EditorPanel } from "./components/EditorPanel.tsx";
 import { useEditableResource } from "./hooks/useEditableResource.ts";
 import { StatsRun } from "./types.ts";
+import { GlobalSkeleton } from "./components/Skeletons.tsx";
 
 const StatsView = React.lazy(() =>
   import("./components/StatsView.tsx").then((m) => ({ default: m.StatsView }))
+);
+
+const EditorPanel = React.lazy(() =>
+  import("./components/EditorPanel.tsx").then((m) => ({ default: m.EditorPanel }))
 );
 
 /** Available primary dashboard tabs. */
@@ -41,7 +45,7 @@ const dashboardLogo = rootContainer?.dataset.logo ?? "/static/icons/logo.webp";
  */
 function App() {
   const [route, setRoute] = useState<RouteTab>(() =>
-    routeFromPathname(window.location.pathname)
+    routeFromPathname(globalThis.location.pathname)
   );
 
   const loadConfig = useCallback(
@@ -174,21 +178,21 @@ function App() {
     if (!autoRefreshStats || route !== "stats") {
       return;
     }
-    const timer = window.setInterval(() => {
+    const timer = globalThis.setInterval(() => {
       void loadStats();
     }, 30_000);
     return () => {
-      window.clearInterval(timer);
+      globalThis.clearInterval(timer);
     };
   }, [autoRefreshStats, loadStats, route]);
 
   useEffect(() => {
     function onPopState(): void {
-      setRoute(routeFromPathname(window.location.pathname));
+      setRoute(routeFromPathname(globalThis.location.pathname));
     }
-    window.addEventListener("popstate", onPopState);
+    globalThis.addEventListener("popstate", onPopState);
     return () => {
-      window.removeEventListener("popstate", onPopState);
+      globalThis.removeEventListener("popstate", onPopState);
     };
   }, []);
 
@@ -203,8 +207,8 @@ function App() {
   /** Navigates between stats and configuration tabs using pathname URLs. */
   function navigate(next: RouteTab): void {
     const nextPath = pathnameForRoute(next);
-    if (window.location.pathname !== nextPath) {
-      window.history.pushState({}, "", nextPath);
+    if (globalThis.location.pathname !== nextPath) {
+      globalThis.history.pushState({}, "", nextPath);
     }
     setRoute(next);
   }
@@ -264,10 +268,10 @@ function App() {
       {banner && <p className="message message-banner">{banner}</p>}
 
       <main className="dashboard-grid">
-        {route === "stats" && (
-          <React.Suspense
-            fallback={<p className="message message-info">Loading components...</p>}
-          >
+        <React.Suspense
+          fallback={<GlobalSkeleton />}
+        >
+          {route === "stats" && (
             <StatsView
               stats={stats}
               statsLoading={statsLoading}
@@ -280,27 +284,27 @@ function App() {
               autoRefreshStats={autoRefreshStats}
               setAutoRefreshStats={setAutoRefreshStats}
             />
-          </React.Suspense>
-        )}
+          )}
 
-        {route === "configuration" && (
-          <div className="column">
-            <EditorPanel
-              title="Config"
-              description="Starlark feed definitions and filters."
-              placeholder='feed(url = "https://example.com/rss.xml")'
-              languageHint="starlark"
-              resource={config}
-            />
-            <EditorPanel
-              title="Error Template"
-              description="Template used for posting error notifications."
-              placeholder="Fetch failed: %v"
-              languageHint="template"
-              resource={errorTemplate}
-            />
-          </div>
-        )}
+          {route === "configuration" && (
+            <div className="column">
+              <EditorPanel
+                title="Config"
+                description="Starlark feed definitions and filters."
+                placeholder='feed(url = "https://example.com/rss.xml")'
+                languageHint="starlark"
+                resource={config}
+              />
+              <EditorPanel
+                title="Error Template"
+                description="Template used for posting error notifications."
+                placeholder="Fetch failed: %v"
+                languageHint="template"
+                resource={errorTemplate}
+              />
+            </div>
+          )}
+        </React.Suspense>
       </main>
     </div>
   );
