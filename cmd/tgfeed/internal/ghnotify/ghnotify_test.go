@@ -71,9 +71,10 @@ func TestHandler(t *testing.T) {
 
 func TestRewriteURL(t *testing.T) {
 	cases := map[string]string{
-		"https://github.com/actions":                              "https://github.com/actions",
-		"https://api.github.com/repos/astrophena/tools/pulls/10":  "https://github.com/astrophena/tools/pull/10",
-		"https://api.github.com/repos/astrophena/tools/issues/10": "https://github.com/astrophena/tools/issues/10",
+		"https://github.com/actions":                                 "https://github.com/actions",
+		"https://api.github.com/repos/astrophena/tools/pulls/10":     "https://github.com/astrophena/tools/pull/10",
+		"https://api.github.com/repos/astrophena/tools/issues/10":    "https://github.com/astrophena/tools/issues/10",
+		"https://api.github.com/repos/astrophena/pulls-repo/pulls/1": "https://github.com/astrophena/pulls-repo/pull/1",
 	}
 
 	for got, want := range cases {
