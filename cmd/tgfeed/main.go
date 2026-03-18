@@ -168,8 +168,8 @@ func (f *fetcher) applySandboxing(ctx context.Context) error {
 	}
 	if f.adminAddr != "" {
 		if strings.HasPrefix(f.adminAddr, "/") {
-			rules = append(rules, landlock.RWFiles(f.adminAddr))
-		} else if strings.HasPrefix(f.adminAddr, "systemd:") {
+			rules = append(rules, landlock.RWDirs(filepath.Dir(f.adminAddr)))
+		} else if strings.HasPrefix(f.adminAddr, "sd-socket:") {
 			// nothing to do, systemd already passes the socket for us
 		} else {
 			_, port, err := net.SplitHostPort(f.adminAddr)
