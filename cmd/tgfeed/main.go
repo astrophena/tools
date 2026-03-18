@@ -16,7 +16,6 @@ import (
 	"log"
 	"log/slog"
 	"math/rand/v2"
-	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -39,9 +38,7 @@ import (
 	"go.astrophena.name/tools/cmd/tgfeed/internal/state"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/telegram"
 	"go.astrophena.name/tools/internal/filelock"
-	"go.astrophena.name/tools/internal/restrict"
 
-	"github.com/landlock-lsm/go-landlock/landlock"
 	"github.com/mmcdole/gofeed"
 )
 
@@ -117,9 +114,6 @@ func (f *fetcher) Run(ctx context.Context) error {
 
 	switch command {
 	case "admin":
-		if err := f.applySandboxing(ctx); err != nil {
-			return err
-		}
 		return admin.Run(ctx, admin.Config{
 			Addr:     f.adminAddr,
 			StateDir: f.stateDir,
@@ -135,9 +129,6 @@ func (f *fetcher) Run(ctx context.Context) error {
 	case "edit":
 		return f.edit(ctx)
 	case "run":
-		if err := f.applySandboxing(ctx); err != nil {
-			return err
-		}
 		if err := f.run(ctx); err != nil {
 			return f.errNotify(ctx, err)
 		}
@@ -150,43 +141,6 @@ func (f *fetcher) Run(ctx context.Context) error {
 	default:
 		return fmt.Errorf("%w: no such command %q", cli.ErrInvalidArgs, command)
 	}
-}
-
-func (f *fetcher) applySandboxing(ctx context.Context) error {
-	// Sandbox ourselves.
-	// This is Linux-specific and will be no-op on non-Linux systems.
-	rules := []landlock.Rule{
-		// for state directory access
-		landlock.RWDirs(f.stateDir),
-		// for DNS, TLS certs, and timezone data
-		landlock.RODirs("/etc"),
-		landlock.RODirs("/usr/share/zoneinfo"),
-		// for DNS, HTTP and HTTPS access
-		landlock.ConnectTCP(53),
-		landlock.ConnectTCP(80),
-		landlock.ConnectTCP(443),
-	}
-	if f.adminAddr != "" {
-		if strings.HasPrefix(f.adminAddr, "/") {
-			rules = append(rules, landlock.RWDirs(filepath.Dir(f.adminAddr)))
-		} else if strings.HasPrefix(f.adminAddr, "sd-socket:") {
-			// nothing to do, systemd already passes the socket for us
-		} else {
-			_, port, err := net.SplitHostPort(f.adminAddr)
-			if err != nil {
-				return fmt.Errorf("invalid ADMIN_ADDR: %v", err)
-			}
-			uport, err := strconv.ParseUint(port, 10, 16)
-			if err != nil {
-				return fmt.Errorf("port in ADMIN_ADDR is invalid: %v", err)
-			}
-			rules = append(rules,
-				landlock.BindTCP(uint16(uport)),
-			)
-		}
-	}
-	restrict.DoUnlessTesting(ctx, rules...)
-	return nil
 }
 
 func parseInt(s string) int64 {
