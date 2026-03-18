@@ -167,17 +167,23 @@ func (f *fetcher) applySandboxing(ctx context.Context) error {
 		landlock.ConnectTCP(443),
 	}
 	if f.adminAddr != "" {
-		_, port, err := net.SplitHostPort(f.adminAddr)
-		if err != nil {
-			return fmt.Errorf("invalid ADMIN_ADDR: %v", err)
+		if strings.HasPrefix(f.adminAddr, "/") {
+			rules = append(rules, landlock.RWFiles(f.adminAddr))
+		} else if strings.HasPrefix(f.adminAddr, "systemd:") {
+			// nothing to do, systemd already passes the socket for us
+		} else {
+			_, port, err := net.SplitHostPort(f.adminAddr)
+			if err != nil {
+				return fmt.Errorf("invalid ADMIN_ADDR: %v", err)
+			}
+			uport, err := strconv.ParseUint(port, 10, 16)
+			if err != nil {
+				return fmt.Errorf("port in ADMIN_ADDR is invalid: %v", err)
+			}
+			rules = append(rules,
+				landlock.BindTCP(uint16(uport)),
+			)
 		}
-		uport, err := strconv.ParseUint(port, 10, 16)
-		if err != nil {
-			return fmt.Errorf("port in ADMIN_ADDR is invalid: %v", err)
-		}
-		rules = append(rules,
-			landlock.BindTCP(uint16(uport)),
-		)
 	}
 	restrict.DoUnlessTesting(ctx, rules...)
 	return nil
