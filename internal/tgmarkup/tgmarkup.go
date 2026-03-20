@@ -16,7 +16,6 @@ import (
 )
 
 // Message represents a Telegram message with text and entities for formatting.
-// It is designed to be marshaled into JSON for use with the Telegram Bot API.
 // See https://core.telegram.org/bots/api#message for more information.
 type Message struct {
 	Text     string   `json:"text" starlark:"text"`
