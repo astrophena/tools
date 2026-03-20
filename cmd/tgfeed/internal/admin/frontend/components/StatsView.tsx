@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 
-import { formatDateTime, formatDuration } from "../format.ts";
+import { formatBytes, formatDateTime, formatDuration } from "../format.ts";
 import { StatsRun } from "../types.ts";
 import { ChartsGrid } from "./ChartsGrid.tsx";
 import { LazyDetails } from "./LazyDetails.tsx";
@@ -27,6 +27,11 @@ const OutcomeCharts = React.lazy(() =>
 const PerformanceCharts = React.lazy(() =>
   import("./PerformanceCharts.tsx").then((module) => ({
     default: module.PerformanceCharts,
+  }))
+);
+const MemoryCharts = React.lazy(() =>
+  import("./MemoryCharts.tsx").then((module) => ({
+    default: module.MemoryCharts,
   }))
 );
 
@@ -284,6 +289,14 @@ export function StatsView(props: {
       ? undefined
       : latestDurationSec - previousDurationSec;
 
+    const latestMemory = toNumber(latestStats?.memory_usage);
+    const previousMemory = previousStats
+      ? toNumber(previousStats.memory_usage)
+      : undefined;
+    const memoryDelta = previousMemory === undefined
+      ? undefined
+      : latestMemory - previousMemory;
+
     return {
       latestTotalFeeds,
       latestHealthyFeeds,
@@ -296,6 +309,8 @@ export function StatsView(props: {
       latestP99,
       p99Delta,
       durationDelta,
+      latestMemory,
+      memoryDelta,
     };
   }, [latestStats, previousStats]);
 
@@ -311,6 +326,8 @@ export function StatsView(props: {
     latestP99,
     p99Delta,
     durationDelta,
+    latestMemory,
+    memoryDelta,
   } = metrics;
 
   const selectRun = React.useCallback(
@@ -445,6 +462,22 @@ export function StatsView(props: {
                     {deltaText(durationDelta, { precision: 1, unit: " s" })}
                   </span>
                 </article>
+                <article className="indicator">
+                  <p>Memory usage</p>
+                  <h3>{formatBytes(latestMemory)}</h3>
+                  <span>Lower is better</span>
+                  <span
+                    className={`delta delta-${deltaTone(memoryDelta, "lower")}`}
+                  >
+                    {memoryDelta === undefined
+                      ? "vs prev run: n/a"
+                      : Math.abs(memoryDelta) < 1024
+                      ? "no change vs prev run"
+                      : `${memoryDelta > 0 ? "+" : "-"}${formatBytes(
+                          Math.abs(memoryDelta)
+                        )} vs prev run`}
+                  </span>
+                </article>
               </div>
             )}
           </Suspender>
@@ -562,6 +595,7 @@ export function StatsView(props: {
                   <OutcomeCharts stats={stats} activeRun={activeRun} />
                   <NetworkCharts activeRun={activeRun} />
                   <PerformanceCharts activeRun={activeRun} />
+                  <MemoryCharts stats={stats} />
                 </ChartsGrid>
               </React.Suspense>
             </LazyDetails>
