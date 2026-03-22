@@ -121,8 +121,18 @@ func structToDict(val reflect.Value) (starlark.Value, error) {
 // canBeInt reports if the float can be converted to int without losing
 // precision.
 func canBeInt(f float64) bool {
-	// Check if the float is within the representable range of int.
-	if f < math.MinInt || f > math.MaxInt {
+	// Check if the float is within the representable range of int64.
+	//
+	// math.MaxInt64 (2^63 - 1) is not exactly representable as float64 and is
+	// rounded to the next power of 2 (2^63). Therefore, the simple check
+	// f > math.MaxInt64 would return false for f = 2^63, which would then
+	// overflow during conversion to int64.
+	//
+	// math.MinInt64 (-2^63) is exactly representable as float64. We use its
+	// absolute value as the exclusive upper bound, which is also exactly
+	// representable and provides the correct limit for int64 across all
+	// architectures.
+	if f < float64(math.MinInt64) || f >= -float64(math.MinInt64) {
 		return false
 	}
 	// Check if the float has a fractional part (i.e., it's not a whole number).
