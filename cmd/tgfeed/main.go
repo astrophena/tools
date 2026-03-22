@@ -276,9 +276,14 @@ func pluralize(n int64) string {
 func (f *fetcher) edit(ctx context.Context) error {
 	env := cli.GetEnv(ctx)
 
-	editor := env.Getenv("EDITOR")
-	if editor == "" {
+	editorArgs := strings.Fields(env.Getenv("EDITOR"))
+	if len(editorArgs) == 0 {
 		return errNoEditor
+	}
+
+	editorPath, err := exec.LookPath(editorArgs[0])
+	if err != nil {
+		return err
 	}
 
 	if err := f.loadState(ctx); err != nil {
@@ -299,7 +304,8 @@ func (f *fetcher) edit(ctx context.Context) error {
 	}
 
 	for {
-		cmd := exec.Command(editor, tmpfile.Name())
+		args := append(editorArgs[1:], tmpfile.Name())
+		cmd := exec.Command(editorPath, args...)
 		cmd.Stdin = env.Stdin
 		cmd.Stdout = env.Stdout
 		cmd.Stderr = env.Stderr

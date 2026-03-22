@@ -272,3 +272,29 @@ func TestSleepReturnsFalseOnContextCancel(t *testing.T) {
 		t.Fatalf("sleep() elapsed = %v, want quick return", elapsed)
 	}
 }
+
+func TestEdit(t *testing.T) {
+	t.Parallel()
+
+	clitest.Run(t, func(t *testing.T) *fetcher {
+		return testFetcher(t, testMux(t, txtarToFS(txtar.Parse(defaultTxtar)), nil))
+	}, map[string]clitest.Case[*fetcher]{
+		"edit works with arguments": {
+			Args: []string{"edit"},
+			Env: map[string]string{
+				"EDITOR": "echo --some-arg",
+			},
+			Stdin: strings.NewReader("n\n"), // "Do you want to save? (y/n)"
+			CheckFunc: func(t *testing.T, f *fetcher) {
+				// We just want to ensure it doesn't return an error and handles the editor with args.
+			},
+		},
+		"edit fails with non-existent editor": {
+			Args: []string{"edit"},
+			Env: map[string]string{
+				"EDITOR": "non-existent-editor-12345",
+			},
+			WantErr: exec.ErrNotFound,
+		},
+	})
+}
