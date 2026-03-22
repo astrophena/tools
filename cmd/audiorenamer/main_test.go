@@ -155,7 +155,7 @@ func TestRun(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				var got []string
+				got := make([]string, 0, len(gotEntries))
 				for _, e := range gotEntries {
 					got = append(got, e.Name())
 				}

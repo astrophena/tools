@@ -86,7 +86,7 @@ func TestSendRateLimitRetry(t *testing.T) {
 		}
 		return nil
 	}
-	var waits []time.Duration
+	waits := make([]time.Duration, 0, 1)
 	s.sleep = func(_ context.Context, d time.Duration) bool {
 		waits = append(waits, d)
 		return true

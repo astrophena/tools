@@ -169,7 +169,7 @@ func (e *engine) doInit(ctx context.Context) error {
 		}
 	}
 
-	var scrubPairs []string
+	scrubPairs := make([]string, 0, 10)
 	for _, val := range []string{
 		e.ghToken,
 		e.gistID,
@@ -279,7 +279,7 @@ func (e *engine) loadFromGist(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	files := make(map[string]string)
+	files := make(map[string]string, len(g.Files))
 	for name, file := range g.Files {
 		files[name] = file.Content
 	}

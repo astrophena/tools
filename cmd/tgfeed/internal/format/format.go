@@ -312,11 +312,11 @@ func DefaultUpdateMessage(u Update, defaultTitle string, messageTemplate string)
 // ItemToStarlark converts an RSS item into a Starlark struct used by feed
 // formatter functions.
 func ItemToStarlark(item *gofeed.Item) starlark.Value {
-	var categories []starlark.Value
+	categories := make([]starlark.Value, 0, len(item.Categories))
 	for _, category := range item.Categories {
 		categories = append(categories, starlark.String(category))
 	}
-	var enclosures []starlark.Value
+	enclosures := make([]starlark.Value, 0, len(item.Enclosures))
 	for _, enc := range item.Enclosures {
 		enclosures = append(enclosures, starlarkstruct.FromStringDict(
 			starlarkstruct.Default,

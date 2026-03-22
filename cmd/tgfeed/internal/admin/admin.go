@@ -372,7 +372,7 @@ func (a *api) handleGetStats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Filter for JSON files.
-	var statsFiles []string
+	statsFiles := make([]string, 0, len(entries))
 	for _, entry := range entries {
 		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".json") {
 			statsFiles = append(statsFiles, entry.Name())
@@ -389,7 +389,7 @@ func (a *api) handleGetStats(w http.ResponseWriter, r *http.Request) {
 		statsFiles = statsFiles[:100]
 	}
 
-	var allStats []statsItem
+	allStats := make([]statsItem, 0, len(statsFiles))
 	for _, name := range statsFiles {
 		path := filepath.Join(a.statsDir, name)
 		b, err := os.ReadFile(path)

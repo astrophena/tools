@@ -59,7 +59,7 @@ func TestHandleTelegramWebhook(t *testing.T) {
 		}
 		upd = json.RawMessage(b)
 
-		files := make(map[string]string)
+		files := make(map[string]string, len(ar.Files))
 		for _, f := range ar.Files {
 			files[f.Name] = string(f.Data)
 		}

@@ -298,7 +298,7 @@ func splitMessageCap(text string, firstChunkCap int) []string {
 		return []string{text}
 	}
 
-	var chunks []string
+	chunks := make([]string, 0, len(runes)/firstChunkCap+1)
 	limit := firstChunkCap
 
 	start := 0

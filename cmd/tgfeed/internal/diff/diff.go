@@ -190,7 +190,7 @@ func tgs(x, y []string) []pair {
 	// We only care about 0, 1, many, counted as 0, -1, -2
 	// for the x side and 0, -4, -8 for the y side.
 	// Using negative numbers now lets us distinguish positive line numbers later.
-	m := make(map[string]int)
+	m := make(map[string]int, len(x)+len(y))
 	for _, s := range x {
 		if c := m[s]; c > -2 {
 			m[s] = c - 1
