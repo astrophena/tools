@@ -87,7 +87,7 @@ func starlarkToJSON(v starlark.Value) ([]byte, error) {
 	case starlark.String:
 		return json.Marshal(v.GoString())
 	case *starlark.List:
-		var list []any
+		list := make([]any, 0, v.Len())
 		for i := 0; i < v.Len(); i++ {
 			item, err := starlarkToJSON(v.Index(i))
 			if err != nil {
@@ -97,7 +97,7 @@ func starlarkToJSON(v starlark.Value) ([]byte, error) {
 		}
 		return json.Marshal(list)
 	case *starlark.Dict:
-		dict := make(map[string]any)
+		dict := make(map[string]any, v.Len())
 		for _, item := range v.Items() {
 			k, v := item[0], item[1]
 			key, ok := k.(starlark.String)
@@ -112,7 +112,7 @@ func starlarkToJSON(v starlark.Value) ([]byte, error) {
 		}
 		return json.Marshal(dict)
 	case starlark.Tuple:
-		var list []any
+		list := make([]any, 0, v.Len())
 		for i := 0; i < v.Len(); i++ {
 			item, err := starlarkToJSON(v.Index(i))
 			if err != nil {
@@ -125,8 +125,9 @@ func starlarkToJSON(v starlark.Value) ([]byte, error) {
 			"values":            list,
 		})
 	case *starlarkstruct.Struct:
-		dict := make(map[string]any)
-		for _, name := range v.AttrNames() {
+		names := v.AttrNames()
+		dict := make(map[string]any, len(names))
+		for _, name := range names {
 			val, err := v.Attr(name)
 			if err != nil {
 				return nil, err
@@ -168,7 +169,7 @@ func jsonToStarlarkValue(v any) (starlark.Value, error) {
 	case string:
 		return starlark.String(v), nil
 	case []any:
-		var list []starlark.Value
+		list := make([]starlark.Value, 0, len(v))
 		for _, item := range v {
 			val, err := jsonToStarlarkValue(item)
 			if err != nil {
@@ -185,7 +186,7 @@ func jsonToStarlarkValue(v any) (starlark.Value, error) {
 				if !ok {
 					return nil, fmt.Errorf("invalid tuple format")
 				}
-				var list []starlark.Value
+				list := make([]starlark.Value, 0, len(values))
 				for _, item := range values {
 					val, err := jsonToStarlarkValue(item)
 					if err != nil {
@@ -199,7 +200,7 @@ func jsonToStarlarkValue(v any) (starlark.Value, error) {
 				if !ok {
 					return nil, fmt.Errorf("invalid struct format")
 				}
-				var tuples []starlark.Tuple
+				tuples := make([]starlark.Tuple, 0, len(values))
 				for k, item := range values {
 					val, err := jsonToStarlarkValue(item)
 					if err != nil {
