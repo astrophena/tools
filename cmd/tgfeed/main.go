@@ -281,6 +281,11 @@ func (f *fetcher) edit(ctx context.Context) error {
 		return errNoEditor
 	}
 
+	editorPath, err := exec.LookPath(editor)
+	if err != nil {
+		return fmt.Errorf("invalid EDITOR %q: %w", editor, err)
+	}
+
 	if err := f.loadState(ctx); err != nil {
 		return err
 	}
@@ -299,7 +304,7 @@ func (f *fetcher) edit(ctx context.Context) error {
 	}
 
 	for {
-		cmd := exec.Command(editor, tmpfile.Name())
+		cmd := exec.Command(editorPath, tmpfile.Name())
 		cmd.Stdin = env.Stdin
 		cmd.Stdout = env.Stdout
 		cmd.Stderr = env.Stderr
