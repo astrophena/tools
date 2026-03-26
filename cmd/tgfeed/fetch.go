@@ -37,6 +37,8 @@ const (
 	sendConcurrencyLimit  = 2  // N sends that can run at the same time
 	retryLimit            = 3  // N attempts to retry feed fetching
 
+	maxRetryTime = 5 * time.Minute
+
 	// lookbackPeriod is the period for which new items are processed even if
 	// they have an old publication date, but only if always_send_new_items
 	// is enabled for the feed.
@@ -272,7 +274,7 @@ func (f *fetcher) handleFeedStatus(req *http.Request, res *http.Response, fd *fe
 	// Handle custom rate limiting.
 	if hasBody {
 		if t, found := retry.Retryable(req.URL.Host, body); found {
-			f.slog.Warn("rate-limited", "host", req.URL.Host, "feed", fd.url, "retry_in", t)
+			f.slog.Warn("rate-limited", "host", req.URL.Host, "feed", fd.url, "retry_in", t.String())
 			return feedStatusResult{
 				handled: true,
 				retry:   true,
@@ -289,7 +291,7 @@ func (f *fetcher) handleFeedStatus(req *http.Request, res *http.Response, fd *fe
 			// as Retry-After could be hours or days which would block the goroutine.
 			const maxRetryAfter = 5 * time.Minute
 			if t <= maxRetryAfter {
-				f.slog.Warn("rate-limited (Retry-After)", "feed", fd.url, "retry_in", t)
+				f.slog.Warn("rate-limited (Retry-After)", "feed", fd.url, "retry_in", t.String())
 				return feedStatusResult{
 					handled: true,
 					retry:   true,
@@ -297,7 +299,7 @@ func (f *fetcher) handleFeedStatus(req *http.Request, res *http.Response, fd *fe
 					class:   res.StatusCode / 100,
 				}, nil
 			}
-			f.slog.Warn("rate-limited (Retry-After), but wait time is too long", "feed", fd.url, "retry_in", t, "max_retry_in", maxRetryAfter)
+			f.slog.Warn("rate-limited (Retry-After), but wait time is too long", "feed", fd.url, "retry_in", t.String(), "max_retry_in", maxRetryAfter.String())
 		}
 	}
 

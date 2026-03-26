@@ -129,7 +129,10 @@ func (f *fetcher) Run(ctx context.Context) error {
 	case "edit":
 		return f.edit(ctx)
 	case "run":
-		if err := f.run(ctx); err != nil {
+		const maxRunTime = 10 * time.Minute
+		rctx, cancel := context.WithTimeout(ctx, maxRunTime)
+		defer cancel()
+		if err := f.run(rctx); err != nil {
 			return f.errNotify(ctx, err)
 		}
 		return nil
@@ -446,6 +449,14 @@ func (f *fetcher) run(ctx context.Context) error {
 
 			for {
 				if retry, retryIn := f.fetch(ctx, feed, updates); retry && retries < retryLimit {
+					if retryIn > maxRetryTime {
+						f.slog.Warn("feed retry time is too long, not retrying at all",
+							"feed", feed.url,
+							"retry_in", retryIn.String(),
+							"max_retry_time", maxRetryTime.String(),
+						)
+						break
+					}
 					feedRetried = true
 					f.stats.WriteAccess(func(s *stats) {
 						s.FetchRetriesTotal += 1
@@ -455,7 +466,7 @@ func (f *fetcher) run(ctx context.Context) error {
 					})
 					f.slog.Warn("retrying feed",
 						"feed", feed.url,
-						"retry_in", retryIn,
+						"retry_in", retryIn.String(),
 						"retries", retries+1,
 						"retry_limit", retryLimit,
 					)
