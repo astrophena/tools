@@ -86,28 +86,15 @@ func (a *app) Run(ctx context.Context) error {
 		return err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://deploy.astrophena.name/"+a.typ+"/"+target, &buf)
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", mw.FormDataContentType())
-	req.Header.Set("User-Agent", version.UserAgent())
-	req.Header.Set("Authorization", "Bearer "+token)
-
-	res, err := request.DefaultClient.Do(req)
-	if err != nil {
-		return err
-	}
-
-	b, err = io.ReadAll(res.Body)
-	if err != nil {
-		return err
-	}
-	res.Body.Close()
-
-	if res.StatusCode != http.StatusOK {
-		return fmt.Errorf("wanted 200, got %d: %s", res.StatusCode, b)
-	}
-
-	return nil
+	_, err = request.Make[request.IgnoreResponse](ctx, request.Params{
+		Method: http.MethodPost,
+		URL:    "https://deploy.astrophena.name/" + a.typ + "/" + target,
+		Body:   buf.Bytes(),
+		Headers: map[string]string{
+			"Content-Type":  mw.FormDataContentType(),
+			"User-Agent":    version.UserAgent(),
+			"Authorization": "Bearer " + token,
+		},
+	})
+	return err
 }

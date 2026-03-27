@@ -24,7 +24,6 @@ import (
 	"go.astrophena.name/base/version"
 	"go.astrophena.name/base/web"
 	"go.astrophena.name/tools/cmd/starlet/internal/bot"
-	"go.astrophena.name/tools/cmd/starlet/internal/logstream"
 	"go.astrophena.name/tools/internal/api/gemini"
 	"go.astrophena.name/tools/internal/api/gist"
 	"go.astrophena.name/tools/internal/idle"
@@ -122,16 +121,15 @@ type engine struct {
 	init syncx.Lazy[error] // main initialization
 
 	// initialized by doInit
-	bot       *bot.Bot
-	cspMux    *web.CSPMux
-	gistc     *gist.Client
-	logStream logstream.Streamer
-	logger    *slog.Logger
-	mux       *http.ServeMux
-	adminMux  *http.ServeMux
-	scrubber  *strings.Replacer
-	srv       *web.Server
-	store     store.Store
+	bot      *bot.Bot
+	cspMux   *web.CSPMux
+	gistc    *gist.Client
+	logger   *slog.Logger
+	mux      *http.ServeMux
+	adminMux *http.ServeMux
+	scrubber *strings.Replacer
+	srv      *web.Server
+	store    store.Store
 
 	// configuration, read-only after initialization
 	addr         string
@@ -153,13 +151,7 @@ type engine struct {
 const kvCacheTTL = 24 * time.Hour
 
 func (e *engine) doInit(ctx context.Context) error {
-	const logLineLimit = 300
-	e.logStream = logstream.New(logLineLimit)
-
 	logger := logger.Get(ctx)
-	logger.Attach(slog.NewJSONHandler(e.logStream, &slog.HandlerOptions{
-		Level: logger.Level,
-	}))
 	e.logger = logger.Logger
 
 	if e.httpc == nil {

@@ -24,7 +24,7 @@ import (
 var (
 	//go:embed static/templates/*.tmpl
 	templatesFS embed.FS
-	//go:embed static/css/* static/js/* static/icons/*
+	//go:embed static/css/* static/icons/*
 	staticFS embed.FS
 
 	templates = sync.OnceValue(func() *template.Template {
@@ -98,28 +98,6 @@ func (e *engine) initRoutes() {
 	statsviz.Register(e.adminMux)
 	e.cspMux.Handle("/debug/statsviz/", statsvizCSP)
 	dbg.Link("/debug/statsviz", "Metrics")
-	// Log streaming.
-	dbg.HandleFunc("logs", "Logs", func(w http.ResponseWriter, r *http.Request) {
-		var buf bytes.Buffer
-		data := struct {
-			MainCSS string
-			LogsCSS string
-			LogsJS  string
-		}{
-			MainCSS: e.srv.StaticHashName("static/css/main.css"),
-			LogsCSS: e.srv.StaticHashName("static/css/logs.css"),
-			LogsJS:  e.srv.StaticHashName("static/js/logs.js"),
-		}
-		if err := templates().ExecuteTemplate(&buf, "logs.tmpl", data); err != nil {
-			web.RespondError(w, r, err)
-			return
-		}
-		buf.WriteTo(w)
-	})
-	e.adminMux.Handle("/debug/log", e.logStream)
-	e.adminMux.HandleFunc("GET /debug/loghistory", func(w http.ResponseWriter, r *http.Request) {
-		web.RespondJSON(w, e.logStream.Lines())
-	})
 
 	dbg.HandleFunc("reload", "Reload", func(w http.ResponseWriter, r *http.Request) {
 		if err := e.loadFromGist(r.Context()); err != nil {
