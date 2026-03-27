@@ -23,6 +23,6 @@ jobs:
         with:
           go-version-file: 'go.mod'
       - name: 'Deploy starlet'
-        run: "./devtools/gha-deploy-service.bash starlet"
+        run: "./.devtools/gha-deploy-service.bash starlet"
       - name: "Deploy tgfeed"
-        run: "./devtools/gha-deploy-service.bash tgfeed"
+        run: "./.devtools/gha-deploy-service.bash tgfeed"
