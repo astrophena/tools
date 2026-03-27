@@ -10,7 +10,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   deploy:
-    name: 'Starlet'
+    name: 'Deploy'
     runs-on: 'ubuntu-latest'
     steps:
       - name: 'Check out'
