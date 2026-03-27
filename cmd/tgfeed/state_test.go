@@ -334,7 +334,10 @@ func TestFeedStateItemDecisions(t *testing.T) {
 				GUID: "regular-nil",
 				Link: "https://example.com/regular-nil",
 			},
+			exists:        true,
 			wantSelection: feedItemSelectionProcess,
+			wantMarkSeen:  "regular-nil",
+			wantReason:    feedItemSkipReasonNone,
 		},
 	}
 

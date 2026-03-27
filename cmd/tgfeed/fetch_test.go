@@ -391,7 +391,7 @@ func TestDecideFeedItem(t *testing.T) {
 			exists:        true,
 			justEnabled:   false,
 			wantSelection: feedItemSelectionProcess,
-			wantMarkSeen:  "",
+			wantMarkSeen:  "regular-nil",
 		},
 	}
 

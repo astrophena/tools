@@ -396,23 +396,29 @@ func (f *fetcher) enqueueFeedItems(fd *feed, state *state.Feed, exists bool, ite
 }
 
 func (f *fetcher) prepareSeenItemsState(fd *feed, state *state.Feed) (justEnabled bool) {
-	if !fd.alwaysSendNewItems {
-		return false
-	}
 	justEnabled, pruned := state.PrepareSeenItems(time.Now(), seenItemsCleanupPeriod)
 	f.stats.WriteAccess(func(s *stats) {
 		s.SeenItemsPrunedTotal += pruned
 	})
+	if !fd.alwaysSendNewItems {
+		return false
+	}
 	return justEnabled
 }
 
 func decideFeedItem(itemCtx feedItemContext, feedItem *gofeed.Item) feedItemDecision {
+	itemDate := feedItem.PublishedParsed
+	if feedItem.UpdatedParsed != nil {
+		itemDate = feedItem.UpdatedParsed
+	}
+
+	guid := cmp.Or(feedItem.GUID, feedItem.Link)
+
 	if itemCtx.feed.alwaysSendNewItems {
 		now := time.Now()
-		if feedItem.PublishedParsed != nil && now.Sub(*feedItem.PublishedParsed) > lookbackPeriod {
+		if itemDate != nil && now.Sub(*itemDate) > lookbackPeriod {
 			return feedItemDecision{selection: feedItemSelectionSkip, reason: feedItemSkipReasonOld}
 		}
-		guid := cmp.Or(feedItem.GUID, feedItem.Link)
 		if itemCtx.state.IsSeen(guid) {
 			return feedItemDecision{selection: feedItemSelectionSkip, reason: feedItemSkipReasonSeen}
 		}
@@ -424,10 +430,19 @@ func decideFeedItem(itemCtx feedItemContext, feedItem *gofeed.Item) feedItemDeci
 		return decision
 	}
 
-	if feedItem.PublishedParsed != nil && feedItem.PublishedParsed.Before(itemCtx.state.LastUpdated) {
+	if itemCtx.state.IsSeen(guid) {
+		return feedItemDecision{selection: feedItemSelectionSkip, reason: feedItemSkipReasonSeen}
+	}
+
+	if itemDate != nil && itemDate.Before(itemCtx.state.LastUpdated) {
 		return feedItemDecision{selection: feedItemSelectionSkip, reason: feedItemSkipReasonOld}
 	}
-	return feedItemDecision{selection: feedItemSelectionProcess}
+
+	if itemDate == nil && !itemCtx.exists {
+		return feedItemDecision{selection: feedItemSelectionMarkSeenOnly, markSeen: guid}
+	}
+
+	return feedItemDecision{selection: feedItemSelectionProcess, markSeen: guid}
 }
 
 func (f *fetcher) decideEnqueueAction(itemCtx feedItemContext, feedItem *gofeed.Item) enqueueAction {
