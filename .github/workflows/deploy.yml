@@ -12,9 +12,8 @@ concurrency:
   group: '${{ github.workflow }}-${{ github.ref }}'
   cancel-in-progress: true
 jobs:
-  starlet:
-    name: 'Starlet'
-    if: '${{ github.event.workflow_run.conclusion == ''success'' }}'
+  deploy:
+    name: 'Deploy'
     runs-on: 'ubuntu-latest'
     steps:
       - name: 'Check out'
@@ -26,33 +25,7 @@ jobs:
         uses: 'actions/setup-go@v6'
         with:
           go-version-file: 'go.mod'
-      - name: 'Build'
-        run: |
-          mkdir -p build/bin build/etc/systemd/system
-          CGO_ENABLED=0 go build -ldflags="-s -w -buildid=" -trimpath -o build/bin/starlet ./cmd/starlet
-          cp cmd/starlet/*.service cmd/starlet/*.socket build/etc/systemd/system
-          tar -czf archive.tar.gz -C build .
-      - name: 'Deploy'
-        run: 'go tool deploy -type service starlet archive.tar.gz'
-  tgfeed:
-    name: 'tgfeed'
-    if: '${{ github.event.workflow_run.conclusion == ''success'' }}'
-    runs-on: 'ubuntu-latest'
-    steps:
-      - name: 'Check out'
-        uses: 'actions/checkout@v6'
-        with:
-          # Show Git tags in version.
-          fetch-depth: 0
-      - name: 'Set up Go'
-        uses: 'actions/setup-go@v6'
-        with:
-          go-version-file: 'go.mod'
-      - name: 'Build'
-        run: |
-          mkdir -p build/bin build/etc/systemd/system
-          CGO_ENABLED=0 go build -ldflags="-s -w -buildid=" -trimpath -o build/bin/tgfeed ./cmd/tgfeed
-          cp cmd/tgfeed/systemd/* build/etc/systemd/system
-          tar -czf archive.tar.gz -C build .
-      - name: 'Deploy'
-        run: 'go tool deploy -type service tgfeed archive.tar.gz'
+      - name: 'Deploy starlet'
+        run: "./.devtools/gha-deploy-service.bash starlet"
+      - name: "Deploy tgfeed"
+        run: "./.devtools/gha-deploy-service.bash tgfeed"
