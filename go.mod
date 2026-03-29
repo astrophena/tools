@@ -10,7 +10,7 @@ require (
 	github.com/microcosm-cc/bluemonday v1.0.27
 	github.com/mmcdole/gofeed v1.3.0
 	github.com/tobischo/gokeepasslib/v3 v3.6.2
-	go.astrophena.name/base v0.16.2
+	go.astrophena.name/base v0.17.0
 	go.starlark.net v0.0.0-20260210143700-b62fd896b91b
 	golang.org/x/sync v0.20.0
 	golang.org/x/term v0.41.0
@@ -20,6 +20,7 @@ require (
 require (
 	github.com/BurntSushi/toml v1.6.0 // indirect
 	github.com/PuerkitoBio/goquery v1.8.0 // indirect
+	github.com/a-h/templ v0.3.1001 // indirect
 	github.com/andybalholm/cascadia v1.3.1 // indirect
 	github.com/aymerick/douceur v0.2.0 // indirect
 	github.com/go4org/hashtriemap v0.0.0-20251130024219-545ba229f689 // indirect

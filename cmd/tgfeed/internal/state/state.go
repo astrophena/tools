@@ -37,8 +37,8 @@ import (
 	"time"
 
 	"go.astrophena.name/base/request"
+	"go.astrophena.name/base/safefile"
 	"go.astrophena.name/base/version"
-	"go.astrophena.name/tools/internal/atomicio"
 )
 
 // Feed stores persisted runtime information for a single feed.
@@ -211,7 +211,7 @@ func (s *store) SaveState(ctx context.Context, state map[string]*Feed) error {
 
 func (s *store) SaveStateJSON(ctx context.Context, content []byte) error {
 	if s.opts.RemoteURL == "" {
-		return atomicio.WriteFile(filepath.Join(s.opts.StateDir, "state.json"), content, 0o644)
+		return safefile.WriteFile(filepath.Join(s.opts.StateDir, "state.json"), content, 0o644)
 	}
 	_, err := request.Make[request.IgnoreResponse](ctx, request.Params{Method: http.MethodPut, URL: s.apiURL("/api/state"), Body: content, Headers: map[string]string{"Content-Type": "application/json", "User-Agent": version.UserAgent()}, WantStatusCode: http.StatusNoContent, HTTPClient: s.httpClient()})
 	if err != nil {
@@ -222,7 +222,7 @@ func (s *store) SaveStateJSON(ctx context.Context, content []byte) error {
 
 func (s *store) SaveConfig(ctx context.Context, config string) error {
 	if s.opts.RemoteURL == "" {
-		return atomicio.WriteFile(filepath.Join(s.opts.StateDir, "config.star"), []byte(config), 0o644)
+		return safefile.WriteFile(filepath.Join(s.opts.StateDir, "config.star"), []byte(config), 0o644)
 	}
 	_, err := request.Make[request.IgnoreResponse](ctx, request.Params{Method: http.MethodPut, URL: s.apiURL("/api/config"), Body: []byte(config), Headers: map[string]string{"Content-Type": "text/plain", "User-Agent": version.UserAgent()}, WantStatusCode: http.StatusNoContent, HTTPClient: s.httpClient()})
 	if err != nil {
@@ -233,7 +233,7 @@ func (s *store) SaveConfig(ctx context.Context, config string) error {
 
 func (s *store) SaveErrorTemplate(ctx context.Context, content string) error {
 	if s.opts.RemoteURL == "" {
-		return atomicio.WriteFile(filepath.Join(s.opts.StateDir, "error.tmpl"), []byte(content), 0o644)
+		return safefile.WriteFile(filepath.Join(s.opts.StateDir, "error.tmpl"), []byte(content), 0o644)
 	}
 	_, err := request.Make[request.IgnoreResponse](ctx, request.Params{Method: http.MethodPut, URL: s.apiURL("/api/error-template"), Body: []byte(content), Headers: map[string]string{"Content-Type": "text/plain", "User-Agent": version.UserAgent()}, WantStatusCode: http.StatusNoContent, HTTPClient: s.httpClient()})
 	if err != nil {
