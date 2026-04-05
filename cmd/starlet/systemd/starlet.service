@@ -3,12 +3,13 @@ Description=starlet
 
 [Service]
 Type=notify
-ExecStart=/srv/starlet/current/bin/starlet
+ExecStart=/srv/starlet/current/bin/starlet \
+  -addr sd-socket:starlet.socket \
+  -admin-addr sd-socket:starlet-admin.socket \
+  -exit-idle-time 5m
 # Managed by Ansible, see https://github.com/astrophena/infra?tab=readme-ov-file#managed-services.
 EnvironmentFile=/etc/starlet/secrets.env
 Environment="DATABASE_PATH=/var/lib/starlet/store.json"
-Environment="ADDR=sd-socket:starlet.socket"
-Environment="ADMIN_ADDR=sd-socket:starlet-admin.socket"
 
 # Run as a transient, unprivileged user.
 User=starlet

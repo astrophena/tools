@@ -4,7 +4,7 @@
 
 // Package idle provides a helper for exiting services after a period of
 // inactivity.
-package idle
+package admin
 
 import (
 	"context"
@@ -14,23 +14,14 @@ import (
 	"time"
 )
 
-// Tracker is an idle tracker.
-type Tracker struct {
+// tracker is an idle tracker.
+type tracker struct {
 	lastActivity atomic.Int64
 	exitIdleTime time.Duration
 	cancel       context.CancelFunc
 }
 
-// NewTracker returns a new idle tracker. It returns nil if the functionality
-// is disabled.
-//
-// It is enabled only when the EXIT_IDLE_TIME environment variable is set to a
-// non-zero duration and the service is socket-activated.
-func NewTracker(cancel context.CancelFunc) *Tracker {
-	return newTracker(cancel, isSocketActivated)
-}
-
-func newTracker(cancel context.CancelFunc, isSocketActivated func() bool) *Tracker {
+func newTracker(cancel context.CancelFunc, isSocketActivated func() bool) *tracker {
 	if !isSocketActivated() {
 		return nil
 	}
@@ -38,7 +29,7 @@ func newTracker(cancel context.CancelFunc, isSocketActivated func() bool) *Track
 	if err != nil || exitIdleTime == 0 {
 		return nil
 	}
-	t := &Tracker{
+	t := &tracker{
 		exitIdleTime: exitIdleTime,
 		cancel:       cancel,
 	}
@@ -54,20 +45,17 @@ func isSocketActivated() bool {
 	return os.Getenv("LISTEN_PID") != ""
 }
 
-// Handler is a [web.Middleware] that updates the last activity time.
-func (t *Tracker) Handler(next http.Handler) http.Handler {
+// handler is a [web.Middleware] that updates the last activity time.
+func (t *tracker) handler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.lastActivity.Store(time.Now().Unix())
 		next.ServeHTTP(w, r)
 	})
 }
 
-// Run runs the activity monitor.
-func (t *Tracker) Run(ctx context.Context) {
-	go t.runActivityMonitor(ctx, 30*time.Second)
-}
+func (t *tracker) run(ctx context.Context) { go t.runActivityMonitor(ctx, 30*time.Second) }
 
-func (t *Tracker) runActivityMonitor(ctx context.Context, tickDuration time.Duration) {
+func (t *tracker) runActivityMonitor(ctx context.Context, tickDuration time.Duration) {
 	ticker := time.NewTicker(tickDuration)
 	defer ticker.Stop()
 

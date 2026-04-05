@@ -26,7 +26,6 @@ import (
 
 	"go.astrophena.name/base/web"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/state"
-	"go.astrophena.name/tools/internal/idle"
 )
 
 var errConflict = web.StatusErr(http.StatusConflict)
@@ -167,9 +166,9 @@ func Run(ctx context.Context, cfg Config) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	if idleTracker := idle.NewTracker(cancel); idleTracker != nil {
-		idleTracker.Run(ctx)
-		srv.Middleware = append(srv.Middleware, idleTracker.Handler)
+	if idleTracker := newTracker(cancel, isSocketActivated); idleTracker != nil {
+		idleTracker.run(ctx)
+		srv.Middleware = append(srv.Middleware, idleTracker.handler)
 	}
 
 	return srv.ListenAndServe(ctx)
