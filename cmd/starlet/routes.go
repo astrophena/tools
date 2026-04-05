@@ -24,7 +24,7 @@ import (
 var (
 	//go:embed static/templates/*.tmpl
 	templatesFS embed.FS
-	//go:embed static/css/* static/icons/*
+	//go:embed static/icons/*
 	staticFS embed.FS
 
 	templates = sync.OnceValue(func() *template.Template {
@@ -49,7 +49,6 @@ func (e *engine) initRoutes() {
 	e.mux = http.NewServeMux()
 	e.adminMux = http.NewServeMux()
 
-	// Public mux.
 	e.mux.HandleFunc("/", e.handlePublicRoot)
 	e.mux.HandleFunc("POST /telegram", e.bot.HandleTelegramWebhook)
 

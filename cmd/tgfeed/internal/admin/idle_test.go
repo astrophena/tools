@@ -2,7 +2,7 @@
 // Use of this source code is governed by the ISC
 // license that can be found in the LICENSE.md file.
 
-package idle
+package admin
 
 import (
 	"context"
@@ -37,14 +37,14 @@ func TestTracker(t *testing.T) {
 }
 
 func TestTracker_Handler(t *testing.T) {
-	tracker := &Tracker{}
+	tracker := &tracker{}
 	tracker.lastActivity.Store(time.Now().Add(-1 * time.Hour).Unix())
 
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
 	rr := httptest.NewRecorder()
 
-	handler := tracker.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
-	handler.ServeHTTP(rr, req)
+	handler := tracker.handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	handler.ServeHTTP(rr, r)
 
 	if time.Since(time.Unix(tracker.lastActivity.Load(), 0)) > 1*time.Second {
 		t.Error("lastActivity was not updated")

@@ -17,7 +17,9 @@ to the bot owner via Telegram, using a customizable error template.
 
 # Usage
 
-	$ starlet
+	$ starlet [flags...]
+
+Run starlet -help to see all available flags.
 
 # Starlark Environment
 
@@ -68,15 +70,13 @@ Required:
 
 Optional:
 
-  - ADDR: Address for the public server (webhooks, docs), in form of host:port, defaults to localhost:3000.
-  - ADMIN_ADDR: Address for the admin server (debug interface). If not set, the admin server is disabled. Can be a Unix socket path (e.g., unix://run/starlet/admin-socket).
   - DATABASE_PATH: Path to a SQLite database file. If not provided, an in-memory store is used.
   - GEMINI_KEY: API key for Google Gemini (required to use the gemini module).
   - GH_TOKEN: A GitHub Personal Access Token (PAT) with gist scope. Recommended for higher rate limits.
 
 # Admin Interface
 
-Starlet provides a debug and admin interface, served on the address specified by ADMIN_ADDR. Access control is expected to be handled at the network level (e.g., a Unix socket with restricted permissions or a firewall).
+Starlet provides a debug and admin interface, served on the address specified by the -admin-addr flag. Access control is expected to be handled at the network level (e.g., a Unix socket with restricted permissions or a firewall).
 
 The interface includes:
 

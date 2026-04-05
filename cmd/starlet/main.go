@@ -2,15 +2,12 @@
 // Use of this source code is governed by the ISC
 // license that can be found in the LICENSE.md file.
 
-// vim: foldmethod=marker
-
 package main
 
 import (
 	"cmp"
 	"context"
 	_ "embed"
-	"errors"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -23,99 +20,17 @@ import (
 	"go.astrophena.name/base/syncx"
 	"go.astrophena.name/base/version"
 	"go.astrophena.name/base/web"
+	"go.astrophena.name/base/web/service"
 	"go.astrophena.name/tools/cmd/starlet/internal/bot"
 	"go.astrophena.name/tools/internal/api/gemini"
 	"go.astrophena.name/tools/internal/api/gist"
-	"go.astrophena.name/tools/internal/idle"
 	"go.astrophena.name/tools/internal/starlark/kvcache"
 	"go.astrophena.name/tools/internal/store"
-
-	"golang.org/x/sync/errgroup"
 )
 
 const tgAPI = "https://api.telegram.org"
 
-func main() { cli.Main(new(engine)) }
-
-func (e *engine) Run(ctx context.Context) error {
-	env := cli.GetEnv(ctx)
-
-	if len(env.Args) > 1 {
-		return errors.New("too many arguments")
-	}
-
-	// Load configuration from environment variables.
-	e.addr = cmp.Or(e.addr, env.Getenv("ADDR"), "localhost:3000")
-	e.adminAddr = cmp.Or(e.adminAddr, env.Getenv("ADMIN_ADDR"))
-	e.databasePath = cmp.Or(e.databasePath, env.Getenv("DATABASE_PATH"))
-	e.geminiKey = cmp.Or(e.geminiKey, env.Getenv("GEMINI_KEY"))
-	e.ghToken = cmp.Or(e.ghToken, env.Getenv("GH_TOKEN"))
-	e.gistID = cmp.Or(e.gistID, env.Getenv("GIST_ID"))
-	e.host = cmp.Or(e.host, env.Getenv("HOST"))
-	e.tgOwner = cmp.Or(e.tgOwner, parseInt(env.Getenv("TG_OWNER")))
-	e.tgSecret = cmp.Or(e.tgSecret, env.Getenv("TG_SECRET"))
-	e.tgToken = cmp.Or(e.tgToken, env.Getenv("TG_TOKEN"))
-
-	// Initialize internal state.
-	if err := e.init.Get(func() error {
-		return e.doInit(ctx)
-	}); err != nil {
-		return err
-	}
-	if e.store != nil {
-		defer e.store.Close()
-	}
-
-	// Used in tests.
-	if e.noServerStart {
-		return nil
-	}
-
-	if err := e.setWebhook(ctx); err != nil {
-		return err
-	}
-
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	idleTracker := idle.NewTracker(cancel)
-	if idleTracker != nil {
-		idleTracker.Run(ctx)
-		e.srv.Middleware = append(e.srv.Middleware, idleTracker.Handler)
-	}
-
-	g, ctx := errgroup.WithContext(ctx)
-
-	g.Go(func() error {
-		return e.srv.ListenAndServe(ctx)
-	})
-
-	if e.adminAddr != "" {
-		adminSrv := &web.Server{
-			Addr:       e.adminAddr,
-			Mux:        e.adminMux,
-			StaticFS:   staticFS,
-			CSP:        e.cspMux,
-			Debuggable: true,
-		}
-		if idleTracker != nil {
-			adminSrv.Middleware = append(adminSrv.Middleware, idleTracker.Handler)
-		}
-		g.Go(func() error {
-			return adminSrv.ListenAndServe(ctx)
-		})
-	}
-
-	return g.Wait()
-}
-
-func parseInt(s string) int64 {
-	i, err := strconv.ParseInt(s, 10, 64)
-	if err == nil {
-		return i
-	}
-	return 0
-}
+func main() { service.Run(new(engine)) }
 
 type engine struct {
 	init syncx.Lazy[error] // main initialization
@@ -132,8 +47,6 @@ type engine struct {
 	store    store.Store
 
 	// configuration, read-only after initialization
-	addr         string
-	adminAddr    string
 	databasePath string
 	geminiKey    string
 	ghToken      string
@@ -143,14 +56,48 @@ type engine struct {
 	tgOwner      int64
 	tgSecret     string
 	tgToken      string
-	// for tests
-	noServerStart bool
-	ready         func() // see web.Server.Ready
 }
 
-const kvCacheTTL = 24 * time.Hour
+func (e *engine) PublicEndpoint(ctx context.Context) (*service.EndpointConfig, error) {
+	return e.endpointConfig(ctx, false)
+}
+
+func (e *engine) AdminEndpoint(ctx context.Context) (*service.EndpointConfig, error) {
+	return e.endpointConfig(ctx, true)
+}
+
+func (e *engine) endpointConfig(ctx context.Context, admin bool) (*service.EndpointConfig, error) {
+	if err := e.init.Get(func() error {
+		return e.doInit(ctx)
+	}); err != nil {
+		return nil, err
+	}
+	ec := &service.EndpointConfig{
+		Mux:      e.mux,
+		StaticFS: staticFS,
+		CSP:      e.cspMux,
+	}
+	if admin {
+		ec.Mux = e.adminMux
+	}
+	return ec, nil
+}
+
+func (e *engine) Shutdown(ctx context.Context) error { return e.store.Close() }
 
 func (e *engine) doInit(ctx context.Context) error {
+	env := cli.GetEnv(ctx)
+
+	// Load configuration from environment variables.
+	e.databasePath = cmp.Or(e.databasePath, env.Getenv("DATABASE_PATH"))
+	e.geminiKey = cmp.Or(e.geminiKey, env.Getenv("GEMINI_KEY"))
+	e.ghToken = cmp.Or(e.ghToken, env.Getenv("GH_TOKEN"))
+	e.gistID = cmp.Or(e.gistID, env.Getenv("GIST_ID"))
+	e.host = cmp.Or(e.host, env.Getenv("HOST"))
+	e.tgOwner = cmp.Or(e.tgOwner, parseInt(env.Getenv("TG_OWNER")))
+	e.tgSecret = cmp.Or(e.tgSecret, env.Getenv("TG_SECRET"))
+	e.tgToken = cmp.Or(e.tgToken, env.Getenv("TG_TOKEN"))
+
 	logger := logger.Get(ctx)
 	e.logger = logger.Logger
 
@@ -183,6 +130,7 @@ func (e *engine) doInit(ctx context.Context) error {
 		Scrubber:   e.scrubber,
 	}
 
+	const kvCacheTTL = 24 * time.Hour
 	if e.databasePath != "" {
 		s, err := store.NewJSONFile(ctx, e.databasePath, kvCacheTTL)
 		if err != nil {
@@ -223,20 +171,22 @@ func (e *engine) doInit(ctx context.Context) error {
 	if err := e.loadFromGist(ctx); err != nil {
 		return err
 	}
-
-	e.cspMux = web.NewCSPMux()
-
-	e.initRoutes()
-	e.srv = &web.Server{
-		Addr:          e.addr,
-		Mux:           e.mux,
-		Ready:         e.ready,
-		StaticFS:      staticFS,
-		CSP:           e.cspMux,
-		NotifySystemd: true,
+	if err := e.setWebhook(ctx); err != nil {
+		return err
 	}
 
+	e.cspMux = web.NewCSPMux()
+	e.initRoutes()
+
 	return nil
+}
+
+func parseInt(s string) int64 {
+	i, err := strconv.ParseInt(s, 10, 64)
+	if err == nil {
+		return i
+	}
+	return 0
 }
 
 func (e *engine) getMe(ctx context.Context) (getMeResponse, error) {
