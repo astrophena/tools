@@ -30,6 +30,10 @@
     "run": ["go", "tool", "staticcheck", "./..."]
   },
   {
+    "run": ["go", "run", "golang.org/x/vuln/cmd/govulncheck@latest", "./..."],
+    "only_in_ci": true
+  },
+  {
     "run": ["go", "test", "./..."],
     "skip_in_ci": true
   },
