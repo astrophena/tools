@@ -43,7 +43,6 @@ type engine struct {
 	mux      *http.ServeMux
 	adminMux *http.ServeMux
 	scrubber *strings.Replacer
-	srv      *web.Server
 	store    store.Store
 
 	// configuration, read-only after initialization

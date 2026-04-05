@@ -74,7 +74,7 @@ func (e *engine) initRoutes() {
 			MainCSS       string
 			Documentation template.HTML
 		}{
-			MainCSS:       e.srv.StaticHashName("static/css/main.css"),
+			MainCSS:       web.StaticHashName(r.Context(), "static/css/main.css"),
 			Documentation: docs,
 		}
 		if err := templates().ExecuteTemplate(&buf, "env.tmpl", data); err != nil {
@@ -130,7 +130,7 @@ func (e *engine) debugMenu(r *http.Request) []web.MenuItem {
 			name:       name,
 			icon:       icon,
 			target:     target,
-			spritePath: e.srv.StaticHashName("static/icons/sprite.svg"),
+			spritePath: web.StaticHashName(r.Context(), "static/icons/sprite.svg"),
 		}
 	}
 
