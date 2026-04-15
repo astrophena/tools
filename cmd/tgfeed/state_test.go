@@ -14,9 +14,7 @@ import (
 	"testing/fstest"
 	"time"
 
-	"github.com/mmcdole/gofeed"
 	"go.astrophena.name/base/testutil"
-	"go.astrophena.name/base/txtar"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/state"
 	"go.astrophena.name/tools/internal/filelock"
 )
@@ -33,8 +31,8 @@ func TestLoadState(t *testing.T) {
 		},
 	}
 
-	tm := testMux(t, baseState, nil)
-	f := testFetcher(t, tm)
+	env := newTestEnv(t, baseState, nil)
+	f := newTestFetcher(t, env)
 
 	if err := f.loadState(t.Context()); err != nil {
 		t.Fatal(err)
@@ -47,15 +45,8 @@ func TestParseConfig(t *testing.T) {
 	testutil.RunGolden(t, "testdata/config/*.star", func(t *testing.T, match string) []byte {
 		config := readFile(t, match)
 
-		ar := &txtar.Archive{
-			Files: []txtar.File{
-				{Name: "config.star", Data: config},
-			},
-		}
-
-		tm := testMux(t, txtarToFS(ar), nil)
-		f := testFetcher(t, tm)
-		if err := f.run(t.Context()); err != nil {
+		f := newTestFetcher(t, newTestEnv(t, nil, nil))
+		if err := f.loadConfig(t.Context(), string(config)); err != nil {
 			return fmt.Appendf(nil, "Error: %v", err)
 		}
 
@@ -66,8 +57,7 @@ func TestParseConfig(t *testing.T) {
 func TestParseConfigDuplicateFeedURL(t *testing.T) {
 	t.Parallel()
 
-	tm := testMux(t, nil, nil)
-	f := testFetcher(t, tm)
+	f := newTestFetcher(t, newTestEnv(t, nil, nil))
 
 	err := f.loadConfig(t.Context(), `
 feed(url="https://example.com/feed.xml")
@@ -104,8 +94,7 @@ func TestParseConfigFormatValidation(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			tm := testMux(t, nil, nil)
-			f := testFetcher(t, tm)
+			f := newTestFetcher(t, newTestEnv(t, nil, nil))
 
 			err := f.loadConfig(t.Context(), tc.config)
 			if err == nil {
@@ -235,124 +224,6 @@ func TestFeedStatePrepareSeenItems(t *testing.T) {
 				keys = append(keys, key)
 			}
 			testutil.AssertEqual(t, keys, tc.wantSeenItemKeys)
-		})
-	}
-}
-
-func TestFeedStateItemDecisions(t *testing.T) {
-	t.Parallel()
-
-	now := time.Now()
-	recent := now.Add(-1 * time.Hour)
-	old := now.Add(-15 * 24 * time.Hour)
-
-	cases := map[string]struct {
-		state         *state.Feed
-		item          *gofeed.Item
-		exists        bool
-		justEnabled   bool
-		alwaysSend    bool
-		wantSelection feedItemSelection
-		wantMarkSeen  string
-		wantReason    feedItemSkipReason
-	}{
-		"always-send skips old entries": {
-			state: &state.Feed{
-				SeenItems: map[string]time.Time{},
-			},
-			item: &gofeed.Item{
-				GUID:            "old",
-				Link:            "https://example.com/old",
-				PublishedParsed: &old,
-			},
-			exists:        true,
-			alwaysSend:    true,
-			wantSelection: feedItemSelectionSkip,
-			wantReason:    feedItemSkipReasonOld,
-		},
-		"always-send processes unseen item for existing feed": {
-			state: &state.Feed{
-				SeenItems: map[string]time.Time{},
-			},
-			item: &gofeed.Item{
-				GUID:            "new",
-				Link:            "https://example.com/new",
-				PublishedParsed: &recent,
-			},
-			exists:        true,
-			alwaysSend:    true,
-			wantSelection: feedItemSelectionProcess,
-			wantMarkSeen:  "new",
-		},
-		"always-send marks-only on first run": {
-			state: &state.Feed{
-				SeenItems: map[string]time.Time{},
-			},
-			item: &gofeed.Item{
-				GUID:            "first",
-				Link:            "https://example.com/first",
-				PublishedParsed: &recent,
-			},
-			exists:        false,
-			alwaysSend:    true,
-			wantSelection: feedItemSelectionMarkSeenOnly,
-			wantMarkSeen:  "first",
-		},
-		"always-send skips already seen": {
-			state: &state.Feed{
-				SeenItems: map[string]time.Time{
-					"seen": now,
-				},
-			},
-			item: &gofeed.Item{
-				GUID:            "seen",
-				Link:            "https://example.com/seen",
-				PublishedParsed: &recent,
-			},
-			exists:        true,
-			alwaysSend:    true,
-			wantSelection: feedItemSelectionSkip,
-			wantReason:    feedItemSkipReasonSeen,
-		},
-		"regular mode skips published before last update": {
-			state: &state.Feed{
-				LastUpdated: now,
-			},
-			item: &gofeed.Item{
-				GUID:            "regular-old",
-				Link:            "https://example.com/regular-old",
-				PublishedParsed: &recent,
-			},
-			wantSelection: feedItemSelectionSkip,
-			wantReason:    feedItemSkipReasonOld,
-		},
-		"regular mode accepts nil published timestamp": {
-			state: &state.Feed{
-				LastUpdated: now,
-			},
-			item: &gofeed.Item{
-				GUID: "regular-nil",
-				Link: "https://example.com/regular-nil",
-			},
-			exists:        true,
-			wantSelection: feedItemSelectionProcess,
-			wantMarkSeen:  "regular-nil",
-			wantReason:    feedItemSkipReasonNone,
-		},
-	}
-
-	for name, tc := range cases {
-		t.Run(name, func(t *testing.T) {
-			decision := decideFeedItem(feedItemContext{
-				feed:        &feed{alwaysSendNewItems: tc.alwaysSend},
-				state:       tc.state,
-				exists:      tc.exists,
-				justEnabled: tc.justEnabled,
-			}, tc.item)
-
-			testutil.AssertEqual(t, decision.selection, tc.wantSelection)
-			testutil.AssertEqual(t, decision.markSeen, tc.wantMarkSeen)
-			testutil.AssertEqual(t, decision.reason, tc.wantReason)
 		})
 	}
 }

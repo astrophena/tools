@@ -5,8 +5,11 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"math"
+	"net"
 	"os"
 	"path/filepath"
 	"slices"
@@ -14,6 +17,8 @@ import (
 )
 
 const topFeedStatCount = 5
+
+// Stats model.
 
 type stats struct {
 	TotalFeeds       int `json:"total_feeds"`
@@ -94,6 +99,8 @@ type feedStatsSummary struct {
 	LastStatusClass int           `json:"last_status_class"`
 }
 
+// Aggregation helpers.
+
 func (s *stats) feedStats(url string) *feedStats {
 	if s.FeedStatsByURL == nil {
 		s.FeedStatsByURL = make(map[string]*feedStats)
@@ -147,6 +154,50 @@ func topFeedStats(input map[string]*feedStats, less func(a *feedStats, b *feedSt
 	}
 	return result
 }
+
+func (s *stats) addHTTPStatusClass(url string, statusCode int) {
+	class := statusCode / 100
+	s.feedStats(url).LastStatusClass = class
+	switch class {
+	case 2:
+		s.HTTP2xxCount += 1
+	case 3:
+		s.HTTP3xxCount += 1
+	case 4:
+		s.HTTP4xxCount += 1
+	case 5:
+		s.HTTP5xxCount += 1
+	}
+}
+
+func (s *stats) classifyFailure(url string, err error) {
+	if netErr, ok := errors.AsType[net.Error](err); ok {
+		s.NetworkErrorCount += 1
+		if netErr.Timeout() {
+			s.TimeoutCount += 1
+		}
+		s.feedStats(url).LastStatusClass = 0
+		return
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		s.TimeoutCount += 1
+		s.NetworkErrorCount += 1
+		s.feedStats(url).LastStatusClass = 0
+		return
+	}
+	s.feedStats(url).LastStatusClass = 0
+}
+
+func (s *stats) recordItemDecision(decision feedItemDecision) {
+	switch decision.reason {
+	case feedItemSkipReasonOld:
+		s.ItemsSkippedOldTotal += 1
+	case feedItemSkipReasonSeen:
+		s.ItemsDedupedTotal += 1
+	}
+}
+
+// Persistence.
 
 func (f *fetcher) putStats(s *stats) error {
 	statsDir := filepath.Join(f.stateDir, "stats")

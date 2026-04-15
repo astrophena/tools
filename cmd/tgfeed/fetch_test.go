@@ -11,7 +11,6 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -20,7 +19,6 @@ import (
 	"github.com/mmcdole/gofeed"
 	"go.astrophena.name/base/syncx"
 	"go.astrophena.name/base/testutil"
-	"go.astrophena.name/base/txtar"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/sender"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/state"
 	"go.starlark.net/starlark"
@@ -30,17 +28,17 @@ import (
 func TestFailingFeed(t *testing.T) {
 	t.Parallel()
 
-	tm := testMux(t, txtarToFS(txtar.Parse(defaultTxtar)), map[string]http.HandlerFunc{
+	env := newDefaultTestEnv(t, map[string]http.HandlerFunc{
 		atomFeedRoute: func(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "I'm a teapot.", http.StatusTeapot)
 		},
 	})
-	f := testFetcher(t, tm)
+	f := newTestFetcher(t, env)
 	if err := f.run(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 
-	state := tm.state(t)
+	state := env.state(t)
 
 	testutil.AssertEqual(t, state[atomFeedURL].ErrorCount, 1)
 	testutil.AssertEqual(t, state[atomFeedURL].LastError, "want 200, got 418: I'm a teapot.\n")
@@ -49,13 +47,13 @@ func TestFailingFeed(t *testing.T) {
 func TestDisablingAndReenablingFailingFeed(t *testing.T) {
 	t.Parallel()
 
-	tm := testMux(t, txtarToFS(txtar.Parse(defaultTxtar)), map[string]http.HandlerFunc{
+	env := newDefaultTestEnv(t, map[string]http.HandlerFunc{
 		atomFeedRoute: func(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "I'm a teapot.", http.StatusTeapot)
 		},
 	})
 
-	f := testFetcher(t, tm)
+	f := newTestFetcher(t, env)
 
 	const attempts = errorThreshold
 	for range attempts {
@@ -64,18 +62,18 @@ func TestDisablingAndReenablingFailingFeed(t *testing.T) {
 		}
 	}
 
-	state1 := tm.state(t)
+	state1 := env.state(t)
 
 	testutil.AssertEqual(t, state1[atomFeedURL].Disabled, true)
 	testutil.AssertEqual(t, state1[atomFeedURL].ErrorCount, attempts)
 	testutil.AssertEqual(t, state1[atomFeedURL].LastError, "want 200, got 418: I'm a teapot.\n")
 
-	testutil.AssertEqual(t, len(tm.sentMessages), 1)
+	testutil.AssertEqual(t, len(env.sentMessages), 1)
 
 	if err := f.reenable(t.Context(), atomFeedURL); err != nil {
 		t.Fatal(err)
 	}
-	state2 := tm.state(t)
+	state2 := env.state(t)
 	testutil.AssertEqual(t, state2[atomFeedURL].Disabled, false)
 	testutil.AssertEqual(t, state2[atomFeedURL].ErrorCount, 0)
 	testutil.AssertEqual(t, state2[atomFeedURL].LastError, "")
@@ -89,7 +87,7 @@ func TestFetchWithIfModifiedSinceAndETag(t *testing.T) {
 		eTag            = "test"
 	)
 
-	tm := testMux(t, txtarToFS(txtar.Parse(defaultTxtar)), map[string]http.HandlerFunc{
+	env := newDefaultTestEnv(t, map[string]http.HandlerFunc{
 		atomFeedRoute: func(w http.ResponseWriter, r *http.Request) {
 			if r.Header.Get("If-Modified-Since") == ifModifiedSince && r.Header.Get("If-None-Match") == eTag {
 				w.WriteHeader(http.StatusNotModified)
@@ -100,14 +98,14 @@ func TestFetchWithIfModifiedSinceAndETag(t *testing.T) {
 			w.Write(atomFeed)
 		},
 	})
-	f := testFetcher(t, tm)
+	f := newTestFetcher(t, env)
 
 	// Initial fetch, should update state with Last-Modified and ETag.
 	if err := f.run(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 
-	state1 := tm.state(t)
+	state1 := env.state(t)
 
 	testutil.AssertEqual(t, state1[atomFeedURL].LastModified, ifModifiedSince)
 	testutil.AssertEqual(t, state1[atomFeedURL].ETag, eTag)
@@ -120,7 +118,7 @@ func TestFetchWithIfModifiedSinceAndETag(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	state2 := tm.state(t)
+	state2 := env.state(t)
 
 	testutil.AssertEqual(t, state2[atomFeedURL].LastModified, ifModifiedSince)
 	testutil.AssertEqual(t, state2[atomFeedURL].ETag, eTag)
@@ -145,28 +143,18 @@ func TestBlockAndKeepRules(t *testing.T) {
 				LastUpdated: time.Time{},
 			},
 		}
-		ar := &txtar.Archive{
-			Files: []txtar.File{
-				{Name: "config.star", Data: config},
-				{Name: "state.json", Data: toJSON(t, state)},
-			},
-		}
-
-		tm := testMux(t, txtarToFS(ar), map[string]http.HandlerFunc{
+		env := newTestEnv(t, stateArchive(t, config, state), map[string]http.HandlerFunc{
 			atomFeedRoute: func(w http.ResponseWriter, r *http.Request) {
 				w.Write([]byte(rulesAtomFeed))
 			},
 		})
 
-		f := testFetcher(t, tm)
+		f := newTestFetcher(t, env)
 		if err := f.run(t.Context()); err != nil {
 			t.Fatal(err)
 		}
 
-		sort.SliceStable(tm.sentMessages, func(i, j int) bool {
-			return compareMaps(tm.sentMessages[i], tm.sentMessages[j])
-		})
-		return toJSON(t, tm.sentMessages)
+		return env.sortedSentMessagesJSON(t)
 	}, *updateGolden)
 }
 
@@ -184,29 +172,18 @@ func TestDigestAndFormat(t *testing.T) {
 				LastUpdated: time.Time{},
 			},
 		}
-		ar := &txtar.Archive{
-			Files: []txtar.File{
-				{Name: "config.star", Data: config},
-				{Name: "state.json", Data: toJSON(t, state)},
-			},
-		}
-
-		tm := testMux(t, txtarToFS(ar), map[string]http.HandlerFunc{
+		env := newTestEnv(t, stateArchive(t, config, state), map[string]http.HandlerFunc{
 			atomFeedRoute: func(w http.ResponseWriter, r *http.Request) {
 				w.Write(atomFeed)
 			},
 		})
 
-		f := testFetcher(t, tm)
+		f := newTestFetcher(t, env)
 		if err := f.run(t.Context()); err != nil {
 			t.Fatal(err)
 		}
 
-		// Sort messages to be deterministic.
-		sort.SliceStable(tm.sentMessages, func(i, j int) bool {
-			return compareMaps(tm.sentMessages[i], tm.sentMessages[j])
-		})
-		return toJSON(t, tm.sentMessages)
+		return env.sortedSentMessagesJSON(t)
 
 	}, *updateGolden)
 }
@@ -224,20 +201,13 @@ func TestAlwaysSendNewItems(t *testing.T) {
 	config := readFile(t, "testdata/new_items/config.star")
 
 	state := map[string]*state.Feed{}
-	ar := &txtar.Archive{
-		Files: []txtar.File{
-			{Name: "config.star", Data: config},
-			{Name: "state.json", Data: toJSON(t, state)},
-		},
-	}
-
 	var (
 		mu      sync.Mutex
 		content string
 	)
 	content = feedContent1
 
-	tm := testMux(t, txtarToFS(ar), map[string]http.HandlerFunc{
+	env := newTestEnv(t, stateArchive(t, config, state), map[string]http.HandlerFunc{
 		atomFeedRoute: func(w http.ResponseWriter, r *http.Request) {
 			mu.Lock()
 			defer mu.Unlock()
@@ -245,14 +215,14 @@ func TestAlwaysSendNewItems(t *testing.T) {
 		},
 	})
 
-	f := testFetcher(t, tm)
+	f := newTestFetcher(t, env)
 	if err := f.run(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 
-	testutil.AssertEqual(t, len(tm.sentMessages), 0)
+	testutil.AssertEqual(t, len(env.sentMessages), 0)
 
-	s := tm.state(t)[atomFeedURL]
+	s := env.state(t)[atomFeedURL]
 	if _, ok := s.SeenItems["item1"]; !ok {
 		t.Errorf("item1 should be in SeenItems")
 	}
@@ -270,8 +240,8 @@ func TestAlwaysSendNewItems(t *testing.T) {
 	}
 
 	// Should have sent item3.
-	testutil.AssertEqual(t, len(tm.sentMessages), 1)
-	got := tm.sentMessages[0]["text"].(string)
+	testutil.AssertEqual(t, len(env.sentMessages), 1)
+	got := env.sentText(t, 0)
 	if !strings.Contains(got, "New item with old date") {
 		t.Errorf("sent message should contain item title, got: %q", got)
 	}
@@ -283,7 +253,48 @@ func TestAlwaysSendNewItems(t *testing.T) {
 	if err := f.run(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	testutil.AssertEqual(t, len(tm.sentMessages), 1)
+	testutil.AssertEqual(t, len(env.sentMessages), 1)
+}
+
+func TestAlwaysSendNewItemsUsesPublishedDateForLookback(t *testing.T) {
+	t.Parallel()
+
+	oldPublished := time.Now().Add(-20 * 24 * time.Hour).Format(time.RFC3339)
+	recentUpdated := time.Now().Add(-1 * time.Hour).Format(time.RFC3339)
+	config := readFile(t, "testdata/new_items/config.star")
+
+	state := map[string]*state.Feed{
+		atomFeedURL: {
+			SeenItems: map[string]time.Time{},
+		},
+	}
+	const feedTemplate = `<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Test Feed</title>
+  <entry>
+    <title>Old published, recently updated</title>
+    <link href="http://example.com/item-old"/>
+    <id>item-old</id>
+    <published>%s</published>
+    <updated>%s</updated>
+  </entry>
+</feed>`
+
+	env := newTestEnv(t, stateArchive(t, config, state), map[string]http.HandlerFunc{
+		atomFeedRoute: func(w http.ResponseWriter, r *http.Request) {
+			fmt.Fprintf(w, feedTemplate, oldPublished, recentUpdated)
+		},
+	})
+
+	f := newTestFetcher(t, env)
+	if err := f.run(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+
+	testutil.AssertEqual(t, len(env.sentMessages), 0)
+	if _, ok := env.state(t)[atomFeedURL].SeenItems["item-old"]; ok {
+		t.Fatalf("old published item should not be tracked as seen")
+	}
 }
 
 func TestDecideFeedItem(t *testing.T) {
@@ -316,6 +327,37 @@ func TestDecideFeedItem(t *testing.T) {
 			justEnabled:   false,
 			wantSelection: feedItemSelectionSkip,
 			wantMarkSeen:  "",
+		},
+		"always_send_new_items prefers published over updated for lookback": {
+			fd: &feed{
+				alwaysSendNewItems: true,
+			},
+			state: &state.Feed{SeenItems: map[string]time.Time{}},
+			item: &gofeed.Item{
+				GUID:            "published-old",
+				Link:            "https://example.com/published-old",
+				PublishedParsed: &old,
+				UpdatedParsed:   &recent,
+			},
+			exists:        true,
+			justEnabled:   false,
+			wantSelection: feedItemSelectionSkip,
+			wantMarkSeen:  "",
+		},
+		"always_send_new_items falls back to updated when published is missing": {
+			fd: &feed{
+				alwaysSendNewItems: true,
+			},
+			state: &state.Feed{SeenItems: map[string]time.Time{}},
+			item: &gofeed.Item{
+				GUID:          "updated-only",
+				Link:          "https://example.com/updated-only",
+				UpdatedParsed: &recent,
+			},
+			exists:        true,
+			justEnabled:   false,
+			wantSelection: feedItemSelectionProcess,
+			wantMarkSeen:  "updated-only",
 		},
 		"always_send_new_items includes new entry for existing feed": {
 			fd: &feed{
@@ -467,7 +509,7 @@ func TestDecideEnqueueAction(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			f := testFetcher(t, testMux(t, nil, nil))
+			f := newTestFetcher(t, newTestEnv(t, nil, nil))
 			got := f.decideEnqueueAction(feedItemContext{feed: tc.fd}, tc.item)
 			testutil.AssertEqual(t, got, tc.want)
 		})
@@ -540,7 +582,7 @@ func TestHandleFeedStatus(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			f := testFetcher(t, testMux(t, nil, nil))
+			f := newTestFetcher(t, newTestEnv(t, nil, nil))
 			f.stats = syncx.Protect(&stats{})
 			fd := &feed{url: "https://example.com/feed.xml"}
 			st := tc.initialState
