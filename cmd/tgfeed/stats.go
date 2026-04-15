@@ -8,15 +8,23 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io/fs"
 	"math"
 	"net"
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"time"
+
+	"go.astrophena.name/base/safefile"
 )
 
-const topFeedStatCount = 5
+const (
+	topFeedStatCount   = 5
+	statsIndexFile     = "index.json"
+	statsIndexMaxItems = 1000
+)
 
 // Stats model.
 
@@ -97,6 +105,54 @@ type feedStatsSummary struct {
 	ItemsEnqueued   int           `json:"items_enqueued"`
 	Retries         int           `json:"retries"`
 	LastStatusClass int           `json:"last_status_class"`
+}
+
+type statsSummary struct {
+	ID string `json:"id"`
+
+	TotalFeeds       int `json:"total_feeds"`
+	SuccessFeeds     int `json:"success_feeds"`
+	FailedFeeds      int `json:"failed_feeds"`
+	NotModifiedFeeds int `json:"not_modified_feeds"`
+
+	StartTime        time.Time     `json:"start_time"`
+	Duration         time.Duration `json:"duration"`
+	TotalItemsParsed int           `json:"total_items_parsed"`
+
+	TotalFetchTime time.Duration   `json:"total_fetch_time"`
+	AvgFetchTime   time.Duration   `json:"avg_fetch_time"`
+	FetchLatencyMS percentileStats `json:"fetch_latency_ms"`
+	SendLatencyMS  percentileStats `json:"send_latency_ms"`
+
+	HTTP2xxCount int `json:"http_2xx_count"`
+	HTTP3xxCount int `json:"http_3xx_count"`
+	HTTP4xxCount int `json:"http_4xx_count"`
+	HTTP5xxCount int `json:"http_5xx_count"`
+
+	TimeoutCount      int `json:"timeout_count"`
+	NetworkErrorCount int `json:"network_error_count"`
+	ParseErrorCount   int `json:"parse_error_count"`
+
+	ItemsSeenTotal       int `json:"items_seen_total"`
+	ItemsKeptTotal       int `json:"items_kept_total"`
+	ItemsDedupedTotal    int `json:"items_deduped_total"`
+	ItemsSkippedOldTotal int `json:"items_skipped_old_total"`
+	ItemsEnqueuedTotal   int `json:"items_enqueued_total"`
+
+	MessagesAttempted int `json:"messages_attempted"`
+	MessagesSent      int `json:"messages_sent"`
+	MessagesFailed    int `json:"messages_failed"`
+
+	FetchRetriesTotal       int           `json:"fetch_retries_total"`
+	FeedsRetriedCount       int           `json:"feeds_retried_count"`
+	BackoffSleepTotal       time.Duration `json:"backoff_sleep_total"`
+	SpecialRateLimitRetries int           `json:"special_rate_limit_retries"`
+
+	SeenItemsEntriesTotal int `json:"seen_items_entries_total"`
+	SeenItemsPrunedTotal  int `json:"seen_items_pruned_total"`
+	StateBytesWritten     int `json:"state_bytes_written"`
+
+	MemoryUsage uint64 `json:"memory_usage"`
 }
 
 // Aggregation helpers.
@@ -205,11 +261,160 @@ func (f *fetcher) putStats(s *stats) error {
 		return err
 	}
 
-	js, err := json.MarshalIndent(s, "", "  ")
+	id := time.Now().UTC().Format("20060102150405")
+	js, err := json.Marshal(s)
 	if err != nil {
 		return err
 	}
-	statsFile := filepath.Join(statsDir, time.Now().UTC().Format("20060102150405")+".json")
+	statsFile := filepath.Join(statsDir, id+".json")
+	if err := safefile.WriteFile(statsFile, js, 0o644); err != nil {
+		return err
+	}
 
-	return os.WriteFile(statsFile, js, 0o644)
+	return putStatsIndex(statsDir, s.summary(id))
+}
+
+func (s *stats) summary(id string) statsSummary {
+	return statsSummary{
+		ID: id,
+
+		TotalFeeds:       s.TotalFeeds,
+		SuccessFeeds:     s.SuccessFeeds,
+		FailedFeeds:      s.FailedFeeds,
+		NotModifiedFeeds: s.NotModifiedFeeds,
+
+		StartTime:        s.StartTime,
+		Duration:         s.Duration,
+		TotalItemsParsed: s.TotalItemsParsed,
+
+		TotalFetchTime: s.TotalFetchTime,
+		AvgFetchTime:   s.AvgFetchTime,
+		FetchLatencyMS: s.FetchLatencyMS,
+		SendLatencyMS:  s.SendLatencyMS,
+
+		HTTP2xxCount: s.HTTP2xxCount,
+		HTTP3xxCount: s.HTTP3xxCount,
+		HTTP4xxCount: s.HTTP4xxCount,
+		HTTP5xxCount: s.HTTP5xxCount,
+
+		TimeoutCount:      s.TimeoutCount,
+		NetworkErrorCount: s.NetworkErrorCount,
+		ParseErrorCount:   s.ParseErrorCount,
+
+		ItemsSeenTotal:       s.ItemsSeenTotal,
+		ItemsKeptTotal:       s.ItemsKeptTotal,
+		ItemsDedupedTotal:    s.ItemsDedupedTotal,
+		ItemsSkippedOldTotal: s.ItemsSkippedOldTotal,
+		ItemsEnqueuedTotal:   s.ItemsEnqueuedTotal,
+
+		MessagesAttempted: s.MessagesAttempted,
+		MessagesSent:      s.MessagesSent,
+		MessagesFailed:    s.MessagesFailed,
+
+		FetchRetriesTotal:       s.FetchRetriesTotal,
+		FeedsRetriedCount:       s.FeedsRetriedCount,
+		BackoffSleepTotal:       s.BackoffSleepTotal,
+		SpecialRateLimitRetries: s.SpecialRateLimitRetries,
+
+		SeenItemsEntriesTotal: s.SeenItemsEntriesTotal,
+		SeenItemsPrunedTotal:  s.SeenItemsPrunedTotal,
+		StateBytesWritten:     s.StateBytesWritten,
+
+		MemoryUsage: s.MemoryUsage,
+	}
+}
+
+func putStatsIndex(statsDir string, summary statsSummary) error {
+	summaries, err := loadStatsIndex(statsDir)
+	if err != nil {
+		return err
+	}
+
+	result := make([]statsSummary, 0, min(len(summaries)+1, statsIndexMaxItems))
+	result = append(result, summary)
+	for _, item := range summaries {
+		if item.ID == summary.ID {
+			continue
+		}
+		result = append(result, item)
+		if len(result) >= statsIndexMaxItems {
+			break
+		}
+	}
+
+	content, err := json.Marshal(result)
+	if err != nil {
+		return err
+	}
+
+	return safefile.WriteFile(filepath.Join(statsDir, statsIndexFile), content, 0o644)
+}
+
+func loadStatsIndex(statsDir string) ([]statsSummary, error) {
+	indexPath := filepath.Join(statsDir, statsIndexFile)
+	content, err := os.ReadFile(indexPath)
+	if err == nil {
+		var summaries []statsSummary
+		if err := json.Unmarshal(content, &summaries); err == nil {
+			return summaries, nil
+		}
+	}
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return nil, err
+	}
+	return rebuildStatsIndex(statsDir)
+}
+
+func rebuildStatsIndex(statsDir string) ([]statsSummary, error) {
+	statsFiles, err := listStatsFiles(statsDir)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	summaries := make([]statsSummary, 0, min(len(statsFiles), statsIndexMaxItems))
+	for _, name := range statsFiles[:min(len(statsFiles), statsIndexMaxItems)] {
+		summary, err := readStatsSummary(filepath.Join(statsDir, name), strings.TrimSuffix(name, ".json"))
+		if err != nil {
+			return nil, err
+		}
+		summaries = append(summaries, summary)
+	}
+	return summaries, nil
+}
+
+func listStatsFiles(statsDir string) ([]string, error) {
+	entries, err := os.ReadDir(statsDir)
+	if err != nil {
+		return nil, err
+	}
+
+	statsFiles := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") || entry.Name() == statsIndexFile {
+			continue
+		}
+		statsFiles = append(statsFiles, entry.Name())
+	}
+
+	slices.SortFunc(statsFiles, func(a, b string) int {
+		return strings.Compare(b, a)
+	})
+	return statsFiles, nil
+}
+
+func readStatsSummary(path string, id string) (statsSummary, error) {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return statsSummary{}, err
+	}
+
+	var summary statsSummary
+	if err := json.Unmarshal(content, &summary); err != nil {
+		return statsSummary{}, err
+	}
+	summary.ID = id
+	return summary, nil
 }

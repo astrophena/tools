@@ -193,6 +193,7 @@ function formatRefreshTime(value: number | null): string {
  */
 export function StatsView(props: {
   stats: StatsRun[];
+  statsDetails: Record<string, StatsRun>;
   statsLoading: boolean;
   statsPromise: Promise<void> | null;
   statsError: string;
@@ -205,6 +206,7 @@ export function StatsView(props: {
 }) {
   const {
     stats,
+    statsDetails,
     statsLoading,
     statsPromise,
     statsError,
@@ -224,9 +226,16 @@ export function StatsView(props: {
     "latest",
   );
 
-  const activeRun = runContextMode === "selected"
+  const activeSummary = runContextMode === "selected"
     ? selectedStats ?? latestStats
     : latestStats;
+  const activeRun = activeSummary?.id !== undefined &&
+      statsDetails[activeSummary.id] !== undefined
+    ? {
+      ...activeSummary,
+      ...statsDetails[activeSummary.id],
+    }
+    : activeSummary;
 
   const runContextLabel =
     runContextMode === "selected" && selectedStatsIndex > 0
@@ -339,7 +348,7 @@ export function StatsView(props: {
       }
       setRunContextMode("selected");
     },
-    [setSelectedStatsIndex]
+    [setSelectedStatsIndex],
   );
 
   return (
@@ -473,9 +482,11 @@ export function StatsView(props: {
                       ? "vs prev run: n/a"
                       : Math.abs(memoryDelta) < 1024
                       ? "no change vs prev run"
-                      : `${memoryDelta > 0 ? "+" : "-"}${formatBytes(
-                          Math.abs(memoryDelta)
-                        )} vs prev run`}
+                      : `${memoryDelta > 0 ? "+" : "-"}${
+                        formatBytes(
+                          Math.abs(memoryDelta),
+                        )
+                      } vs prev run`}
                   </span>
                 </article>
               </div>

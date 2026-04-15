@@ -20,10 +20,12 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"text/template"
 	"time"
 
+	"go.astrophena.name/base/safefile"
 	"go.astrophena.name/base/web"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/state"
 )
@@ -115,6 +117,14 @@ func Handler(cfg Config) (*http.ServeMux, error) {
 			web.RespondJSONError(w, r, fmt.Errorf("%w: method not allowed", web.ErrMethodNotAllowed))
 		}
 	})
+	mux.HandleFunc("/api/stats/{id}", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			api.handleGetStatsDetail(w, r)
+		default:
+			web.RespondJSONError(w, r, fmt.Errorf("%w: method not allowed", web.ErrMethodNotAllowed))
+		}
+	})
 
 	dbg := web.Debugger(mux)
 	dbg.Link("/api/config", "Config")
@@ -194,9 +204,69 @@ type api struct {
 	statsDir         string
 }
 
-type statsItem struct {
-	StartTime time.Time
-	Raw       json.RawMessage
+const (
+	statsDefaultLimit = 20
+	statsMaxLimit     = 200
+	statsIndexFile    = "index.json"
+	statsIndexMaxRows = 1000
+)
+
+type statsSummary struct {
+	ID string `json:"id"`
+
+	TotalFeeds       int `json:"total_feeds"`
+	SuccessFeeds     int `json:"success_feeds"`
+	FailedFeeds      int `json:"failed_feeds"`
+	NotModifiedFeeds int `json:"not_modified_feeds"`
+
+	StartTime        time.Time     `json:"start_time"`
+	Duration         time.Duration `json:"duration"`
+	TotalItemsParsed int           `json:"total_items_parsed"`
+
+	TotalFetchTime time.Duration `json:"total_fetch_time"`
+	AvgFetchTime   time.Duration `json:"avg_fetch_time"`
+	FetchLatencyMS struct {
+		P50 int64 `json:"p50"`
+		P90 int64 `json:"p90"`
+		P99 int64 `json:"p99"`
+		Max int64 `json:"max"`
+	} `json:"fetch_latency_ms"`
+	SendLatencyMS struct {
+		P50 int64 `json:"p50"`
+		P90 int64 `json:"p90"`
+		P99 int64 `json:"p99"`
+		Max int64 `json:"max"`
+	} `json:"send_latency_ms"`
+
+	HTTP2xxCount int `json:"http_2xx_count"`
+	HTTP3xxCount int `json:"http_3xx_count"`
+	HTTP4xxCount int `json:"http_4xx_count"`
+	HTTP5xxCount int `json:"http_5xx_count"`
+
+	TimeoutCount      int `json:"timeout_count"`
+	NetworkErrorCount int `json:"network_error_count"`
+	ParseErrorCount   int `json:"parse_error_count"`
+
+	ItemsSeenTotal       int `json:"items_seen_total"`
+	ItemsKeptTotal       int `json:"items_kept_total"`
+	ItemsDedupedTotal    int `json:"items_deduped_total"`
+	ItemsSkippedOldTotal int `json:"items_skipped_old_total"`
+	ItemsEnqueuedTotal   int `json:"items_enqueued_total"`
+
+	MessagesAttempted int `json:"messages_attempted"`
+	MessagesSent      int `json:"messages_sent"`
+	MessagesFailed    int `json:"messages_failed"`
+
+	FetchRetriesTotal       int           `json:"fetch_retries_total"`
+	FeedsRetriedCount       int           `json:"feeds_retried_count"`
+	BackoffSleepTotal       time.Duration `json:"backoff_sleep_total"`
+	SpecialRateLimitRetries int           `json:"special_rate_limit_retries"`
+
+	SeenItemsEntriesTotal int `json:"seen_items_entries_total"`
+	SeenItemsPrunedTotal  int `json:"seen_items_pruned_total"`
+	StateBytesWritten     int `json:"state_bytes_written"`
+
+	MemoryUsage uint64 `json:"memory_usage"`
 }
 
 func newAPI(cfg Config) *api {
@@ -360,63 +430,158 @@ func validateState(content []byte) error {
 }
 
 func (a *api) handleGetStats(w http.ResponseWriter, r *http.Request) {
-	entries, err := os.ReadDir(a.statsDir)
+	limit, err := parseStatsLimit(r.URL.Query().Get("limit"))
+	if err != nil {
+		web.RespondJSONError(w, r, err)
+		return
+	}
+
+	if r.URL.Query().Get("view") == "full" {
+		a.handleGetFullStats(w, r, limit)
+		return
+	}
+
+	summaries, err := a.loadStatsSummaries(limit)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
 			http.Error(w, "No stats available.", http.StatusNotFound)
 			return
 		}
-		web.RespondJSONError(w, r, fmt.Errorf("reading stats directory: %w", err))
+		web.RespondJSONError(w, r, err)
 		return
 	}
 
-	// Filter for JSON files.
-	statsFiles := make([]string, 0, len(entries))
-	for _, entry := range entries {
-		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".json") {
-			statsFiles = append(statsFiles, entry.Name())
+	writeJSON(w, r, summaries, "encoding stats response")
+}
+
+func (a *api) handleGetStatsDetail(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	content, err := os.ReadFile(filepath.Join(a.statsDir, id+".json"))
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			http.Error(w, "No stats available.", http.StatusNotFound)
+			return
 		}
+		web.RespondJSONError(w, r, fmt.Errorf("reading stats file %q: %w", id, err))
+		return
 	}
 
-	// Sort by filename, descending (newest first).
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	_, _ = w.Write(content)
+}
+
+func (a *api) handleGetFullStats(w http.ResponseWriter, r *http.Request, limit int) {
+	summaries, err := a.loadStatsSummaries(limit)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			http.Error(w, "No stats available.", http.StatusNotFound)
+			return
+		}
+		web.RespondJSONError(w, r, err)
+		return
+	}
+
+	response := make([]json.RawMessage, 0, len(summaries))
+	for _, summary := range summaries {
+		content, err := os.ReadFile(filepath.Join(a.statsDir, summary.ID+".json"))
+		if err != nil {
+			web.RespondJSONError(w, r, fmt.Errorf("reading stats file %q: %w", summary.ID, err))
+			return
+		}
+		response = append(response, json.RawMessage(content))
+	}
+
+	writeJSON(w, r, response, "encoding stats response")
+}
+
+func (a *api) loadStatsSummaries(limit int) ([]statsSummary, error) {
+	summaries, err := a.readStatsIndex()
+	if err != nil {
+		return nil, err
+	}
+	if len(summaries) == 0 {
+		return nil, fs.ErrNotExist
+	}
+	if limit < len(summaries) {
+		summaries = summaries[:limit]
+	}
+	return summaries, nil
+}
+
+func (a *api) readStatsIndex() ([]statsSummary, error) {
+	content, err := os.ReadFile(filepath.Join(a.statsDir, statsIndexFile))
+	if err == nil {
+		var summaries []statsSummary
+		if err := json.Unmarshal(content, &summaries); err == nil {
+			return summaries, nil
+		}
+	}
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return nil, fmt.Errorf("reading stats index: %w", err)
+	}
+
+	summaries, rebuildErr := a.rebuildStatsIndex()
+	if rebuildErr != nil {
+		return nil, rebuildErr
+	}
+	if len(summaries) > 0 {
+		if content, err := json.Marshal(summaries); err == nil {
+			_ = safefile.WriteFile(filepath.Join(a.statsDir, statsIndexFile), content, 0o644)
+		}
+	}
+	return summaries, nil
+}
+
+func (a *api) rebuildStatsIndex() ([]statsSummary, error) {
+	entries, err := os.ReadDir(a.statsDir)
+	if err != nil {
+		return nil, fmt.Errorf("reading stats directory: %w", err)
+	}
+
+	statsFiles := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") || entry.Name() == statsIndexFile {
+			continue
+		}
+		statsFiles = append(statsFiles, entry.Name())
+	}
+
 	slices.SortFunc(statsFiles, func(a, b string) int {
 		return strings.Compare(b, a)
 	})
 
-	// Limit to the latest 100 entries.
-	if len(statsFiles) > 100 {
-		statsFiles = statsFiles[:100]
-	}
-
-	allStats := make([]statsItem, 0, len(statsFiles))
-	for _, name := range statsFiles {
-		path := filepath.Join(a.statsDir, name)
-		b, err := os.ReadFile(path)
+	summaries := make([]statsSummary, 0, len(statsFiles))
+	for _, name := range statsFiles[:min(len(statsFiles), statsIndexMaxRows)] {
+		content, err := os.ReadFile(filepath.Join(a.statsDir, name))
 		if err != nil {
-			web.RespondJSONError(w, r, fmt.Errorf("reading stats file %s: %w", path, err))
-			return
+			return nil, fmt.Errorf("reading stats file %s: %w", name, err)
 		}
-
-		var s struct {
-			StartTime time.Time `json:"start_time"`
+		var summary statsSummary
+		if err := json.Unmarshal(content, &summary); err != nil {
+			return nil, fmt.Errorf("parsing stats file %s: %w", name, err)
 		}
-		if err := json.Unmarshal(b, &s); err != nil {
-			web.RespondJSONError(w, r, fmt.Errorf("parsing stats file %s: %w", path, err))
-			return
-		}
-		allStats = append(allStats, statsItem{
-			StartTime: s.StartTime,
-			Raw:       append(json.RawMessage(nil), b...),
-		})
+		summary.ID = strings.TrimSuffix(name, ".json")
+		summaries = append(summaries, summary)
 	}
 
-	response := make([]json.RawMessage, len(allStats))
-	for i, item := range allStats {
-		response[i] = item.Raw
+	return summaries, nil
+}
+
+func parseStatsLimit(value string) (int, error) {
+	if value == "" {
+		return statsDefaultLimit, nil
 	}
 
+	limit, err := strconv.Atoi(value)
+	if err != nil || limit <= 0 {
+		return 0, fmt.Errorf("%w: invalid stats limit %q", web.ErrBadRequest, value)
+	}
+	return min(limit, statsMaxLimit), nil
+}
+
+func writeJSON(w http.ResponseWriter, r *http.Request, value any, context string) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	if err := json.NewEncoder(w).Encode(response); err != nil {
-		web.RespondJSONError(w, r, fmt.Errorf("encoding stats response: %w", err))
+	if err := json.NewEncoder(w).Encode(value); err != nil {
+		web.RespondJSONError(w, r, fmt.Errorf("%s: %w", context, err))
 	}
 }

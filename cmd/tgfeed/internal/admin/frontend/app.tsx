@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 
 import { getText, putText, toAPIError } from "./api.ts";
@@ -11,7 +11,9 @@ const StatsView = React.lazy(() =>
 );
 
 const EditorPanel = React.lazy(() =>
-  import("./components/EditorPanel.tsx").then((m) => ({ default: m.EditorPanel }))
+  import("./components/EditorPanel.tsx").then((m) => ({
+    default: m.EditorPanel,
+  }))
 );
 
 /** Available primary dashboard tabs. */
@@ -81,6 +83,9 @@ function App() {
   });
 
   const [stats, setStats] = useState<StatsRun[]>([]);
+  const [statsDetails, setStatsDetails] = useState<Record<string, StatsRun>>(
+    {},
+  );
   const [statsLoading, setStatsLoading] = useState(false);
   const [statsPromise, setStatsPromise] = useState<Promise<void> | null>(null);
   const [statsError, setStatsError] = useState("");
@@ -90,13 +95,52 @@ function App() {
   >(null);
   const [autoRefreshStats, setAutoRefreshStats] = useState(false);
   const [banner, setBanner] = useState("");
+  const statsDetailsRef = useRef<Record<string, StatsRun>>({});
+  const statsDetailLoads = useRef<Record<string, Promise<void>>>({});
+
+  const loadStatsDetail = useCallback(async (id: string) => {
+    if (id === "" || statsDetailsRef.current[id] !== undefined) {
+      return;
+    }
+
+    if (statsDetailLoads.current[id] !== undefined) {
+      await statsDetailLoads.current[id];
+      return;
+    }
+
+    const loadPromise = (async () => {
+      const response = await fetch(`/api/stats/${encodeURIComponent(id)}`, {
+        method: "GET",
+        headers: { Accept: "application/json" },
+      });
+      if (!response.ok) {
+        throw await toAPIError(response);
+      }
+      const payload: unknown = await response.json();
+      if (payload && typeof payload === "object") {
+        setStatsDetails((prev) => ({
+          ...prev,
+          [id]: payload as StatsRun,
+        }));
+      }
+    })().finally(() => {
+      delete statsDetailLoads.current[id];
+    });
+
+    statsDetailLoads.current[id] = loadPromise;
+    await loadPromise;
+  }, []);
+
+  useEffect(() => {
+    statsDetailsRef.current = statsDetails;
+  }, [statsDetails]);
 
   /** Loads persisted run stats used by dashboard charts and indicators. */
   const loadStats = useCallback(async () => {
     setStatsLoading(true);
     setStatsError("");
     const loadPromise = (async () => {
-      const response = await fetch("/api/stats", {
+      const response = await fetch("/api/stats?limit=20", {
         method: "GET",
         headers: { Accept: "application/json" },
       });
@@ -115,7 +159,7 @@ function App() {
           if (
             prevStats.length > 0 &&
             newStats.length === prevStats.length &&
-            newStats[0]?.start_time === prevStats[0]?.start_time
+            newStats[0]?.id === prevStats[0]?.id
           ) {
             return prevStats;
           }
@@ -138,6 +182,14 @@ function App() {
 
     await loadPromise.catch(() => {});
   }, []);
+
+  useEffect(() => {
+    const activeID = stats[selectedStatsIndex]?.id ?? stats[0]?.id;
+    if (activeID === undefined) {
+      return;
+    }
+    void loadStatsDetail(activeID);
+  }, [loadStatsDetail, selectedStatsIndex, stats]);
 
   /** Refreshes all editable resources and stats in one action. */
   async function refreshAll(): Promise<void> {
@@ -274,6 +326,7 @@ function App() {
           {route === "stats" && (
             <StatsView
               stats={stats}
+              statsDetails={statsDetails}
               statsLoading={statsLoading}
               statsPromise={statsPromise}
               statsError={statsError}

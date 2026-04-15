@@ -151,12 +151,14 @@ The following files and directories are used:
   - state.json: Feed state information (last fetch times, errors, etc.).
   - error.tmpl: Optional custom error notification template.
   - stats/: A directory containing JSON files with statistics for each run.
+  - stats/index.json: A compact summary index used by the admin dashboard.
 
 # Stats Collection
 
 tgfeed collects statistics for every execution and saves them as individual
-JSON files in the $STATE_DIRECTORY/stats directory. This allows for historical
-performance monitoring.
+JSON files in the $STATE_DIRECTORY/stats directory. It also maintains a compact
+index of recent run summaries to keep admin dashboard reads fast even when the
+stats directory contains many historical snapshots.
 
 Stats include:
 
@@ -171,9 +173,14 @@ Stats include:
   - Average fetch time per successful feed
   - Memory usage at the end of the run
 
-These stats can be fetched in bulk as JSON from the admin server's
-/api/stats endpoint. This is useful for custom dashboards and for analyzing
-feed performance over time.
+These stats can be fetched as JSON from the admin server:
+
+  - /api/stats: Recent run summaries (limited by default, newest first).
+  - /api/stats?view=full: Full JSON snapshots for recent runs.
+  - /api/stats/{id}: Full JSON snapshot for one specific run.
+
+This keeps the built-in dashboard responsive while still allowing custom
+dashboards and offline analysis to access richer per-run detail when needed.
 
 # Administration
 

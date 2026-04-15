@@ -26,6 +26,7 @@ import (
 const testDefaultErrorTemplate = "Default error template."
 
 type statsView struct {
+	ID        string    `json:"id"`
 	StartTime time.Time `json:"start_time"`
 }
 
@@ -178,8 +179,57 @@ func TestAdmin(t *testing.T) {
 			t.Fatalf("expected 2 stats entries, got %d", len(got))
 		}
 		// Check sorting (newest first).
+		testutil.AssertEqual(t, got[0].ID, "b")
 		testutil.AssertEqual(t, got[0].StartTime.Format("2006-01-02T15:04:05Z07:00"), "2023-01-02T12:00:00Z")
+		testutil.AssertEqual(t, got[1].ID, "a")
 		testutil.AssertEqual(t, got[1].StartTime.Format("2006-01-02T15:04:05Z07:00"), "2023-01-01T12:00:00Z")
+	})
+	t.Run("get stats JSON with limit", func(t *testing.T) {
+		cfg := setup(t, initialFS)
+		req := httptest.NewRequest(http.MethodGet, "/api/stats?limit=1", nil)
+		h, err := Handler(cfg)
+		if err != nil {
+			t.Fatalf("creating handler: %v", err)
+		}
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, req)
+
+		testutil.AssertEqual(t, w.Code, http.StatusOK)
+
+		var got []statsView
+		if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+			t.Fatal(err)
+		}
+		if len(got) != 1 {
+			t.Fatalf("expected 1 stats entry, got %d", len(got))
+		}
+		testutil.AssertEqual(t, got[0].ID, "b")
+	})
+	t.Run("get full stats JSON", func(t *testing.T) {
+		cfg := setup(t, initialFS)
+		req := httptest.NewRequest(http.MethodGet, "/api/stats?view=full&limit=1", nil)
+		h, err := Handler(cfg)
+		if err != nil {
+			t.Fatalf("creating handler: %v", err)
+		}
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, req)
+
+		testutil.AssertEqual(t, w.Code, http.StatusOK)
+
+		var got []map[string]string
+		if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+			t.Fatal(err)
+		}
+		if len(got) != 1 {
+			t.Fatalf("expected 1 full stats entry, got %d", len(got))
+		}
+		testutil.AssertEqual(t, got[0]["start_time"], "2023-01-02T12:00:00Z")
+	})
+	t.Run("get stats detail", func(t *testing.T) {
+		cfg := setup(t, initialFS)
+		req := httptest.NewRequest(http.MethodGet, "/api/stats/b", nil)
+		runTest(t, cfg, req, http.StatusOK, `"start_time":"2023-01-02T12:00:00Z"`)
 	})
 	t.Run("get stats JSON (no stats)", func(t *testing.T) {
 		cfg := setup(t, nil)

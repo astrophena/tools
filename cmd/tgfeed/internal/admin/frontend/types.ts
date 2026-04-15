@@ -14,6 +14,7 @@ export type FeedSummary = {
  * Stats payload shape returned by `/api/stats`.
  */
 export type StatsRun = {
+  id?: string;
   start_time?: string;
   duration?: number;
   total_feeds?: number;
