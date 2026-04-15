@@ -6,6 +6,14 @@
 Tgfeed fetches RSS feeds and sends updates to Telegram. It's designed to be run
 as a periodic job.
 
+For a top-down code reading tour, start with these files in order:
+
+  - main.go: entrypoint, bootstrap, command dispatch, and run orchestration
+  - state.go: feed configuration, config parsing, state loading, and run locking
+  - fetch.go: single-feed fetch flow, item processing, rendering, and delivery
+  - special.go: tgfeed:// special feed handlers
+  - stats.go: runtime statistics aggregation and persistence
+
 # Usage
 
 	$ tgfeed [flags...] <command>
@@ -74,7 +82,8 @@ If always_send_new_items is set to true, tgfeed will send items even if they
 have a publication date in the past. This is useful for feeds that add items
 retrospectively, like CourtListener docket feeds. To avoid duplicates, tgfeed
 tracks seen items in its state. Only items published within the last 14 days
-are considered.
+are considered. If a feed does not provide a publication date, tgfeed falls
+back to the updated date.
 
 Digest mode can be enabled by setting digest to true. In this mode, updates
 are bundled into a single message instead of sending one message per item.

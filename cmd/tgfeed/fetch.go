@@ -29,7 +29,7 @@ import (
 	"go.starlark.net/starlark"
 )
 
-// Feed fetching and message sending.
+// Fetch flow.
 
 const (
 	errorThreshold        = 12 // failing continuously for N fetches will disable feed and complain loudly
@@ -211,6 +211,8 @@ func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *update) (re
 	return false, 0
 }
 
+// Request construction and response handling.
+
 func (f *fetcher) newFeedRequest(ctx context.Context, fd *feed, etag string, lastModified string) (*http.Request, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fd.url, nil)
 	if err != nil {
@@ -226,6 +228,13 @@ func (f *fetcher) newFeedRequest(ctx context.Context, fd *feed, etag string, las
 	}
 
 	return req, nil
+}
+
+func (f *fetcher) makeFeedRequest(req *http.Request) (*http.Response, error) {
+	if isSpecialFeed(req.URL.String()) {
+		return f.handleSpecialFeed(req)
+	}
+	return f.httpc.Do(req)
 }
 
 func (f *fetcher) logFeedResponse(fd *feed, res *http.Response) {
@@ -340,6 +349,8 @@ func (f *fetcher) updateFeedStateFromHeaders(state *state.Feed, res *http.Respon
 	state.UpdateCacheHeaders(res.Header.Get("ETag"), res.Header.Get("Last-Modified"))
 }
 
+// Item processing.
+
 func (f *fetcher) enqueueFeedItems(fd *feed, state *state.Feed, exists bool, items []*gofeed.Item, updates chan *update) {
 	var validItems []*gofeed.Item
 
@@ -406,15 +417,25 @@ func (f *fetcher) prepareSeenItemsState(fd *feed, state *state.Feed) (justEnable
 	return justEnabled
 }
 
-func decideFeedItem(itemCtx feedItemContext, feedItem *gofeed.Item) feedItemDecision {
-	itemDate := feedItem.PublishedParsed
-	if feedItem.UpdatedParsed != nil {
-		itemDate = feedItem.UpdatedParsed
+func feedItemPublishedTime(feedItem *gofeed.Item) *time.Time {
+	if feedItem.PublishedParsed != nil {
+		return feedItem.PublishedParsed
 	}
+	return feedItem.UpdatedParsed
+}
 
+func feedItemActivityTime(feedItem *gofeed.Item) *time.Time {
+	if feedItem.UpdatedParsed != nil {
+		return feedItem.UpdatedParsed
+	}
+	return feedItem.PublishedParsed
+}
+
+func decideFeedItem(itemCtx feedItemContext, feedItem *gofeed.Item) feedItemDecision {
 	guid := cmp.Or(feedItem.GUID, feedItem.Link)
 
 	if itemCtx.feed.alwaysSendNewItems {
+		itemDate := feedItemPublishedTime(feedItem)
 		now := time.Now()
 		if itemDate != nil && now.Sub(*itemDate) > lookbackPeriod {
 			return feedItemDecision{selection: feedItemSelectionSkip, reason: feedItemSkipReasonOld}
@@ -434,6 +455,7 @@ func decideFeedItem(itemCtx feedItemContext, feedItem *gofeed.Item) feedItemDeci
 		return feedItemDecision{selection: feedItemSelectionSkip, reason: feedItemSkipReasonSeen}
 	}
 
+	itemDate := feedItemActivityTime(feedItem)
 	if itemDate != nil && itemDate.Before(itemCtx.state.LastUpdated) {
 		return feedItemDecision{selection: feedItemSelectionSkip, reason: feedItemSkipReasonOld}
 	}
@@ -453,6 +475,38 @@ func (f *fetcher) decideEnqueueAction(itemCtx feedItemContext, feedItem *gofeed.
 		return enqueueActionDigest
 	}
 	return enqueueActionSingle
+}
+
+func (f *fetcher) applyRule(rule *starlark.Function, item *gofeed.Item, starlarkVal starlark.Value) bool {
+	val, err := starlark.Call(
+		&starlark.Thread{
+			Print: func(_ *starlark.Thread, msg string) { f.slog.Info(msg) },
+		},
+		rule,
+		starlark.Tuple{starlarkVal},
+		[]starlark.Tuple{},
+	)
+	if err != nil {
+		f.slog.Warn("applying rule for item", "item", item.Link, "error", err)
+		return false
+	}
+
+	ret, ok := val.(starlark.Bool)
+	if !ok {
+		f.slog.Warn("rule returned non-boolean value", "item", item.Link)
+		return false
+	}
+	return bool(ret)
+}
+
+var bmStripper = bluemonday.StrictPolicy()
+
+func (f *fetcher) itemToStarlark(item *gofeed.Item) starlark.Value {
+	// Let's create a copy so we don't mutate the original parsed item structure.
+	cleanedItem := *item
+	cleanedItem.Content = bmStripper.Sanitize(cleanedItem.Content)
+	cleanedItem.Description = bmStripper.Sanitize(cleanedItem.Description)
+	return format.ItemToStarlark(&cleanedItem)
 }
 
 func (f *fetcher) feedItemPassesRules(fd *feed, feedItem *gofeed.Item, starlarkVal starlark.Value) bool {
@@ -495,125 +549,7 @@ func (f *fetcher) markFetchSuccess(url string, parsedItems int, startTime time.T
 	})
 }
 
-func (f *fetcher) makeFeedRequest(req *http.Request) (*http.Response, error) {
-	if isSpecialFeed(req.URL.String()) {
-		return f.handleSpecialFeed(req)
-	}
-	return f.httpc.Do(req)
-}
-
-func (f *fetcher) applyRule(rule *starlark.Function, item *gofeed.Item, starlarkVal starlark.Value) bool {
-	val, err := starlark.Call(
-		&starlark.Thread{
-			Print: func(_ *starlark.Thread, msg string) { f.slog.Info(msg) },
-		},
-		rule,
-		starlark.Tuple{starlarkVal},
-		[]starlark.Tuple{},
-	)
-	if err != nil {
-		f.slog.Warn("applying rule for item", "item", item.Link, "error", err)
-		return false
-	}
-
-	ret, ok := val.(starlark.Bool)
-	if !ok {
-		f.slog.Warn("rule returned non-boolean value", "item", item.Link)
-		return false
-	}
-	return bool(ret)
-}
-
-var bmStripper = bluemonday.StrictPolicy()
-
-func (f *fetcher) itemToStarlark(item *gofeed.Item) starlark.Value {
-	// Let's create a copy so we don't mutate the original parsed item structure.
-	cleanedItem := *item
-	cleanedItem.Content = bmStripper.Sanitize(cleanedItem.Content)
-	cleanedItem.Description = bmStripper.Sanitize(cleanedItem.Description)
-	return format.ItemToStarlark(&cleanedItem)
-}
-
-func (f *fetcher) handleFetchFailure(ctx context.Context, url string, err error) {
-	f.stats.WriteAccess(func(s *stats) {
-		s.FailedFeeds += 1
-		s.classifyFailure(url, err)
-		s.feedStats(url).Failures += 1
-	})
-
-	var (
-		disabled   bool
-		errorCount int
-	)
-	if updateErr := f.withFeedState(ctx, url, func(state *state.Feed, _ bool) bool {
-		disabled = state.MarkFetchFailure(err, errorThreshold)
-		errorCount = state.ErrorCount
-		return true
-	}); updateErr != nil {
-		f.slog.Warn("failed to persist feed failure state", "feed", url, "error", updateErr)
-	}
-
-	f.slog.Debug("fetch failed", "feed", url, "error", err)
-
-	// Complain loudly and disable feed, if we failed previously enough.
-	if disabled {
-		err = fmt.Errorf("fetching feed %q failed after %d previous attempts: %v; feed was disabled, to reenable it run 'tgfeed reenable %q'", url, errorCount, err, url)
-
-		if err := f.errNotify(ctx, err); err != nil {
-			f.slog.Warn("failed to send error notification", "error", err)
-		} else {
-			// Successfully notified, clear the pending flag.
-			if updateErr := f.withFeedState(ctx, url, func(state *state.Feed, _ bool) bool {
-				state.DisabledNotifyPending = false
-				return true
-			}); updateErr != nil {
-				f.slog.Warn("failed to persist feed failure state (DisabledNotifyPending)", "feed", url, "error", updateErr)
-			}
-		}
-	}
-}
-
-func (s *stats) addHTTPStatusClass(url string, statusCode int) {
-	class := statusCode / 100
-	s.feedStats(url).LastStatusClass = class
-	switch class {
-	case 2:
-		s.HTTP2xxCount += 1
-	case 3:
-		s.HTTP3xxCount += 1
-	case 4:
-		s.HTTP4xxCount += 1
-	case 5:
-		s.HTTP5xxCount += 1
-	}
-}
-
-func (s *stats) classifyFailure(url string, err error) {
-	if netErr, ok := errors.AsType[net.Error](err); ok {
-		s.NetworkErrorCount += 1
-		if netErr.Timeout() {
-			s.TimeoutCount += 1
-		}
-		s.feedStats(url).LastStatusClass = 0
-		return
-	}
-	if errors.Is(err, context.DeadlineExceeded) {
-		s.TimeoutCount += 1
-		s.NetworkErrorCount += 1
-		s.feedStats(url).LastStatusClass = 0
-		return
-	}
-	s.feedStats(url).LastStatusClass = 0
-}
-
-func (s *stats) recordItemDecision(decision feedItemDecision) {
-	switch decision.reason {
-	case feedItemSkipReasonOld:
-		s.ItemsSkippedOldTotal += 1
-	case feedItemSkipReasonSeen:
-		s.ItemsDedupedTotal += 1
-	}
-}
+// Rendering and delivery.
 
 func (f *fetcher) sendUpdate(ctx context.Context, u *update) {
 	rendered, ok := f.buildUpdateMessage(u)
@@ -707,4 +643,42 @@ func (f *fetcher) errNotify(ctx context.Context, err error) error {
 			SuppressLinkPreview: true,
 		},
 	})
+}
+
+// Failure handling.
+
+func (f *fetcher) handleFetchFailure(ctx context.Context, url string, err error) {
+	f.stats.WriteAccess(func(s *stats) {
+		s.FailedFeeds += 1
+		s.classifyFailure(url, err)
+		s.feedStats(url).Failures += 1
+	})
+
+	var (
+		disabled   bool
+		errorCount int
+	)
+	if updateErr := f.withFeedState(ctx, url, func(state *state.Feed, _ bool) bool {
+		disabled = state.MarkFetchFailure(err, errorThreshold)
+		errorCount = state.ErrorCount
+		return true
+	}); updateErr != nil {
+		f.slog.Warn("failed to persist feed failure state", "feed", url, "error", updateErr)
+	}
+
+	f.slog.Debug("fetch failed", "feed", url, "error", err)
+
+	if disabled {
+		err = fmt.Errorf("fetching feed %q failed after %d previous attempts: %v; feed was disabled, to reenable it run 'tgfeed reenable %q'", url, errorCount, err, url)
+		if err := f.errNotify(ctx, err); err != nil {
+			f.slog.Warn("failed to send error notification", "error", err)
+		} else {
+			if updateErr := f.withFeedState(ctx, url, func(state *state.Feed, _ bool) bool {
+				state.DisabledNotifyPending = false
+				return true
+			}); updateErr != nil {
+				f.slog.Warn("failed to persist feed failure state (DisabledNotifyPending)", "feed", url, "error", updateErr)
+			}
+		}
+	}
 }

@@ -22,7 +22,7 @@ import (
 	"go.starlark.net/starlark"
 )
 
-// Feed state.
+// Configuration model.
 
 type feed struct {
 	url                string
@@ -40,6 +40,7 @@ func newFeedBuiltin(feeds *[]*feed) *starlark.Builtin {
 		if len(args) > 0 {
 			return nil, fmt.Errorf("unexpected positional arguments")
 		}
+
 		f := new(feed)
 		if err := starlark.UnpackArgs("feed", args, kwargs,
 			"url", &f.url,
@@ -53,39 +54,13 @@ func newFeedBuiltin(feeds *[]*feed) *starlark.Builtin {
 		); err != nil {
 			return nil, err
 		}
+
 		*feeds = append(*feeds, f)
 		return starlark.None, nil
 	})
 }
 
-func (f *fetcher) withFeedState(ctx context.Context, url string, fn func(*state.Feed, bool) bool) error {
-	return f.state.Update(ctx, url, func(fd *state.Feed, exists bool) (bool, error) {
-		return fn(fd, exists), nil
-	})
-}
-
-func (f *fetcher) loadState(ctx context.Context) error {
-	snapshot, err := f.store.LoadSnapshot(ctx)
-	if err != nil {
-		return err
-	}
-	if err := f.loadConfig(ctx, snapshot.Config); err != nil {
-		return err
-	}
-	f.errorTemplate = snapshot.ErrorTemplate
-	f.state = state.NewFeedSet(f.store, snapshot.State)
-	return nil
-}
-
-func (f *fetcher) loadConfig(ctx context.Context, config string) error {
-	feeds, err := f.parseConfig(ctx, config)
-	if err != nil {
-		return err
-	}
-	f.config = config
-	f.feeds = feeds
-	return nil
-}
+// Configuration parsing and validation.
 
 func (f *fetcher) parseConfig(ctx context.Context, config string) ([]*feed, error) {
 	var feeds []*feed
@@ -172,6 +147,41 @@ func (f *fetcher) validateFeedFormat(fd *feed) error {
 
 	return nil
 }
+
+// Snapshot loading and state access.
+
+func (f *fetcher) loadState(ctx context.Context) error {
+	snapshot, err := f.store.LoadSnapshot(ctx)
+	if err != nil {
+		return err
+	}
+	if err := f.loadConfig(ctx, snapshot.Config); err != nil {
+		return err
+	}
+
+	f.errorTemplate = snapshot.ErrorTemplate
+	f.state = state.NewFeedSet(f.store, snapshot.State)
+	return nil
+}
+
+func (f *fetcher) loadConfig(ctx context.Context, config string) error {
+	feeds, err := f.parseConfig(ctx, config)
+	if err != nil {
+		return err
+	}
+
+	f.config = config
+	f.feeds = feeds
+	return nil
+}
+
+func (f *fetcher) withFeedState(ctx context.Context, url string, fn func(*state.Feed, bool) bool) error {
+	return f.state.Update(ctx, url, func(fd *state.Feed, exists bool) (bool, error) {
+		return fn(fd, exists), nil
+	})
+}
+
+// Run locking.
 
 func (f *fetcher) acquireRunLock() error {
 	lockPath := filepath.Join(f.stateDir, ".run.lock")

@@ -24,8 +24,8 @@ func TestGitHubNotificationsFeed(t *testing.T) {
 	}
 	defer rec.Close()
 
-	tm := testMux(t, txtarToFS(txtar.Parse(githubNotificationsTxtar)), nil)
-	f := testFetcher(t, tm)
+	env := newTestEnv(t, txtarToFS(txtar.Parse(githubNotificationsTxtar)), nil)
+	f := newTestFetcher(t, env)
 	f.httpc = &http.Client{
 		Transport: &roundTripper{f.httpc.Transport, rec.Client().Transport},
 	}
@@ -36,7 +36,7 @@ func TestGitHubNotificationsFeed(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	state := tm.state(t)["tgfeed://github-notifications"]
+	state := env.state(t)["tgfeed://github-notifications"]
 	testutil.AssertEqual(t, state.ErrorCount, 0)
 	testutil.AssertEqual(t, state.LastError, "")
 }

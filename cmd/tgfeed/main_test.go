@@ -50,7 +50,7 @@ func TestFetcherMain(t *testing.T) {
 	t.Parallel()
 
 	clitest.Run(t, func(t *testing.T) *fetcher {
-		return testFetcher(t, testMux(t, txtarToFS(txtar.Parse(defaultTxtar)), map[string]http.HandlerFunc{
+		return newTestFetcher(t, newDefaultTestEnv(t, map[string]http.HandlerFunc{
 			atomFeedRoute: func(w http.ResponseWriter, r *http.Request) {
 				w.Write(atomFeed)
 			},
@@ -105,8 +105,8 @@ func TestListFeeds(t *testing.T) {
 	testutil.RunGolden(t, "testdata/list/*.txtar", func(t *testing.T, tc string) []byte {
 		t.Parallel()
 
-		tm := testMux(t, txtarToFS(txtar.Parse(readFile(t, tc))), nil)
-		f := testFetcher(t, tm)
+		env := newTestEnv(t, txtarToFS(txtar.Parse(readFile(t, tc))), nil)
+		f := newTestFetcher(t, env)
 
 		var buf bytes.Buffer
 		if err := f.listFeeds(t.Context(), &buf); err != nil {
@@ -126,12 +126,31 @@ func readFile(t *testing.T, path string) []byte {
 	return b
 }
 
-func testFetcher(t *testing.T, m *mux) *fetcher {
+func stateArchive(t *testing.T, config []byte, state map[string]*state.Feed) fs.FS {
+	t.Helper()
+
+	ar := &txtar.Archive{
+		Files: []txtar.File{
+			{Name: "config.star", Data: config},
+		},
+	}
+	if state != nil {
+		ar.Files = append(ar.Files, txtar.File{Name: "state.json", Data: toJSON(t, state)})
+	}
+	return txtarToFS(ar)
+}
+
+func newDefaultTestEnv(t *testing.T, overrides map[string]http.HandlerFunc) *testEnv {
+	t.Helper()
+	return newTestEnv(t, txtarToFS(txtar.Parse(defaultTxtar)), overrides)
+}
+
+func newTestFetcher(t *testing.T, env *testEnv) *fetcher {
 	f := &fetcher{
-		httpc:    testutil.MockHTTPClient(m.mux),
+		httpc:    testutil.MockHTTPClient(env.mux),
 		logf:     t.Logf,
 		ghToken:  "superdupersecret",
-		stateDir: m.stateDir,
+		stateDir: env.stateDir,
 		tgToken:  tgToken,
 		chatID:   "test",
 	}
@@ -141,18 +160,18 @@ func testFetcher(t *testing.T, m *mux) *fetcher {
 	return f
 }
 
-type mux struct {
+type testEnv struct {
 	mux          *http.ServeMux
 	mu           sync.Mutex
 	stateDir     string
 	sentMessages []map[string]any
 }
 
-func (m *mux) state(t *testing.T) map[string]*state.Feed {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+func (env *testEnv) state(t *testing.T) map[string]*state.Feed {
+	env.mu.Lock()
+	defer env.mu.Unlock()
 
-	content, err := os.ReadFile(filepath.Join(m.stateDir, "state.json"))
+	content, err := os.ReadFile(filepath.Join(env.stateDir, "state.json"))
 	if err != nil {
 		t.Fatalf("reading state.json: %v", err)
 	}
@@ -160,35 +179,57 @@ func (m *mux) state(t *testing.T) map[string]*state.Feed {
 	return testutil.UnmarshalJSON[map[string]*state.Feed](t, content)
 }
 
+func (env *testEnv) sentText(t *testing.T, index int) string {
+	t.Helper()
+	env.mu.Lock()
+	defer env.mu.Unlock()
+
+	text, ok := env.sentMessages[index]["text"].(string)
+	if !ok {
+		t.Fatalf("sent message %d has no text field", index)
+	}
+	return text
+}
+
+func (env *testEnv) sortedSentMessagesJSON(t *testing.T) []byte {
+	t.Helper()
+	env.mu.Lock()
+	defer env.mu.Unlock()
+
+	sent := append([]map[string]any(nil), env.sentMessages...)
+	slices.SortFunc(sent, compareMessages)
+	return toJSON(t, sent)
+}
+
 const (
 	sendTelegram = "POST api.telegram.org/{token}/sendMessage"
 )
 
-func testMux(t *testing.T, baseState fs.FS, overrides map[string]http.HandlerFunc) *mux {
-	m := &mux{
+func newTestEnv(t *testing.T, baseState fs.FS, overrides map[string]http.HandlerFunc) *testEnv {
+	env := &testEnv{
 		mux:      http.NewServeMux(),
 		stateDir: t.TempDir(),
 	}
 	if baseState != nil {
-		if err := os.CopyFS(m.stateDir, baseState); err != nil {
+		if err := os.CopyFS(env.stateDir, baseState); err != nil {
 			t.Fatalf("initializing state directory: %v", err)
 		}
 	}
-	m.mux.HandleFunc(sendTelegram, orHandler(overrides[sendTelegram], func(w http.ResponseWriter, r *http.Request) {
+	env.mux.HandleFunc(sendTelegram, orHandler(overrides[sendTelegram], func(w http.ResponseWriter, r *http.Request) {
 		testutil.AssertEqual(t, tgToken, strings.TrimPrefix(r.PathValue("token"), "bot"))
-		m.mu.Lock()
-		defer m.mu.Unlock()
+		env.mu.Lock()
+		defer env.mu.Unlock()
 		sentMessage := read(t, r.Body)
-		m.sentMessages = append(m.sentMessages, testutil.UnmarshalJSON[map[string]any](t, sentMessage))
+		env.sentMessages = append(env.sentMessages, testutil.UnmarshalJSON[map[string]any](t, sentMessage))
 		w.Write([]byte("{}"))
 	}))
 	for pat, h := range overrides {
 		if slices.Contains([]string{sendTelegram}, pat) {
 			continue
 		}
-		m.mux.HandleFunc(pat, h)
+		env.mux.HandleFunc(pat, h)
 	}
-	return m
+	return env
 }
 
 func txtarToFS(ar *txtar.Archive) fs.FS {
@@ -218,23 +259,19 @@ func read(t *testing.T, r io.Reader) []byte {
 	return b
 }
 
-func compareMaps(map1, map2 map[string]any) bool {
+func compareMessages(map1, map2 map[string]any) int {
 	text1, ok1 := map1["text"].(string)
 	text2, ok2 := map2["text"].(string)
 	if !ok1 {
 		if !ok2 {
-			// Both don't have text, consider them equal (no change in order).
-			return false
+			return 0
 		}
-		// map1 doesn't have text, map2 does, so map2 comes later.
-		return false
+		return 1
 	}
 	if !ok2 {
-		// map1 has text, map2 doesn't, so map1 comes earlier
-		return true
+		return -1
 	}
-	// Compare texts alphabetically.
-	return text1 < text2
+	return strings.Compare(text1, text2)
 }
 
 func toJSON(t *testing.T, val any) []byte {
