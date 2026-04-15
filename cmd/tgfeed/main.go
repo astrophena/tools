@@ -236,48 +236,7 @@ func (f *fetcher) run(ctx context.Context) error {
 	for _, feed := range shuffle(f.feeds) {
 		fetchWg.Go(func() {
 			defer fetchedFeeds.Add(1)
-
-			var retries int
-			var feedRetried bool
-
-			for {
-				if retry, retryIn := f.fetch(ctx, feed, updates); retry && retries < retryLimit {
-					if retryIn > maxRetryTime {
-						f.slog.Warn("feed retry time is too long, not retrying at all",
-							"feed", feed.url,
-							"retry_in", retryIn.String(),
-							"max_retry_time", maxRetryTime.String(),
-						)
-						break
-					}
-
-					feedRetried = true
-					f.stats.WriteAccess(func(s *stats) {
-						s.FetchRetriesTotal += 1
-						s.BackoffSleepTotal += retryIn
-						s.feedStats(feed.url).Retries += 1
-						s.SpecialRateLimitRetries += 1
-					})
-					f.slog.Warn("retrying feed",
-						"feed", feed.url,
-						"retry_in", retryIn.String(),
-						"retries", retries+1,
-						"retry_limit", retryLimit,
-					)
-					if !sleep(ctx, retryIn) {
-						break
-					}
-					retries += 1
-					continue
-				}
-				break
-			}
-
-			if feedRetried {
-				f.stats.WriteAccess(func(s *stats) {
-					s.FeedsRetriedCount += 1
-				})
-			}
+			f.runFeedFetch(ctx, feed, updates)
 		})
 	}
 
@@ -352,6 +311,59 @@ func (f *fetcher) run(ctx context.Context) error {
 	})
 
 	return nil
+}
+
+func (f *fetcher) runFeedFetch(ctx context.Context, fd *feed, updates chan *update) {
+	var retries int
+	var feedRetried bool
+
+	for {
+		retry, retryIn := f.fetch(ctx, fd, updates)
+		if !retry {
+			break
+		}
+		if !f.retryFeedFetch(ctx, fd, retries, retryIn) {
+			break
+		}
+		feedRetried = true
+		retries += 1
+	}
+
+	if feedRetried {
+		f.stats.WriteAccess(func(s *stats) {
+			s.FeedsRetriedCount += 1
+		})
+	}
+}
+
+func (f *fetcher) retryFeedFetch(ctx context.Context, fd *feed, retries int, retryIn time.Duration) bool {
+	if retries >= retryLimit {
+		f.handleFetchFailure(ctx, fd.url, fmt.Errorf("retry limit exceeded after %d retries", retries))
+		return false
+	}
+	if retryIn > maxRetryTime {
+		f.slog.Warn("feed retry time is too long, not retrying at all",
+			"feed", fd.url,
+			"retry_in", retryIn.String(),
+			"max_retry_time", maxRetryTime.String(),
+		)
+		f.handleFetchFailure(ctx, fd.url, fmt.Errorf("retry wait %s exceeds max retry time %s", retryIn, maxRetryTime))
+		return false
+	}
+
+	f.stats.WriteAccess(func(s *stats) {
+		s.FetchRetriesTotal += 1
+		s.BackoffSleepTotal += retryIn
+		s.feedStats(fd.url).Retries += 1
+		s.SpecialRateLimitRetries += 1
+	})
+	f.slog.Warn("retrying feed",
+		"feed", fd.url,
+		"retry_in", retryIn.String(),
+		"retries", retries+1,
+		"retry_limit", retryLimit,
+	)
+	return sleep(ctx, retryIn)
 }
 
 func (f *fetcher) cleanState(ctx context.Context) error {

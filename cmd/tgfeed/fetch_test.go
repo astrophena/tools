@@ -13,6 +13,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -42,6 +43,40 @@ func TestFailingFeed(t *testing.T) {
 
 	testutil.AssertEqual(t, state[atomFeedURL].ErrorCount, 1)
 	testutil.AssertEqual(t, state[atomFeedURL].LastError, "want 200, got 418: I'm a teapot.\n")
+}
+
+func TestRetryExhaustionCountsAsFailure(t *testing.T) {
+	t.Parallel()
+
+	var attempts atomic.Int32
+	env := newDefaultTestEnv(t, map[string]http.HandlerFunc{
+		atomFeedRoute: func(w http.ResponseWriter, r *http.Request) {
+			attempts.Add(1)
+			http.Error(w, "service unavailable", http.StatusServiceUnavailable)
+		},
+	})
+	f := newTestFetcher(t, env)
+	if err := f.run(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+
+	state := env.state(t)
+
+	testutil.AssertEqual(t, attempts.Load(), int32(retryLimit+1))
+	testutil.AssertEqual(t, state[atomFeedURL].ErrorCount, 1)
+	testutil.AssertEqual(t, state[atomFeedURL].FetchFailCount, int64(1))
+	if !strings.Contains(state[atomFeedURL].LastError, fmt.Sprintf("retry limit exceeded after %d retries", retryLimit)) {
+		t.Fatalf("unexpected last error: %q", state[atomFeedURL].LastError)
+	}
+
+	f.stats.ReadAccess(func(s *stats) {
+		testutil.AssertEqual(t, s.FailedFeeds, 1)
+		testutil.AssertEqual(t, s.SuccessFeeds, 0)
+		testutil.AssertEqual(t, s.NotModifiedFeeds, 0)
+		testutil.AssertEqual(t, s.FetchRetriesTotal, retryLimit)
+		testutil.AssertEqual(t, s.FeedsRetriedCount, 1)
+		testutil.AssertEqual(t, s.HTTP5xxCount, retryLimit+1)
+	})
 }
 
 func TestDisablingAndReenablingFailingFeed(t *testing.T) {
