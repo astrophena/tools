@@ -1,26 +1,23 @@
-// © 2025 Ilya Mateyko. All rights reserved.
+// © 2026 Ilya Mateyko. All rights reserved.
 // Use of this source code is governed by the ISC
 // license that can be found in the LICENSE.md file.
 
-package main
+// Package stats aggregates tgfeed runtime metrics and persists run snapshots.
+package stats
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"math"
 	"net"
-	"os"
-	"path/filepath"
 	"slices"
 	"time"
 )
 
 const topFeedStatCount = 5
 
-// Stats model.
-
-type stats struct {
+// Run stores aggregated statistics for one tgfeed execution.
+type Run struct {
 	TotalFeeds       int `json:"total_feeds"`
 	SuccessFeeds     int `json:"success_feeds"`
 	FailedFeeds      int `json:"failed_feeds"`
@@ -32,8 +29,8 @@ type stats struct {
 
 	TotalFetchTime time.Duration   `json:"total_fetch_time"`
 	AvgFetchTime   time.Duration   `json:"avg_fetch_time"`
-	FetchLatencyMS percentileStats `json:"fetch_latency_ms"`
-	SendLatencyMS  percentileStats `json:"send_latency_ms"`
+	FetchLatencyMS PercentileStats `json:"fetch_latency_ms"`
+	SendLatencyMS  PercentileStats `json:"send_latency_ms"`
 
 	HTTP2xxCount int `json:"http_2xx_count"`
 	HTTP3xxCount int `json:"http_3xx_count"`
@@ -63,25 +60,27 @@ type stats struct {
 	SeenItemsPrunedTotal  int `json:"seen_items_pruned_total"`
 	StateBytesWritten     int `json:"state_bytes_written"`
 
-	TopSlowestFeeds []feedStatsSummary `json:"top_slowest_feeds,omitempty"`
-	TopErrorFeeds   []feedStatsSummary `json:"top_error_feeds,omitempty"`
-	TopNewItemFeeds []feedStatsSummary `json:"top_new_item_feeds,omitempty"`
+	TopSlowestFeeds []FeedStatsSummary `json:"top_slowest_feeds,omitempty"`
+	TopErrorFeeds   []FeedStatsSummary `json:"top_error_feeds,omitempty"`
+	TopNewItemFeeds []FeedStatsSummary `json:"top_new_item_feeds,omitempty"`
 
 	MemoryUsage uint64 `json:"memory_usage"`
 
-	fetchLatencySamples []time.Duration       `json:"-"`
-	sendLatencySamples  []time.Duration       `json:"-"`
-	FeedStatsByURL      map[string]*feedStats `json:"-"`
+	FetchLatencySamples []time.Duration       `json:"-"`
+	SendLatencySamples  []time.Duration       `json:"-"`
+	FeedStatsByURL      map[string]*FeedStats `json:"-"`
 }
 
-type percentileStats struct {
+// PercentileStats contains percentile latency values in milliseconds.
+type PercentileStats struct {
 	P50 int64 `json:"p50"`
 	P90 int64 `json:"p90"`
 	P99 int64 `json:"p99"`
 	Max int64 `json:"max"`
 }
 
-type feedStats struct {
+// FeedStats stores per-feed counters used for top-N summaries.
+type FeedStats struct {
 	URL             string
 	FetchDuration   time.Duration
 	Failures        int
@@ -90,7 +89,8 @@ type feedStats struct {
 	LastStatusClass int
 }
 
-type feedStatsSummary struct {
+// FeedStatsSummary stores feed metrics exposed in the public JSON payload.
+type FeedStatsSummary struct {
 	URL             string        `json:"url"`
 	FetchDuration   time.Duration `json:"fetch_duration"`
 	Failures        int           `json:"failures"`
@@ -99,28 +99,37 @@ type feedStatsSummary struct {
 	LastStatusClass int           `json:"last_status_class"`
 }
 
-// Aggregation helpers.
+// FeedItemDecisionReason classifies why an item was skipped.
+type FeedItemDecisionReason int
 
-func (s *stats) feedStats(url string) *feedStats {
-	if s.FeedStatsByURL == nil {
-		s.FeedStatsByURL = make(map[string]*feedStats)
+const (
+	FeedItemSkipReasonUnknown FeedItemDecisionReason = iota
+	FeedItemSkipReasonOld
+	FeedItemSkipReasonSeen
+)
+
+// FeedStats returns mutable per-feed statistics.
+func (r *Run) FeedStats(url string) *FeedStats {
+	if r.FeedStatsByURL == nil {
+		r.FeedStatsByURL = make(map[string]*FeedStats)
 	}
-	if _, ok := s.FeedStatsByURL[url]; !ok {
-		s.FeedStatsByURL[url] = &feedStats{URL: url}
+	if _, ok := r.FeedStatsByURL[url]; !ok {
+		r.FeedStatsByURL[url] = &FeedStats{URL: url}
 	}
-	return s.FeedStatsByURL[url]
+	return r.FeedStatsByURL[url]
 }
 
-func quantilesMS(samples []time.Duration) percentileStats {
+// QuantilesMS returns latency percentiles in milliseconds.
+func QuantilesMS(samples []time.Duration) PercentileStats {
 	if len(samples) == 0 {
-		return percentileStats{}
+		return PercentileStats{}
 	}
 	ms := make([]int64, len(samples))
 	for i, sample := range samples {
 		ms[i] = sample.Milliseconds()
 	}
 	slices.Sort(ms)
-	return percentileStats{
+	return PercentileStats{
 		P50: percentileValue(ms, 0.50),
 		P90: percentileValue(ms, 0.90),
 		P99: percentileValue(ms, 0.99),
@@ -134,16 +143,17 @@ func percentileValue(sorted []int64, percentile float64) int64 {
 	return sorted[idx]
 }
 
-func topFeedStats(input map[string]*feedStats, less func(a *feedStats, b *feedStats) int) []feedStatsSummary {
-	all := make([]*feedStats, 0, len(input))
+// TopFeedStats calculates top-N feed summaries according to provided comparator.
+func TopFeedStats(input map[string]*FeedStats, less func(a *FeedStats, b *FeedStats) int) []FeedStatsSummary {
+	all := make([]*FeedStats, 0, len(input))
 	for _, item := range input {
 		all = append(all, item)
 	}
 	slices.SortFunc(all, less)
 	all = all[:min(topFeedStatCount, len(all))]
-	result := make([]feedStatsSummary, 0, len(all))
+	result := make([]FeedStatsSummary, 0, len(all))
 	for _, item := range all {
-		result = append(result, feedStatsSummary{
+		result = append(result, FeedStatsSummary{
 			URL:             item.URL,
 			FetchDuration:   item.FetchDuration,
 			Failures:        item.Failures,
@@ -155,61 +165,47 @@ func topFeedStats(input map[string]*feedStats, less func(a *feedStats, b *feedSt
 	return result
 }
 
-func (s *stats) addHTTPStatusClass(url string, statusCode int) {
+// AddHTTPStatusClass increments status-class counters for a feed response.
+func (r *Run) AddHTTPStatusClass(url string, statusCode int) {
 	class := statusCode / 100
-	s.feedStats(url).LastStatusClass = class
+	r.FeedStats(url).LastStatusClass = class
 	switch class {
 	case 2:
-		s.HTTP2xxCount += 1
+		r.HTTP2xxCount += 1
 	case 3:
-		s.HTTP3xxCount += 1
+		r.HTTP3xxCount += 1
 	case 4:
-		s.HTTP4xxCount += 1
+		r.HTTP4xxCount += 1
 	case 5:
-		s.HTTP5xxCount += 1
+		r.HTTP5xxCount += 1
 	}
 }
 
-func (s *stats) classifyFailure(url string, err error) {
+// ClassifyFailure increments failure counters based on error type.
+func (r *Run) ClassifyFailure(url string, err error) {
 	if netErr, ok := errors.AsType[net.Error](err); ok {
-		s.NetworkErrorCount += 1
+		r.NetworkErrorCount += 1
 		if netErr.Timeout() {
-			s.TimeoutCount += 1
+			r.TimeoutCount += 1
 		}
-		s.feedStats(url).LastStatusClass = 0
+		r.FeedStats(url).LastStatusClass = 0
 		return
 	}
 	if errors.Is(err, context.DeadlineExceeded) {
-		s.TimeoutCount += 1
-		s.NetworkErrorCount += 1
-		s.feedStats(url).LastStatusClass = 0
+		r.TimeoutCount += 1
+		r.NetworkErrorCount += 1
+		r.FeedStats(url).LastStatusClass = 0
 		return
 	}
-	s.feedStats(url).LastStatusClass = 0
+	r.FeedStats(url).LastStatusClass = 0
 }
 
-func (s *stats) recordItemDecision(decision feedItemDecision) {
-	switch decision.reason {
-	case feedItemSkipReasonOld:
-		s.ItemsSkippedOldTotal += 1
-	case feedItemSkipReasonSeen:
-		s.ItemsDedupedTotal += 1
+// RecordItemDecision counts item skip reasons.
+func (r *Run) RecordItemDecision(reason FeedItemDecisionReason) {
+	switch reason {
+	case FeedItemSkipReasonOld:
+		r.ItemsSkippedOldTotal += 1
+	case FeedItemSkipReasonSeen:
+		r.ItemsDedupedTotal += 1
 	}
-}
-
-// Persistence.
-
-func (f *fetcher) putStats(s *stats) error {
-	statsDir := filepath.Join(f.stateDir, "stats")
-	if err := os.MkdirAll(statsDir, 0o755); err != nil {
-		return err
-	}
-
-	js, err := json.MarshalIndent(s, "", "  ")
-	if err != nil {
-		return err
-	}
-	statsFile := filepath.Join(statsDir, time.Now().UTC().Format("20060102150405")+".json")
-
-	return os.WriteFile(statsFile, js, 0o644)
 }

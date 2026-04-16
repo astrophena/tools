@@ -150,13 +150,13 @@ The following files and directories are used:
   - config.star: Feed configuration written in Starlark.
   - state.json: Feed state information (last fetch times, errors, etc.).
   - error.tmpl: Optional custom error notification template.
-  - stats/: A directory containing JSON files with statistics for each run.
+  - stats.sqlite3: SQLite database containing runtime statistics for each run.
 
 # Stats Collection
 
-tgfeed collects statistics for every execution and saves them as individual
-JSON files in the $STATE_DIRECTORY/stats directory. This allows for historical
-performance monitoring.
+tgfeed collects statistics for every execution and saves them into
+$STATE_DIRECTORY/stats.sqlite3. This allows historical performance monitoring
+with indexed queries as history grows.
 
 Stats include:
 

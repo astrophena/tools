@@ -17,15 +17,12 @@ import (
 	"io"
 	"io/fs"
 	"net/http"
-	"os"
-	"path/filepath"
 	"slices"
-	"strings"
 	"text/template"
-	"time"
 
 	"go.astrophena.name/base/web"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/state"
+	"go.astrophena.name/tools/cmd/tgfeed/internal/stats"
 )
 
 var errConflict = web.StatusErr(http.StatusConflict)
@@ -42,6 +39,8 @@ type Config struct {
 	ValidateConfig func(ctx context.Context, content string) error
 	// IsRunLocked reports whether tgfeed run lock is currently held.
 	IsRunLocked func() bool
+	// StatsStore reads persisted tgfeed run stats.
+	StatsStore *stats.Store
 }
 
 // Handler returns an HTTP handler serving the tgfeed admin API.
@@ -184,6 +183,12 @@ func normalizeConfig(cfg Config) (Config, error) {
 	if cfg.IsRunLocked == nil {
 		cfg.IsRunLocked = func() bool { return false }
 	}
+	if cfg.StatsStore == nil {
+		cfg.StatsStore = stats.OpenReader(cfg.StateDir)
+		if err := cfg.StatsStore.Bootstrap(context.Background()); err != nil {
+			return Config{}, err
+		}
+	}
 	return cfg, nil
 }
 
@@ -191,12 +196,7 @@ type api struct {
 	store            state.Store
 	validateConfigFn func(context.Context, string) error
 	isRunLocked      func() bool
-	statsDir         string
-}
-
-type statsItem struct {
-	StartTime time.Time
-	Raw       json.RawMessage
+	statsStore       *stats.Store
 }
 
 func newAPI(cfg Config) *api {
@@ -204,7 +204,7 @@ func newAPI(cfg Config) *api {
 		store:            cfg.Store,
 		validateConfigFn: cfg.ValidateConfig,
 		isRunLocked:      cfg.IsRunLocked,
-		statsDir:         filepath.Join(cfg.StateDir, "stats"),
+		statsStore:       cfg.StatsStore,
 	}
 }
 
@@ -360,59 +360,22 @@ func validateState(content []byte) error {
 }
 
 func (a *api) handleGetStats(w http.ResponseWriter, r *http.Request) {
-	entries, err := os.ReadDir(a.statsDir)
+	if a.statsStore == nil {
+		web.RespondJSONError(w, r, errors.New("stats store is not configured"))
+		return
+	}
+	response, err := a.statsStore.ListRuns(r.Context(), 100)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
 			http.Error(w, "No stats available.", http.StatusNotFound)
 			return
 		}
-		web.RespondJSONError(w, r, fmt.Errorf("reading stats directory: %w", err))
+		web.RespondJSONError(w, r, fmt.Errorf("reading stats from SQLite: %w", err))
 		return
 	}
-
-	// Filter for JSON files.
-	statsFiles := make([]string, 0, len(entries))
-	for _, entry := range entries {
-		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".json") {
-			statsFiles = append(statsFiles, entry.Name())
-		}
-	}
-
-	// Sort by filename, descending (newest first).
-	slices.SortFunc(statsFiles, func(a, b string) int {
-		return strings.Compare(b, a)
-	})
-
-	// Limit to the latest 100 entries.
-	if len(statsFiles) > 100 {
-		statsFiles = statsFiles[:100]
-	}
-
-	allStats := make([]statsItem, 0, len(statsFiles))
-	for _, name := range statsFiles {
-		path := filepath.Join(a.statsDir, name)
-		b, err := os.ReadFile(path)
-		if err != nil {
-			web.RespondJSONError(w, r, fmt.Errorf("reading stats file %s: %w", path, err))
-			return
-		}
-
-		var s struct {
-			StartTime time.Time `json:"start_time"`
-		}
-		if err := json.Unmarshal(b, &s); err != nil {
-			web.RespondJSONError(w, r, fmt.Errorf("parsing stats file %s: %w", path, err))
-			return
-		}
-		allStats = append(allStats, statsItem{
-			StartTime: s.StartTime,
-			Raw:       append(json.RawMessage(nil), b...),
-		})
-	}
-
-	response := make([]json.RawMessage, len(allStats))
-	for i, item := range allStats {
-		response[i] = item.Raw
+	if len(response) == 0 {
+		http.Error(w, "No stats available.", http.StatusNotFound)
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")

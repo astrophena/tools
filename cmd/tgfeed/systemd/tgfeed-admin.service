@@ -37,7 +37,7 @@ CapabilityBoundingSet=
 AmbientCapabilities=
 
 # Make kernel and system files read-only (/usr, /boot, /etc, /var).
-ProtectSystem=full
+ProtectSystem=strict
 # Provide a private, empty /tmp and /var/tmp.
 PrivateTmp=yes
 # Provide a private /proc and hide other users' processes.
@@ -49,6 +49,8 @@ PrivateDevices=yes
 
 # Explicitly allow read-only access to files required for DNS resolution and TLS validation.
 ReadOnlyPaths=/etc/resolv.conf /etc/ssl/certs/
+# Enforce read-only access to tgfeed stats database for admin mode.
+ReadOnlyPaths=%S/tgfeed/stats.sqlite3 %S/tgfeed/stats.sqlite3-wal %S/tgfeed/stats.sqlite3-shm
 
 # Make common, non-essential directories completely inaccessible.
 InaccessiblePaths=/boot /mnt /opt /root

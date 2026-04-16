@@ -22,6 +22,7 @@ import (
 	"go.astrophena.name/base/testutil"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/sender"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/state"
+	tgstats "go.astrophena.name/tools/cmd/tgfeed/internal/stats"
 	"go.starlark.net/starlark"
 	"go.starlark.net/syntax"
 )
@@ -69,7 +70,7 @@ func TestRetryExhaustionCountsAsFailure(t *testing.T) {
 		t.Fatalf("unexpected last error: %q", state[atomFeedURL].LastError)
 	}
 
-	f.stats.ReadAccess(func(s *stats) {
+	f.stats.ReadAccess(func(s *tgstats.Run) {
 		testutil.AssertEqual(t, s.FailedFeeds, 1)
 		testutil.AssertEqual(t, s.SuccessFeeds, 0)
 		testutil.AssertEqual(t, s.NotModifiedFeeds, 0)
@@ -144,7 +145,7 @@ func TestFetchWithIfModifiedSinceAndETag(t *testing.T) {
 
 	testutil.AssertEqual(t, state1[atomFeedURL].LastModified, ifModifiedSince)
 	testutil.AssertEqual(t, state1[atomFeedURL].ETag, eTag)
-	f.stats.ReadAccess(func(s *stats) {
+	f.stats.ReadAccess(func(s *tgstats.Run) {
 		testutil.AssertEqual(t, s.NotModifiedFeeds, 0)
 	})
 
@@ -157,7 +158,7 @@ func TestFetchWithIfModifiedSinceAndETag(t *testing.T) {
 
 	testutil.AssertEqual(t, state2[atomFeedURL].LastModified, ifModifiedSince)
 	testutil.AssertEqual(t, state2[atomFeedURL].ETag, eTag)
-	f.stats.ReadAccess(func(s *stats) {
+	f.stats.ReadAccess(func(s *tgstats.Run) {
 		testutil.AssertEqual(t, s.NotModifiedFeeds, 1)
 	})
 }
@@ -618,7 +619,7 @@ func TestHandleFeedStatus(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			f := newTestFetcher(t, newTestEnv(t, nil, nil))
-			f.stats = syncx.Protect(&stats{})
+			f.stats = syncx.Protect(&tgstats.Run{})
 			fd := &feed{url: "https://example.com/feed.xml"}
 			st := tc.initialState
 			f.state = state.NewFeedSet(f.store, map[string]*state.Feed{
@@ -656,7 +657,7 @@ func TestHandleFeedStatus(t *testing.T) {
 			testutil.AssertEqual(t, st.LastError, tc.wantLastError)
 			testutil.AssertEqual(t, !st.LastUpdated.IsZero(), tc.wantLastUpdatedNonZero)
 
-			f.stats.ReadAccess(func(s *stats) {
+			f.stats.ReadAccess(func(s *tgstats.Run) {
 				testutil.AssertEqual(t, s.NotModifiedFeeds, tc.wantNotModifiedFeeds)
 			})
 		})
@@ -676,7 +677,7 @@ func TestSendUpdateUsesInjectedSender(t *testing.T) {
 	t.Parallel()
 
 	f := &fetcher{slog: slog.Default()}
-	f.stats = syncx.Protect(&stats{})
+	f.stats = syncx.Protect(&tgstats.Run{})
 	mock := &captureSender{}
 	f.sender = mock
 
