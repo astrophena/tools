@@ -16,7 +16,8 @@ cleanup() {
 trap cleanup EXIT
 
 mkdir -p "$build_dir/build/bin" "$build_dir/build/etc/systemd/system"
-go build -ldflags="-s -w -buildid=" -trimpath -o "$build_dir/build/bin/$service" "./cmd/$service"
+CGO_ENABLED=1 GOOS=linux CC="zig cc -target x86_64-linux-musl" GOOS=linux GOARCH=amd64 \
+	go build -ldflags="-s -w -buildid=" -trimpath -o "$build_dir/build/bin/$service" "./cmd/$service"
 cp cmd/$service/systemd/* "$build_dir/build/etc/systemd/system"
 tar -czf "$build_dir/archive.tar.gz" -C "$build_dir/build" .
 go tool deploy -type service "$service" "$build_dir/archive.tar.gz"
