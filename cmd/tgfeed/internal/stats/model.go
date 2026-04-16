@@ -79,6 +79,26 @@ type PercentileStats struct {
 	Max int64 `json:"max"`
 }
 
+// RunSummary stores the lightweight fields used by dashboard overview panels.
+type RunSummary struct {
+	StartedAtUnix int64 `json:"started_at_unix"`
+
+	StartTime time.Time     `json:"start_time"`
+	Duration  time.Duration `json:"duration"`
+
+	TotalFeeds       int `json:"total_feeds"`
+	SuccessFeeds     int `json:"success_feeds"`
+	FailedFeeds      int `json:"failed_feeds"`
+	NotModifiedFeeds int `json:"not_modified_feeds"`
+
+	MessagesAttempted int `json:"messages_attempted"`
+	MessagesSent      int `json:"messages_sent"`
+	MessagesFailed    int `json:"messages_failed"`
+
+	FetchLatencyMS PercentileStats `json:"fetch_latency_ms"`
+	MemoryUsage    uint64          `json:"memory_usage"`
+}
+
 // FeedStats stores per-feed counters used for top-N summaries.
 type FeedStats struct {
 	URL             string
