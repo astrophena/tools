@@ -11,7 +11,6 @@ import (
 	"embed"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -20,14 +19,13 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	_ "github.com/tailscale/sqlite"
 )
 
 const dbFileName = "stats.sqlite3"
 
-const currentSchemaVersion = 1
+const currentSchemaVersion = 2
 
 //go:embed migrations/*.sql
 var migrationsFS embed.FS
@@ -126,7 +124,7 @@ func (s *Store) SaveRun(ctx context.Context, run *Run) error {
 	_, err = db.ExecContext(
 		ctx,
 		`INSERT OR IGNORE INTO runs(started_at_unix, finished_at_unix, duration_ms, payload_json, payload_sha256)
-		VALUES(?, ?, ?, ?, ?);`,
+		VALUES(?, ?, ?, jsonb(?), ?);`,
 		started,
 		finished,
 		durationMS,
@@ -148,7 +146,7 @@ func (s *Store) ListRuns(ctx context.Context, limit int) ([]json.RawMessage, err
 
 	rows, err := db.QueryContext(
 		ctx,
-		`SELECT payload_json FROM runs ORDER BY started_at_unix DESC LIMIT ?;`,
+		`SELECT json(payload_json) FROM runs ORDER BY started_at_unix DESC LIMIT ?;`,
 		limit,
 	)
 	if err != nil {
@@ -168,87 +166,6 @@ func (s *Store) ListRuns(ctx context.Context, limit int) ([]json.RawMessage, err
 		return nil, err
 	}
 	return res, nil
-}
-
-// MarkMigrationComplete records completion of JSON migration.
-func (s *Store) MarkMigrationComplete(ctx context.Context) error {
-	db, err := s.open(ctx)
-	if err != nil {
-		return err
-	}
-
-	_, err = db.ExecContext(
-		ctx,
-		`INSERT INTO meta(key, value) VALUES('legacy_json_migrated', '1')
-		ON CONFLICT(key) DO UPDATE SET value=excluded.value;`,
-	)
-	return err
-}
-
-// MigrationCompleted reports whether JSON migration marker exists.
-func (s *Store) MigrationCompleted(ctx context.Context) (bool, error) {
-	db, err := s.open(ctx)
-	if err != nil {
-		return false, err
-	}
-
-	var value string
-	err = db.QueryRowContext(ctx, `SELECT value FROM meta WHERE key='legacy_json_migrated';`).Scan(&value)
-	if errors.Is(err, sql.ErrNoRows) {
-		return false, nil
-	}
-	if err != nil {
-		return false, err
-	}
-	return value == "1", nil
-}
-
-// MigrateJSONDir imports legacy JSON run snapshots.
-func (s *Store) MigrateJSONDir(ctx context.Context, statsDir string) (int, error) {
-	if s.readOnly {
-		return 0, nil
-	}
-	entries, err := os.ReadDir(statsDir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return 0, nil
-		}
-		return 0, err
-	}
-	files := make([]string, 0, len(entries))
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
-			continue
-		}
-		files = append(files, entry.Name())
-	}
-	slices.Sort(files)
-
-	migrated := 0
-	for _, name := range files {
-		path := filepath.Join(statsDir, name)
-		b, err := os.ReadFile(path)
-		if err != nil {
-			return migrated, err
-		}
-		var run Run
-		if err := json.Unmarshal(b, &run); err != nil {
-			return migrated, fmt.Errorf("%s: %w", path, err)
-		}
-		if run.StartTime.IsZero() {
-			if ts, err := strconv.ParseInt(strings.TrimSuffix(name, ".json"), 10, 64); err == nil {
-				run.StartTime = time.Unix(ts, 0).UTC()
-			}
-		}
-		if err := s.SaveRun(ctx, &run); err != nil {
-			return migrated, err
-		}
-		migrated += 1
-	}
-	if err := s.MarkMigrationComplete(ctx); err != nil {
-		return migrated, err
-	}
-	return migrated, nil
 }
 
 func (s *Store) open(ctx context.Context) (*sql.DB, error) {

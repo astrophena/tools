@@ -6,8 +6,6 @@ package stats
 
 import (
 	"encoding/json"
-	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -71,7 +69,7 @@ func TestStoreSaveRunAndListRuns(t *testing.T) {
 	testutil.AssertEqual(t, version, currentSchemaVersion)
 }
 
-func TestStoreMigrateJSONDir(t *testing.T) {
+func TestStoreSaveRunUsesJSONB(t *testing.T) {
 	t.Parallel()
 
 	store := OpenMemory(t.Name())
@@ -85,27 +83,30 @@ func TestStoreMigrateJSONDir(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	statsDir := t.TempDir()
-	firstRun := `{"start_time":"2023-01-01T12:00:00Z","total_feeds":1}`
-	secondRun := `{"total_feeds":2}`
-	if err := os.WriteFile(filepath.Join(statsDir, "1672574400.json"), []byte(firstRun), 0o644); err != nil {
+	if err := store.SaveRun(t.Context(), &Run{
+		StartTime:  time.Date(2023, time.January, 1, 12, 0, 0, 0, time.UTC),
+		TotalFeeds: 1,
+	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(statsDir, "1672660800.json"), []byte(secondRun), 0o644); err != nil {
+	if err := store.SaveRun(t.Context(), &Run{
+		StartTime:  time.Date(2023, time.January, 2, 12, 0, 0, 0, time.UTC),
+		TotalFeeds: 2,
+	}); err != nil {
 		t.Fatal(err)
 	}
 
-	migrated, err := store.MigrateJSONDir(t.Context(), statsDir)
+	db, err := store.open(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
-	testutil.AssertEqual(t, migrated, 2)
 
-	done, err := store.MigrationCompleted(t.Context())
+	var payloadType string
+	err = db.QueryRowContext(t.Context(), `SELECT typeof(payload_json) FROM runs LIMIT 1;`).Scan(&payloadType)
 	if err != nil {
 		t.Fatal(err)
 	}
-	testutil.AssertEqual(t, done, true)
+	testutil.AssertEqual(t, payloadType, "blob")
 
 	runs, err := store.ListRuns(t.Context(), 10)
 	if err != nil {

@@ -51,8 +51,17 @@ func TestAdmin(t *testing.T) {
 		if err := statsStore.Bootstrap(t.Context()); err != nil {
 			t.Fatalf("bootstrapping stats store: %v", err)
 		}
-		if _, err := statsStore.MigrateJSONDir(t.Context(), filepath.Join(stateDir, "stats")); err != nil {
-			t.Fatalf("migrating legacy stats: %v", err)
+		if fs != nil {
+			if err := statsStore.SaveRun(t.Context(), &stats.Run{
+				StartTime: time.Date(2023, time.January, 1, 12, 0, 0, 0, time.UTC),
+			}); err != nil {
+				t.Fatalf("saving first stats run: %v", err)
+			}
+			if err := statsStore.SaveRun(t.Context(), &stats.Run{
+				StartTime: time.Date(2023, time.January, 2, 12, 0, 0, 0, time.UTC),
+			}); err != nil {
+				t.Fatalf("saving second stats run: %v", err)
+			}
 		}
 
 		return Config{
@@ -90,11 +99,9 @@ func TestAdmin(t *testing.T) {
 	}
 
 	initialFS := fstest.MapFS{
-		"config.star":  {Data: []byte(`feed(url="https://example.com")`)},
-		"state.json":   {Data: []byte(`{}`)},
-		"error.tmpl":   {Data: []byte(`Custom error: %v`)},
-		"stats/a.json": {Data: []byte(`{"start_time":"2023-01-01T12:00:00Z"}`)},
-		"stats/b.json": {Data: []byte(`{"start_time":"2023-01-02T12:00:00Z"}`)},
+		"config.star": {Data: []byte(`feed(url="https://example.com")`)},
+		"state.json":  {Data: []byte(`{}`)},
+		"error.tmpl":  {Data: []byte(`Custom error: %v`)},
 	}
 
 	t.Run("get config", func(t *testing.T) {
