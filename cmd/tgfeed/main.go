@@ -36,6 +36,7 @@ import (
 	"go.astrophena.name/tools/cmd/tgfeed/internal/diff"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/sender"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/state"
+	"go.astrophena.name/tools/cmd/tgfeed/internal/stats"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/telegram"
 	"go.astrophena.name/tools/internal/filelock"
 
@@ -84,9 +85,10 @@ type fetcher struct {
 	errorTemplate string
 	state         *state.FeedSet
 
-	stats  syncx.Protected[*stats]
-	sender sender.Sender
-	store  state.Store
+	stats      syncx.Protected[*stats.Run]
+	statsStore *stats.Store
+	sender     sender.Sender
+	store      state.Store
 
 	runLock filelock.Lock
 }
@@ -137,10 +139,15 @@ func (f *fetcher) Run(ctx context.Context) error {
 
 	switch env.Args[0] {
 	case "admin":
+		reader := stats.OpenReader(f.stateDir)
+		if err := reader.Bootstrap(ctx); err != nil {
+			return fmt.Errorf("bootstrapping stats database failed: %w", err)
+		}
 		return admin.Run(ctx, admin.Config{
-			Addr:     f.adminAddr,
-			StateDir: f.stateDir,
-			Store:    f.store,
+			Addr:       f.adminAddr,
+			StateDir:   f.stateDir,
+			Store:      f.store,
+			StatsStore: reader,
 			ValidateConfig: func(ctx context.Context, content string) error {
 				_, err := f.parseConfig(ctx, content)
 				return err
@@ -183,9 +190,18 @@ func (f *fetcher) run(ctx context.Context) error {
 	}
 	defer f.releaseRunLock()
 
-	f.stats = syncx.Protect(&stats{
+	f.stats = syncx.Protect(&stats.Run{
 		StartTime: time.Now(),
 	})
+	f.statsStore = stats.OpenWriter(f.stateDir)
+	if err := f.statsStore.Bootstrap(ctx); err != nil {
+		return fmt.Errorf("bootstrapping stats database failed: %w", err)
+	}
+	if migrated, err := f.statsStore.MigrateJSONDir(ctx, filepath.Join(f.stateDir, "stats")); err != nil {
+		return fmt.Errorf("migrating legacy stats failed: %w", err)
+	} else if migrated > 0 {
+		f.slog.Info("migrated legacy stats into SQLite", "count", migrated)
+	}
 
 	if err := f.loadState(ctx); err != nil {
 		return fmt.Errorf("loading state failed: %w", err)
@@ -247,14 +263,14 @@ func (f *fetcher) run(ctx context.Context) error {
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
 
-	f.stats.WriteAccess(func(s *stats) {
+	f.stats.WriteAccess(func(s *stats.Run) {
 		s.Duration = time.Since(s.StartTime)
 		s.TotalFeeds = len(f.feeds)
 		if s.SuccessFeeds > 0 {
 			s.AvgFetchTime = s.TotalFetchTime / time.Duration(s.SuccessFeeds)
 		}
-		s.FetchLatencyMS = quantilesMS(s.fetchLatencySamples)
-		s.SendLatencyMS = quantilesMS(s.sendLatencySamples)
+		s.FetchLatencyMS = stats.QuantilesMS(s.FetchLatencySamples)
+		s.SendLatencyMS = stats.QuantilesMS(s.SendLatencySamples)
 
 		stateSnapshot := f.state.Snapshot()
 		for _, feedState := range stateSnapshot {
@@ -264,7 +280,7 @@ func (f *fetcher) run(ctx context.Context) error {
 			s.StateBytesWritten = len(stateBytes)
 		}
 
-		s.TopSlowestFeeds = topFeedStats(s.FeedStatsByURL, func(a *feedStats, b *feedStats) int {
+		s.TopSlowestFeeds = stats.TopFeedStats(s.FeedStatsByURL, func(a *stats.FeedStats, b *stats.FeedStats) int {
 			if a.FetchDuration == b.FetchDuration {
 				return strings.Compare(a.URL, b.URL)
 			}
@@ -273,7 +289,7 @@ func (f *fetcher) run(ctx context.Context) error {
 			}
 			return 1
 		})
-		s.TopErrorFeeds = topFeedStats(s.FeedStatsByURL, func(a *feedStats, b *feedStats) int {
+		s.TopErrorFeeds = stats.TopFeedStats(s.FeedStatsByURL, func(a *stats.FeedStats, b *stats.FeedStats) int {
 			if a.Failures == b.Failures {
 				return strings.Compare(a.URL, b.URL)
 			}
@@ -282,7 +298,7 @@ func (f *fetcher) run(ctx context.Context) error {
 			}
 			return 1
 		})
-		s.TopNewItemFeeds = topFeedStats(s.FeedStatsByURL, func(a *feedStats, b *feedStats) int {
+		s.TopNewItemFeeds = stats.TopFeedStats(s.FeedStatsByURL, func(a *stats.FeedStats, b *stats.FeedStats) int {
 			if a.ItemsEnqueued == b.ItemsEnqueued {
 				return strings.Compare(a.URL, b.URL)
 			}
@@ -304,8 +320,8 @@ func (f *fetcher) run(ctx context.Context) error {
 		return nil
 	}
 
-	f.stats.ReadAccess(func(s *stats) {
-		if err := f.putStats(s); err != nil {
+	f.stats.ReadAccess(func(s *stats.Run) {
+		if err := f.statsStore.SaveRun(ctx, s); err != nil {
 			f.slog.Warn("failed to upload stats", "error", err)
 		}
 	})
@@ -330,7 +346,7 @@ func (f *fetcher) runFeedFetch(ctx context.Context, fd *feed, updates chan *upda
 	}
 
 	if feedRetried {
-		f.stats.WriteAccess(func(s *stats) {
+		f.stats.WriteAccess(func(s *stats.Run) {
 			s.FeedsRetriedCount += 1
 		})
 	}
@@ -351,10 +367,10 @@ func (f *fetcher) retryFeedFetch(ctx context.Context, fd *feed, retries int, ret
 		return false
 	}
 
-	f.stats.WriteAccess(func(s *stats) {
+	f.stats.WriteAccess(func(s *stats.Run) {
 		s.FetchRetriesTotal += 1
 		s.BackoffSleepTotal += retryIn
-		s.feedStats(fd.url).Retries += 1
+		s.FeedStats(fd.url).Retries += 1
 		s.SpecialRateLimitRetries += 1
 	})
 	f.slog.Warn("retrying feed",

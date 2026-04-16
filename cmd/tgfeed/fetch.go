@@ -23,6 +23,7 @@ import (
 	"go.astrophena.name/tools/cmd/tgfeed/internal/retry"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/sender"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/state"
+	"go.astrophena.name/tools/cmd/tgfeed/internal/stats"
 
 	"github.com/microcosm-cc/bluemonday"
 	"github.com/mmcdole/gofeed"
@@ -81,6 +82,17 @@ type feedItemDecision struct {
 	selection feedItemSelection
 	markSeen  string
 	reason    feedItemSkipReason
+}
+
+func toDecisionReason(d feedItemDecision) stats.FeedItemDecisionReason {
+	switch d.reason {
+	case feedItemSkipReasonOld:
+		return stats.FeedItemSkipReasonOld
+	case feedItemSkipReasonSeen:
+		return stats.FeedItemSkipReasonSeen
+	default:
+		return stats.FeedItemSkipReasonUnknown
+	}
 }
 
 // enqueueAction determines how an accepted item is emitted to the updates
@@ -190,7 +202,7 @@ func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *update) (re
 
 	parsedFeed, err := f.fp.Parse(res.Body)
 	if err != nil {
-		f.stats.WriteAccess(func(s *stats) {
+		f.stats.WriteAccess(func(s *stats.Run) {
 			s.ParseErrorCount += 1
 		})
 		f.handleFetchFailure(ctx, fd.url, err)
@@ -252,10 +264,10 @@ func (f *fetcher) handleFeedStatus(req *http.Request, res *http.Response, fd *fe
 	// Ignore unmodified feeds and report an error otherwise.
 	if res.StatusCode == http.StatusNotModified {
 		f.slog.Debug("unmodified feed", "feed", fd.url)
-		f.stats.WriteAccess(func(s *stats) {
+		f.stats.WriteAccess(func(s *stats.Run) {
 			s.NotModifiedFeeds += 1
 			s.HTTP3xxCount += 1
-			s.feedStats(fd.url).LastStatusClass = 3
+			s.FeedStats(fd.url).LastStatusClass = 3
 		})
 		_ = f.withFeedState(req.Context(), fd.url, func(state *state.Feed, _ bool) bool {
 			state.MarkNotModified(time.Now())
@@ -267,15 +279,15 @@ func (f *fetcher) handleFeedStatus(req *http.Request, res *http.Response, fd *fe
 		}, nil
 	}
 	if res.StatusCode == http.StatusOK {
-		f.stats.WriteAccess(func(s *stats) {
+		f.stats.WriteAccess(func(s *stats.Run) {
 			s.HTTP2xxCount += 1
-			s.feedStats(fd.url).LastStatusClass = 2
+			s.FeedStats(fd.url).LastStatusClass = 2
 		})
 		return feedStatusResult{class: 2}, nil
 	}
 
-	f.stats.WriteAccess(func(s *stats) {
-		s.addHTTPStatusClass(fd.url, res.StatusCode)
+	f.stats.WriteAccess(func(s *stats.Run) {
+		s.AddHTTPStatusClass(fd.url, res.StatusCode)
 	})
 
 	body, hasBody := readFeedErrorBody(res.Body)
@@ -361,7 +373,7 @@ func (f *fetcher) enqueueFeedItems(fd *feed, state *state.Feed, exists bool, ite
 		justEnabled: f.prepareSeenItemsState(fd, state),
 	}
 
-	f.stats.WriteAccess(func(s *stats) {
+	f.stats.WriteAccess(func(s *stats.Run) {
 		s.ItemsSeenTotal += len(items)
 	})
 
@@ -373,8 +385,8 @@ func (f *fetcher) enqueueFeedItems(fd *feed, state *state.Feed, exists bool, ite
 			state.MarkSeen(decision.markSeen, time.Now())
 		}
 		if decision.selection != feedItemSelectionProcess {
-			f.stats.WriteAccess(func(s *stats) {
-				s.recordItemDecision(decision)
+			f.stats.WriteAccess(func(s *stats.Run) {
+				s.RecordItemDecision(toDecisionReason(decision))
 			})
 			continue
 		}
@@ -386,20 +398,20 @@ func (f *fetcher) enqueueFeedItems(fd *feed, state *state.Feed, exists bool, ite
 			continue
 		case enqueueActionDigest:
 			validItems = append(validItems, feedItem)
-			f.stats.WriteAccess(func(s *stats) {
+			f.stats.WriteAccess(func(s *stats.Run) {
 				s.ItemsKeptTotal += 1
 				s.ItemsEnqueuedTotal += 1
-				s.feedStats(fd.url).ItemsEnqueued += 1
+				s.FeedStats(fd.url).ItemsEnqueued += 1
 			})
 		case enqueueActionSingle:
 			updates <- &update{
 				feed:  fd,
 				items: []*gofeed.Item{feedItem},
 			}
-			f.stats.WriteAccess(func(s *stats) {
+			f.stats.WriteAccess(func(s *stats.Run) {
 				s.ItemsKeptTotal += 1
 				s.ItemsEnqueuedTotal += 1
-				s.feedStats(fd.url).ItemsEnqueued += 1
+				s.FeedStats(fd.url).ItemsEnqueued += 1
 			})
 		}
 	}
@@ -408,7 +420,7 @@ func (f *fetcher) enqueueFeedItems(fd *feed, state *state.Feed, exists bool, ite
 
 func (f *fetcher) prepareSeenItemsState(fd *feed, state *state.Feed) (justEnabled bool) {
 	justEnabled, pruned := state.PrepareSeenItems(time.Now(), seenItemsCleanupPeriod)
-	f.stats.WriteAccess(func(s *stats) {
+	f.stats.WriteAccess(func(s *stats.Run) {
 		s.SeenItemsPrunedTotal += pruned
 	})
 	if !fd.alwaysSendNewItems {
@@ -539,13 +551,13 @@ func publishDigestUpdate(fd *feed, validItems []*gofeed.Item, updates chan *upda
 }
 
 func (f *fetcher) markFetchSuccess(url string, parsedItems int, startTime time.Time) {
-	f.stats.WriteAccess(func(s *stats) {
+	f.stats.WriteAccess(func(s *stats.Run) {
 		elapsed := time.Since(startTime)
 		s.TotalItemsParsed += parsedItems
 		s.SuccessFeeds += 1
 		s.TotalFetchTime += elapsed
-		s.fetchLatencySamples = append(s.fetchLatencySamples, elapsed)
-		s.feedStats(url).FetchDuration += elapsed
+		s.FetchLatencySamples = append(s.FetchLatencySamples, elapsed)
+		s.FeedStats(url).FetchDuration += elapsed
 	})
 }
 
@@ -562,7 +574,7 @@ func (f *fetcher) sendUpdate(ctx context.Context, u *update) {
 		return
 	}
 
-	f.stats.WriteAccess(func(s *stats) {
+	f.stats.WriteAccess(func(s *stats.Run) {
 		s.MessagesAttempted += 1
 	})
 
@@ -579,17 +591,17 @@ func (f *fetcher) sendUpdate(ctx context.Context, u *update) {
 		Actions: rendered.Actions,
 		Media:   rendered.Media,
 	}); err != nil {
-		f.stats.WriteAccess(func(s *stats) {
+		f.stats.WriteAccess(func(s *stats.Run) {
 			s.MessagesFailed += 1
-			s.sendLatencySamples = append(s.sendLatencySamples, time.Since(start))
+			s.SendLatencySamples = append(s.SendLatencySamples, time.Since(start))
 		})
 		f.slog.Warn("failed to send message", "chat_id", f.chatID, "error", err)
 		return
 	}
 
-	f.stats.WriteAccess(func(s *stats) {
+	f.stats.WriteAccess(func(s *stats.Run) {
 		s.MessagesSent += 1
-		s.sendLatencySamples = append(s.sendLatencySamples, time.Since(start))
+		s.SendLatencySamples = append(s.SendLatencySamples, time.Since(start))
 	})
 }
 
@@ -648,10 +660,10 @@ func (f *fetcher) errNotify(ctx context.Context, err error) error {
 // Failure handling.
 
 func (f *fetcher) handleFetchFailure(ctx context.Context, url string, err error) {
-	f.stats.WriteAccess(func(s *stats) {
+	f.stats.WriteAccess(func(s *stats.Run) {
 		s.FailedFeeds += 1
-		s.classifyFailure(url, err)
-		s.feedStats(url).Failures += 1
+		s.ClassifyFailure(url, err)
+		s.FeedStats(url).Failures += 1
 	})
 
 	var (

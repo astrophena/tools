@@ -20,6 +20,7 @@ import (
 
 	"go.astrophena.name/base/testutil"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/state"
+	"go.astrophena.name/tools/cmd/tgfeed/internal/stats"
 	"go.astrophena.name/tools/internal/filelock"
 )
 
@@ -41,6 +42,18 @@ func TestAdmin(t *testing.T) {
 				t.Fatalf("initializing state directory: %v", err)
 			}
 		}
+		statsStore := stats.OpenMemory(t.Name())
+		t.Cleanup(func() {
+			if err := statsStore.Close(); err != nil {
+				t.Fatalf("closing stats store: %v", err)
+			}
+		})
+		if err := statsStore.Bootstrap(t.Context()); err != nil {
+			t.Fatalf("bootstrapping stats store: %v", err)
+		}
+		if _, err := statsStore.MigrateJSONDir(t.Context(), filepath.Join(stateDir, "stats")); err != nil {
+			t.Fatalf("migrating legacy stats: %v", err)
+		}
 
 		return Config{
 			StateDir: stateDir,
@@ -54,6 +67,7 @@ func TestAdmin(t *testing.T) {
 			IsRunLocked: func() bool {
 				return filelock.IsLocked(filepath.Join(stateDir, ".run.lock"))
 			},
+			StatsStore: statsStore,
 		}
 	}
 
