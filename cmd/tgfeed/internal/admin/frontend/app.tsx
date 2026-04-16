@@ -91,12 +91,46 @@ function App() {
   const [autoRefreshStats, setAutoRefreshStats] = useState(false);
   const [banner, setBanner] = useState("");
 
+  const mergeRunDetail = useCallback((run: StatsRun) => {
+    if (typeof run.started_at_unix !== "number") {
+      return;
+    }
+    setStats((prevStats) =>
+      prevStats.map((item) =>
+        item.started_at_unix === run.started_at_unix ? { ...item, ...run } : item
+      )
+    );
+  }, []);
+
+  const loadRunDetail = useCallback(
+    async (startedAtUnix: number) => {
+      const response = await fetch(
+        `/api/stats/run?started_at_unix=${encodeURIComponent(String(startedAtUnix))}`,
+        {
+          method: "GET",
+          headers: { Accept: "application/json" },
+        },
+      );
+      if (!response.ok) {
+        throw await toAPIError(response);
+      }
+      const payload: unknown = await response.json();
+      if (payload && typeof payload === "object") {
+        mergeRunDetail({
+          ...(payload as StatsRun),
+          started_at_unix: startedAtUnix,
+        });
+      }
+    },
+    [mergeRunDetail],
+  );
+
   /** Loads persisted run stats used by dashboard charts and indicators. */
   const loadStats = useCallback(async () => {
     setStatsLoading(true);
     setStatsError("");
     const loadPromise = (async () => {
-      const response = await fetch("/api/stats", {
+      const response = await fetch("/api/stats?include_details=false&limit=100", {
         method: "GET",
         headers: { Accept: "application/json" },
       });
@@ -111,6 +145,7 @@ function App() {
       const payload: unknown = await response.json();
       if (Array.isArray(payload)) {
         const newStats = payload as StatsRun[];
+        const latestStartedAt = newStats[0]?.started_at_unix;
         setStats((prevStats) => {
           if (
             prevStats.length > 0 &&
@@ -121,6 +156,9 @@ function App() {
           }
           return newStats;
         });
+        if (typeof latestStartedAt === "number") {
+          await loadRunDetail(latestStartedAt);
+        }
       } else {
         setStats([]);
       }
@@ -137,7 +175,7 @@ function App() {
     );
 
     await loadPromise.catch(() => {});
-  }, []);
+  }, [loadRunDetail]);
 
   /** Refreshes all editable resources and stats in one action. */
   async function refreshAll(): Promise<void> {
@@ -173,6 +211,21 @@ function App() {
   useEffect(() => {
     setSelectedStatsIndex(0);
   }, [stats]);
+
+  useEffect(() => {
+    const selected = stats[selectedStatsIndex];
+    const startedAtUnix = selected?.started_at_unix;
+    if (typeof startedAtUnix !== "number") {
+      return;
+    }
+    if (
+      typeof selected?.http_2xx_count === "number" ||
+      Array.isArray(selected?.top_slowest_feeds)
+    ) {
+      return;
+    }
+    void loadRunDetail(startedAtUnix).catch(() => {});
+  }, [loadRunDetail, selectedStatsIndex, stats]);
 
   useEffect(() => {
     if (!autoRefreshStats || route !== "stats") {

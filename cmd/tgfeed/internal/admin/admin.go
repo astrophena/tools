@@ -10,6 +10,7 @@ package admin
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"embed"
 	"encoding/json"
 	"errors"
@@ -18,6 +19,7 @@ import (
 	"io/fs"
 	"net/http"
 	"slices"
+	"strconv"
 	"text/template"
 
 	"go.astrophena.name/base/web"
@@ -114,12 +116,21 @@ func Handler(cfg Config) (*http.ServeMux, error) {
 			web.RespondJSONError(w, r, fmt.Errorf("%w: method not allowed", web.ErrMethodNotAllowed))
 		}
 	})
+	mux.HandleFunc("/api/stats/run", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			api.handleGetStatsRun(w, r)
+		default:
+			web.RespondJSONError(w, r, fmt.Errorf("%w: method not allowed", web.ErrMethodNotAllowed))
+		}
+	})
 
 	dbg := web.Debugger(mux)
 	dbg.Link("/api/config", "Config")
 	dbg.Link("/api/state", "State")
 	dbg.Link("/api/error-template", "Error template")
 	dbg.Link("/api/stats", "Stats")
+	dbg.Link("/api/stats/run", "Stats run")
 
 	return mux, nil
 }
@@ -364,7 +375,51 @@ func (a *api) handleGetStats(w http.ResponseWriter, r *http.Request) {
 		web.RespondJSONError(w, r, errors.New("stats store is not configured"))
 		return
 	}
-	response, err := a.statsStore.ListRuns(r.Context(), 100)
+
+	limit, err := queryInt(r, "limit", 100)
+	if err != nil {
+		web.RespondJSONError(w, r, err)
+		return
+	}
+	beforeStartedAt, err := queryInt64Optional(r, "before_started_at")
+	if err != nil {
+		web.RespondJSONError(w, r, err)
+		return
+	}
+	includeDetails, err := queryBool(r, "include_details", true)
+	if err != nil {
+		web.RespondJSONError(w, r, err)
+		return
+	}
+
+	if includeDetails {
+		var response []json.RawMessage
+		if beforeStartedAt == nil {
+			response, err = a.statsStore.ListRuns(r.Context(), limit)
+		} else {
+			response, err = a.statsStore.ListRunsBefore(r.Context(), limit, *beforeStartedAt)
+		}
+		if err != nil {
+			if errors.Is(err, fs.ErrNotExist) {
+				http.Error(w, "No stats available.", http.StatusNotFound)
+				return
+			}
+			web.RespondJSONError(w, r, fmt.Errorf("reading stats from SQLite: %w", err))
+			return
+		}
+		if len(response) == 0 {
+			http.Error(w, "No stats available.", http.StatusNotFound)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			web.RespondJSONError(w, r, fmt.Errorf("encoding stats response: %w", err))
+		}
+		return
+	}
+
+	response, err := a.statsStore.ListRunSummaries(r.Context(), limit, beforeStartedAt)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
 			http.Error(w, "No stats available.", http.StatusNotFound)
@@ -382,4 +437,83 @@ func (a *api) handleGetStats(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		web.RespondJSONError(w, r, fmt.Errorf("encoding stats response: %w", err))
 	}
+}
+
+func (a *api) handleGetStatsRun(w http.ResponseWriter, r *http.Request) {
+	if a.statsStore == nil {
+		web.RespondJSONError(w, r, errors.New("stats store is not configured"))
+		return
+	}
+
+	startedAt, err := queryInt64Required(r, "started_at_unix")
+	if err != nil {
+		web.RespondJSONError(w, r, err)
+		return
+	}
+
+	response, err := a.statsStore.GetRunByStartedAt(r.Context(), startedAt)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) || errors.Is(err, fs.ErrNotExist) {
+			http.Error(w, "No stats available.", http.StatusNotFound)
+			return
+		}
+		web.RespondJSONError(w, r, fmt.Errorf("reading stats run from SQLite: %w", err))
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	if _, err := w.Write(response); err != nil {
+		web.RespondJSONError(w, r, fmt.Errorf("writing stats run response: %w", err))
+	}
+}
+
+func queryInt(r *http.Request, key string, fallback int) (int, error) {
+	value := r.URL.Query().Get(key)
+	if value == "" {
+		return fallback, nil
+	}
+	result, err := strconv.Atoi(value)
+	if err != nil {
+		return 0, fmt.Errorf("%w: invalid %q query parameter", web.ErrBadRequest, key)
+	}
+	if result <= 0 {
+		return 0, fmt.Errorf("%w: %q query parameter must be greater than zero", web.ErrBadRequest, key)
+	}
+	return result, nil
+}
+
+func queryInt64Required(r *http.Request, key string) (int64, error) {
+	value := r.URL.Query().Get(key)
+	if value == "" {
+		return 0, fmt.Errorf("%w: missing %q query parameter", web.ErrBadRequest, key)
+	}
+	result, err := strconv.ParseInt(value, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("%w: invalid %q query parameter", web.ErrBadRequest, key)
+	}
+	return result, nil
+}
+
+func queryInt64Optional(r *http.Request, key string) (*int64, error) {
+	value := r.URL.Query().Get(key)
+	if value == "" {
+		return nil, nil
+	}
+	result, err := strconv.ParseInt(value, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("%w: invalid %q query parameter", web.ErrBadRequest, key)
+	}
+	return &result, nil
+}
+
+func queryBool(r *http.Request, key string, fallback bool) (bool, error) {
+	value := r.URL.Query().Get(key)
+	if value == "" {
+		return fallback, nil
+	}
+	result, err := strconv.ParseBool(value)
+	if err != nil {
+		return false, fmt.Errorf("%w: invalid %q query parameter", web.ErrBadRequest, key)
+	}
+	return result, nil
 }

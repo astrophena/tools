@@ -19,11 +19,13 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	_ "github.com/tailscale/sqlite"
 )
 
 const dbFileName = "stats.sqlite3"
+const defaultListLimit = 100
 
 const currentSchemaVersion = 2
 
@@ -136,19 +138,31 @@ func (s *Store) SaveRun(ctx context.Context, run *Run) error {
 
 // ListRuns returns latest run JSON payloads.
 func (s *Store) ListRuns(ctx context.Context, limit int) ([]json.RawMessage, error) {
-	if limit <= 0 {
-		limit = 100
-	}
+	return s.listRuns(ctx, limit, nil)
+}
+
+// ListRunsBefore returns latest run JSON payloads older than beforeStartedAt.
+func (s *Store) ListRunsBefore(ctx context.Context, limit int, beforeStartedAt int64) ([]json.RawMessage, error) {
+	return s.listRuns(ctx, limit, &beforeStartedAt)
+}
+
+func (s *Store) listRuns(ctx context.Context, limit int, beforeStartedAt *int64) ([]json.RawMessage, error) {
 	db, err := s.open(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	rows, err := db.QueryContext(
-		ctx,
-		`SELECT json(payload_json) FROM runs ORDER BY started_at_unix DESC LIMIT ?;`,
-		limit,
-	)
+	limit = normalizeLimit(limit)
+	query := `SELECT json(payload_json) FROM runs`
+	args := []any{}
+	if beforeStartedAt != nil {
+		query += ` WHERE started_at_unix < ?`
+		args = append(args, *beforeStartedAt)
+	}
+	query += ` ORDER BY started_at_unix DESC LIMIT ?;`
+	args = append(args, limit)
+
+	rows, err := db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -166,6 +180,106 @@ func (s *Store) ListRuns(ctx context.Context, limit int) ([]json.RawMessage, err
 		return nil, err
 	}
 	return res, nil
+}
+
+// ListRunSummaries returns lightweight run rows for dashboard overview panels.
+func (s *Store) ListRunSummaries(ctx context.Context, limit int, beforeStartedAt *int64) ([]RunSummary, error) {
+	db, err := s.open(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	limit = normalizeLimit(limit)
+	query := `SELECT
+	started_at_unix,
+	duration_ms,
+	total_feeds,
+	success_feeds,
+	failed_feeds,
+	COALESCE(CAST(json_extract(payload_json, '$.not_modified_feeds') AS INTEGER), 0) AS not_modified_feeds,
+	COALESCE(CAST(json_extract(payload_json, '$.messages_attempted') AS INTEGER), 0) AS messages_attempted,
+	COALESCE(CAST(json_extract(payload_json, '$.messages_sent') AS INTEGER), 0) AS messages_sent,
+	COALESCE(CAST(json_extract(payload_json, '$.messages_failed') AS INTEGER), 0) AS messages_failed,
+	COALESCE(CAST(json_extract(payload_json, '$.fetch_latency_ms.p50') AS INTEGER), 0) AS fetch_latency_p50,
+	COALESCE(CAST(json_extract(payload_json, '$.fetch_latency_ms.p90') AS INTEGER), 0) AS fetch_latency_p90,
+	COALESCE(CAST(json_extract(payload_json, '$.fetch_latency_ms.p99') AS INTEGER), 0) AS fetch_latency_p99,
+	COALESCE(CAST(json_extract(payload_json, '$.fetch_latency_ms.max') AS INTEGER), 0) AS fetch_latency_max,
+	COALESCE(CAST(json_extract(payload_json, '$.memory_usage') AS INTEGER), 0) AS memory_usage
+FROM runs`
+	args := []any{}
+	if beforeStartedAt != nil {
+		query += ` WHERE started_at_unix < ?`
+		args = append(args, *beforeStartedAt)
+	}
+	query += ` ORDER BY started_at_unix DESC LIMIT ?;`
+	args = append(args, limit)
+
+	rows, err := db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var res []RunSummary
+	for rows.Next() {
+		var (
+			item       RunSummary
+			durationMS int64
+			memory     int64
+		)
+		if err := rows.Scan(
+			&item.StartedAtUnix,
+			&durationMS,
+			&item.TotalFeeds,
+			&item.SuccessFeeds,
+			&item.FailedFeeds,
+			&item.NotModifiedFeeds,
+			&item.MessagesAttempted,
+			&item.MessagesSent,
+			&item.MessagesFailed,
+			&item.FetchLatencyMS.P50,
+			&item.FetchLatencyMS.P90,
+			&item.FetchLatencyMS.P99,
+			&item.FetchLatencyMS.Max,
+			&memory,
+		); err != nil {
+			return nil, err
+		}
+		item.StartTime = time.Unix(item.StartedAtUnix, 0).UTC()
+		item.Duration = time.Duration(durationMS) * time.Millisecond
+		item.MemoryUsage = uint64(max(memory, 0))
+		res = append(res, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
+// GetRunByStartedAt returns a full JSON payload for a run with the given start time.
+func (s *Store) GetRunByStartedAt(ctx context.Context, startedAtUnix int64) (json.RawMessage, error) {
+	db, err := s.open(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var payload string
+	err = db.QueryRowContext(
+		ctx,
+		`SELECT json(payload_json) FROM runs WHERE started_at_unix = ? LIMIT 1;`,
+		startedAtUnix,
+	).Scan(&payload)
+	if err != nil {
+		return nil, err
+	}
+	return json.RawMessage(payload), nil
+}
+
+func normalizeLimit(limit int) int {
+	if limit <= 0 {
+		return defaultListLimit
+	}
+	return limit
 }
 
 func (s *Store) open(ctx context.Context) (*sql.DB, error) {
