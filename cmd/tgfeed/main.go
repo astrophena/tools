@@ -197,11 +197,6 @@ func (f *fetcher) run(ctx context.Context) error {
 	if err := f.statsStore.Bootstrap(ctx); err != nil {
 		return fmt.Errorf("bootstrapping stats database failed: %w", err)
 	}
-	if migrated, err := f.statsStore.MigrateJSONDir(ctx, filepath.Join(f.stateDir, "stats")); err != nil {
-		return fmt.Errorf("migrating legacy stats failed: %w", err)
-	} else if migrated > 0 {
-		f.slog.Info("migrated legacy stats into SQLite", "count", migrated)
-	}
 
 	if err := f.loadState(ctx); err != nil {
 		return fmt.Errorf("loading state failed: %w", err)
