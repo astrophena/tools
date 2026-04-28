@@ -6,7 +6,7 @@ require (
 	crawshaw.dev/jsonfile v0.0.0-20240206193014-699d1dad804e
 	github.com/arl/statsviz v0.8.0
 	github.com/dhowden/tag v0.0.0-20240417053706-3d75831295e8
-	github.com/landlock-lsm/go-landlock v0.7.0
+	github.com/landlock-lsm/go-landlock v0.8.0
 	github.com/microcosm-cc/bluemonday v1.0.27
 	github.com/mmcdole/gofeed v1.3.0
 	github.com/tailscale/sqlite v0.0.0-20260306200437-15a02b90c606
