@@ -4,7 +4,8 @@ Description=tgfeed Admin Socket
 [Socket]
 ListenStream=/run/tgfeed/admin-socket
 Service=tgfeed-admin.service
-SocketMode=0666
+SocketGroup=service-sockets
+SocketMode=0660
 
 [Install]
 WantedBy=sockets.target
