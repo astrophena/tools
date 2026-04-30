@@ -4,7 +4,8 @@ Description=starlet Socket
 [Socket]
 ListenStream=/run/starlet/socket
 Service=starlet.service
-SocketMode=0666
+SocketGroup=service-sockets
+SocketMode=0660
 
 [Install]
 WantedBy=sockets.target
