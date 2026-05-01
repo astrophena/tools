@@ -16,6 +16,7 @@ import (
 
 	"go.astrophena.name/base/syncx"
 	"go.astrophena.name/base/web"
+	"go.astrophena.name/tools/internal/store"
 
 	"github.com/arl/statsviz"
 	"rsc.io/markdown"
@@ -93,6 +94,31 @@ func (e *engine) initRoutes() {
 	dbg.KVFunc("Loaded Starlark modules", func() any {
 		return fmt.Sprintf("%+v", e.bot.Visited())
 	})
+	if s, ok := e.store.(*store.JSONFile); ok {
+		dbg.KVFunc("KV cache store", func() any {
+			stats := s.Stats()
+			return fmt.Sprintf(
+				"path=%s\nmetrics=%s\nttl=%s\nsession_gets=%d\nsession_sets=%d\nsession_rewrites=%d\nsession_rewrite_bytes=%s (%d)\ntotal_gets=%d\ntotal_sets=%d\ntotal_rewrites=%d\ntotal_rewrite_bytes=%s (%d)\ncurrent_size=%s (%d)\nexpired=%d\ncleanup_deletes=%d",
+				stats.Path,
+				stats.MetricsPath,
+				stats.TTL,
+				stats.Gets,
+				stats.Sets,
+				stats.Rewrites,
+				humanBytes(stats.RewriteBytes),
+				stats.RewriteBytes,
+				stats.TotalGets,
+				stats.TotalSets,
+				stats.TotalRewrites,
+				humanBytes(stats.TotalRewriteBytes),
+				stats.TotalRewriteBytes,
+				humanBytes(uint64(stats.FileSizeBytes)),
+				stats.FileSizeBytes,
+				stats.TotalExpired,
+				stats.TotalCleanupDeletes,
+			)
+		})
+	}
 	// Runtime metrics.
 	statsviz.Register(e.adminMux)
 	e.cspMux.Handle("/debug/statsviz/", statsvizCSP)
@@ -158,4 +184,17 @@ func (hi headerItem) ToHTML() template.HTML {
 	sb.WriteString(html.EscapeString(hi.name))
 	sb.WriteString("</a>")
 	return template.HTML(sb.String())
+}
+
+func humanBytes(n uint64) string {
+	const unit = 1024
+	if n < unit {
+		return fmt.Sprintf("%d B", n)
+	}
+	div, exp := uint64(unit), 0
+	for q := n / unit; q >= unit; q /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %ciB", float64(n)/float64(div), "KMGTPE"[exp])
 }
