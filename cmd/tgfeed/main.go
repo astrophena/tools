@@ -235,12 +235,8 @@ func (f *fetcher) run(ctx context.Context) error {
 			if nErr := f.errNotify(ctx, err); nErr != nil {
 				f.slog.Warn("failed to send pending error notification", "feed", feed.url, "error", nErr)
 			} else {
-				if updateErr := f.updateFeedState(ctx, feed.url, func(state *state.Feed, _ bool) bool {
-					state.DisabledNotifyPending = false
-					return true
-				}); updateErr != nil {
-					f.slog.Warn("failed to persist feed failure state (DisabledNotifyPending)", "feed", feed.url, "error", updateErr)
-				}
+				fdState, _ := f.feedState(feed.url)
+				fdState.DisabledNotifyPending = false
 			}
 		}
 	}
@@ -256,6 +252,8 @@ func (f *fetcher) run(ctx context.Context) error {
 	fetchWg.Wait()
 	close(updates)
 	baseWg.Wait()
+
+	f.cleanState()
 
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
@@ -307,14 +305,14 @@ func (f *fetcher) run(ctx context.Context) error {
 		s.MemoryUsage = m.Alloc
 	})
 
-	if err := f.cleanState(ctx); err != nil {
-		return err
-	}
-
 	f.slog.Debug("fetch finished", "fetched_count", fetchedFeeds.Load(), "all_count", len(f.feeds))
 
 	if f.dry {
 		return nil
+	}
+
+	if err := f.saveFeedState(ctx); err != nil {
+		return fmt.Errorf("saving state failed: %w", err)
 	}
 
 	f.stats.ReadAccess(func(s *stats.Run) {
@@ -379,12 +377,12 @@ func (f *fetcher) retryFeedFetch(ctx context.Context, fd *feed, retries int, ret
 	return ctxsleep.Sleep(ctx, retryIn)
 }
 
-func (f *fetcher) cleanState(ctx context.Context) error {
+func (f *fetcher) cleanState() {
 	keep := make(map[string]struct{}, len(f.feeds))
 	for _, fd := range f.feeds {
 		keep[fd.url] = struct{}{}
 	}
-	return f.pruneFeedState(ctx, keep)
+	f.pruneFeedState(keep)
 }
 
 // User-facing commands.
@@ -515,10 +513,9 @@ func (f *fetcher) reenable(ctx context.Context, url string) error {
 		return fmt.Errorf("%q: %w", url, errNoFeed)
 	}
 
-	return f.updateFeedState(ctx, url, func(fdState *state.Feed, _ bool) bool {
-		fdState.Reenable()
-		return true
-	})
+	fdState, _ := f.feedState(url)
+	fdState.Reenable()
+	return f.saveFeedState(ctx)
 }
 
 // Low-level helpers.

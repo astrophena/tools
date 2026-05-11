@@ -181,8 +181,10 @@ func (f *fetcher) loadConfig(ctx context.Context, config string) error {
 	return nil
 }
 
-func (f *fetcher) updateFeedState(ctx context.Context, url string, fn func(*state.Feed, bool) bool) error {
+func (f *fetcher) feedState(url string) (*state.Feed, bool) {
 	f.stateMu.Lock()
+	defer f.stateMu.Unlock()
+
 	if f.state == nil {
 		f.state = map[string]*state.Feed{}
 	}
@@ -191,17 +193,7 @@ func (f *fetcher) updateFeedState(ctx context.Context, url string, fn func(*stat
 		fd = state.NewFeed(time.Now())
 		f.state[url] = fd
 	}
-
-	changed := fn(fd, exists)
-	if !changed {
-		f.stateMu.Unlock()
-		return nil
-	}
-
-	snapshot := cloneFeedStateMap(f.state)
-	f.stateMu.Unlock()
-
-	return f.store.SaveState(ctx, snapshot)
+	return fd, exists
 }
 
 func (f *fetcher) getFeedState(url string) (*state.Feed, bool) {
@@ -221,6 +213,10 @@ func (f *fetcher) feedStateSnapshot() map[string]*state.Feed {
 	return cloneFeedStateMap(f.state)
 }
 
+func (f *fetcher) saveFeedState(ctx context.Context) error {
+	return f.store.SaveState(ctx, f.feedStateSnapshot())
+}
+
 func cloneFeedStateMap(input map[string]*state.Feed) map[string]*state.Feed {
 	out := make(map[string]*state.Feed, len(input))
 	for k, v := range input {
@@ -229,25 +225,16 @@ func cloneFeedStateMap(input map[string]*state.Feed) map[string]*state.Feed {
 	return out
 }
 
-func (f *fetcher) pruneFeedState(ctx context.Context, keep map[string]struct{}) error {
+func (f *fetcher) pruneFeedState(keep map[string]struct{}) {
 	f.stateMu.Lock()
-	changed := false
+	defer f.stateMu.Unlock()
+
 	for url := range f.state {
 		if _, ok := keep[url]; ok {
 			continue
 		}
 		delete(f.state, url)
-		changed = true
 	}
-	if !changed {
-		f.stateMu.Unlock()
-		return nil
-	}
-
-	snapshot := cloneFeedStateMap(f.state)
-	f.stateMu.Unlock()
-
-	return f.store.SaveState(ctx, snapshot)
 }
 
 // Run locking.

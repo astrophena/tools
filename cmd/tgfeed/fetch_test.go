@@ -637,7 +637,7 @@ func TestHandleFeedStatus(t *testing.T) {
 				rec.WriteString(tc.body)
 			}
 
-			result, err := f.handleFeedStatus(req, rec.Result(), fd)
+			result, err := f.handleFeedStatus(req, rec.Result(), fd, &st)
 
 			if tc.wantErrContains != "" {
 				if err == nil {
