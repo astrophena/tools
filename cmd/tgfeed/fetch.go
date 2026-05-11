@@ -204,8 +204,8 @@ func (f *fetcher) logFeedResponse(fd *feed, res *http.Response) {
 }
 
 func (f *fetcher) handleFeedStatus(req *http.Request, res *http.Response, fd *feed) (feedStatusResult, error) {
-	// Ignore unmodified feeds and report an error otherwise.
-	if res.StatusCode == http.StatusNotModified {
+	switch res.StatusCode {
+	case http.StatusNotModified:
 		f.slog.Debug("unmodified feed", "feed", fd.url)
 		f.stats.WriteAccess(func(s *stats.Run) {
 			s.NotModifiedFeeds += 1
@@ -215,8 +215,7 @@ func (f *fetcher) handleFeedStatus(req *http.Request, res *http.Response, fd *fe
 		return feedStatusResult{
 			notModified: true,
 		}, nil
-	}
-	if res.StatusCode == http.StatusOK {
+	case http.StatusOK:
 		f.stats.WriteAccess(func(s *stats.Run) {
 			s.HTTP2xxCount += 1
 			s.FeedStats(fd.url).LastStatusClass = 2
@@ -240,8 +239,8 @@ func (f *fetcher) handleFeedStatus(req *http.Request, res *http.Response, fd *fe
 		}
 	}
 
-	// Handle standard HTTP Retry-After for Too Many Requests and Service Unavailable.
-	if res.StatusCode == http.StatusTooManyRequests || res.StatusCode == http.StatusServiceUnavailable {
+	switch res.StatusCode {
+	case http.StatusTooManyRequests, http.StatusServiceUnavailable:
 		if t, found := retry.RetryAfter(res.Header.Get("Retry-After")); found {
 			// Limit backoff to a reasonable maximum (context deadline or 5 minutes),
 			// as Retry-After could be hours or days which would block the goroutine.
@@ -256,7 +255,6 @@ func (f *fetcher) handleFeedStatus(req *http.Request, res *http.Response, fd *fe
 		}
 	}
 
-	// Retry on generic 5xx server errors without Retry-After header.
 	if res.StatusCode >= 500 && res.StatusCode < 600 {
 		return feedStatusResult{
 			retryIn: 5 * time.Second,
