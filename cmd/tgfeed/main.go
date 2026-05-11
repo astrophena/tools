@@ -33,6 +33,7 @@ import (
 	"go.astrophena.name/base/request"
 	"go.astrophena.name/base/syncx"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/admin"
+	"go.astrophena.name/tools/cmd/tgfeed/internal/ctxsleep"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/diff"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/sender"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/state"
@@ -374,7 +375,7 @@ func (f *fetcher) retryFeedFetch(ctx context.Context, fd *feed, retries int, ret
 		"retries", retries+1,
 		"retry_limit", retryLimit,
 	)
-	return sleep(ctx, retryIn)
+	return ctxsleep.Sleep(ctx, retryIn)
 }
 
 func (f *fetcher) cleanState(ctx context.Context) error {
@@ -549,19 +550,6 @@ func parseInt(s string) int64 {
 		return i
 	}
 	return 0
-}
-
-// sleep waits for the duration unless the context is canceled first.
-func sleep(ctx context.Context, d time.Duration) bool {
-	t := time.NewTimer(d)
-	defer t.Stop()
-
-	select {
-	case <-t.C:
-		return true
-	case <-ctx.Done():
-		return false
-	}
 }
 
 func shuffle[S any](s []S) []S {
