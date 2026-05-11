@@ -232,11 +232,11 @@ func TestWithFeedState(t *testing.T) {
 	t.Parallel()
 
 	f := &fetcher{store: state.NewStore(state.Options{StateDir: t.TempDir(), DefaultErrorTemplate: "x"})}
-	f.state = state.NewFeedSet(f.store, map[string]*state.Feed{})
+	f.state = map[string]*state.Feed{}
 
 	const feedURL = "https://example.com/feed.xml"
 	var state1 *state.Feed
-	if err := f.withFeedState(t.Context(), feedURL, func(state *state.Feed, exists bool) bool {
+	if err := f.updateFeedState(t.Context(), feedURL, func(state *state.Feed, exists bool) bool {
 		state1 = state
 		testutil.AssertEqual(t, exists, false)
 		testutil.AssertEqual(t, state1.LastUpdated.IsZero(), false)
@@ -245,7 +245,7 @@ func TestWithFeedState(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := f.withFeedState(t.Context(), feedURL, func(state2 *state.Feed, exists bool) bool {
+	if err := f.updateFeedState(t.Context(), feedURL, func(state2 *state.Feed, exists bool) bool {
 		testutil.AssertEqual(t, exists, true)
 		testutil.AssertEqual(t, state2, state1)
 		return false
