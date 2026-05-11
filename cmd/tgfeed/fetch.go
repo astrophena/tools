@@ -71,7 +71,6 @@ type feedStatusResult struct {
 	handled bool
 	retry   bool
 	retryIn time.Duration
-	class   int
 }
 
 // feedItemDecision captures both item processing and seen-state updates.
@@ -275,7 +274,6 @@ func (f *fetcher) handleFeedStatus(req *http.Request, res *http.Response, fd *fe
 		})
 		return feedStatusResult{
 			handled: true,
-			class:   3,
 		}, nil
 	}
 	if res.StatusCode == http.StatusOK {
@@ -283,7 +281,7 @@ func (f *fetcher) handleFeedStatus(req *http.Request, res *http.Response, fd *fe
 			s.HTTP2xxCount += 1
 			s.FeedStats(fd.url).LastStatusClass = 2
 		})
-		return feedStatusResult{class: 2}, nil
+		return feedStatusResult{}, nil
 	}
 
 	f.stats.WriteAccess(func(s *stats.Run) {
@@ -300,7 +298,6 @@ func (f *fetcher) handleFeedStatus(req *http.Request, res *http.Response, fd *fe
 				handled: true,
 				retry:   true,
 				retryIn: t,
-				class:   4,
 			}, nil
 		}
 	}
@@ -317,7 +314,6 @@ func (f *fetcher) handleFeedStatus(req *http.Request, res *http.Response, fd *fe
 					handled: true,
 					retry:   true,
 					retryIn: t,
-					class:   res.StatusCode / 100,
 				}, nil
 			}
 			f.slog.Warn("rate-limited (Retry-After), but wait time is too long", "feed", fd.url, "retry_in", t.String(), "max_retry_in", maxRetryAfter.String())
@@ -330,13 +326,11 @@ func (f *fetcher) handleFeedStatus(req *http.Request, res *http.Response, fd *fe
 			handled: true,
 			retry:   true,
 			retryIn: 5 * time.Second,
-			class:   res.StatusCode / 100,
 		}, nil
 	}
 
 	return feedStatusResult{
 		handled: true,
-		class:   res.StatusCode / 100,
 	}, fmt.Errorf("want 200, got %d: %s", res.StatusCode, body)
 }
 
@@ -583,7 +577,7 @@ func (f *fetcher) sendUpdate(ctx context.Context, u *update) {
 	if err := f.sender.Send(ctx, sender.Message{
 		Body: strings.TrimSpace(rendered.Body),
 		Target: sender.Target{
-			Topic: strconv.FormatInt(u.feed.messageThreadID, 10),
+			Thread: strconv.FormatInt(u.feed.messageThreadID, 10),
 		},
 		Options: sender.Options{
 			SuppressLinkPreview: rendered.DisablePreview,
@@ -649,7 +643,7 @@ func (f *fetcher) errNotify(ctx context.Context, err error) error {
 	return f.sender.Send(ctx, sender.Message{
 		Body: fmt.Sprintf(tmpl, err),
 		Target: sender.Target{
-			Topic: strconv.FormatInt(f.errorThreadID, 10),
+			Thread: strconv.FormatInt(f.errorThreadID, 10),
 		},
 		Options: sender.Options{
 			SuppressLinkPreview: true,

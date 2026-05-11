@@ -134,10 +134,10 @@ func (s *Sender) Send(ctx context.Context, msg sender.Message) error {
 		chatID = msg.Target.Channel
 	}
 	var threadID int64
-	if msg.Target.Topic != "" {
-		tid, err := strconv.ParseInt(msg.Target.Topic, 10, 64)
+	if msg.Target.Thread != "" {
+		tid, err := strconv.ParseInt(msg.Target.Thread, 10, 64)
 		if err != nil {
-			return fmt.Errorf("parsing target topic as thread id: %w", err)
+			return fmt.Errorf("parsing target thread as thread id: %w", err)
 		}
 		threadID = tid
 	}

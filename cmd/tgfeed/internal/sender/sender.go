@@ -30,7 +30,7 @@ type Media struct {
 // Target identifies where a message should be delivered.
 type Target struct {
 	Channel string
-	Topic   string
+	Thread  string
 }
 
 // Options controls optional message delivery behavior.

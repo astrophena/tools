@@ -151,11 +151,11 @@ func TestIsRateLimited(t *testing.T) {
 	}
 }
 
-func TestSendInvalidTopic(t *testing.T) {
+func TestSendInvalidThread(t *testing.T) {
 	t.Parallel()
 
 	s := New(Config{ChatID: "chat", Token: "token"})
-	err := s.Send(t.Context(), sender.Message{Body: "hello", Target: sender.Target{Topic: "not-a-number"}})
+	err := s.Send(t.Context(), sender.Message{Body: "hello", Target: sender.Target{Thread: "not-a-number"}})
 	if err == nil {
 		t.Fatal("Send() error = nil, want non-nil")
 	}
