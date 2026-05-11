@@ -18,11 +18,11 @@ import (
 type FeedSet struct {
 	mu    sync.RWMutex
 	feeds map[string]*Feed
-	store Store
+	store *Store
 }
 
 // NewFeedSet builds a mutable state set from an existing snapshot.
-func NewFeedSet(store Store, feeds map[string]*Feed) *FeedSet {
+func NewFeedSet(store *Store, feeds map[string]*Feed) *FeedSet {
 	if feeds == nil {
 		feeds = map[string]*Feed{}
 	}

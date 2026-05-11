@@ -73,28 +73,6 @@ type Snapshot struct {
 	ErrorTemplate string
 }
 
-// Store reads and writes tgfeed persisted state.
-//
-// It is constructed with [NewStore].
-type Store interface {
-	// LoadSnapshot loads config, feed state, and error template in one call.
-	LoadSnapshot(ctx context.Context) (*Snapshot, error)
-	// LoadConfig loads tgfeed Starlark configuration.
-	LoadConfig(ctx context.Context) (string, error)
-	// LoadState loads persisted feed runtime state.
-	LoadState(ctx context.Context) (map[string]*Feed, error)
-	// LoadErrorTemplate loads the current error template.
-	LoadErrorTemplate(ctx context.Context) (string, error)
-	// SaveConfig persists tgfeed Starlark configuration.
-	SaveConfig(ctx context.Context, config string) error
-	// SaveState persists feed runtime state as formatted JSON.
-	SaveState(ctx context.Context, state map[string]*Feed) error
-	// SaveStateJSON persists pre-encoded state JSON.
-	SaveStateJSON(ctx context.Context, content []byte) error
-	// SaveErrorTemplate persists the error template.
-	SaveErrorTemplate(ctx context.Context, content string) error
-}
-
 // Options configures [NewStore].
 type Options struct {
 	// StateDir is a local directory used when [RemoteURL] is empty.
@@ -111,17 +89,18 @@ type Options struct {
 	DefaultErrorTemplate string
 }
 
-// NewStore constructs a [Store] that persists state locally or remotely,
-// depending on [Options].
-func NewStore(opts Options) Store { return &store{opts: opts} }
+// Store reads and writes tgfeed persisted state.
+type Store struct{ opts Options }
 
-type store struct{ opts Options }
+// NewStore constructs a store that persists state locally or remotely,
+// depending on opts.
+func NewStore(opts Options) *Store { return &Store{opts: opts} }
 
 type errorResponse struct {
 	Error string `json:"error"`
 }
 
-func (s *store) LoadSnapshot(ctx context.Context) (*Snapshot, error) {
+func (s *Store) LoadSnapshot(ctx context.Context) (*Snapshot, error) {
 	config, err := s.LoadConfig(ctx)
 	if err != nil {
 		return nil, err
@@ -137,7 +116,7 @@ func (s *store) LoadSnapshot(ctx context.Context) (*Snapshot, error) {
 	return &Snapshot{Config: config, State: stateMap, ErrorTemplate: errorTemplate}, nil
 }
 
-func (s *store) LoadConfig(ctx context.Context) (string, error) {
+func (s *Store) LoadConfig(ctx context.Context) (string, error) {
 	if s.opts.RemoteURL == "" {
 		configBytes, err := os.ReadFile(filepath.Join(s.opts.StateDir, "config.star"))
 		if err != nil {
@@ -152,7 +131,7 @@ func (s *store) LoadConfig(ctx context.Context) (string, error) {
 	return string(b), nil
 }
 
-func (s *store) LoadState(ctx context.Context) (map[string]*Feed, error) {
+func (s *Store) LoadState(ctx context.Context) (map[string]*Feed, error) {
 	if s.opts.RemoteURL == "" {
 		stateBytes, err := os.ReadFile(filepath.Join(s.opts.StateDir, "state.json"))
 		if err != nil && !errors.Is(err, fs.ErrNotExist) {
@@ -171,7 +150,7 @@ func (s *store) LoadState(ctx context.Context) (map[string]*Feed, error) {
 	return stateMap, nil
 }
 
-func (s *store) LoadErrorTemplate(ctx context.Context) (string, error) {
+func (s *Store) LoadErrorTemplate(ctx context.Context) (string, error) {
 	if s.opts.RemoteURL == "" {
 		errorTemplateBytes, err := os.ReadFile(filepath.Join(s.opts.StateDir, "error.tmpl"))
 		if err != nil && !errors.Is(err, fs.ErrNotExist) {
@@ -186,7 +165,7 @@ func (s *store) LoadErrorTemplate(ctx context.Context) (string, error) {
 	return string(b), nil
 }
 
-func (s *store) fetch(ctx context.Context, url string) ([]byte, error) {
+func (s *Store) fetch(ctx context.Context, url string) ([]byte, error) {
 	b, err := request.Make[request.Bytes](ctx, request.Params{Method: http.MethodGet, Headers: map[string]string{"User-Agent": version.UserAgent()}, URL: s.apiURL(url), HTTPClient: s.httpClient()})
 	if err != nil {
 		var statusErr *request.StatusError
@@ -201,7 +180,7 @@ func (s *store) fetch(ctx context.Context, url string) ([]byte, error) {
 	return b, nil
 }
 
-func (s *store) SaveState(ctx context.Context, state map[string]*Feed) error {
+func (s *Store) SaveState(ctx context.Context, state map[string]*Feed) error {
 	b, err := MarshalStateMap(state)
 	if err != nil {
 		return err
@@ -209,7 +188,7 @@ func (s *store) SaveState(ctx context.Context, state map[string]*Feed) error {
 	return s.SaveStateJSON(ctx, b)
 }
 
-func (s *store) SaveStateJSON(ctx context.Context, content []byte) error {
+func (s *Store) SaveStateJSON(ctx context.Context, content []byte) error {
 	if s.opts.RemoteURL == "" {
 		return safefile.WriteFile(filepath.Join(s.opts.StateDir, "state.json"), content, 0o644)
 	}
@@ -220,7 +199,7 @@ func (s *store) SaveStateJSON(ctx context.Context, content []byte) error {
 	return nil
 }
 
-func (s *store) SaveConfig(ctx context.Context, config string) error {
+func (s *Store) SaveConfig(ctx context.Context, config string) error {
 	if s.opts.RemoteURL == "" {
 		return safefile.WriteFile(filepath.Join(s.opts.StateDir, "config.star"), []byte(config), 0o644)
 	}
@@ -231,7 +210,7 @@ func (s *store) SaveConfig(ctx context.Context, config string) error {
 	return nil
 }
 
-func (s *store) SaveErrorTemplate(ctx context.Context, content string) error {
+func (s *Store) SaveErrorTemplate(ctx context.Context, content string) error {
 	if s.opts.RemoteURL == "" {
 		return safefile.WriteFile(filepath.Join(s.opts.StateDir, "error.tmpl"), []byte(content), 0o644)
 	}
@@ -261,7 +240,7 @@ func UnmarshalStateMap(b []byte) (map[string]*Feed, error) {
 	return stateMap, nil
 }
 
-func (s *store) httpClient() *http.Client {
+func (s *Store) httpClient() *http.Client {
 	if strings.HasPrefix(s.opts.RemoteURL, "/") {
 		return &http.Client{Transport: &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
 			return (&net.Dialer{}).DialContext(ctx, "unix", s.opts.RemoteURL)
@@ -270,7 +249,7 @@ func (s *store) httpClient() *http.Client {
 	return s.opts.HTTPClient
 }
 
-func (s *store) apiURL(endpoint string) string {
+func (s *Store) apiURL(endpoint string) string {
 	if strings.HasPrefix(s.opts.RemoteURL, "/") {
 		return "http://unix" + endpoint
 	}

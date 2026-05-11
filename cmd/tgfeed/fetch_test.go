@@ -688,7 +688,7 @@ func TestSendUpdateUsesInjectedSender(t *testing.T) {
 
 	f.sendUpdate(t.Context(), u)
 	testutil.AssertEqual(t, len(mock.messages), 1)
-	testutil.AssertEqual(t, mock.messages[0].Target.Topic, "7")
+	testutil.AssertEqual(t, mock.messages[0].Target.Thread, "7")
 	if !strings.Contains(mock.messages[0].Body, "hello") {
 		t.Fatalf("sent body %q does not include title", mock.messages[0].Body)
 	}

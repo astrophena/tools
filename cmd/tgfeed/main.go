@@ -89,7 +89,7 @@ type fetcher struct {
 	stats      syncx.Protected[*stats.Run]
 	statsStore *stats.Store
 	sender     sender.Sender
-	store      state.Store
+	store      *state.Store
 
 	runLock filelock.Lock
 }

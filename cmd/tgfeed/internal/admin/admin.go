@@ -29,6 +29,22 @@ import (
 
 var errConflict = web.StatusErr(http.StatusConflict)
 
+// Store reads and writes the persisted resources exposed by the admin API.
+type Store interface {
+	// LoadConfig loads tgfeed Starlark configuration.
+	LoadConfig(ctx context.Context) (string, error)
+	// LoadState loads persisted feed runtime state.
+	LoadState(ctx context.Context) (map[string]*state.Feed, error)
+	// LoadErrorTemplate loads the current error template.
+	LoadErrorTemplate(ctx context.Context) (string, error)
+	// SaveConfig persists tgfeed Starlark configuration.
+	SaveConfig(ctx context.Context, config string) error
+	// SaveStateJSON persists pre-encoded feed runtime state.
+	SaveStateJSON(ctx context.Context, content []byte) error
+	// SaveErrorTemplate persists the error template.
+	SaveErrorTemplate(ctx context.Context, content string) error
+}
+
 // Config configures the tgfeed admin HTTP API.
 type Config struct {
 	// Addr is the network address passed to [web.Server].
@@ -36,7 +52,7 @@ type Config struct {
 	// StateDir is tgfeed's local state directory.
 	StateDir string
 	// Store reads and writes tgfeed persisted state.
-	Store state.Store
+	Store Store
 	// ValidateConfig validates a Starlark config before persisting it.
 	ValidateConfig func(ctx context.Context, content string) error
 	// IsRunLocked reports whether tgfeed run lock is currently held.
@@ -204,7 +220,7 @@ func normalizeConfig(cfg Config) (Config, error) {
 }
 
 type api struct {
-	store            state.Store
+	store            Store
 	validateConfigFn func(context.Context, string) error
 	isRunLocked      func() bool
 	statsStore       *stats.Store
