@@ -64,63 +64,22 @@ type update struct {
 
 // feedStatusResult describes what a response status handler decided to do next.
 //
-// A status can be fully handled (for example, 304 Not Modified), in which case
-// fetch should stop and return. Some handled statuses also request a retry with
-// backoff information.
+// A zero value means the caller should continue parsing the feed body.
 type feedStatusResult struct {
-	handled bool
-	retry   bool
-	retryIn time.Duration
+	notModified bool
+	retryIn     time.Duration
 }
 
 // feedItemDecision captures both item processing and seen-state updates.
 //
-// selection controls whether the item is processed further. markSeen stores the
-// key that should be recorded in seen-items state immediately.
+// process controls whether the item is processed further. markSeen stores the
+// key that should be recorded in seen-items state immediately. skipReason is
+// reported to stats when process is false.
 type feedItemDecision struct {
-	selection feedItemSelection
-	markSeen  string
-	reason    feedItemSkipReason
+	process    bool
+	markSeen   string
+	skipReason stats.FeedItemDecisionReason
 }
-
-func toDecisionReason(d feedItemDecision) stats.FeedItemDecisionReason {
-	switch d.reason {
-	case feedItemSkipReasonOld:
-		return stats.FeedItemSkipReasonOld
-	case feedItemSkipReasonSeen:
-		return stats.FeedItemSkipReasonSeen
-	default:
-		return stats.FeedItemSkipReasonUnknown
-	}
-}
-
-// enqueueAction determines how an accepted item is emitted to the updates
-// channel.
-type enqueueAction uint8
-
-const (
-	enqueueActionSkip enqueueAction = iota
-	enqueueActionSingle
-	enqueueActionDigest
-)
-
-// feedItemSelection describes whether an item should be skipped, only marked
-// as seen, or processed and potentially sent.
-type feedItemSelection uint8
-
-const (
-	feedItemSelectionSkip feedItemSelection = iota
-	feedItemSelectionMarkSeenOnly
-	feedItemSelectionProcess
-)
-
-type feedItemSkipReason uint8
-
-const (
-	feedItemSkipReasonNone feedItemSkipReason = iota
-	feedItemSkipReasonOld
-	feedItemSkipReasonSeen
-)
 
 // feedItemContext groups immutable fetch-time context used while deciding how
 // to handle a specific parsed item.
@@ -129,7 +88,6 @@ type feedItemContext struct {
 	state       *state.Feed
 	exists      bool
 	justEnabled bool
-	starlarkVal starlark.Value
 }
 
 // fetch fetches one feed and either emits updates, asks caller to retry, or
@@ -178,13 +136,17 @@ func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *update) (re
 
 	f.logFeedResponse(fd, res)
 
-	status, err := f.handleFeedStatus(req, res, fd, fdState)
+	status, err := f.handleFeedStatus(req, res, fd)
 	if err != nil {
 		f.handleFetchFailure(ctx, fd.url, err)
 		return false, 0
 	}
-	if status.handled {
-		return status.retry, status.retryIn
+	if status.notModified {
+		fdState.MarkNotModified(time.Now())
+		return false, 0
+	}
+	if status.retryIn > 0 {
+		return true, status.retryIn
 	}
 
 	parsedFeed, err := f.fp.Parse(res.Body)
@@ -241,7 +203,7 @@ func (f *fetcher) logFeedResponse(fd *feed, res *http.Response) {
 	)
 }
 
-func (f *fetcher) handleFeedStatus(req *http.Request, res *http.Response, fd *feed, fdState *state.Feed) (feedStatusResult, error) {
+func (f *fetcher) handleFeedStatus(req *http.Request, res *http.Response, fd *feed) (feedStatusResult, error) {
 	// Ignore unmodified feeds and report an error otherwise.
 	if res.StatusCode == http.StatusNotModified {
 		f.slog.Debug("unmodified feed", "feed", fd.url)
@@ -250,9 +212,8 @@ func (f *fetcher) handleFeedStatus(req *http.Request, res *http.Response, fd *fe
 			s.HTTP3xxCount += 1
 			s.FeedStats(fd.url).LastStatusClass = 3
 		})
-		fdState.MarkNotModified(time.Now())
 		return feedStatusResult{
-			handled: true,
+			notModified: true,
 		}, nil
 	}
 	if res.StatusCode == http.StatusOK {
@@ -274,8 +235,6 @@ func (f *fetcher) handleFeedStatus(req *http.Request, res *http.Response, fd *fe
 		if t, found := retry.Retryable(req.URL.Host, body); found {
 			f.slog.Warn("rate-limited", "host", req.URL.Host, "feed", fd.url, "retry_in", t.String())
 			return feedStatusResult{
-				handled: true,
-				retry:   true,
 				retryIn: t,
 			}, nil
 		}
@@ -290,8 +249,6 @@ func (f *fetcher) handleFeedStatus(req *http.Request, res *http.Response, fd *fe
 			if t <= maxRetryAfter {
 				f.slog.Warn("rate-limited (Retry-After)", "feed", fd.url, "retry_in", t.String())
 				return feedStatusResult{
-					handled: true,
-					retry:   true,
 					retryIn: t,
 				}, nil
 			}
@@ -302,15 +259,11 @@ func (f *fetcher) handleFeedStatus(req *http.Request, res *http.Response, fd *fe
 	// Retry on generic 5xx server errors without Retry-After header.
 	if res.StatusCode >= 500 && res.StatusCode < 600 {
 		return feedStatusResult{
-			handled: true,
-			retry:   true,
 			retryIn: 5 * time.Second,
 		}, nil
 	}
 
-	return feedStatusResult{
-		handled: true,
-	}, fmt.Errorf("want 200, got %d: %s", res.StatusCode, body)
+	return feedStatusResult{}, fmt.Errorf("want 200, got %d: %s", res.StatusCode, body)
 }
 
 func isTransientError(err error) bool {
@@ -357,38 +310,48 @@ func (f *fetcher) enqueueFeedItems(fd *feed, state *state.Feed, exists bool, ite
 		if decision.markSeen != "" {
 			state.MarkSeen(decision.markSeen, time.Now())
 		}
-		if decision.selection != feedItemSelectionProcess {
+		if !decision.process {
 			f.stats.WriteAccess(func(s *stats.Run) {
-				s.RecordItemDecision(toDecisionReason(decision))
+				s.RecordItemDecision(decision.skipReason)
 			})
 			continue
 		}
 
-		itemCtx.starlarkVal = f.itemToStarlark(feedItem)
-
-		switch f.decideEnqueueAction(itemCtx, feedItem) {
-		case enqueueActionSkip:
+		starlarkVal := f.itemToStarlark(feedItem)
+		if !f.feedItemPassesRules(fd, feedItem, starlarkVal) {
 			continue
-		case enqueueActionDigest:
+		}
+
+		if fd.digest {
 			validItems = append(validItems, feedItem)
-			f.stats.WriteAccess(func(s *stats.Run) {
-				s.ItemsKeptTotal += 1
-				s.ItemsEnqueuedTotal += 1
-				s.FeedStats(fd.url).ItemsEnqueued += 1
-			})
-		case enqueueActionSingle:
-			updates <- &update{
-				feed:  fd,
-				items: []*gofeed.Item{feedItem},
-			}
-			f.stats.WriteAccess(func(s *stats.Run) {
-				s.ItemsKeptTotal += 1
-				s.ItemsEnqueuedTotal += 1
-				s.FeedStats(fd.url).ItemsEnqueued += 1
-			})
+			f.recordItemEnqueued(fd.url)
+			continue
+		}
+
+		f.recordItemEnqueued(fd.url)
+		updates <- &update{
+			feed:  fd,
+			items: []*gofeed.Item{feedItem},
 		}
 	}
 	publishDigestUpdate(fd, validItems, updates)
+}
+
+func (f *fetcher) recordItemEnqueued(feedURL string) {
+	f.stats.WriteAccess(func(s *stats.Run) {
+		s.ItemsKeptTotal += 1
+		s.ItemsEnqueuedTotal += 1
+		s.FeedStats(feedURL).ItemsEnqueued += 1
+	})
+}
+
+func publishDigestUpdate(fd *feed, validItems []*gofeed.Item, updates chan *update) {
+	if len(validItems) > 0 {
+		updates <- &update{
+			feed:  fd,
+			items: validItems,
+		}
+	}
 }
 
 func (f *fetcher) prepareSeenItemsState(fd *feed, state *state.Feed) (justEnabled bool) {
@@ -423,43 +386,33 @@ func decideFeedItem(itemCtx feedItemContext, feedItem *gofeed.Item) feedItemDeci
 		itemDate := feedItemPublishedTime(feedItem)
 		now := time.Now()
 		if itemDate != nil && now.Sub(*itemDate) > lookbackPeriod {
-			return feedItemDecision{selection: feedItemSelectionSkip, reason: feedItemSkipReasonOld}
+			return feedItemDecision{skipReason: stats.FeedItemSkipReasonOld}
 		}
 		if itemCtx.state.IsSeen(guid) {
-			return feedItemDecision{selection: feedItemSelectionSkip, reason: feedItemSkipReasonSeen}
+			return feedItemDecision{skipReason: stats.FeedItemSkipReasonSeen}
 		}
-		decision := feedItemDecision{selection: feedItemSelectionMarkSeenOnly, markSeen: guid}
+		decision := feedItemDecision{markSeen: guid}
 		if !itemCtx.exists || itemCtx.justEnabled {
 			return decision
 		}
-		decision.selection = feedItemSelectionProcess
+		decision.process = true
 		return decision
 	}
 
 	if itemCtx.state.IsSeen(guid) {
-		return feedItemDecision{selection: feedItemSelectionSkip, reason: feedItemSkipReasonSeen}
+		return feedItemDecision{skipReason: stats.FeedItemSkipReasonSeen}
 	}
 
 	itemDate := feedItemActivityTime(feedItem)
 	if itemDate != nil && itemDate.Before(itemCtx.state.LastUpdated) {
-		return feedItemDecision{selection: feedItemSelectionSkip, reason: feedItemSkipReasonOld}
+		return feedItemDecision{skipReason: stats.FeedItemSkipReasonOld}
 	}
 
 	if itemDate == nil && !itemCtx.exists {
-		return feedItemDecision{selection: feedItemSelectionMarkSeenOnly, markSeen: guid}
+		return feedItemDecision{markSeen: guid}
 	}
 
-	return feedItemDecision{selection: feedItemSelectionProcess, markSeen: guid}
-}
-
-func (f *fetcher) decideEnqueueAction(itemCtx feedItemContext, feedItem *gofeed.Item) enqueueAction {
-	if !f.feedItemPassesRules(itemCtx.feed, feedItem, itemCtx.starlarkVal) {
-		return enqueueActionSkip
-	}
-	if itemCtx.feed.digest {
-		return enqueueActionDigest
-	}
-	return enqueueActionSingle
+	return feedItemDecision{process: true, markSeen: guid}
 }
 
 func (f *fetcher) applyRule(rule *starlark.Function, item *gofeed.Item, starlarkVal starlark.Value) bool {
@@ -510,17 +463,6 @@ func (f *fetcher) feedItemPassesRules(fd *feed, feedItem *gofeed.Item, starlarkV
 	}
 
 	return true
-}
-
-func publishDigestUpdate(fd *feed, validItems []*gofeed.Item, updates chan *update) {
-	if !fd.digest || len(validItems) == 0 {
-		return
-	}
-
-	updates <- &update{
-		feed:  fd,
-		items: validItems,
-	}
 }
 
 func (f *fetcher) markFetchSuccess(url string, parsedItems int, startTime time.Time) {
