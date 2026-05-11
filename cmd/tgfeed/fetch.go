@@ -150,7 +150,7 @@ func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *update) (re
 		etag         string
 		lastModified string
 	)
-	if err := f.withFeedState(ctx, fd.url, func(state *state.Feed, hasState bool) bool {
+	if err := f.updateFeedState(ctx, fd.url, func(state *state.Feed, hasState bool) bool {
 		exists = hasState
 		disabled = state.IsDisabled()
 		etag, lastModified = state.CacheHeaders()
@@ -208,7 +208,7 @@ func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *update) (re
 		return false, 0
 	}
 
-	if err := f.withFeedState(ctx, fd.url, func(state *state.Feed, hasState bool) bool {
+	if err := f.updateFeedState(ctx, fd.url, func(state *state.Feed, hasState bool) bool {
 		f.updateFeedStateFromHeaders(state, res)
 		f.enqueueFeedItems(fd, state, hasState, parsedFeed.Items, updates)
 		state.MarkFetchSuccess(time.Now())
@@ -268,7 +268,7 @@ func (f *fetcher) handleFeedStatus(req *http.Request, res *http.Response, fd *fe
 			s.HTTP3xxCount += 1
 			s.FeedStats(fd.url).LastStatusClass = 3
 		})
-		_ = f.withFeedState(req.Context(), fd.url, func(state *state.Feed, _ bool) bool {
+		_ = f.updateFeedState(req.Context(), fd.url, func(state *state.Feed, _ bool) bool {
 			state.MarkNotModified(time.Now())
 			return true
 		})
@@ -664,7 +664,7 @@ func (f *fetcher) handleFetchFailure(ctx context.Context, url string, err error)
 		disabled   bool
 		errorCount int
 	)
-	if updateErr := f.withFeedState(ctx, url, func(state *state.Feed, _ bool) bool {
+	if updateErr := f.updateFeedState(ctx, url, func(state *state.Feed, _ bool) bool {
 		disabled = state.MarkFetchFailure(err, errorThreshold)
 		errorCount = state.ErrorCount
 		return true
@@ -679,7 +679,7 @@ func (f *fetcher) handleFetchFailure(ctx context.Context, url string, err error)
 		if err := f.errNotify(ctx, err); err != nil {
 			f.slog.Warn("failed to send error notification", "error", err)
 		} else {
-			if updateErr := f.withFeedState(ctx, url, func(state *state.Feed, _ bool) bool {
+			if updateErr := f.updateFeedState(ctx, url, func(state *state.Feed, _ bool) bool {
 				state.DisabledNotifyPending = false
 				return true
 			}); updateErr != nil {

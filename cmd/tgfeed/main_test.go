@@ -84,7 +84,7 @@ func TestFetcherMain(t *testing.T) {
 			Args:               []string{"reenable", "https://example.com/disabled.xml"},
 			WantNothingPrinted: true,
 			CheckFunc: func(t *testing.T, f *fetcher) {
-				st, ok := f.state.Get("https://example.com/disabled.xml")
+				st, ok := f.getFeedState("https://example.com/disabled.xml")
 				testutil.AssertEqual(t, ok, true)
 				testutil.AssertEqual(t, st.Disabled, false)
 			},

@@ -622,9 +622,9 @@ func TestHandleFeedStatus(t *testing.T) {
 			f.stats = syncx.Protect(&tgstats.Run{})
 			fd := &feed{url: "https://example.com/feed.xml"}
 			st := tc.initialState
-			f.state = state.NewFeedSet(f.store, map[string]*state.Feed{
+			f.state = map[string]*state.Feed{
 				fd.url: &st,
-			})
+			}
 
 			req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, tc.reqURL, nil)
 			if err != nil {

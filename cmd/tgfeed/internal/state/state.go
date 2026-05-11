@@ -13,10 +13,9 @@
 // A typical flow is:
 //
 //   - call [Store.LoadSnapshot] during startup
-//   - build a [FeedSet] with [NewFeedSet]
-//   - mutate feed state with [FeedSet.Update] and [Feed] methods such as
-//     [Feed.MarkFetchSuccess], [Feed.MarkNotModified], and
-//     [Feed.MarkFetchFailure]
+//   - mutate feed state with [Feed] methods such as [Feed.MarkFetchSuccess],
+//     [Feed.MarkNotModified], and [Feed.MarkFetchFailure]
+//   - call [Store.SaveState] to persist the updated state map
 //
 // For admin endpoints that accept raw JSON, [Store.SaveStateJSON] and
 // [UnmarshalStateMap] avoid duplicate encoding/decoding paths.
