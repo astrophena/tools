@@ -84,7 +84,8 @@ type fetcher struct {
 	config        string
 	feeds         []*feed
 	errorTemplate string
-	state         *state.FeedSet
+	stateMu       sync.RWMutex
+	state         map[string]*state.Feed
 
 	stats      syncx.Protected[*stats.Run]
 	statsStore *stats.Store
@@ -229,12 +230,12 @@ func (f *fetcher) run(ctx context.Context) error {
 	var fetchedFeeds atomic.Int64
 
 	for _, feed := range f.feeds {
-		if fdState, ok := f.state.Get(feed.url); ok && fdState.DisabledNotifyPending {
+		if fdState, ok := f.getFeedState(feed.url); ok && fdState.DisabledNotifyPending {
 			err := fmt.Errorf("fetching feed %q failed after %d previous attempts: feed was disabled, to reenable it run 'tgfeed reenable %q'", feed.url, fdState.ErrorCount, feed.url)
 			if nErr := f.errNotify(ctx, err); nErr != nil {
 				f.slog.Warn("failed to send pending error notification", "feed", feed.url, "error", nErr)
 			} else {
-				if updateErr := f.withFeedState(ctx, feed.url, func(state *state.Feed, _ bool) bool {
+				if updateErr := f.updateFeedState(ctx, feed.url, func(state *state.Feed, _ bool) bool {
 					state.DisabledNotifyPending = false
 					return true
 				}); updateErr != nil {
@@ -268,7 +269,7 @@ func (f *fetcher) run(ctx context.Context) error {
 		s.FetchLatencyMS = stats.QuantilesMS(s.FetchLatencySamples)
 		s.SendLatencyMS = stats.QuantilesMS(s.SendLatencySamples)
 
-		stateSnapshot := f.state.Snapshot()
+		stateSnapshot := f.feedStateSnapshot()
 		for _, feedState := range stateSnapshot {
 			s.SeenItemsEntriesTotal += len(feedState.SeenItems)
 		}
@@ -383,7 +384,7 @@ func (f *fetcher) cleanState(ctx context.Context) error {
 	for _, fd := range f.feeds {
 		keep[fd.url] = struct{}{}
 	}
-	return f.state.PruneMissing(ctx, keep)
+	return f.pruneFeedState(ctx, keep)
 }
 
 // User-facing commands.
@@ -395,7 +396,7 @@ func (f *fetcher) listFeeds(ctx context.Context, w io.Writer) error {
 
 	var sb strings.Builder
 	for _, feed := range f.feeds {
-		state, hasState := f.state.Get(feed.url)
+		state, hasState := f.getFeedState(feed.url)
 		fmt.Fprintf(&sb, "%s", feed.url)
 		if !hasState {
 			fmt.Fprintf(&sb, " \n")
@@ -509,12 +510,12 @@ func (f *fetcher) reenable(ctx context.Context, url string) error {
 		return err
 	}
 
-	_, ok := f.state.Get(url)
+	_, ok := f.getFeedState(url)
 	if !ok {
 		return fmt.Errorf("%q: %w", url, errNoFeed)
 	}
 
-	return f.withFeedState(ctx, url, func(fdState *state.Feed, _ bool) bool {
+	return f.updateFeedState(ctx, url, func(fdState *state.Feed, _ bool) bool {
 		fdState.Reenable()
 		return true
 	})

@@ -159,8 +159,14 @@ func (f *fetcher) loadState(ctx context.Context) error {
 		return err
 	}
 
+	if snapshot.State == nil {
+		snapshot.State = map[string]*state.Feed{}
+	}
+
 	f.errorTemplate = snapshot.ErrorTemplate
-	f.state = state.NewFeedSet(f.store, snapshot.State)
+	f.stateMu.Lock()
+	f.state = snapshot.State
+	f.stateMu.Unlock()
 	return nil
 }
 
@@ -175,10 +181,73 @@ func (f *fetcher) loadConfig(ctx context.Context, config string) error {
 	return nil
 }
 
-func (f *fetcher) withFeedState(ctx context.Context, url string, fn func(*state.Feed, bool) bool) error {
-	return f.state.Update(ctx, url, func(fd *state.Feed, exists bool) (bool, error) {
-		return fn(fd, exists), nil
-	})
+func (f *fetcher) updateFeedState(ctx context.Context, url string, fn func(*state.Feed, bool) bool) error {
+	f.stateMu.Lock()
+	if f.state == nil {
+		f.state = map[string]*state.Feed{}
+	}
+	fd, exists := f.state[url]
+	if !exists {
+		fd = state.NewFeed(time.Now())
+		f.state[url] = fd
+	}
+
+	changed := fn(fd, exists)
+	if !changed {
+		f.stateMu.Unlock()
+		return nil
+	}
+
+	snapshot := cloneFeedStateMap(f.state)
+	f.stateMu.Unlock()
+
+	return f.store.SaveState(ctx, snapshot)
+}
+
+func (f *fetcher) getFeedState(url string) (*state.Feed, bool) {
+	f.stateMu.RLock()
+	defer f.stateMu.RUnlock()
+
+	fd, ok := f.state[url]
+	if !ok {
+		return nil, false
+	}
+	return fd.Clone(), true
+}
+
+func (f *fetcher) feedStateSnapshot() map[string]*state.Feed {
+	f.stateMu.RLock()
+	defer f.stateMu.RUnlock()
+	return cloneFeedStateMap(f.state)
+}
+
+func cloneFeedStateMap(input map[string]*state.Feed) map[string]*state.Feed {
+	out := make(map[string]*state.Feed, len(input))
+	for k, v := range input {
+		out[k] = v.Clone()
+	}
+	return out
+}
+
+func (f *fetcher) pruneFeedState(ctx context.Context, keep map[string]struct{}) error {
+	f.stateMu.Lock()
+	changed := false
+	for url := range f.state {
+		if _, ok := keep[url]; ok {
+			continue
+		}
+		delete(f.state, url)
+		changed = true
+	}
+	if !changed {
+		f.stateMu.Unlock()
+		return nil
+	}
+
+	snapshot := cloneFeedStateMap(f.state)
+	f.stateMu.Unlock()
+
+	return f.store.SaveState(ctx, snapshot)
 }
 
 // Run locking.
