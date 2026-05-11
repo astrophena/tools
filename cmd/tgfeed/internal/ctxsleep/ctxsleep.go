@@ -2,7 +2,8 @@
 // Use of this source code is governed by the ISC
 // license that can be found in the LICENSE.md file.
 
-// Package ctxsleep contains a context-aware sleep function.
+// Package ctxsleep provides a small context-aware sleep helper for retry
+// loops.
 package ctxsleep
 
 import (
@@ -10,7 +11,9 @@ import (
 	"time"
 )
 
-// Sleep waits for the duration unless the context is canceled first.
+// Sleep waits for duration and reports whether the timer completed.
+//
+// It returns false when ctx is canceled before duration elapses.
 func Sleep(ctx context.Context, duration time.Duration) bool {
 	t := time.NewTimer(duration)
 	defer t.Stop()
