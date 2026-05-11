@@ -19,6 +19,7 @@ import (
 
 	"go.astrophena.name/base/request"
 	"go.astrophena.name/base/version"
+	"go.astrophena.name/tools/cmd/tgfeed/internal/ctxsleep"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/sender"
 	"go.astrophena.name/tools/internal/tgmarkup"
 )
@@ -64,7 +65,7 @@ func New(cfg Config) *Sender {
 		s.slog = slog.Default()
 	}
 	s.makeRequest = s.makeTelegramRequest
-	s.sleep = sleep
+	s.sleep = ctxsleep.Sleep
 	return s
 }
 
@@ -371,17 +372,6 @@ func isRateLimited(err error) (bool, time.Duration) {
 	}
 
 	return true, time.Duration(errorResponse.Parameters.RetryAfter) * time.Second
-}
-
-func sleep(ctx context.Context, d time.Duration) bool {
-	t := time.NewTimer(d)
-	defer t.Stop()
-	select {
-	case <-t.C:
-		return true
-	case <-ctx.Done():
-		return false
-	}
 }
 
 var _ sender.Sender = (*Sender)(nil)

@@ -26,6 +26,7 @@ import (
 	"go.astrophena.name/base/cli/clitest"
 	"go.astrophena.name/base/testutil"
 	"go.astrophena.name/base/txtar"
+	"go.astrophena.name/tools/cmd/tgfeed/internal/ctxsleep"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/state"
 )
 
@@ -287,7 +288,7 @@ func TestSleepReturnsTrueAfterDuration(t *testing.T) {
 
 	ctx := context.Background()
 	start := time.Now()
-	if !sleep(ctx, 10*time.Millisecond) {
+	if !ctxsleep.Sleep(ctx, 10*time.Millisecond) {
 		t.Fatal("sleep() = false, want true")
 	}
 	if elapsed := time.Since(start); elapsed < 10*time.Millisecond {
@@ -302,7 +303,7 @@ func TestSleepReturnsFalseOnContextCancel(t *testing.T) {
 	cancel()
 
 	start := time.Now()
-	if sleep(ctx, time.Second) {
+	if ctxsleep.Sleep(ctx, time.Second) {
 		t.Fatal("sleep() = true, want false")
 	}
 	if elapsed := time.Since(start); elapsed > 50*time.Millisecond {
