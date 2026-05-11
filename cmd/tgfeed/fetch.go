@@ -144,21 +144,9 @@ type feedItemContext struct {
 func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *update) (retry bool, retryIn time.Duration) {
 	startTime := time.Now()
 
-	var (
-		exists       bool
-		disabled     bool
-		etag         string
-		lastModified string
-	)
-	if err := f.updateFeedState(ctx, fd.url, func(state *state.Feed, hasState bool) bool {
-		exists = hasState
-		disabled = state.IsDisabled()
-		etag, lastModified = state.CacheHeaders()
-		return false
-	}); err != nil {
-		f.handleFetchFailure(ctx, fd.url, err)
-		return false, 0
-	}
+	fdState, exists := f.feedState(fd.url)
+	disabled := fdState.IsDisabled()
+	etag, lastModified := fdState.CacheHeaders()
 	if !exists {
 		// If we don't remember this feed, it's probably new. Set its last update
 		// date to current so we don't get a lot of unread articles and trigger
@@ -190,7 +178,7 @@ func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *update) (re
 
 	f.logFeedResponse(fd, res)
 
-	status, err := f.handleFeedStatus(req, res, fd)
+	status, err := f.handleFeedStatus(req, res, fd, fdState)
 	if err != nil {
 		f.handleFetchFailure(ctx, fd.url, err)
 		return false, 0
@@ -208,15 +196,9 @@ func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *update) (re
 		return false, 0
 	}
 
-	if err := f.updateFeedState(ctx, fd.url, func(state *state.Feed, hasState bool) bool {
-		f.updateFeedStateFromHeaders(state, res)
-		f.enqueueFeedItems(fd, state, hasState, parsedFeed.Items, updates)
-		state.MarkFetchSuccess(time.Now())
-		return true
-	}); err != nil {
-		f.handleFetchFailure(ctx, fd.url, err)
-		return false, 0
-	}
+	f.updateFeedStateFromHeaders(fdState, res)
+	f.enqueueFeedItems(fd, fdState, exists, parsedFeed.Items, updates)
+	fdState.MarkFetchSuccess(time.Now())
 	f.markFetchSuccess(fd.url, len(parsedFeed.Items), startTime)
 
 	return false, 0
@@ -259,7 +241,7 @@ func (f *fetcher) logFeedResponse(fd *feed, res *http.Response) {
 	)
 }
 
-func (f *fetcher) handleFeedStatus(req *http.Request, res *http.Response, fd *feed) (feedStatusResult, error) {
+func (f *fetcher) handleFeedStatus(req *http.Request, res *http.Response, fd *feed, fdState *state.Feed) (feedStatusResult, error) {
 	// Ignore unmodified feeds and report an error otherwise.
 	if res.StatusCode == http.StatusNotModified {
 		f.slog.Debug("unmodified feed", "feed", fd.url)
@@ -268,10 +250,7 @@ func (f *fetcher) handleFeedStatus(req *http.Request, res *http.Response, fd *fe
 			s.HTTP3xxCount += 1
 			s.FeedStats(fd.url).LastStatusClass = 3
 		})
-		_ = f.updateFeedState(req.Context(), fd.url, func(state *state.Feed, _ bool) bool {
-			state.MarkNotModified(time.Now())
-			return true
-		})
+		fdState.MarkNotModified(time.Now())
 		return feedStatusResult{
 			handled: true,
 		}, nil
@@ -664,13 +643,9 @@ func (f *fetcher) handleFetchFailure(ctx context.Context, url string, err error)
 		disabled   bool
 		errorCount int
 	)
-	if updateErr := f.updateFeedState(ctx, url, func(state *state.Feed, _ bool) bool {
-		disabled = state.MarkFetchFailure(err, errorThreshold)
-		errorCount = state.ErrorCount
-		return true
-	}); updateErr != nil {
-		f.slog.Warn("failed to persist feed failure state", "feed", url, "error", updateErr)
-	}
+	state, _ := f.feedState(url)
+	disabled = state.MarkFetchFailure(err, errorThreshold)
+	errorCount = state.ErrorCount
 
 	f.slog.Debug("fetch failed", "feed", url, "error", err)
 
@@ -679,12 +654,7 @@ func (f *fetcher) handleFetchFailure(ctx context.Context, url string, err error)
 		if err := f.errNotify(ctx, err); err != nil {
 			f.slog.Warn("failed to send error notification", "error", err)
 		} else {
-			if updateErr := f.updateFeedState(ctx, url, func(state *state.Feed, _ bool) bool {
-				state.DisabledNotifyPending = false
-				return true
-			}); updateErr != nil {
-				f.slog.Warn("failed to persist feed failure state (DisabledNotifyPending)", "feed", url, "error", updateErr)
-			}
+			state.DisabledNotifyPending = false
 		}
 	}
 }
