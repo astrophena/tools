@@ -54,6 +54,8 @@ var (
 	errNoEditor       = errors.New("environment variable EDITOR is not defined")
 )
 
+const finalStateSaveTimeout = 30 * time.Second
+
 // Entry point and program state.
 
 func main() { cli.Main(new(fetcher)) }
@@ -311,7 +313,9 @@ func (f *fetcher) run(ctx context.Context) error {
 		return nil
 	}
 
-	if err := f.saveFeedState(ctx); err != nil {
+	saveCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), finalStateSaveTimeout)
+	defer cancel()
+	if err := f.saveFeedState(saveCtx); err != nil {
 		return fmt.Errorf("saving state failed: %w", err)
 	}
 
