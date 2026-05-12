@@ -341,13 +341,14 @@ func TestDecideFeedItem(t *testing.T) {
 	old := now.Add(-15 * 24 * time.Hour)
 
 	cases := map[string]struct {
-		fd            *feed
-		state         *state.Feed
-		item          *gofeed.Item
-		exists        bool
-		justEnabled   bool
-		wantSelection feedItemSelection
-		wantMarkSeen  string
+		fd                   *feed
+		state                *state.Feed
+		item                 *gofeed.Item
+		exists               bool
+		seenItemsInitialized bool
+		wantProcess          bool
+		wantMarkSeen         string
+		wantSkip             tgstats.FeedItemDecisionReason
 	}{
 		"always_send_new_items skips old entries": {
 			fd: &feed{
@@ -359,10 +360,10 @@ func TestDecideFeedItem(t *testing.T) {
 				Link:            "https://example.com/old",
 				PublishedParsed: &old,
 			},
-			exists:        true,
-			justEnabled:   false,
-			wantSelection: feedItemSelectionSkip,
-			wantMarkSeen:  "",
+			exists:       true,
+			wantProcess:  false,
+			wantMarkSeen: "",
+			wantSkip:     tgstats.FeedItemSkipReasonOld,
 		},
 		"always_send_new_items prefers published over updated for lookback": {
 			fd: &feed{
@@ -375,10 +376,10 @@ func TestDecideFeedItem(t *testing.T) {
 				PublishedParsed: &old,
 				UpdatedParsed:   &recent,
 			},
-			exists:        true,
-			justEnabled:   false,
-			wantSelection: feedItemSelectionSkip,
-			wantMarkSeen:  "",
+			exists:       true,
+			wantProcess:  false,
+			wantMarkSeen: "",
+			wantSkip:     tgstats.FeedItemSkipReasonOld,
 		},
 		"always_send_new_items falls back to updated when published is missing": {
 			fd: &feed{
@@ -390,10 +391,9 @@ func TestDecideFeedItem(t *testing.T) {
 				Link:          "https://example.com/updated-only",
 				UpdatedParsed: &recent,
 			},
-			exists:        true,
-			justEnabled:   false,
-			wantSelection: feedItemSelectionProcess,
-			wantMarkSeen:  "updated-only",
+			exists:       true,
+			wantProcess:  true,
+			wantMarkSeen: "updated-only",
 		},
 		"always_send_new_items includes new entry for existing feed": {
 			fd: &feed{
@@ -405,10 +405,9 @@ func TestDecideFeedItem(t *testing.T) {
 				Link:            "https://example.com/new",
 				PublishedParsed: &recent,
 			},
-			exists:        true,
-			justEnabled:   false,
-			wantSelection: feedItemSelectionProcess,
-			wantMarkSeen:  "new",
+			exists:       true,
+			wantProcess:  true,
+			wantMarkSeen: "new",
 		},
 		"always_send_new_items suppresses first run": {
 			fd: &feed{
@@ -420,10 +419,26 @@ func TestDecideFeedItem(t *testing.T) {
 				Link:            "https://example.com/first",
 				PublishedParsed: &recent,
 			},
-			exists:        false,
-			justEnabled:   false,
-			wantSelection: feedItemSelectionMarkSeenOnly,
-			wantMarkSeen:  "first",
+			exists:       false,
+			wantProcess:  false,
+			wantMarkSeen: "first",
+			wantSkip:     tgstats.FeedItemSkipReasonUnknown,
+		},
+		"always_send_new_items suppresses seen-items migration run": {
+			fd: &feed{
+				alwaysSendNewItems: true,
+			},
+			state: &state.Feed{SeenItems: map[string]time.Time{}},
+			item: &gofeed.Item{
+				GUID:            "migration",
+				Link:            "https://example.com/migration",
+				PublishedParsed: &recent,
+			},
+			exists:               true,
+			seenItemsInitialized: true,
+			wantProcess:          false,
+			wantMarkSeen:         "migration",
+			wantSkip:             tgstats.FeedItemSkipReasonUnknown,
 		},
 		"always_send_new_items skips already seen": {
 			fd: &feed{
@@ -437,10 +452,10 @@ func TestDecideFeedItem(t *testing.T) {
 				Link:            "https://example.com/seen",
 				PublishedParsed: &recent,
 			},
-			exists:        true,
-			justEnabled:   false,
-			wantSelection: feedItemSelectionSkip,
-			wantMarkSeen:  "",
+			exists:       true,
+			wantProcess:  false,
+			wantMarkSeen: "",
+			wantSkip:     tgstats.FeedItemSkipReasonSeen,
 		},
 		"published before last update is ignored in regular mode": {
 			fd: &feed{},
@@ -452,10 +467,10 @@ func TestDecideFeedItem(t *testing.T) {
 				Link:            "https://example.com/regular-old",
 				PublishedParsed: &recent,
 			},
-			exists:        true,
-			justEnabled:   false,
-			wantSelection: feedItemSelectionSkip,
-			wantMarkSeen:  "",
+			exists:       true,
+			wantProcess:  false,
+			wantMarkSeen: "",
+			wantSkip:     tgstats.FeedItemSkipReasonOld,
 		},
 		"nil published timestamp is accepted in regular mode": {
 			fd: &feed{},
@@ -466,10 +481,21 @@ func TestDecideFeedItem(t *testing.T) {
 				GUID: "regular-nil",
 				Link: "https://example.com/regular-nil",
 			},
-			exists:        true,
-			justEnabled:   false,
-			wantSelection: feedItemSelectionProcess,
-			wantMarkSeen:  "regular-nil",
+			exists:       true,
+			wantProcess:  true,
+			wantMarkSeen: "regular-nil",
+		},
+		"missing item identity is skipped": {
+			fd:    &feed{},
+			state: &state.Feed{SeenItems: map[string]time.Time{}},
+			item: &gofeed.Item{
+				Title:           "no stable identity",
+				PublishedParsed: &recent,
+			},
+			exists:       true,
+			wantProcess:  false,
+			wantMarkSeen: "",
+			wantSkip:     tgstats.FeedItemSkipReasonUnknown,
 		},
 	}
 
@@ -477,20 +503,21 @@ func TestDecideFeedItem(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			beforeSeenCount := len(tc.state.SeenItems)
 			itemCtx := feedItemContext{
-				feed:        tc.fd,
-				state:       tc.state,
-				exists:      tc.exists,
-				justEnabled: tc.justEnabled,
+				feed:                 tc.fd,
+				state:                tc.state,
+				exists:               tc.exists,
+				seenItemsInitialized: tc.seenItemsInitialized,
 			}
-			decision := decideFeedItem(itemCtx, tc.item)
-			testutil.AssertEqual(t, decision.selection, tc.wantSelection)
+			decision := decideFeedItem(now, itemCtx, tc.item)
+			testutil.AssertEqual(t, decision.process, tc.wantProcess)
 			testutil.AssertEqual(t, decision.markSeen, tc.wantMarkSeen)
+			testutil.AssertEqual(t, decision.skipReason, tc.wantSkip)
 			testutil.AssertEqual(t, len(tc.state.SeenItems), beforeSeenCount)
 		})
 	}
 }
 
-func TestDecideEnqueueAction(t *testing.T) {
+func TestFeedItemPassesRules(t *testing.T) {
 	t.Parallel()
 
 	makeRule := func(t *testing.T, src string, name string) *starlark.Function {
@@ -513,17 +540,12 @@ func TestDecideEnqueueAction(t *testing.T) {
 	cases := map[string]struct {
 		fd   *feed
 		item *gofeed.Item
-		want enqueueAction
+		want bool
 	}{
-		"single action for non-digest feed": {
+		"passes without rules": {
 			fd:   &feed{digest: false},
 			item: &gofeed.Item{Link: "https://example.com/a"},
-			want: enqueueActionSingle,
-		},
-		"digest action for digest feed": {
-			fd:   &feed{digest: true},
-			item: &gofeed.Item{Link: "https://example.com/a"},
-			want: enqueueActionDigest,
+			want: true,
 		},
 		"skip when blocked": {
 			fd: &feed{
@@ -531,7 +553,7 @@ func TestDecideEnqueueAction(t *testing.T) {
 				blockRule: makeRule(t, "def rule(item):\n  return True\n", "rule"),
 			},
 			item: &gofeed.Item{Link: "https://example.com/a"},
-			want: enqueueActionSkip,
+			want: false,
 		},
 		"skip when keep rule rejects": {
 			fd: &feed{
@@ -539,14 +561,14 @@ func TestDecideEnqueueAction(t *testing.T) {
 				keepRule: makeRule(t, "def rule(item):\n  return False\n", "rule"),
 			},
 			item: &gofeed.Item{Link: "https://example.com/a"},
-			want: enqueueActionSkip,
+			want: false,
 		},
 	}
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			f := newTestFetcher(t, newTestEnv(t, nil, nil))
-			got := f.decideEnqueueAction(feedItemContext{feed: tc.fd}, tc.item)
+			got := f.feedItemPassesRules(tc.fd, tc.item, f.itemToStarlark(tc.item))
 			testutil.AssertEqual(t, got, tc.want)
 		})
 	}
@@ -556,18 +578,14 @@ func TestHandleFeedStatus(t *testing.T) {
 	t.Parallel()
 
 	cases := map[string]struct {
-		reqURL                 string
-		statusCode             int
-		body                   string
-		initialState           state.Feed
-		wantHandled            bool
-		wantRetry              bool
-		wantRetryIn            time.Duration
-		wantErrContains        string
-		wantErrorCount         int
-		wantLastError          string
-		wantLastUpdatedNonZero bool
-		wantNotModifiedFeeds   int
+		reqURL               string
+		statusCode           int
+		body                 string
+		initialState         state.Feed
+		wantNotModified      bool
+		wantRetryIn          time.Duration
+		wantErrContains      string
+		wantNotModifiedFeeds int
 	}{
 		"not modified": {
 			reqURL:     "https://example.com/feed.xml",
@@ -576,43 +594,30 @@ func TestHandleFeedStatus(t *testing.T) {
 				ErrorCount: 3,
 				LastError:  "oops",
 			},
-			wantHandled:            true,
-			wantRetry:              false,
-			wantRetryIn:            0,
-			wantErrorCount:         0,
-			wantLastError:          "",
-			wantLastUpdatedNonZero: true,
-			wantNotModifiedFeeds:   1,
+			wantNotModified:      true,
+			wantRetryIn:          0,
+			wantNotModifiedFeeds: 1,
 		},
 		"200 status": {
-			reqURL:         "https://example.com/feed.xml",
-			statusCode:     http.StatusOK,
-			wantHandled:    false,
-			wantRetry:      false,
-			wantRetryIn:    0,
-			wantErrorCount: 0,
-			wantLastError:  "",
+			reqURL:          "https://example.com/feed.xml",
+			statusCode:      http.StatusOK,
+			wantNotModified: false,
+			wantRetryIn:     0,
 		},
 		"tg.i-c-a.su retry": {
-			reqURL:         "https://tg.i-c-a.su/feed.json",
-			statusCode:     http.StatusTooManyRequests,
-			body:           `{"errors":["FLOOD_WAIT_15"]}`,
-			wantHandled:    true,
-			wantRetry:      true,
-			wantRetryIn:    15 * time.Second,
-			wantErrorCount: 0,
-			wantLastError:  "",
+			reqURL:          "https://tg.i-c-a.su/feed.json",
+			statusCode:      http.StatusTooManyRequests,
+			body:            `{"errors":["FLOOD_WAIT_15"]}`,
+			wantNotModified: false,
+			wantRetryIn:     15 * time.Second,
 		},
 		"non-200 returns error": {
 			reqURL:          "https://example.com/feed.xml",
 			statusCode:      http.StatusTeapot,
 			body:            "teapot",
-			wantHandled:     true,
-			wantRetry:       false,
+			wantNotModified: false,
 			wantRetryIn:     0,
 			wantErrContains: "want 200, got 418: teapot",
-			wantErrorCount:  0,
-			wantLastError:   "",
 		},
 	}
 
@@ -637,7 +642,7 @@ func TestHandleFeedStatus(t *testing.T) {
 				rec.WriteString(tc.body)
 			}
 
-			result, err := f.handleFeedStatus(req, rec.Result(), fd, &st)
+			result, err := f.handleFeedStatus(req, rec.Result(), fd)
 
 			if tc.wantErrContains != "" {
 				if err == nil {
@@ -650,12 +655,9 @@ func TestHandleFeedStatus(t *testing.T) {
 				testutil.AssertEqual(t, err, nil)
 			}
 
-			testutil.AssertEqual(t, result.handled, tc.wantHandled)
-			testutil.AssertEqual(t, result.retry, tc.wantRetry)
+			testutil.AssertEqual(t, result.notModified, tc.wantNotModified)
 			testutil.AssertEqual(t, result.retryIn, tc.wantRetryIn)
-			testutil.AssertEqual(t, st.ErrorCount, tc.wantErrorCount)
-			testutil.AssertEqual(t, st.LastError, tc.wantLastError)
-			testutil.AssertEqual(t, !st.LastUpdated.IsZero(), tc.wantLastUpdatedNonZero)
+			testutil.AssertEqual(t, st, tc.initialState)
 
 			f.stats.ReadAccess(func(s *tgstats.Run) {
 				testutil.AssertEqual(t, s.NotModifiedFeeds, tc.wantNotModifiedFeeds)
