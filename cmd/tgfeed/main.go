@@ -30,7 +30,6 @@ import (
 
 	"go.astrophena.name/base/cli"
 	"go.astrophena.name/base/logger"
-	"go.astrophena.name/base/request"
 	"go.astrophena.name/base/syncx"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/admin"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/ctxsleep"
@@ -567,7 +566,9 @@ func (f *fetcher) doInit(ctx context.Context) {
 	f.logf = log.New(env.Stderr, "", 0).Printf
 
 	if f.httpc == nil {
-		f.httpc = request.DefaultClient
+		f.httpc = &http.Client{
+			Timeout: 60 * time.Second,
+		}
 	}
 	f.fp = gofeed.NewParser()
 
