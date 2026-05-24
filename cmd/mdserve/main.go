@@ -52,6 +52,9 @@ type engine struct {
 	// configuration
 	addr string
 	fs   fs.FS
+	root *os.Root
+
+	initErr error
 
 	// used in tests
 	noServerStart bool
@@ -79,6 +82,7 @@ func (e *engine) Run(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+		e.root = root
 		e.fs = root.FS()
 		rules = append(rules, landlock.RODirs(dir))
 	}
@@ -101,6 +105,9 @@ func (e *engine) Run(ctx context.Context) error {
 	restrict.DoUnlessTesting(ctx, rules...)
 
 	e.init.Do(e.doInit)
+	if e.initErr != nil {
+		return e.initErr
+	}
 
 	if dir != "" {
 		logger.Info(ctx, "serving from", slog.String("dir", dir))
@@ -116,7 +123,13 @@ func (e *engine) Run(ctx context.Context) error {
 func (e *engine) doInit() {
 	// Serve by default from current directory.
 	if e.fs == nil {
-		e.fs = os.DirFS(".")
+		root, err := os.OpenRoot(".")
+		if err != nil {
+			e.initErr = err
+			return
+		}
+		e.root = root
+		e.fs = root.FS()
 	}
 	e.md = &markdown.Parser{
 		HeadingID:          true,
@@ -142,6 +155,10 @@ func (e *engine) doInit() {
 
 func (e *engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	e.init.Do(e.doInit)
+	if e.initErr != nil {
+		web.RespondError(w, r, e.initErr)
+		return
+	}
 
 	p := r.URL.Path
 	if p == "/" {

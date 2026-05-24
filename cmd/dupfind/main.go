@@ -54,12 +54,18 @@ type dup struct {
 }
 
 func lookup(dir string) ([]dup, error) {
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return nil, err
+	}
+	defer root.Close()
+
 	var (
 		dups   []dup
 		hashes = make(map[string]string)
 	)
 
-	if err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+	if err := fs.WalkDir(root.FS(), ".", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -68,7 +74,7 @@ func lookup(dir string) ([]dup, error) {
 			return nil
 		}
 
-		f, err := os.Open(path)
+		f, err := root.Open(filepath.FromSlash(path))
 		if err != nil {
 			return err
 		}
@@ -83,18 +89,9 @@ func lookup(dir string) ([]dup, error) {
 
 		prev, hasDup := hashes[hh]
 		if hasDup {
-			bpath, err := filepath.Rel(dir, path)
-			if err != nil {
-				return err
-			}
-			bprev, err := filepath.Rel(dir, prev)
-			if err != nil {
-				return err
-			}
-
 			dups = append(dups, dup{
-				cur:  bpath,
-				prev: bprev,
+				cur:  filepath.FromSlash(path),
+				prev: filepath.FromSlash(prev),
 			})
 			return nil
 		}

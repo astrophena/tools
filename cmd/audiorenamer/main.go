@@ -64,6 +64,12 @@ func (a *app) Run(ctx context.Context) error {
 		dir = realdir
 	}
 
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+
 	// Drop privileges if not inside tests.
 	restrict.DoUnlessTesting(ctx, landlock.RWDirs(dir))
 
@@ -75,7 +81,7 @@ func (a *app) Run(ctx context.Context) error {
 
 	var processed, existing, renamed int
 
-	if err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+	if err := fs.WalkDir(root.FS(), ".", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -83,7 +89,7 @@ func (a *app) Run(ctx context.Context) error {
 			return nil
 		}
 
-		f, err := os.Open(path)
+		f, err := root.Open(filepath.FromSlash(path))
 		if err != nil {
 			return err
 		}
@@ -103,15 +109,15 @@ func (a *app) Run(ctx context.Context) error {
 
 		processed++
 
-		dir := filepath.Dir(path)
+		reldir := filepath.Dir(filepath.FromSlash(path))
 
 		var buf bytes.Buffer
 		if err := tmpl.Execute(&buf, m); err != nil {
 			return err
 		}
 		// Strip slashes from the new name to make it a valid filename.
-		newname := strings.ReplaceAll(buf.String(), "/", "")
-		newname = filepath.Join(dir, newname+filepath.Ext(path))
+		newname := strings.NewReplacer("/", "", "\\", "").Replace(buf.String())
+		newname = filepath.Join(reldir, newname+filepath.Ext(path))
 
 		if path == newname {
 			vlog("already exists, no need to rename", slog.String("path", path))
@@ -125,7 +131,7 @@ func (a *app) Run(ctx context.Context) error {
 		}
 		vlog(logMsg, slog.String("from", path), slog.String("to", newname))
 		if !a.dry {
-			if err := os.Rename(path, newname); err != nil {
+			if err := root.Rename(filepath.FromSlash(path), newname); err != nil {
 				return err
 			}
 		}
