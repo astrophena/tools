@@ -50,10 +50,16 @@ func (a *app) Run(ctx context.Context) error {
 		dir = realdir
 	}
 
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+
 	// Drop privileges if not in tests.
 	restrict.DoUnlessTesting(ctx, landlock.RWDirs(dir))
 
-	files, err := os.ReadDir(dir)
+	files, err := fs.ReadDir(root.FS(), ".")
 	if err != nil {
 		return err
 	}
@@ -90,32 +96,34 @@ func (a *app) Run(ctx context.Context) error {
 		return errUnknownSortMode
 	}
 
-	return a.rename(ctx, dir, files)
+	return a.rename(ctx, root, dir, files)
 }
 
-func (a *app) rename(ctx context.Context, dir string, files []fs.DirEntry) error {
+func (a *app) rename(ctx context.Context, root *os.Root, dir string, files []fs.DirEntry) error {
 	for _, d := range files {
 		if d.IsDir() {
 			return nil
 		}
 
 		var (
-			ext     = filepath.Ext(d.Name())
-			oldname = filepath.Join(dir, d.Name())
-			newname = filepath.Join(dir, fmt.Sprintf("%d%s", a.start, ext))
+			ext        = filepath.Ext(d.Name())
+			oldname    = d.Name()
+			newname    = fmt.Sprintf("%d%s", a.start, ext)
+			oldLogPath = filepath.Join(dir, oldname)
+			newLogPath = filepath.Join(dir, newname)
 		)
 
-		if _, err := os.Stat(newname); !errors.Is(err, fs.ErrNotExist) {
-			logger.Info(ctx, "file already exists, skipping", slog.String("path", newname))
+		if _, err := root.Stat(newname); !errors.Is(err, fs.ErrNotExist) {
+			logger.Info(ctx, "file already exists, skipping", slog.String("path", newLogPath))
 			a.start++
 			continue
 		}
 
 		if a.dry {
-			logger.Info(ctx, "would rename", slog.String("from", oldname), slog.String("to", newname))
+			logger.Info(ctx, "would rename", slog.String("from", oldLogPath), slog.String("to", newLogPath))
 		} else {
-			logger.Info(ctx, "renaming", slog.String("from", oldname), slog.String("to", newname))
-			if err := os.Rename(oldname, newname); err != nil {
+			logger.Info(ctx, "renaming", slog.String("from", oldLogPath), slog.String("to", newLogPath))
+			if err := root.Rename(oldname, newname); err != nil {
 				return err
 			}
 		}
