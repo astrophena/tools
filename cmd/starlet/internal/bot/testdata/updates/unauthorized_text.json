@@ -1,0 +1,19 @@
+{
+  "update_id": 10003,
+  "message": {
+    "date": 1441645532,
+    "chat": {
+      "id": 222222,
+      "type": "private",
+      "first_name": "Unknown",
+      "username": "Unknown"
+    },
+    "message_id": 1368,
+    "from": {
+      "id": 222222,
+      "first_name": "Unknown",
+      "username": "Unknown"
+    },
+    "text": "hello"
+  }
+}

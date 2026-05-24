@@ -1,0 +1,26 @@
+{
+  "update_id": 10001,
+  "message": {
+    "date": 1441645532,
+    "chat": {
+      "id": 123456789,
+      "type": "private",
+      "first_name": "Test",
+      "username": "Test"
+    },
+    "message_id": 1366,
+    "from": {
+      "id": 123456789,
+      "first_name": "Test",
+      "username": "Test"
+    },
+    "text": "/echo hello",
+    "entities": [
+      {
+        "offset": 0,
+        "length": 5,
+        "type": "bot_command"
+      }
+    ]
+  }
+}

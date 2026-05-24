@@ -1,0 +1,17 @@
+update: command
+-- bot.star --
+load("@starlet//tgbot.star", "tgbot")
+load("@starlet//tg.star", "tg")
+
+bot = tgbot.new(allowed_chats=[123456789])
+
+def echo(message, args):
+    tg.reply(message, "echo: " + args)
+
+bot.command("/echo", "Echo text.", echo, require_args=True)
+
+def on_load():
+    bot.set_commands()
+
+def handle(update):
+    bot.handle(update)
