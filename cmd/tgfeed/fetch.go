@@ -372,10 +372,10 @@ func feedItemPublishedTime(feedItem *gofeed.Item) *time.Time {
 }
 
 func feedItemActivityTime(feedItem *gofeed.Item) *time.Time {
-	if feedItem.UpdatedParsed != nil {
-		return feedItem.UpdatedParsed
+	if feedItem.PublishedParsed != nil {
+		return feedItem.PublishedParsed
 	}
-	return feedItem.PublishedParsed
+	return feedItem.UpdatedParsed
 }
 
 func decideFeedItem(now time.Time, itemCtx feedItemContext, feedItem *gofeed.Item) feedItemDecision {
