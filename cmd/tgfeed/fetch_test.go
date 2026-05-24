@@ -457,20 +457,35 @@ func TestDecideFeedItem(t *testing.T) {
 			wantMarkSeen: "",
 			wantSkip:     tgstats.FeedItemSkipReasonSeen,
 		},
-		"published before last update is ignored in regular mode": {
+		"regular mode ignores recently updated item with old published date": {
 			fd: &feed{},
 			state: &state.Feed{
 				LastUpdated: now,
 			},
 			item: &gofeed.Item{
-				GUID:            "regular-old",
-				Link:            "https://example.com/regular-old",
-				PublishedParsed: &recent,
+				GUID:            "regular-old-updated",
+				Link:            "https://example.com/regular-old-updated",
+				PublishedParsed: &old,
+				UpdatedParsed:   &recent,
 			},
 			exists:       true,
 			wantProcess:  false,
 			wantMarkSeen: "",
 			wantSkip:     tgstats.FeedItemSkipReasonOld,
+		},
+		"regular mode falls back to updated when published is missing": {
+			fd: &feed{},
+			state: &state.Feed{
+				LastUpdated: old,
+			},
+			item: &gofeed.Item{
+				GUID:          "regular-updated-only",
+				Link:          "https://example.com/regular-updated-only",
+				UpdatedParsed: &recent,
+			},
+			exists:       true,
+			wantProcess:  true,
+			wantMarkSeen: "regular-updated-only",
 		},
 		"nil published timestamp is accepted in regular mode": {
 			fd: &feed{},
