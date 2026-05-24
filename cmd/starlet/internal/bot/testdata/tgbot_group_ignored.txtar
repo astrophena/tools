@@ -1,0 +1,15 @@
+update: group_text
+-- bot.star --
+load("@starlet//tgbot.star", "tgbot")
+load("@starlet//tg.star", "tg")
+
+bot = tgbot.new(
+    allowed_chats=[-100123456789],
+    group_mode="addressed_only",
+)
+
+def fallback(message):
+    tg.reply(message, "handled")
+
+def handle(update):
+    bot.handle(update, fallback=fallback)

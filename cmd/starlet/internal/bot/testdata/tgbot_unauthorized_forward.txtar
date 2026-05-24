@@ -1,0 +1,12 @@
+update: unauthorized_text
+-- bot.star --
+load("@starlet//tgbot.star", "tgbot")
+
+bot = tgbot.new(
+    allowed_chats=[123456789],
+    unauthorized_forward_to=config.owner_id,
+    unauthorized_forward_ack="forwarded",
+)
+
+def handle(update):
+    bot.handle(update)

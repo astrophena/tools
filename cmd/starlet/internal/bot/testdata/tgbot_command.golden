@@ -1,0 +1,29 @@
+[
+  {
+    "method": "setMyCommands",
+    "args": {
+      "commands": [
+        {
+          "command": "echo",
+          "description": "Echo text."
+        }
+      ],
+      "scope": {
+        "chat_id": 123456789,
+        "type": "chat"
+      }
+    }
+  },
+  {
+    "method": "sendMessage",
+    "args": {
+      "chat_id": 123456789,
+      "entities": [],
+      "link_preview_options": {
+        "is_disabled": true
+      },
+      "reply_markup": {},
+      "text": "echo: hello\n\n"
+    }
+  }
+]
