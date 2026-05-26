@@ -6,14 +6,6 @@
 Tgfeed fetches RSS feeds and sends updates to Telegram. It's designed to be run
 as a periodic job.
 
-For a top-down code reading tour, start with these files in order:
-
-  - main.go: entrypoint, bootstrap, command dispatch, and run orchestration
-  - state.go: feed configuration, config parsing, state loading, and run locking
-  - fetch.go: single-feed fetch flow, item processing, rendering, and delivery
-  - special.go: tgfeed:// special feed handlers
-  - stats.go: runtime statistics aggregation and persistence
-
 # Usage
 
 	$ tgfeed [flags...] <command>
