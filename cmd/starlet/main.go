@@ -24,6 +24,7 @@ import (
 	"go.astrophena.name/tools/cmd/starlet/internal/bot"
 	"go.astrophena.name/tools/internal/api/gemini"
 	"go.astrophena.name/tools/internal/api/gist"
+	"go.astrophena.name/tools/internal/api/llm"
 	"go.astrophena.name/tools/internal/starlark/kvcache"
 	"go.astrophena.name/tools/internal/store"
 )
@@ -48,6 +49,9 @@ type engine struct {
 	// configuration, read-only after initialization
 	databasePath string
 	geminiKey    string
+	llmAPIKey    string
+	llmAPIURL    string
+	llmUsagePath string
 	ghToken      string
 	gistID       string
 	host         string
@@ -90,6 +94,9 @@ func (e *engine) doInit(ctx context.Context) error {
 	// Load configuration from environment variables.
 	e.databasePath = cmp.Or(e.databasePath, env.Getenv("DATABASE_PATH"))
 	e.geminiKey = cmp.Or(e.geminiKey, env.Getenv("GEMINI_KEY"))
+	e.llmAPIKey = cmp.Or(e.llmAPIKey, env.Getenv("LLM_API_KEY"))
+	e.llmAPIURL = cmp.Or(e.llmAPIURL, env.Getenv("LLM_API_URL"))
+	e.llmUsagePath = cmp.Or(e.llmUsagePath, env.Getenv("LLM_USAGE_PATH"))
 	e.ghToken = cmp.Or(e.ghToken, env.Getenv("GH_TOKEN"))
 	e.gistID = cmp.Or(e.gistID, env.Getenv("GIST_ID"))
 	e.host = cmp.Or(e.host, env.Getenv("HOST"))
@@ -114,6 +121,7 @@ func (e *engine) doInit(ctx context.Context) error {
 		e.tgSecret,
 		e.tgToken,
 		e.geminiKey,
+		e.llmAPIKey,
 	} {
 		if val != "" {
 			scrubPairs = append(scrubPairs, val, "[EXPUNGED]")
@@ -140,19 +148,33 @@ func (e *engine) doInit(ctx context.Context) error {
 		e.store = store.NewMemStore(ctx, kvCacheTTL)
 	}
 
+	if e.llmUsagePath == "" {
+		e.llmUsagePath = "llm-usage.json"
+	}
+
 	opts := bot.Opts{
-		Token:      e.tgToken,
-		Secret:     e.tgSecret,
-		Owner:      e.tgOwner,
-		HTTPClient: e.httpc,
-		KVCache:    kvcache.Module(ctx, e.store),
-		Scrubber:   e.scrubber,
-		Logger:     e.logger.WithGroup("bot"),
+		Token:        e.tgToken,
+		Secret:       e.tgSecret,
+		Owner:        e.tgOwner,
+		HTTPClient:   e.httpc,
+		KVCache:      kvcache.Module(ctx, e.store),
+		Scrubber:     e.scrubber,
+		Logger:       e.logger.WithGroup("bot"),
+		LLMUsagePath: e.llmUsagePath,
 	}
 
 	if e.geminiKey != "" {
 		opts.GeminiClient = &gemini.Client{
 			APIKey:     e.geminiKey,
+			HTTPClient: e.httpc,
+			Scrubber:   e.scrubber,
+		}
+	}
+
+	if e.llmAPIKey != "" && e.llmAPIURL != "" {
+		opts.LLMClient = &llm.Client{
+			APIKey:     e.llmAPIKey,
+			APIURL:     e.llmAPIURL,
 			HTTPClient: e.httpc,
 			Scrubber:   e.scrubber,
 		}

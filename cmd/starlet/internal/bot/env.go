@@ -14,6 +14,7 @@ import (
 	"go.astrophena.name/tools/internal/starlark/gemini"
 	"go.astrophena.name/tools/internal/starlark/go2star"
 	"go.astrophena.name/tools/internal/starlark/kvcache"
+	"go.astrophena.name/tools/internal/starlark/llm"
 	"go.astrophena.name/tools/internal/starlark/telegram"
 	"go.astrophena.name/tools/internal/tgmarkup"
 
@@ -166,6 +167,11 @@ func (b *Bot) environment() Environment {
 			Name:  "gemini",
 			Doc:   gemini.Documentation(),
 			Value: gemini.Module(b.geminic),
+		},
+		{
+			Name:  "llm",
+			Doc:   llm.Documentation(),
+			Value: llm.Module(b.llmc, b.llmUsagePath),
 		},
 		{
 			Name:  "kvcache",
