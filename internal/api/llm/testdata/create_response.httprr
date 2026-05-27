@@ -1,0 +1,21 @@
+httprr trace v1
+332 2095
+POST https://llm.example/responses HTTP/1.1
+Host: llm.example
+User-Agent: llm.test/ (+https://astrophena.name/bleep-bloop)
+Content-Length: 151
+Content-Type: application/json
+
+{"model":"test-model","input":[{"role":"user","content":[{"type":"input_text","text":"Reply with one short sentence."}]}],"instructions":"Be concise."}HTTP/2.0 200 OK
+Content-Length: 1792
+Cache-Control: no-cache
+Cache-Control: no-cache, no-store, must-revalidate
+Content-Type: application/json
+Date: Wed, 27 May 2026 16:59:19 GMT
+Expires: 0
+Pragma: no-cache
+X-Accel-Buffering: no
+X-Ratelimit-Reset-Requests: 2ms
+X-Ratelimit-Reset-Tokens: 0s
+
+{"id":"resp_cGsAflnzPi-ic1fuAUaZbYupCjDoUK2iLocVdPitUropiKA-b30DDvACNkTMu20Nba5mz4s7TBvSTYqVBiCHiwYPEmbf_eMzpQ78YV3E5FXZsVjNKgnqmZ8DJYuiaVNptX6rkGraRC4-M4X0_trqKCzrxXGXJfXMtdfoYyc5Zo4eWUxmL6zxiluhGkAVJySn7qmXztPD_9U3HzE471pYJoRlsI-XDO5yWzvChlpUctR9wS-VGt3SdkapaqyoxIf7zbuWN__docyhTLcv4iJz12ya4RrayuFdLR10HtGfp90yK7uO6KknvvoY-44EFJB8Ik5Foyqjbq-QB1y0nOUXV_Aq4x0b3BxcY7ms4wCU59XwYQOcfmKNMozoFWuB_PMwWiautldQilUer4pezSr5yVJIL9ZKpg==","created_at":1779901157,"error":null,"incomplete_details":null,"instructions":"Be concise.","metadata":{},"model":"openai/gpt-5-nano","object":"response","output":[{"id":"rs_0818a2983f7e1a2d006a1722e6172881908380fda02a978937","summary":[],"type":"reasoning"},{"id":"msg_0818a2983f7e1a2d006a1722e7375481909cfcbc073dc29360","content":[{"annotations":[],"text":"Sure, I can help with that.","type":"output_text","logprobs":[]}],"role":"assistant","status":"completed","type":"message","phase":null}],"parallel_tool_calls":true,"temperature":1.0,"tool_choice":"auto","tools":[],"top_p":1.0,"max_output_tokens":null,"previous_response_id":null,"reasoning":{"context":"current_turn","effort":"medium","summary":null},"status":"completed","text":{"format":{"type":"text"},"verbosity":"medium"},"truncation":"disabled","usage":{"input_tokens":19,"input_tokens_details":{"audio_tokens":null,"cached_tokens":0,"text_tokens":null},"output_tokens":183,"output_tokens_details":{"reasoning_tokens":128,"text_tokens":null},"total_tokens":202,"cost":null},"user":"example","store":true,"background":false,"billing":{"payer":"developer"},"completed_at":1779901159,"frequency_penalty":0.0,"max_tool_calls":null,"moderation":null,"presence_penalty":0.0,"prompt_cache_key":null,"prompt_cache_retention":"in_memory","safety_identifier":null,"service_tier":"default","top_logprobs":0}

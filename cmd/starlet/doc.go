@@ -72,6 +72,11 @@ Optional:
 
   - DATABASE_PATH: Path to a SQLite database file. If not provided, an in-memory store is used.
   - GEMINI_KEY: API key for Google Gemini (required to use the gemini module).
+  - LLM_API_KEY: API key for an OpenAI-compatible gateway (required to use llm).
+  - LLM_API_URL: API root URL for an OpenAI-compatible gateway, for example
+    https://api.openai.com/v1 (required to use llm).
+  - LLM_USAGE_PATH: Path to persistent JSON file with per-key token usage stats
+    for llm module. Defaults to llm-usage.json in current directory.
   - GH_TOKEN: A GitHub Personal Access Token (PAT) with gist scope. Recommended for higher rate limits.
 
 # Admin Interface

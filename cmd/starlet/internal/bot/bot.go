@@ -23,6 +23,7 @@ import (
 	"go.astrophena.name/base/version"
 	"go.astrophena.name/base/web"
 	"go.astrophena.name/tools/internal/api/gemini"
+	"go.astrophena.name/tools/internal/api/llm"
 	"go.astrophena.name/tools/internal/starlark/go2star"
 	"go.astrophena.name/tools/internal/starlark/interpreter"
 	"go.astrophena.name/tools/internal/tgmarkup"
@@ -64,11 +65,13 @@ type Bot struct {
 	tgBotID       int64
 	tgBotUsername string
 
-	httpc    *http.Client
-	geminic  *gemini.Client
-	kvCache  *starlarkstruct.Module
-	scrubber *strings.Replacer
-	logger   *slog.Logger
+	httpc        *http.Client
+	geminic      *gemini.Client
+	llmc         *llm.Client
+	llmUsagePath string
+	kvCache      *starlarkstruct.Module
+	scrubber     *strings.Replacer
+	logger       *slog.Logger
 
 	instance atomic.Pointer[instance]
 }
@@ -96,6 +99,10 @@ type Opts struct {
 	HTTPClient *http.Client
 	// GeminiClient is the client for interacting with the Google Gemini API.
 	GeminiClient *gemini.Client
+	// LLMClient is the client for interacting with an OpenAI-compatible LLM API.
+	LLMClient *llm.Client
+	// LLMUsagePath is path to persistent usage stats JSON for llm module.
+	LLMUsagePath string
 	// KVCache is the key-value cache for Starlark.
 	KVCache *starlarkstruct.Module
 	// Scrubber is used to scrub sensitive information from logs.
@@ -114,6 +121,8 @@ func New(opts Opts) *Bot {
 		tgBotUsername: opts.BotUsername,
 		httpc:         opts.HTTPClient,
 		geminic:       opts.GeminiClient,
+		llmc:          opts.LLMClient,
+		llmUsagePath:  opts.LLMUsagePath,
 		kvCache:       opts.KVCache,
 		scrubber:      opts.Scrubber,
 		logger:        opts.Logger,
