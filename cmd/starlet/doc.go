@@ -8,7 +8,7 @@ Starlet is a Telegram bot runner powered by Starlark.
 It fetches bot logic written in Starlark from a specified GitHub Gist,
 executes it within a Starlark interpreter, and handles incoming Telegram updates
 via webhooks. Starlet provides a sandboxed environment with pre-defined modules
-for interacting with Telegram, Gemini AI, key-value caching, and more.
+for interacting with Telegram, LLM, key-value caching, and more.
 
 When a Telegram update arrives, Starlet parses it, converts the JSON payload
 into a Starlark dictionary, and invokes the handle function defined in the
@@ -71,7 +71,6 @@ Required:
 Optional:
 
   - DATABASE_PATH: Path to a SQLite database file. If not provided, an in-memory store is used.
-  - GEMINI_KEY: API key for Google Gemini (required to use the gemini module).
   - LLM_API_KEY: API key for an OpenAI-compatible gateway (required to use llm).
   - LLM_API_URL: API root URL for an OpenAI-compatible gateway, for example
     https://api.openai.com/v1 (required to use llm).

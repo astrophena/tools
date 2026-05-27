@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	"go.astrophena.name/base/version"
-	"go.astrophena.name/tools/internal/starlark/gemini"
 	"go.astrophena.name/tools/internal/starlark/go2star"
 	"go.astrophena.name/tools/internal/starlark/kvcache"
 	"go.astrophena.name/tools/internal/starlark/llm"
@@ -162,11 +161,6 @@ func (b *Bot) environment() Environment {
 					Value: starlark.NewBuiltin("files.read", b.starlarkFilesRead),
 				},
 			},
-		},
-		{
-			Name:  "gemini",
-			Doc:   gemini.Documentation(),
-			Value: gemini.Module(b.geminic),
 		},
 		{
 			Name:  "llm",

@@ -22,7 +22,6 @@ import (
 	"go.astrophena.name/base/web"
 	"go.astrophena.name/base/web/service"
 	"go.astrophena.name/tools/cmd/starlet/internal/bot"
-	"go.astrophena.name/tools/internal/api/gemini"
 	"go.astrophena.name/tools/internal/api/gist"
 	"go.astrophena.name/tools/internal/api/llm"
 	"go.astrophena.name/tools/internal/starlark/kvcache"
@@ -48,7 +47,6 @@ type engine struct {
 
 	// configuration, read-only after initialization
 	databasePath string
-	geminiKey    string
 	llmAPIKey    string
 	llmAPIURL    string
 	llmUsagePath string
@@ -93,7 +91,6 @@ func (e *engine) doInit(ctx context.Context) error {
 
 	// Load configuration from environment variables.
 	e.databasePath = cmp.Or(e.databasePath, env.Getenv("DATABASE_PATH"))
-	e.geminiKey = cmp.Or(e.geminiKey, env.Getenv("GEMINI_KEY"))
 	e.llmAPIKey = cmp.Or(e.llmAPIKey, env.Getenv("LLM_API_KEY"))
 	e.llmAPIURL = cmp.Or(e.llmAPIURL, env.Getenv("LLM_API_URL"))
 	e.llmUsagePath = cmp.Or(e.llmUsagePath, env.Getenv("LLM_USAGE_PATH"))
@@ -109,7 +106,7 @@ func (e *engine) doInit(ctx context.Context) error {
 
 	if e.httpc == nil {
 		e.httpc = &http.Client{
-			// Increase timeout to properly handle Gemini API response times.
+			// Increase timeout to properly handle LLM API response times.
 			Timeout: 60 * time.Second,
 		}
 	}
@@ -120,7 +117,6 @@ func (e *engine) doInit(ctx context.Context) error {
 		e.gistID,
 		e.tgSecret,
 		e.tgToken,
-		e.geminiKey,
 		e.llmAPIKey,
 	} {
 		if val != "" {
@@ -161,14 +157,6 @@ func (e *engine) doInit(ctx context.Context) error {
 		Scrubber:     e.scrubber,
 		Logger:       e.logger.WithGroup("bot"),
 		LLMUsagePath: e.llmUsagePath,
-	}
-
-	if e.geminiKey != "" {
-		opts.GeminiClient = &gemini.Client{
-			APIKey:     e.geminiKey,
-			HTTPClient: e.httpc,
-			Scrubber:   e.scrubber,
-		}
 	}
 
 	if e.llmAPIKey != "" && e.llmAPIURL != "" {

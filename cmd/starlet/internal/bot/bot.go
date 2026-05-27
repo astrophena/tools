@@ -22,7 +22,6 @@ import (
 	"go.astrophena.name/base/request"
 	"go.astrophena.name/base/version"
 	"go.astrophena.name/base/web"
-	"go.astrophena.name/tools/internal/api/gemini"
 	"go.astrophena.name/tools/internal/api/llm"
 	"go.astrophena.name/tools/internal/starlark/go2star"
 	"go.astrophena.name/tools/internal/starlark/interpreter"
@@ -66,7 +65,6 @@ type Bot struct {
 	tgBotUsername string
 
 	httpc        *http.Client
-	geminic      *gemini.Client
 	llmc         *llm.Client
 	llmUsagePath string
 	kvCache      *starlarkstruct.Module
@@ -97,8 +95,6 @@ type Opts struct {
 	BotUsername string
 	// HTTPClient is the HTTP client to use for making requests.
 	HTTPClient *http.Client
-	// GeminiClient is the client for interacting with the Google Gemini API.
-	GeminiClient *gemini.Client
 	// LLMClient is the client for interacting with an OpenAI-compatible LLM API.
 	LLMClient *llm.Client
 	// LLMUsagePath is path to persistent usage stats JSON for llm module.
@@ -120,7 +116,6 @@ func New(opts Opts) *Bot {
 		tgBotID:       opts.BotID,
 		tgBotUsername: opts.BotUsername,
 		httpc:         opts.HTTPClient,
-		geminic:       opts.GeminiClient,
 		llmc:          opts.LLMClient,
 		llmUsagePath:  opts.LLMUsagePath,
 		kvCache:       opts.KVCache,
