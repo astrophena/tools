@@ -81,7 +81,7 @@ func (m *module) generate(thread *starlark.Thread, b *starlark.Builtin, args sta
 		if !ok {
 			return nil, fmt.Errorf("%s: in contents[%d] content must be a string", b.Name(), i)
 		}
-		messages = append(messages, llm.Message{Role: string(role), Content: []llm.ContentPart{{Type: "input_text", Text: string(content)}}})
+		messages = append(messages, llm.Message{Role: string(role), Content: []llm.ContentPart{{Type: contentPartType(string(role)), Text: string(content)}}})
 	}
 	if image.Len() > 0 {
 		mime := http.DetectContentType([]byte(image))
@@ -100,6 +100,15 @@ func (m *module) generate(thread *starlark.Thread, b *starlark.Builtin, args sta
 	}
 
 	return starlark.String(resp.OutputText), nil
+}
+
+func contentPartType(role string) string {
+	switch role {
+	case "assistant", "model":
+		return "output_text"
+	default:
+		return "input_text"
+	}
 }
 
 func (m *module) getUsage(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
