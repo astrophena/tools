@@ -12,6 +12,7 @@ import (
 	"io"
 	"io/fs"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"slices"
@@ -95,6 +96,45 @@ func TestFetcherMain(t *testing.T) {
 		},
 	},
 	)
+}
+
+func TestRemoteClientDoesNotCreateStateDir(t *testing.T) {
+	t.Parallel()
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/config", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`feed(url="https://example.com/feed.xml")`))
+	})
+	mux.HandleFunc("/api/state", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{}`))
+	})
+	mux.HandleFunc("/api/error-template", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("test"))
+	})
+	server := httptest.NewServer(mux)
+	t.Cleanup(server.Close)
+
+	xdgStateHome := t.TempDir()
+	var stdout, stderr bytes.Buffer
+	env := &cli.Env{
+		Args: []string{"-remote", server.URL, "feeds"},
+		Getenv: func(key string) string {
+			if key == "XDG_STATE_HOME" {
+				return xdgStateHome
+			}
+			return ""
+		},
+		Stdin:  strings.NewReader(""),
+		Stdout: &stdout,
+		Stderr: &stderr,
+	}
+	if err := cli.Run(cli.WithEnv(t.Context(), env), new(fetcher)); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := os.Stat(filepath.Join(xdgStateHome, "tgfeed")); !os.IsNotExist(err) {
+		t.Fatalf("remote client created state directory: %v", err)
+	}
 }
 
 func TestListFeeds(t *testing.T) {
