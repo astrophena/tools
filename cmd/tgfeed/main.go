@@ -113,20 +113,22 @@ func (f *fetcher) Run(ctx context.Context) error {
 	f.ghToken = cmp.Or(f.ghToken, env.Getenv("GITHUB_TOKEN"))
 	f.stateDir = cmp.Or(f.stateDir, env.Getenv("STATE_DIRECTORY"))
 	if f.stateDir == "" {
-		xdgStateHome := env.Getenv("XDG_STATE_HOME")
-		if xdgStateHome == "" {
-			home, err := os.UserHomeDir()
-			if err != nil {
-				return err
-			}
-			xdgStateHome = filepath.Join(home, ".local", "state")
+		stateDir, err := defaultStateDir(env)
+		if err != nil {
+			return err
 		}
-		f.stateDir = filepath.Join(xdgStateHome, "tgfeed")
+		f.stateDir = stateDir
+	}
+	f.tgToken = cmp.Or(f.tgToken, env.Getenv("TELEGRAM_TOKEN"))
+
+	if len(env.Args) == 0 {
+		return fmt.Errorf("%w: command is required, see -help for usage", cli.ErrInvalidArgs)
+	}
+	if f.needsLocalStateDir(env.Args[0]) {
 		if err := os.MkdirAll(f.stateDir, 0o700); err != nil {
 			return err
 		}
 	}
-	f.tgToken = cmp.Or(f.tgToken, env.Getenv("TELEGRAM_TOKEN"))
 
 	f.init.Do(func() {
 		f.doInit(ctx)
@@ -134,10 +136,6 @@ func (f *fetcher) Run(ctx context.Context) error {
 
 	if f.dry {
 		f.slogLevel.Set(slog.LevelDebug)
-	}
-
-	if len(env.Args) == 0 {
-		return fmt.Errorf("%w: command is required, see -help for usage", cli.ErrInvalidArgs)
 	}
 
 	switch env.Args[0] {
@@ -177,6 +175,22 @@ func (f *fetcher) Run(ctx context.Context) error {
 	default:
 		return fmt.Errorf("%w: no such command %q", cli.ErrInvalidArgs, env.Args[0])
 	}
+}
+
+func defaultStateDir(env *cli.Env) (string, error) {
+	xdgStateHome := env.Getenv("XDG_STATE_HOME")
+	if xdgStateHome == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
+		xdgStateHome = filepath.Join(home, ".local", "state")
+	}
+	return filepath.Join(xdgStateHome, "tgfeed"), nil
+}
+
+func (f *fetcher) needsLocalStateDir(command string) bool {
+	return f.remoteURL == "" || slices.Contains([]string{"admin", "run"}, command)
 }
 
 // Run orchestration.
