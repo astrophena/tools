@@ -11,8 +11,10 @@ require (
 	github.com/mmcdole/gofeed v1.3.0
 	github.com/tailscale/sqlite v0.0.0-20260306200437-15a02b90c606
 	github.com/tobischo/gokeepasslib/v3 v3.6.2
-	go.astrophena.name/base v0.19.1
+	go.astrophena.name/base v0.21.0
 	go.starlark.net v0.0.0-20260326113308-fadfc96def35
+	golang.org/x/mod v0.35.0
+	golang.org/x/sync v0.20.0
 	golang.org/x/term v0.43.0
 	rsc.io/markdown v0.0.0-20241212154241-6bf72452917f
 )
@@ -20,7 +22,7 @@ require (
 require (
 	github.com/BurntSushi/toml v1.6.0 // indirect
 	github.com/PuerkitoBio/goquery v1.12.0 // indirect
-	github.com/a-h/templ v0.3.1001 // indirect
+	github.com/a-h/templ v0.3.1020 // indirect
 	github.com/andybalholm/cascadia v1.3.3 // indirect
 	github.com/aymerick/douceur v0.2.0 // indirect
 	github.com/go4org/hashtriemap v0.0.0-20251130024219-545ba229f689 // indirect
@@ -34,9 +36,7 @@ require (
 	github.com/tobischo/argon2 v0.1.0 // indirect
 	golang.org/x/crypto v0.51.0 // indirect
 	golang.org/x/exp/typeparams v0.0.0-20260218203240-3dfff04db8fa // indirect
-	golang.org/x/mod v0.35.0 // indirect
 	golang.org/x/net v0.55.0 // indirect
-	golang.org/x/sync v0.20.0 // indirect
 	golang.org/x/sys v0.45.0 // indirect
 	golang.org/x/text v0.37.0 // indirect
 	golang.org/x/tools v0.44.0 // indirect
