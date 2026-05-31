@@ -134,10 +134,10 @@ Warn when orphaned packages are installed.
 
 Warn when explicitly installed native packages are not listed in `packages`.
 
-### `pacman.check_pacnew(prefs_etc)`
+### `pacman.check_pacnew(managed_etc)`
 
 Warn when `.pacnew` files exist under `/etc`, grouping files managed by
-`prefs_etc` separately from unmanaged files and showing short diffs.
+`managed_etc` separately from unmanaged files and showing short diffs.
 
 ## `rescue`
 

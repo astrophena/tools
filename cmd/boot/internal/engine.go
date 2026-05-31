@@ -49,8 +49,9 @@ type Task struct {
 
 // Action is an idempotent operation emitted by a task.
 type Action struct {
-	Summary string
-	Apply   func(context.Context, bool) (Result, error)
+	Summary   string
+	Apply     func(context.Context, bool) (Result, error)
+	IsConsent bool
 }
 
 // Result describes what an action did.
@@ -159,7 +160,7 @@ func (e *Engine) Run(ctx context.Context, w io.Writer, selection Selection, opts
 		return e.runJSON(ctx, w, selection, opts)
 	}
 	if opts.DryRun {
-		return e.plan(ctx, w, selection, opts)
+		return e.RunPlan(ctx, w, selection, opts)
 	}
 	if opts.Verbose {
 		return e.applyVerbose(ctx, w, selection, opts)
@@ -167,7 +168,74 @@ func (e *Engine) Run(ctx context.Context, w io.Writer, selection Selection, opts
 	return e.apply(ctx, w, selection, opts)
 }
 
-func (e *Engine) plan(ctx context.Context, w io.Writer, selection Selection, opts RunOptions) error {
+func (e *Engine) prepare(ctx context.Context, tasks []*Task, opts RunOptions) (planned map[string]bool, summary Summary, failures []failure, stopOnError bool) {
+	planned = make(map[string]bool)
+	summary.Tasks = len(tasks)
+
+	for _, task := range tasks {
+		task.Actions = nil
+		thread := &starlark.Thread{Name: "boot:" + task.ID}
+		SetTask(thread, task)
+		if _, err := starlark.Call(thread, task.Run, nil, nil); err != nil {
+			if !task.ContinueOnError {
+				stopOnError = true
+			}
+			summary.Failed++
+			failures = append(failures, failure{TaskID: task.ID, TaskName: task.Name, Err: err})
+			if opts.FailFast && !task.ContinueOnError {
+				break
+			}
+			continue
+		}
+		if opts.Interactive && !opts.DryRun {
+			stop := false
+			for i := 0; i < len(task.Actions); i++ {
+				action := task.Actions[i]
+				if action.IsConsent {
+					summary.Actions++
+					result, err := action.Apply(ctx, false)
+					if err != nil {
+						if !task.ContinueOnError {
+							stopOnError = true
+						}
+						summary.Failed++
+						failures = append(failures, failure{TaskID: task.ID, TaskName: task.Name, Action: action.Summary, Err: err})
+						if opts.FailFast && !task.ContinueOnError {
+							stop = true
+							break
+						}
+						continue
+					}
+					if result == ResultSkip || result == ResultStop {
+						summary.Skipped++
+					} else if result == ResultChange {
+						summary.Changed++
+					} else if result == ResultWarn {
+						summary.Warnings++
+					}
+					if result == ResultStop {
+						task.Actions = nil
+						stop = true
+						break
+					}
+					task.Actions = slices.Delete(task.Actions, i, i+1)
+					i--
+				}
+			}
+			if stop && opts.FailFast && (len(tasks) > 0 && !tasks[0].ContinueOnError) { // approximated
+				break
+			}
+			if stop {
+				continue
+			}
+		}
+		planned[task.ID] = true
+	}
+	return planned, summary, failures, stopOnError
+}
+
+// RunPlan plans the selected tasks, evaluating actions without applying changes.
+func (e *Engine) RunPlan(ctx context.Context, w io.Writer, selection Selection, opts RunOptions) error {
 	tasks, err := e.Selected(selection)
 	if err != nil {
 		return err
@@ -242,21 +310,20 @@ func (e *Engine) apply(ctx context.Context, w io.Writer, selection Selection, op
 	if err := e.prepareSudo(ctx, tasks); err != nil {
 		return err
 	}
-	summary := Summary{
-		Tasks: len(tasks),
+
+	planned, summary, failures, stopOnError := e.prepare(ctx, tasks, opts)
+	hadFailures := len(failures) > 0
+
+	if stopOnError && opts.FailFast {
+		e.printReport(w, summary, false)
+		e.printFailures(w, failures)
+		return errors.New("one or more tasks failed")
 	}
 
 	concurrency := max(opts.Concurrency, 1)
 
 	pb := progressbar.New(w, len(tasks), opts.Interactive)
 	pb.Start()
-
-	var (
-		mu          sync.Mutex
-		hadFailures bool
-		stopOnError bool
-		failures    []failure
-	)
 
 	doneCh := make(map[string]chan struct{})
 	for _, task := range tasks {
@@ -265,6 +332,8 @@ func (e *Engine) apply(ctx context.Context, w io.Writer, selection Selection, op
 
 	g, ctx := errgroup.WithContext(ctx)
 	g.SetLimit(concurrency)
+
+	var mu sync.Mutex
 
 	for _, task := range tasks {
 		g.Go(func() error {
@@ -281,35 +350,14 @@ func (e *Engine) apply(ctx context.Context, w io.Writer, selection Selection, op
 			}
 
 			mu.Lock()
-			if stopOnError && opts.FailFast {
+			if !planned[task.ID] || (stopOnError && opts.FailFast) {
 				mu.Unlock()
+				pb.Increment()
 				return nil
 			}
 			mu.Unlock()
 
-			task.Actions = nil
-
 			pb.SetTitle(task.Name)
-			thread := &starlark.Thread{Name: "boot:" + task.ID}
-			SetTask(thread, task)
-			_, err := starlark.Call(thread, task.Run, nil, nil)
-			if err != nil {
-				mu.Lock()
-				hadFailures = true
-				if !task.ContinueOnError {
-					stopOnError = true
-				}
-				summary.Failed++
-				failures = append(failures, failure{TaskID: task.ID, TaskName: task.Name, Err: err})
-				mu.Unlock()
-
-				if opts.FailFast && !task.ContinueOnError {
-					pb.Increment()
-					return err
-				}
-				pb.Increment()
-				return nil
-			}
 
 			for _, action := range task.Actions {
 				mu.Lock()
@@ -388,23 +436,20 @@ func (e *Engine) applyVerbose(ctx context.Context, w io.Writer, selection Select
 	if err := e.prepareSudo(ctx, tasks); err != nil {
 		return err
 	}
-	summary := Summary{Tasks: len(tasks)}
-	var failures []failure
+
+	planned, summary, failures, stopOnError := e.prepare(ctx, tasks, opts)
+	if stopOnError && opts.FailFast {
+		e.printReport(w, summary, false)
+		e.printFailures(w, failures)
+		return errors.New("one or more tasks failed")
+	}
 
 	for i, task := range tasks {
-		stop := false
-		fmt.Fprintf(w, "[%d/%d] Applying task %s: %s\n", i+1, len(tasks), task.ID, task.Name)
-		task.Actions = nil
-		thread := &starlark.Thread{Name: "boot:" + task.ID}
-		SetTask(thread, task)
-		if _, err := starlark.Call(thread, task.Run, nil, nil); err != nil {
-			summary.Failed++
-			failures = append(failures, failure{TaskID: task.ID, TaskName: task.Name, Err: err})
-			if opts.FailFast && !task.ContinueOnError {
-				break
-			}
+		if !planned[task.ID] {
 			continue
 		}
+		stop := false
+		fmt.Fprintf(w, "[%d/%d] Applying task %s: %s\n", i+1, len(tasks), task.ID, task.Name)
 		for _, action := range task.Actions {
 			summary.Actions++
 			result, err := action.Apply(ctx, false)
@@ -581,17 +626,21 @@ func (e *Engine) runJSON(ctx context.Context, w io.Writer, selection Selection, 
 		}
 	}
 
-	report := jsonRun{DryRun: opts.DryRun, Summary: Summary{Tasks: len(tasks)}}
+	planned, summary, failures, stopOnError := e.prepare(ctx, tasks, opts)
+	report := jsonRun{DryRun: opts.DryRun, Summary: summary}
+	for _, f := range failures {
+		report.Actions = append(report.Actions, jsonAction{TaskID: f.TaskID, TaskName: f.TaskName, Error: f.Err.Error()})
+	}
+
+	if stopOnError && opts.FailFast {
+		if err := json.NewEncoder(w).Encode(report); err != nil {
+			return err
+		}
+		return errors.New("one or more tasks failed")
+	}
+
 	for _, task := range tasks {
-		task.Actions = nil
-		thread := &starlark.Thread{Name: "boot:" + task.ID}
-		SetTask(thread, task)
-		if _, err := starlark.Call(thread, task.Run, nil, nil); err != nil {
-			report.Summary.Failed++
-			report.Actions = append(report.Actions, jsonAction{TaskID: task.ID, TaskName: task.Name, Error: err.Error()})
-			if opts.FailFast && !task.ContinueOnError {
-				break
-			}
+		if !planned[task.ID] {
 			continue
 		}
 		stop := false

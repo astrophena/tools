@@ -83,6 +83,9 @@ func (m *impl) run(thread *starlark.Thread, b *starlark.Builtin, args starlark.T
 			}
 
 			if onlyIf != "" {
+				if dryRun && sudo && m.rt.NeedsSudo() {
+					return boot.ResultChange, nil
+				}
 				var cmd *exec.Cmd
 				if sudo && m.rt.NeedsSudo() {
 					cmd = exec.CommandContext(ctx, "sudo", "sh", "-c", onlyIf)

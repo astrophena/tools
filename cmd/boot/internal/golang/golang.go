@@ -324,6 +324,7 @@ func newLatestCache(modules []string) *latestCache {
 	return &latestCache{modules: modules}
 }
 
+// Get returns the latest module info for the given module, using cached values if available.
 func (c *latestCache) Get(ctx context.Context, module string) (moduleInfo, error) {
 	c.once.Do(func() {
 		c.fetch(ctx)
