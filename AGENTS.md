@@ -25,6 +25,7 @@ Follow the Go style for commit messages.
 - Write meaningful comments. Avoid stating the obvious.
   - **Bad:** `// WriteFile writes a file.`
   - **Good:** `// WriteFile writes data to a file, creating it if necessary.`
+- When documenting shell commands, prefix commands with `$` for commands run as a normal user and `#` for commands run as root (using `sudo` or similar).
 
 ## Dependencies
 

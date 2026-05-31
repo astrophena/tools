@@ -80,8 +80,8 @@ the code fragile or much larger.
 Start with a focused recipe and task selection:
 
 ```sh
-go run ./cmd/boot -C ~/code/prefs -only setup_packages plan
-go run ./cmd/boot -C ~/code/prefs -only setup_packages -verbose apply
+$ go run ./cmd/boot -only setup_packages plan
+$ go run ./cmd/boot -only setup_packages -verbose apply
 ```
 
 Use `plan` to verify the action list and idempotency checks. Use `-verbose
@@ -120,21 +120,5 @@ For command-based modules, create small executable shell scripts with
 Before submitting changes, run from the repository root:
 
 ```sh
-go tool pre-commit
+$ go tool pre-commit
 ```
-
-## Recipe Compatibility
-
-Boot currently targets the prefs setup recipes, so compatibility with the old
-`automation/setup` behavior matters. Be careful around:
-
-- package updates, which may need explicit consent;
-- maintenance checks, which should warn unless the recipe intentionally wants a
-  hard failure;
-- environment loading before tools that rely on `GOBIN`, `GOPATH`, or XDG
-  variables;
-- dry-run behavior for system modules.
-
-When replacing old setup behavior, read the old Python task and port the
-observable behavior first. Then simplify only when the new behavior is
-intentional and documented.

@@ -57,7 +57,8 @@ func (m *impl) require(thread *starlark.Thread, b *starlark.Builtin, args starla
 	}
 
 	boot.AddAction(thread, boot.Action{
-		Summary: "confirm: " + message,
+		Summary:   "would ask for consent: " + message,
+		IsConsent: true,
 		Apply: func(_ context.Context, dryRun bool) (boot.Result, error) {
 			if dryRun {
 				return boot.ResultChange, nil

@@ -114,8 +114,14 @@ func TestApplyVerboseFailFastStopsAfterActionFailure(t *testing.T) {
 		{
 			ID:   "second",
 			Name: "second",
-			Run: starlark.NewBuiltin("second", func(*starlark.Thread, *starlark.Builtin, starlark.Tuple, []starlark.Tuple) (starlark.Value, error) {
-				ranSecond = true
+			Run: starlark.NewBuiltin("second", func(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+				AddAction(thread, Action{
+					Summary: "second",
+					Apply: func(context.Context, bool) (Result, error) {
+						ranSecond = true
+						return ResultSkip, nil
+					},
+				})
 				return starlark.None, nil
 			}),
 		},
@@ -127,7 +133,7 @@ func TestApplyVerboseFailFastStopsAfterActionFailure(t *testing.T) {
 		t.Fatal("Run succeeded, want failure")
 	}
 	if ranSecond {
-		t.Fatal("second task ran after action failure")
+		t.Fatal("second task actions ran after action failure")
 	}
 }
 

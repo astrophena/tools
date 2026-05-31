@@ -121,11 +121,11 @@ func (m *impl) checkPacnew(thread *starlark.Thread, b *starlark.Builtin, args st
 	if !boot.InTask(thread) {
 		return nil, fmt.Errorf("%s: can only be called from a task", b.Name())
 	}
-	var prefsEtc string
-	if err := starlark.UnpackArgs(b.Name(), args, kwargs, "prefs_etc", &prefsEtc); err != nil {
+	var managedEtc string
+	if err := starlark.UnpackArgs(b.Name(), args, kwargs, "managed_etc", &managedEtc); err != nil {
 		return nil, err
 	}
-	prefsEtc = m.rt.ResolveSource(prefsEtc)
+	managedEtc = m.rt.ResolveSource(managedEtc)
 
 	boot.AddAction(thread, boot.Action{
 		Summary: "check pacman .pacnew files",
@@ -145,7 +145,7 @@ func (m *impl) checkPacnew(thread *starlark.Thread, b *starlark.Builtin, args st
 					unmanaged = append(unmanaged, path)
 					continue
 				}
-				if _, err := os.Stat(filepath.Join(prefsEtc, rel)); err == nil {
+				if _, err := os.Stat(filepath.Join(managedEtc, rel)); err == nil {
 					managed = append(managed, path)
 				} else {
 					unmanaged = append(unmanaged, path)
@@ -155,7 +155,7 @@ func (m *impl) checkPacnew(thread *starlark.Thread, b *starlark.Builtin, args st
 			var buf bytes.Buffer
 			fmt.Fprintln(&buf, ".pacnew files found")
 			if len(managed) > 0 {
-				fmt.Fprintln(&buf, "managed by prefs:")
+				fmt.Fprintln(&buf, "managed by recipe:")
 				fmt.Fprintln(&buf, bulletList(managed))
 				fmt.Fprintln(&buf, pacnewDiffs(ctx, managed))
 			}
