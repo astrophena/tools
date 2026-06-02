@@ -281,6 +281,7 @@ func (f *fetcher) run(ctx context.Context) error {
 		}
 		s.FetchLatencyMS = stats.QuantilesMS(s.FetchLatencySamples)
 		s.SendLatencyMS = stats.QuantilesMS(s.SendLatencySamples)
+		s.FinalizeRequestTimingStats()
 
 		stateSnapshot := f.feedStateSnapshot()
 		for _, feedState := range stateSnapshot {

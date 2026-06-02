@@ -27,10 +27,11 @@ type Run struct {
 	Duration         time.Duration `json:"duration"`
 	TotalItemsParsed int           `json:"total_items_parsed"`
 
-	TotalFetchTime time.Duration   `json:"total_fetch_time"`
-	AvgFetchTime   time.Duration   `json:"avg_fetch_time"`
-	FetchLatencyMS PercentileStats `json:"fetch_latency_ms"`
-	SendLatencyMS  PercentileStats `json:"send_latency_ms"`
+	TotalFetchTime time.Duration      `json:"total_fetch_time"`
+	AvgFetchTime   time.Duration      `json:"avg_fetch_time"`
+	FetchLatencyMS PercentileStats    `json:"fetch_latency_ms"`
+	SendLatencyMS  PercentileStats    `json:"send_latency_ms"`
+	RequestTiming  RequestTimingStats `json:"request_timing"`
 
 	HTTP2xxCount int `json:"http_2xx_count"`
 	HTTP3xxCount int `json:"http_3xx_count"`
@@ -68,7 +69,52 @@ type Run struct {
 
 	FetchLatencySamples []time.Duration       `json:"-"`
 	SendLatencySamples  []time.Duration       `json:"-"`
+	RequestTimings      RequestTimingSamples  `json:"-"`
 	FeedStatsByURL      map[string]*FeedStats `json:"-"`
+}
+
+// RequestTimingStats stores aggregate HTTP request phase durations in milliseconds.
+type RequestTimingStats struct {
+	DNS              DurationStats `json:"dns"`
+	TCPConnect       DurationStats `json:"tcp_connect"`
+	TLSHandshake     DurationStats `json:"tls_handshake"`
+	RequestWrite     DurationStats `json:"request_write"`
+	ResponseWait     DurationStats `json:"response_wait"`
+	TimeToFirstByte  DurationStats `json:"time_to_first_byte"`
+	ResponseBodyRead DurationStats `json:"response_body_read"`
+	Total            DurationStats `json:"total"`
+}
+
+// DurationStats contains aggregate duration values in milliseconds.
+type DurationStats struct {
+	Count        int             `json:"count"`
+	TotalMS      int64           `json:"total_ms"`
+	AvgMS        int64           `json:"avg_ms"`
+	PercentileMS PercentileStats `json:"percentile_ms"`
+}
+
+// RequestTimingSamples stores per-request timing samples until a run is finalized.
+type RequestTimingSamples struct {
+	DNS              []time.Duration
+	TCPConnect       []time.Duration
+	TLSHandshake     []time.Duration
+	RequestWrite     []time.Duration
+	ResponseWait     []time.Duration
+	TimeToFirstByte  []time.Duration
+	ResponseBodyRead []time.Duration
+	Total            []time.Duration
+}
+
+// RequestTimingSample stores timing information measured for one feed request.
+type RequestTimingSample struct {
+	DNS              *time.Duration
+	TCPConnect       *time.Duration
+	TLSHandshake     *time.Duration
+	RequestWrite     *time.Duration
+	ResponseWait     *time.Duration
+	TimeToFirstByte  *time.Duration
+	ResponseBodyRead *time.Duration
+	Total            *time.Duration
 }
 
 // PercentileStats contains percentile latency values in milliseconds.
@@ -183,6 +229,55 @@ func TopFeedStats(input map[string]*FeedStats, less func(a *FeedStats, b *FeedSt
 		})
 	}
 	return result
+}
+
+// RecordRequestTimings records timing samples for one feed request.
+func (r *Run) RecordRequestTimings(sample RequestTimingSample) {
+	appendSample := func(samples *[]time.Duration, value *time.Duration) {
+		if value == nil {
+			return
+		}
+		*samples = append(*samples, *value)
+	}
+
+	appendSample(&r.RequestTimings.DNS, sample.DNS)
+	appendSample(&r.RequestTimings.TCPConnect, sample.TCPConnect)
+	appendSample(&r.RequestTimings.TLSHandshake, sample.TLSHandshake)
+	appendSample(&r.RequestTimings.RequestWrite, sample.RequestWrite)
+	appendSample(&r.RequestTimings.ResponseWait, sample.ResponseWait)
+	appendSample(&r.RequestTimings.TimeToFirstByte, sample.TimeToFirstByte)
+	appendSample(&r.RequestTimings.ResponseBodyRead, sample.ResponseBodyRead)
+	appendSample(&r.RequestTimings.Total, sample.Total)
+}
+
+// FinalizeRequestTimingStats calculates aggregate request timing statistics.
+func (r *Run) FinalizeRequestTimingStats() {
+	r.RequestTiming = RequestTimingStats{
+		DNS:              durationStatsMS(r.RequestTimings.DNS),
+		TCPConnect:       durationStatsMS(r.RequestTimings.TCPConnect),
+		TLSHandshake:     durationStatsMS(r.RequestTimings.TLSHandshake),
+		RequestWrite:     durationStatsMS(r.RequestTimings.RequestWrite),
+		ResponseWait:     durationStatsMS(r.RequestTimings.ResponseWait),
+		TimeToFirstByte:  durationStatsMS(r.RequestTimings.TimeToFirstByte),
+		ResponseBodyRead: durationStatsMS(r.RequestTimings.ResponseBodyRead),
+		Total:            durationStatsMS(r.RequestTimings.Total),
+	}
+}
+
+func durationStatsMS(samples []time.Duration) DurationStats {
+	if len(samples) == 0 {
+		return DurationStats{}
+	}
+	var total time.Duration
+	for _, sample := range samples {
+		total += sample
+	}
+	return DurationStats{
+		Count:        len(samples),
+		TotalMS:      total.Milliseconds(),
+		AvgMS:        (total / time.Duration(len(samples))).Milliseconds(),
+		PercentileMS: QuantilesMS(samples),
+	}
 }
 
 // AddHTTPStatusClass increments status-class counters for a feed response.

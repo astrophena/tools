@@ -36,7 +36,20 @@ func TestStoreSaveRunAndListRuns(t *testing.T) {
 		TotalItemsParsed: 6,
 		TotalFetchTime:   7 * time.Second,
 		AvgFetchTime:     8 * time.Second,
-		MemoryUsage:      9,
+		RequestTiming: RequestTimingStats{
+			Total: DurationStats{
+				Count:   2,
+				TotalMS: 30,
+				AvgMS:   15,
+				PercentileMS: PercentileStats{
+					P50: 10,
+					P90: 20,
+					P99: 20,
+					Max: 20,
+				},
+			},
+		},
+		MemoryUsage: 9,
 	}
 
 	if err := store.SaveRun(t.Context(), &want); err != nil {
