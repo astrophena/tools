@@ -242,7 +242,7 @@ func (a *api) handleGetConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	_, _ = w.Write([]byte(config))
+	w.Write([]byte(config))
 }
 
 func (a *api) handlePutConfig(w http.ResponseWriter, r *http.Request) {
@@ -280,7 +280,7 @@ func (a *api) handleGetState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	_, _ = w.Write(content)
+	w.Write(content)
 }
 
 func (a *api) handlePutState(w http.ResponseWriter, r *http.Request) {
@@ -313,7 +313,7 @@ func (a *api) handleGetErrorTemplate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	_, _ = w.Write([]byte(errorTemplate))
+	w.Write([]byte(errorTemplate))
 }
 
 func (a *api) handlePutErrorTemplate(w http.ResponseWriter, r *http.Request) {

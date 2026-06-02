@@ -36,15 +36,15 @@ func Acquire(path string, payload string) (Lock, error) {
 	}
 	if payload != "" {
 		if err := lockFile.Truncate(0); err != nil {
-			_ = (&fileLock{file: lockFile}).Release()
+			(&fileLock{file: lockFile}).Release()
 			return nil, err
 		}
 		if _, err := lockFile.Seek(0, 0); err != nil {
-			_ = (&fileLock{file: lockFile}).Release()
+			(&fileLock{file: lockFile}).Release()
 			return nil, err
 		}
 		if _, err := lockFile.WriteString(payload); err != nil {
-			_ = (&fileLock{file: lockFile}).Release()
+			(&fileLock{file: lockFile}).Release()
 			return nil, err
 		}
 	}
@@ -61,7 +61,7 @@ func IsLocked(path string) bool {
 
 	err = syscall.Flock(int(lockFile.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
 	if err == nil {
-		_ = syscall.Flock(int(lockFile.Fd()), syscall.LOCK_UN)
+		syscall.Flock(int(lockFile.Fd()), syscall.LOCK_UN)
 		return false
 	}
 
