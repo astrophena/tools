@@ -89,7 +89,7 @@ func (m *impl) update(thread *starlark.Thread, b *starlark.Builtin, args starlar
 				return "", err
 			}
 			if err := run(ctx, m.rt.NeedsSudo(), "", "sbctl", "sign", "-s", target); err != nil {
-				_ = run(ctx, m.rt.NeedsSudo(), "", "rm", "-f", target)
+				run(ctx, m.rt.NeedsSudo(), "", "rm", "-f", target)
 				return "", err
 			}
 			if err := prune(ctx, m.rt, esp, keep); err != nil {
@@ -164,7 +164,7 @@ func prune(ctx context.Context, rt *boot.Runtime, esp string, keep int) error {
 		if err := run(ctx, rt.NeedsSudo(), "", "rm", "-f", image.path); err != nil {
 			return err
 		}
-		_ = run(ctx, rt.NeedsSudo(), "", "sbctl", "remove-file", image.path)
+		run(ctx, rt.NeedsSudo(), "", "sbctl", "remove-file", image.path)
 	}
 	return nil
 }

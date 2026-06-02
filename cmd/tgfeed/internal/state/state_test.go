@@ -53,7 +53,7 @@ func TestStoreRemoteErrorPropagation(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/config" {
 			w.WriteHeader(http.StatusBadRequest)
-			_, _ = w.Write([]byte(`{"error":"bad config"}`))
+			w.Write([]byte(`{"error":"bad config"}`))
 			return
 		}
 		w.WriteHeader(http.StatusNotFound)
