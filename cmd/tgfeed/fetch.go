@@ -7,6 +7,7 @@ package main
 import (
 	"cmp"
 	"context"
+	"crypto/tls"
 	_ "embed"
 	"errors"
 	"fmt"
@@ -14,6 +15,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/http/httptrace"
 	"strconv"
 	"strings"
 	"time"
@@ -117,7 +119,8 @@ func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *update) (re
 		return false, 0
 	}
 
-	req, err := f.newFeedRequest(ctx, fd, etag, lastModified)
+	t := &timings{start: time.Now()}
+	req, err := f.newFeedRequest(ctx, fd, etag, lastModified, t)
 	if err != nil {
 		f.handleFetchFailure(ctx, fd.url, err)
 		return false, 0
@@ -132,9 +135,12 @@ func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *update) (re
 		f.handleFetchFailure(ctx, fd.url, err)
 		return false, 0
 	}
-	defer res.Body.Close()
-
-	f.logFeedResponse(fd, res)
+	res.Body = &timingReadCloser{ReadCloser: res.Body, timings: t}
+	defer func() {
+		res.Body.Close()
+		f.logFeedResponse(ctx, fd, res, t)
+		f.recordRequestTimings(t)
+	}()
 
 	status, err := f.handleFeedStatus(req, res, fd)
 	if err != nil {
@@ -168,11 +174,14 @@ func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *update) (re
 
 // Request construction and response handling.
 
-func (f *fetcher) newFeedRequest(ctx context.Context, fd *feed, etag string, lastModified string) (*http.Request, error) {
+func (f *fetcher) newFeedRequest(ctx context.Context, fd *feed, etag string, lastModified string, t *timings) (*http.Request, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fd.url, nil)
 	if err != nil {
 		return nil, err
 	}
+
+	trace := newTrace(t)
+	req = req.WithContext(httptrace.WithClientTrace(req.Context(), trace))
 
 	req.Header.Set("User-Agent", version.UserAgent())
 	if etag != "" {
@@ -192,15 +201,40 @@ func (f *fetcher) makeFeedRequest(req *http.Request) (*http.Response, error) {
 	return f.httpc.Do(req)
 }
 
-func (f *fetcher) logFeedResponse(fd *feed, res *http.Response) {
-	f.slog.Debug(
-		"fetched feed",
-		"feed", fd.url,
-		"proto", res.Proto,
-		"len", res.ContentLength,
-		"status", res.StatusCode,
-		"headers", res.Header,
-	)
+func (f *fetcher) recordRequestTimings(t *timings) {
+	f.stats.WriteAccess(func(s *stats.Run) {
+		s.RecordRequestTimings(t.statsSample())
+	})
+}
+
+func (f *fetcher) logFeedResponse(ctx context.Context, fd *feed, res *http.Response, t *timings) {
+	attrs := []slog.Attr{
+		slog.String("feed", fd.url),
+		slog.String("proto", res.Proto),
+		slog.Int64("len", res.ContentLength),
+		slog.Int("status", res.StatusCode),
+		slog.Any("headers", res.Header),
+	}
+
+	addDuration := func(name string, start time.Time, end time.Time) {
+		if start.IsZero() || end.IsZero() {
+			return
+		}
+		attrs = append(attrs, slog.Duration(name, end.Sub(start)))
+	}
+
+	addDuration("dns_duration", t.dnsStart, t.dnsDone)
+	addDuration("tcp_connect_duration", t.connectStart, t.connectDone)
+	addDuration("tls_handshake_duration", t.tlsStart, t.tlsDone)
+	addDuration("request_write_duration", t.gotConn, t.wroteRequest)
+	addDuration("response_wait_duration", t.wroteRequest, t.firstByte)
+	addDuration("time_to_first_byte", t.start, t.firstByte)
+	if t.bodyComplete {
+		addDuration("response_body_read_duration", t.firstByte, t.done)
+	}
+	addDuration("total_duration", t.start, t.done)
+
+	f.slog.LogAttrs(ctx, slog.LevelDebug, "fetched feed", attrs...)
 }
 
 func (f *fetcher) handleFeedStatus(req *http.Request, res *http.Response, fd *feed) (feedStatusResult, error) {
@@ -283,6 +317,107 @@ func readFeedErrorBody(r io.Reader) (body []byte, hasBody bool) {
 
 func (f *fetcher) updateFeedStateFromHeaders(state *state.Feed, res *http.Response) {
 	state.UpdateCacheHeaders(res.Header.Get("ETag"), res.Header.Get("Last-Modified"))
+}
+
+// Request tracing and performance statistics.
+// Based on https://blainsmith.com/articles/httptrace-with-go/.
+
+type timings struct {
+	start        time.Time
+	dnsStart     time.Time
+	dnsDone      time.Time
+	connectStart time.Time
+	connectDone  time.Time
+	tlsStart     time.Time
+	tlsDone      time.Time
+	gotConn      time.Time
+	wroteRequest time.Time
+	firstByte    time.Time
+	done         time.Time
+	bodyComplete bool
+}
+
+func (t *timings) markDone(bodyComplete bool) {
+	if t.done.IsZero() {
+		t.done = time.Now()
+	}
+	if bodyComplete {
+		t.bodyComplete = true
+	}
+}
+
+func (t *timings) statsSample() stats.RequestTimingSample {
+	sample := stats.RequestTimingSample{
+		DNS:             durationPtr(t.dnsStart, t.dnsDone),
+		TCPConnect:      durationPtr(t.connectStart, t.connectDone),
+		TLSHandshake:    durationPtr(t.tlsStart, t.tlsDone),
+		RequestWrite:    durationPtr(t.gotConn, t.wroteRequest),
+		ResponseWait:    durationPtr(t.wroteRequest, t.firstByte),
+		TimeToFirstByte: durationPtr(t.start, t.firstByte),
+		Total:           durationPtr(t.start, t.done),
+	}
+	if t.bodyComplete {
+		sample.ResponseBodyRead = durationPtr(t.firstByte, t.done)
+	}
+	return sample
+}
+
+func durationPtr(start time.Time, end time.Time) *time.Duration {
+	if start.IsZero() || end.IsZero() {
+		return nil
+	}
+	duration := end.Sub(start)
+	return &duration
+}
+
+func newTrace(t *timings) *httptrace.ClientTrace {
+	return &httptrace.ClientTrace{
+		DNSStart: func(_ httptrace.DNSStartInfo) {
+			t.dnsStart = time.Now()
+		},
+		DNSDone: func(_ httptrace.DNSDoneInfo) {
+			t.dnsDone = time.Now()
+		},
+		ConnectStart: func(_, _ string) {
+			t.connectStart = time.Now()
+		},
+		ConnectDone: func(_, _ string, _ error) {
+			t.connectDone = time.Now()
+		},
+		TLSHandshakeStart: func() {
+			t.tlsStart = time.Now()
+		},
+		TLSHandshakeDone: func(_ tls.ConnectionState, _ error) {
+			t.tlsDone = time.Now()
+		},
+		GotConn: func(_ httptrace.GotConnInfo) {
+			t.gotConn = time.Now()
+		},
+		WroteRequest: func(_ httptrace.WroteRequestInfo) {
+			t.wroteRequest = time.Now()
+		},
+		GotFirstResponseByte: func() {
+			t.firstByte = time.Now()
+		},
+	}
+}
+
+type timingReadCloser struct {
+	io.ReadCloser
+	timings *timings
+}
+
+func (r *timingReadCloser) Read(p []byte) (int, error) {
+	n, err := r.ReadCloser.Read(p)
+	if errors.Is(err, io.EOF) {
+		r.timings.markDone(true)
+	}
+	return n, err
+}
+
+func (r *timingReadCloser) Close() error {
+	r.timings.markDone(false)
+	return r.ReadCloser.Close()
 }
 
 // Item processing.
