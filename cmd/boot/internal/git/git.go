@@ -64,8 +64,8 @@ func (m *module) lockRepo(dst string) func() {
 }
 
 func (m *impl) sync(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	if !boot.InTask(thread) {
-		return nil, fmt.Errorf("%s: can only be called from a task", b.Name())
+	if err := boot.RequireTask(thread, b); err != nil {
+		return nil, err
 	}
 
 	var (
@@ -139,8 +139,8 @@ func (m *impl) sync(thread *starlark.Thread, b *starlark.Builtin, args starlark.
 }
 
 func (m *impl) pull(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	if !boot.InTask(thread) {
-		return nil, fmt.Errorf("%s: can only be called from a task", b.Name())
+	if err := boot.RequireTask(thread, b); err != nil {
+		return nil, err
 	}
 
 	var dest string
@@ -161,12 +161,11 @@ func (m *impl) pull(thread *starlark.Thread, b *starlark.Builtin, args starlark.
 				return "", fmt.Errorf("not a git repository: %s", dst)
 			}
 
-			cmd := exec.CommandContext(ctx, "git", "-C", dst, "status", "--porcelain")
-			out, err := cmd.Output()
+			dirty, err := isDirty(ctx, dst)
 			if err != nil {
 				return "", err
 			}
-			if len(out) > 0 {
+			if dirty {
 				return boot.ResultSkip, nil
 			}
 
@@ -197,8 +196,8 @@ func (m *impl) pull(thread *starlark.Thread, b *starlark.Builtin, args starlark.
 }
 
 func (m *impl) clone(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	if !boot.InTask(thread) {
-		return nil, fmt.Errorf("%s: can only be called from a task", b.Name())
+	if err := boot.RequireTask(thread, b); err != nil {
+		return nil, err
 	}
 
 	var (
@@ -258,15 +257,7 @@ func (m *impl) clone(thread *starlark.Thread, b *starlark.Builtin, args starlark
 }
 
 func run(cmd *exec.Cmd) error {
-	out, err := cmd.CombinedOutput()
-	if err == nil {
-		return nil
-	}
-	msg := strings.TrimSpace(string(out))
-	if msg == "" {
-		return err
-	}
-	return fmt.Errorf("%w:\n%s", err, msg)
+	return boot.RunCmd(cmd)
 }
 
 func hasUpstream(ctx context.Context, dst string) bool {
@@ -309,8 +300,7 @@ func gitRevisions(ctx context.Context, dst string) (string, string, error) {
 }
 
 func gitRevision(ctx context.Context, dst, rev string) (string, error) {
-	cmd := exec.CommandContext(ctx, "git", "-C", dst, "rev-parse", "--verify", rev)
-	out, err := cmd.Output()
+	out, err := boot.CommandOutput(ctx, "", "git", "-C", dst, "rev-parse", "--verify", rev)
 	if err != nil {
 		return "", err
 	}
@@ -332,8 +322,7 @@ func cloneRepository(ctx context.Context, url, dst, revision string) error {
 }
 
 func isDirty(ctx context.Context, dst string) (bool, error) {
-	cmd := exec.CommandContext(ctx, "git", "-C", dst, "status", "--porcelain")
-	out, err := cmd.Output()
+	out, err := boot.CommandOutput(ctx, "", "git", "-C", dst, "status", "--porcelain")
 	if err != nil {
 		return false, err
 	}

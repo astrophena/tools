@@ -9,7 +9,8 @@ contracts used by the built-in modules.
 `main.go` builds an `internal.Engine` with:
 
 - a `Runtime`, which stores recipe root, home directory, environment access,
-  stdio, and whether the current run is interactive;
+  runtime environment overrides, stdio, color preference, and whether the current
+  run is interactive;
 - an entrypoint, normally `BOOT.star`;
 - a list of modules, each exposed as a Starlark module.
 
@@ -17,6 +18,7 @@ contracts used by the built-in modules.
 
 - `task(...)` registers a task;
 - `fail(message)` stops recipe evaluation;
+- `host()` returns host/runtime metadata for top-level branching;
 - each Go module appears under its module name, such as `fs` or `pkg`.
 
 Top-level Starlark should only register tasks and choose machine profiles. Host
@@ -25,8 +27,8 @@ mutation belongs in task functions through module actions.
 ## Tasks and Actions
 
 A task is a named Starlark callable. When the engine runs a task, it attaches
-the task to the Starlark thread with `SetTask`. Module functions validate
-`InTask(thread)` and call `AddAction(thread, Action{...})`.
+the task to the Starlark thread with `SetTask`. Module functions call
+`RequireTask(thread, b)` and then `AddAction(thread, Action{...})`.
 
 An `Action` has:
 
@@ -59,16 +61,18 @@ that emits one idempotent action over a general-purpose command wrapper.
 
 Module function checklist:
 
-- Require task context for functions that emit actions.
+- Require task context for functions that emit actions with `boot.RequireTask`.
 - Parse arguments with `starlark.UnpackArgs`.
 - Resolve recipe inputs with `Runtime.ResolveSource`.
 - Resolve host targets with `Runtime.ResolveTarget`.
-- Use `Runtime.ExpandHome` or `Runtime.Hostname` rather than duplicating that
-  logic.
+- Use `Runtime.ExpandHome`, `Runtime.Hostname`, `Runtime.EnvValue`, and
+  `Runtime.SetEnv` rather than duplicating that logic.
 - Do not mutate the host while registering actions.
 - In dry-run, perform enough checks to decide skip/change but do not write.
-- Include command output in returned errors; use `boot.CommandError` when it
-  fits.
+- Include command output in returned errors; prefer `boot.RunCommand`,
+  `boot.RunCmd`, `boot.CommandOutput`, or `boot.CommandError`.
+- Use `boot.Output` and `boot.BulletList` for user-visible check details.
+- Validate Starlark file modes with `boot.FileMode`.
 - Keep successful JSON or textual output minimal; noisy reporting belongs in
   explicit check modules.
 
@@ -92,6 +96,10 @@ running actions.
 Use `--json` when another program needs stable output. JSON runs intentionally
 use a simpler sequential execution path so action results are ordered and easy
 to consume.
+
+Task selection is strict: if `-only`, `-skip`, or `-tag` leaves a selected task
+without one of its declared dependencies, selection fails instead of silently
+ignoring the missing dependency.
 
 When debugging command execution, prefer fake commands in a temporary `PATH`
 inside tests. See the `packages`, `systemd`, and `rescue` tests for examples.

@@ -61,6 +61,17 @@ func TestSelectedRejectsEmptySelection(t *testing.T) {
 	}
 }
 
+func TestSelectedRejectsIncompleteDependencies(t *testing.T) {
+	engine := &Engine{Tasks: []*Task{
+		{ID: "setup", Tags: []string{"base"}},
+		{ID: "apps", Tags: []string{"apps"}, DependsOn: []string{"setup"}},
+	}}
+	_, err := engine.Selected(Selection{Only: []string{"apps"}})
+	if err == nil || err.Error() != "selected task dependencies are incomplete: apps depends on unselected task(s): setup" {
+		t.Fatalf("error = %v, want incomplete dependency error", err)
+	}
+}
+
 func TestPlanFailFastStopsAfterActionFailure(t *testing.T) {
 	var ranSecond bool
 	engine := &Engine{Tasks: []*Task{
@@ -137,6 +148,92 @@ func TestApplyVerboseFailFastStopsAfterActionFailure(t *testing.T) {
 	if ranSecond {
 		t.Fatal("second task actions ran after action failure")
 	}
+}
+
+func TestApplyFailFastStopsBeforeStartingLaterTasks(t *testing.T) {
+	var ranSecond bool
+	engine := &Engine{Tasks: []*Task{
+		{
+			ID:   "first",
+			Name: "first",
+			Run: starlark.NewBuiltin("first", func(thread *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, _ []starlark.Tuple) (starlark.Value, error) {
+				AddAction(thread, Action{
+					Summary: "fail",
+					Apply: func(context.Context, bool) (Result, error) {
+						return "", errors.New("boom")
+					},
+				})
+				return starlark.None, nil
+			}),
+		},
+		{
+			ID:   "second",
+			Name: "second",
+			Run: starlark.NewBuiltin("second", func(thread *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, _ []starlark.Tuple) (starlark.Value, error) {
+				AddAction(thread, Action{
+					Summary: "must not run",
+					Apply: func(context.Context, bool) (Result, error) {
+						ranSecond = true
+						return ResultSkip, nil
+					},
+				})
+				return starlark.None, nil
+			}),
+		},
+	}}
+
+	var out bytes.Buffer
+	err := engine.Run(t.Context(), &out, Selection{}, RunOptions{FailFast: true, Concurrency: 1})
+	if err == nil {
+		t.Fatal("Run succeeded, want failure")
+	}
+	if ranSecond {
+		t.Fatal("second task action ran after fail-fast failure")
+	}
+}
+
+func TestApplySkipsDependentTaskAfterDependencyFailure(t *testing.T) {
+	var ranDependent bool
+	engine := &Engine{Tasks: []*Task{
+		{
+			ID:   "setup",
+			Name: "setup",
+			Run: starlark.NewBuiltin("setup", func(thread *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, _ []starlark.Tuple) (starlark.Value, error) {
+				AddAction(thread, Action{
+					Summary: "fail",
+					Apply: func(context.Context, bool) (Result, error) {
+						return "", errors.New("boom")
+					},
+				})
+				return starlark.None, nil
+			}),
+		},
+		{
+			ID:        "apps",
+			Name:      "apps",
+			DependsOn: []string{"setup"},
+			Run: starlark.NewBuiltin("apps", func(thread *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, _ []starlark.Tuple) (starlark.Value, error) {
+				AddAction(thread, Action{
+					Summary: "must not run",
+					Apply: func(context.Context, bool) (Result, error) {
+						ranDependent = true
+						return ResultSkip, nil
+					},
+				})
+				return starlark.None, nil
+			}),
+		},
+	}}
+
+	var out bytes.Buffer
+	err := engine.Run(t.Context(), &out, Selection{}, RunOptions{Concurrency: 2})
+	if err == nil {
+		t.Fatal("Run succeeded, want failure")
+	}
+	if ranDependent {
+		t.Fatal("dependent task ran after dependency failure")
+	}
+	assertContains(t, out.String(), "dependency setup failed", "failure output")
 }
 
 func TestApplyFailFastPreservesContinueOnError(t *testing.T) {

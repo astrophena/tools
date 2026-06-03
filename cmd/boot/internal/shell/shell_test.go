@@ -17,6 +17,28 @@ import (
 	"go.starlark.net/starlark"
 )
 
+func TestShellRunRequiresSudo(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("sudo is not needed when running as root")
+	}
+	rt := &boot.Runtime{Root: t.TempDir(), Getenv: func(string) string { return "" }}
+	task, thread := testutil.TaskThread("test")
+	m := &impl{rt: rt}
+	_, err := m.run(thread, starlark.NewBuiltin("shell.run", m.run), nil, []starlark.Tuple{
+		{starlark.String("command"), starlark.String("true")},
+		{starlark.String("sudo"), starlark.True},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(task.Actions) != 1 {
+		t.Fatalf("got %d actions, want 1", len(task.Actions))
+	}
+	if !task.Actions[0].RequiresSudo {
+		t.Fatal("RequiresSudo is false, want true")
+	}
+}
+
 func TestShellRun(t *testing.T) {
 	cases := map[string]struct {
 		setup   func(t *testing.T, root string)

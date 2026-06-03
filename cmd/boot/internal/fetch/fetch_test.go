@@ -19,6 +19,59 @@ import (
 	"go.starlark.net/starlark"
 )
 
+func TestFetchFileRejectsInvalidChecksum(t *testing.T) {
+	rt := &boot.Runtime{Root: t.TempDir()}
+	_, thread := testutil.TaskThread("test")
+	m := &impl{rt: rt}
+	_, err := m.file(thread, starlark.NewBuiltin("fetch.file", m.file), nil, []starlark.Tuple{
+		{starlark.String("url"), starlark.String("https://example.invalid/file")},
+		{starlark.String("path"), starlark.String("file")},
+		{starlark.String("checksum"), starlark.String("sha256:not-hex")},
+	})
+	if err == nil {
+		t.Fatal("fetch.file succeeded, want checksum error")
+	}
+}
+
+func TestFetchFileUpdatesModeWithoutChecksum(t *testing.T) {
+	content := []byte("hello\n")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Write(content)
+	}))
+	defer server.Close()
+
+	root := t.TempDir()
+	path := filepath.Join(root, "file.txt")
+	if err := os.WriteFile(path, content, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	rt := &boot.Runtime{Root: root}
+	task, thread := testutil.TaskThread("test")
+	m := &impl{rt: rt}
+	_, err := m.file(thread, starlark.NewBuiltin("fetch.file", m.file), nil, []starlark.Tuple{
+		{starlark.String("url"), starlark.String(server.URL)},
+		{starlark.String("path"), starlark.String(path)},
+		{starlark.String("mode"), starlark.MakeInt(0o600)},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := task.Actions[0].Apply(t.Context(), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res != boot.ResultChange {
+		t.Fatalf("result = %s, want %s", res, boot.ResultChange)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o600 {
+		t.Fatalf("mode = %o, want 0600", info.Mode().Perm())
+	}
+}
+
 func TestFetchFile(t *testing.T) {
 	content := []byte("hello\n")
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

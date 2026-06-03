@@ -59,10 +59,7 @@ func (m *impl) get(thread *starlark.Thread, b *starlark.Builtin, args starlark.T
 		return nil, err
 	}
 
-	val := m.rt.Getenv(key)
-	if val == "" {
-		val = os.Getenv(key)
-	}
+	val := m.rt.EnvValue(key)
 	if val == "" {
 		val = defaultVal
 	}
@@ -92,14 +89,14 @@ func (m *impl) loadDir(thread *starlark.Thread, b *starlark.Builtin, args starla
 		return nil, err
 	}
 	for _, match := range matches {
-		if err := loadFile(match); err != nil {
+		if err := loadFile(m.rt, match); err != nil {
 			return nil, fmt.Errorf("%s: %w", match, err)
 		}
 	}
 	return starlark.None, nil
 }
 
-func loadFile(path string) error {
+func loadFile(rt *boot.Runtime, path string) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return err
@@ -118,9 +115,9 @@ func loadFile(path string) error {
 		value = strings.TrimSpace(value)
 		value = strings.Trim(value, `"'`)
 		value = os.Expand(value, func(name string) string {
-			return os.Getenv(name)
+			return rt.EnvValue(name)
 		})
-		if err := os.Setenv(key, value); err != nil {
+		if err := rt.SetEnv(key, value); err != nil {
 			return err
 		}
 	}

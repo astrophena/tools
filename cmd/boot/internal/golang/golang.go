@@ -48,8 +48,8 @@ type impl struct {
 }
 
 func (m *impl) install(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	if !boot.InTask(thread) {
-		return nil, fmt.Errorf("%s: can only be called from a task", b.Name())
+	if err := boot.RequireTask(thread, b); err != nil {
+		return nil, err
 	}
 
 	var (
@@ -82,8 +82,8 @@ func (m *impl) install(thread *starlark.Thread, b *starlark.Builtin, args starla
 }
 
 func (m *impl) installLocal(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	if !boot.InTask(thread) {
-		return nil, fmt.Errorf("%s: can only be called from a task", b.Name())
+	if err := boot.RequireTask(thread, b); err != nil {
+		return nil, err
 	}
 
 	var (
@@ -157,13 +157,8 @@ func addInstallAction(thread *starlark.Thread, rt *boot.Runtime, pkg, cwd, ldfla
 			if cwd != "" {
 				cmd.Dir = rt.ResolveTarget(cwd)
 			}
-			out, err := cmd.CombinedOutput()
-			if err != nil {
-				msg := strings.TrimSpace(string(out))
-				if msg == "" {
-					return "", err
-				}
-				return "", fmt.Errorf("%w:\n%s", err, msg)
+			if err := boot.RunCmd(cmd); err != nil {
+				return "", err
 			}
 			return boot.ResultChange, nil
 		},
@@ -389,9 +384,7 @@ func latestModules(packages []string) []string {
 }
 
 func output(ctx context.Context, dir string, name string, args ...string) (string, error) {
-	cmd := exec.CommandContext(ctx, name, args...)
-	cmd.Dir = dir
-	out, err := cmd.Output()
+	out, err := boot.CommandOutput(ctx, dir, append([]string{name}, args...)...)
 	if err != nil {
 		return "", err
 	}

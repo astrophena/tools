@@ -6,6 +6,7 @@ package systemd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -43,8 +44,8 @@ func (m *impl) systemUnit(thread *starlark.Thread, b *starlark.Builtin, args sta
 }
 
 func (m *impl) unit(thread *starlark.Thread, b *starlark.Builtin, user bool, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	if !boot.InTask(thread) {
-		return nil, fmt.Errorf("%s: can only be called from a task", b.Name())
+	if err := boot.RequireTask(thread, b); err != nil {
+		return nil, err
 	}
 	var (
 		name         string
@@ -66,7 +67,8 @@ func (m *impl) unit(thread *starlark.Thread, b *starlark.Builtin, user bool, arg
 	}
 
 	boot.AddAction(thread, boot.Action{
-		Summary: "systemd " + scopeName(user) + " unit " + name,
+		Summary:      "systemd " + scopeName(user) + " unit " + name,
+		RequiresSudo: !user && m.rt.NeedsSudo(),
 		Apply: func(ctx context.Context, dryRun bool) (boot.Result, error) {
 			needsChange := false
 			needsReload := false
@@ -127,11 +129,7 @@ func unitNeedsReload(ctx context.Context, rt *boot.Runtime, user bool, name stri
 	cmd := systemctlCommand(ctx, rt, user, "show", name, "--property=NeedDaemonReload", "--value")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		msg := strings.TrimSpace(string(out))
-		if msg == "" {
-			return false, err
-		}
-		return false, fmt.Errorf("%w:\n%s", err, msg)
+		return false, boot.CommandError(cmd.Args, out, err)
 	}
 	switch strings.TrimSpace(string(out)) {
 	case "yes":
@@ -149,17 +147,23 @@ func systemctlQuiet(ctx context.Context, rt *boot.Runtime, user bool, args ...st
 	if err == nil {
 		return true, nil
 	}
+	if !isSystemctlInactiveStatus(out) {
+		return false, boot.CommandError(cmd.Args, out, err)
+	}
+	var exitErr *exec.ExitError
+	if !errors.As(err, &exitErr) {
+		return false, err
+	}
+	return false, nil
+}
+
+func isSystemctlInactiveStatus(out []byte) bool {
 	status := strings.TrimSpace(string(out))
-	if status == "disabled" || status == "inactive" || status == "failed" {
-		return false, nil
+	switch status {
+	case "disabled", "inactive", "failed", "not-found", "unknown":
+		return true
 	}
-	if strings.Contains(string(out), "could not be found") {
-		return false, nil
-	}
-	if _, ok := err.(*exec.ExitError); ok {
-		return false, nil
-	}
-	return false, err
+	return strings.Contains(string(out), "could not be found")
 }
 
 func runSystemctl(ctx context.Context, rt *boot.Runtime, user bool, args ...string) error {
@@ -168,11 +172,7 @@ func runSystemctl(ctx context.Context, rt *boot.Runtime, user bool, args ...stri
 	if err == nil {
 		return nil
 	}
-	msg := strings.TrimSpace(string(out))
-	if msg == "" {
-		return err
-	}
-	return fmt.Errorf("%w:\n%s", err, msg)
+	return boot.CommandError(cmd.Args, out, err)
 }
 
 func systemctlCommand(ctx context.Context, rt *boot.Runtime, user bool, args ...string) *exec.Cmd {

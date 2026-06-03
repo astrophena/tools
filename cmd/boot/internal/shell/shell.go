@@ -5,11 +5,12 @@
 package shell
 
 import (
+	"bytes"
 	"context"
-	"fmt"
+	"errors"
+	"io/fs"
 	"os"
 	"os/exec"
-	"strings"
 
 	boot "go.astrophena.name/tools/cmd/boot/internal"
 
@@ -36,8 +37,8 @@ type impl struct {
 }
 
 func (m *impl) run(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	if !boot.InTask(thread) {
-		return nil, fmt.Errorf("%s: can only be called from a task", b.Name())
+	if err := boot.RequireTask(thread, b); err != nil {
+		return nil, err
 	}
 
 	var (
@@ -73,12 +74,15 @@ func (m *impl) run(thread *starlark.Thread, b *starlark.Builtin, args starlark.T
 	}
 
 	boot.AddAction(thread, boot.Action{
-		Summary: summary,
+		Summary:      summary,
+		RequiresSudo: sudo && m.rt.NeedsSudo(),
 		Apply: func(ctx context.Context, dryRun bool) (boot.Result, error) {
 			if creates != "" {
 				abs := m.rt.ResolveTarget(creates)
 				if _, err := os.Stat(abs); err == nil {
 					return boot.ResultSkip, nil
+				} else if !errors.Is(err, fs.ErrNotExist) {
+					return "", err
 				}
 			}
 
@@ -113,13 +117,8 @@ func (m *impl) run(thread *starlark.Thread, b *starlark.Builtin, args starlark.T
 			if cwd != "" {
 				cmd.Dir = m.rt.ResolveTarget(cwd)
 			}
-			out, err := cmd.CombinedOutput()
-			if err != nil {
-				msg := strings.TrimSpace(string(out))
-				if msg == "" {
-					return "", err
-				}
-				return "", fmt.Errorf("%w:\n%s", err, msg)
+			if err := boot.RunCmd(cmd); err != nil {
+				return "", err
 			}
 
 			return boot.ResultChange, nil
@@ -154,13 +153,12 @@ func (m *impl) output(thread *starlark.Thread, b *starlark.Builtin, args starlar
 		cmd.Dir = m.rt.ResolveTarget(cwd)
 	}
 
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
 	out, err := cmd.Output()
 	if err != nil {
-		msg := strings.TrimSpace(string(out))
-		if msg == "" {
-			return nil, fmt.Errorf("%s failed: %w", command, err)
-		}
-		return nil, fmt.Errorf("%s failed: %w:\n%s", command, err, msg)
+		combined := append(append([]byte{}, out...), stderr.Bytes()...)
+		return nil, boot.CommandError(cmd.Args, combined, err)
 	}
 	return starlark.String(out), nil
 }

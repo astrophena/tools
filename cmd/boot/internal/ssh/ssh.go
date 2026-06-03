@@ -12,7 +12,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 
 	boot "go.astrophena.name/tools/cmd/boot/internal"
 
@@ -38,8 +37,8 @@ type impl struct {
 }
 
 func (m *impl) key(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	if !boot.InTask(thread) {
-		return nil, fmt.Errorf("%s: can only be called from a task", b.Name())
+	if err := boot.RequireTask(thread, b); err != nil {
+		return nil, err
 	}
 
 	var (
@@ -81,13 +80,8 @@ func (m *impl) key(thread *starlark.Thread, b *starlark.Builtin, args starlark.T
 				return "", err
 			}
 			cmd := exec.CommandContext(ctx, "ssh-keygen", "-q", "-t", keyType, "-C", comment, "-N", passphrase, "-f", abs)
-			out, err := cmd.CombinedOutput()
-			if err != nil {
-				msg := strings.TrimSpace(string(out))
-				if msg == "" {
-					return "", err
-				}
-				return "", fmt.Errorf("%w:\n%s", err, msg)
+			if err := boot.RunCmd(cmd); err != nil {
+				return "", err
 			}
 			return boot.ResultChange, nil
 		},

@@ -11,7 +11,27 @@ import (
 
 	boot "go.astrophena.name/tools/cmd/boot/internal"
 	"go.astrophena.name/tools/cmd/boot/internal/testutil"
+	"go.starlark.net/starlark"
 )
+
+func TestInstallRequiresSudo(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("sudo is not needed when running as root")
+	}
+	task, thread := testutil.TaskThread("test")
+	mod := &module{manager: "apt"}
+	m := &impl{rt: &boot.Runtime{Getenv: func(string) string { return "" }}, mod: mod}
+	packages := starlark.NewList([]starlark.Value{starlark.String("curl")})
+	_, err := m.install(thread, starlark.NewBuiltin("pkg.install", m.install), nil, []starlark.Tuple{
+		{starlark.String("packages"), packages},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !task.Actions[0].RequiresSudo {
+		t.Fatal("RequiresSudo is false, want true")
+	}
+}
 
 func TestPackageManagerAptMissing(t *testing.T) {
 	bin := t.TempDir()
