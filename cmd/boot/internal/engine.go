@@ -6,13 +6,10 @@ package internal
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"io/fs"
-	"os"
-	"os/exec"
 	"slices"
 	"strings"
 	"sync"
@@ -27,7 +24,20 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-// Engine loads recipes, registers tasks, and runs selected tasks.
+// Engine owns one loaded recipe run.
+//
+// The engine has two distinct phases:
+//
+//  1. Load executes the Starlark entrypoint. Top-level Starlark is expected to
+//     be declarative: it calls task(...) to register task metadata and does not
+//     mutate the host.
+//  2. Run evaluates selected task bodies. Task bodies are where modules append
+//     Actions to the current task. The engine then plans or applies those
+//     actions according to RunOptions.
+//
+// Keeping task registration separate from action creation lets selection happen
+// before any task body is evaluated, and lets plan/apply share the same task
+// body evaluation code.
 type Engine struct {
 	Runtime *Runtime
 	Entry   string
@@ -37,6 +47,12 @@ type Engine struct {
 }
 
 // Task is a recipe-defined unit of work.
+//
+// Run is a Starlark callable registered by task(...). It should not do host
+// mutation directly; instead it calls module functions such as fs.file or
+// pkg.install, and those functions append actions to task.Actions via AddAction.
+// Actions is intentionally reset every time the task is prepared so repeated
+// plan/apply calls do not reuse stale closures or stale host checks.
 type Task struct {
 	ID              string
 	Name            string
@@ -49,9 +65,17 @@ type Task struct {
 }
 
 // Action is an idempotent operation emitted by a task.
+//
+// Apply must implement both check and apply behavior. When dryRun is true it may
+// perform read-only probes to decide skip/change, but it must not mutate the
+// host. When dryRun is false it should bring the host to the requested state and
+// return ResultChange only when it actually changed something.
 type Action struct {
-	Summary   string
-	Apply     func(context.Context, bool) (Result, error)
+	Summary string
+	Apply   func(context.Context, bool) (Result, error)
+	// IsConsent marks an action that must be evaluated during prepare in
+	// interactive apply runs. Consent can remove the remaining actions from a task
+	// before sudo prompting and before concurrent execution starts.
 	IsConsent bool
 	// RequiresSudo marks an action as needing sudo even in dry-run mode.
 	RequiresSudo bool
@@ -102,9 +126,14 @@ type Summary struct {
 }
 
 // Load executes the entrypoint and registers tasks.
+//
+// Starlark modules are installed as predeclared globals instead of using Python
+// import syntax. The interpreter still gets a filesystem loader so recipe files
+// can load sibling Starlark files through the repository's interpreter package.
 func (e *Engine) Load(ctx context.Context) error {
 	predeclared := starlark.StringDict{
 		"fail":   starlark.NewBuiltin("fail", fail),
+		"host":   starlark.NewBuiltin("host", e.host),
 		"task":   starlark.NewBuiltin("task", e.starlarkTask),
 		"struct": starlark.NewBuiltin("struct", starlarkstruct.Make),
 	}
@@ -157,9 +186,14 @@ func (e *Engine) List(w io.Writer, selection Selection) error {
 }
 
 // Run runs selected tasks.
+//
+// Output mode is chosen here, but all modes share the same preparation step:
+// selected task bodies are evaluated into action lists, consent actions may run
+// early, and sudo prompts are computed from the resulting actions.
 func (e *Engine) Run(ctx context.Context, w io.Writer, selection Selection, opts RunOptions) error {
 	if e.Runtime != nil {
 		e.Runtime.Interactive = opts.Interactive
+		e.Runtime.Color = opts.Color
 	}
 	if opts.JSON {
 		return e.runJSON(ctx, w, selection, opts)
@@ -173,6 +207,15 @@ func (e *Engine) Run(ctx context.Context, w io.Writer, selection Selection, opts
 	return e.apply(ctx, w, selection, opts)
 }
 
+// prepare evaluates task bodies and records which tasks are ready to execute.
+//
+// A task body is run once per engine Run call. It emits Actions into task.Actions
+// through module functions. In interactive apply mode, consent actions are
+// special-cased here: asking for consent after sudo prompting or after starting
+// parallel work would be surprising, so consent runs while the task is still
+// being prepared. Accepted consent actions are deleted from the action list so
+// they are not counted or executed twice; denied/non-interactive consent marks
+// the task as unplanned by returning ResultStop.
 func (e *Engine) prepare(ctx context.Context, tasks []*Task, opts RunOptions) (planned map[string]bool, summary Summary, failures []failure, stopOnError bool) {
 	planned = make(map[string]bool)
 	summary.Tasks = len(tasks)
@@ -228,7 +271,7 @@ func (e *Engine) prepare(ctx context.Context, tasks []*Task, opts RunOptions) (p
 					i--
 				}
 			}
-			if stop && opts.FailFast && (len(tasks) > 0 && !tasks[0].ContinueOnError) { // approximated
+			if stop && opts.FailFast && !task.ContinueOnError {
 				break
 			}
 			if stop {
@@ -241,6 +284,10 @@ func (e *Engine) prepare(ctx context.Context, tasks []*Task, opts RunOptions) (p
 }
 
 // RunPlan plans the selected tasks, evaluating actions without applying changes.
+//
+// Plan output intentionally runs actions sequentially. Planning should be
+// deterministic and easy to read; parallelism is reserved for apply where it can
+// reduce real wall-clock time.
 func (e *Engine) RunPlan(ctx context.Context, w io.Writer, selection Selection, opts RunOptions) error {
 	tasks, err := e.Selected(selection)
 	if err != nil {
@@ -392,6 +439,13 @@ func (e *Engine) runPlanSequential(ctx context.Context, w io.Writer, tasks []*Ta
 	return nil
 }
 
+// apply runs prepared actions, using parallelism only when requested.
+//
+// For -j 1 this delegates to the sequential path so fail-fast and dependency
+// behavior is deterministic. For -j N, each task waits for its declared
+// dependencies to finish, then competes for a task slot. Concurrent action runs
+// also share the same global limit; this keeps a recipe from multiplying
+// parallelism by running N tasks each with N concurrent actions.
 func (e *Engine) apply(ctx context.Context, w io.Writer, selection Selection, opts RunOptions) error {
 	tasks, err := e.Selected(selection)
 	if err != nil {
@@ -411,22 +465,54 @@ func (e *Engine) apply(ctx context.Context, w io.Writer, selection Selection, op
 	}
 
 	concurrency := max(opts.Concurrency, 1)
+	if concurrency == 1 {
+		return e.applySequentialPrepared(ctx, w, tasks, planned, summary, failures, opts, false)
+	}
 
 	pb := progressbar.New(w, len(tasks), opts.Interactive)
 	pb.Start()
 
+	// doneCh records completion of every selected task. status records whether a
+	// completed dependency succeeded. Both maps include unplanned tasks so
+	// dependents can distinguish "dependency skipped during preparation" from
+	// "dependency failed during preparation".
 	doneCh := make(map[string]chan struct{})
+	status := make(map[string]taskStatus)
 	for _, task := range tasks {
 		doneCh[task.ID] = make(chan struct{})
+		status[task.ID] = taskPending
+	}
+	for _, task := range tasks {
+		if planned[task.ID] {
+			continue
+		}
+		if _, ok := taskFailure(failures, task); ok {
+			status[task.ID] = taskFailed
+		} else {
+			status[task.ID] = taskSucceeded
+		}
 	}
 
 	g, ctx := errgroup.WithContext(ctx)
+	// Two limiters are deliberate: task concurrency bounds how many independent
+	// task streams can be active, while action concurrency bounds the number of
+	// expensive operations inside those streams. Using the same numeric limit for
+	// both keeps the CLI simple while preserving a global cap on concurrent host
+	// mutations.
+	tasksLimiter := newActionLimiter(concurrency)
 	actions := newActionLimiter(concurrency)
 
 	var mu sync.Mutex
 
 	for _, task := range tasks {
 		g.Go(func() error {
+			// Each goroutine owns one task's action stream. Shared summary/failure state
+			// is protected by mu; dependency completion is signaled by closing doneCh.
+			setStatus := func(next taskStatus) {
+				mu.Lock()
+				status[task.ID] = next
+				mu.Unlock()
+			}
 			defer close(doneCh[task.ID])
 
 			for _, dep := range task.DependsOn {
@@ -436,8 +522,33 @@ func (e *Engine) apply(ctx context.Context, w io.Writer, selection Selection, op
 					case <-ctx.Done():
 						return ctx.Err()
 					}
+					mu.Lock()
+					depFailed := status[dep] == taskFailed
+					mu.Unlock()
+					if depFailed {
+						err := fmt.Errorf("dependency %s failed", dep)
+						mu.Lock()
+						hadFailures = true
+						if !task.ContinueOnError {
+							stopOnError = true
+						}
+						summary.Failed++
+						failures = append(failures, failure{TaskID: task.ID, TaskName: task.Name, Err: err})
+						status[task.ID] = taskFailed
+						mu.Unlock()
+						pb.Increment()
+						if opts.FailFast && !task.ContinueOnError {
+							return err
+						}
+						return nil
+					}
 				}
 			}
+
+			if err := tasksLimiter.acquire(ctx); err != nil {
+				return err
+			}
+			defer tasksLimiter.release()
 
 			mu.Lock()
 			if !planned[task.ID] || (stopOnError && opts.FailFast) {
@@ -448,6 +559,7 @@ func (e *Engine) apply(ctx context.Context, w io.Writer, selection Selection, op
 			mu.Unlock()
 
 			pb.SetTitle(task.Name)
+			taskHadFailure := false
 
 			applyAction := func(action Action) (Result, error) {
 				mu.Lock()
@@ -465,6 +577,7 @@ func (e *Engine) apply(ctx context.Context, w io.Writer, selection Selection, op
 				mu.Lock()
 				defer mu.Unlock()
 				if err != nil {
+					taskHadFailure = true
 					hadFailures = true
 					if !task.ContinueOnError {
 						stopOnError = true
@@ -506,6 +619,9 @@ func (e *Engine) apply(ctx context.Context, w io.Writer, selection Selection, op
 					continue
 				}
 
+				// Adjacent Concurrent actions form a batch. Non-concurrent actions act as
+				// ordering barriers, which is useful for recipes such as "sync files, then
+				// restart service".
 				end := i + 1
 				for end < len(task.Actions) && task.Actions[end].Concurrent {
 					end++
@@ -539,6 +655,11 @@ func (e *Engine) apply(ctx context.Context, w io.Writer, selection Selection, op
 				i = end
 			}
 
+			if taskHadFailure {
+				setStatus(taskFailed)
+			} else {
+				setStatus(taskSucceeded)
+			}
 			pb.Increment()
 			return nil
 		})
@@ -578,17 +699,39 @@ func (e *Engine) applyVerbose(ctx context.Context, w io.Writer, selection Select
 		e.printFailures(w, failures)
 		return errors.New("one or more tasks failed")
 	}
+	return e.applySequentialPrepared(ctx, w, tasks, planned, summary, failures, opts, true)
+}
 
+// applySequentialPrepared is used for verbose apply and for non-verbose -j 1.
+// It shares dependency failure handling with the parallel path but avoids the
+// progress bar and goroutine scheduling, making the single-threaded behavior
+// predictable and easier to debug.
+func (e *Engine) applySequentialPrepared(ctx context.Context, w io.Writer, tasks []*Task, planned map[string]bool, summary Summary, failures []failure, opts RunOptions, verbose bool) error {
+	status := initialTaskStatus(tasks, planned, failures)
 	for i, task := range tasks {
 		if !planned[task.ID] {
 			continue
 		}
+		if dep, failed := failedDependency(status, task); failed {
+			err := fmt.Errorf("dependency %s failed", dep)
+			summary.Failed++
+			failures = append(failures, failure{TaskID: task.ID, TaskName: task.Name, Err: err})
+			status[task.ID] = taskFailed
+			if opts.FailFast && !task.ContinueOnError {
+				break
+			}
+			continue
+		}
+		status[task.ID] = taskSucceeded
 		stop := false
-		fmt.Fprintf(w, "[%d/%d] Applying task %s: %s\n", i+1, len(tasks), task.ID, task.Name)
+		if verbose {
+			fmt.Fprintf(w, "[%d/%d] Applying task %s: %s\n", i+1, len(tasks), task.ID, task.Name)
+		}
 		for _, action := range task.Actions {
 			summary.Actions++
 			result, err := action.Apply(ctx, false)
 			if err != nil {
+				status[task.ID] = taskFailed
 				summary.Failed++
 				failures = append(failures, failure{
 					TaskID:   task.ID,
@@ -605,17 +748,28 @@ func (e *Engine) applyVerbose(ctx context.Context, w io.Writer, selection Select
 			switch result {
 			case ResultChange:
 				summary.Changed++
-				fmt.Fprintf(w, "%s %s: %s\n", e.color(string(result), colorGreen), task.ID, action.Summary)
+				if verbose {
+					fmt.Fprintf(w, "%s %s: %s\n", e.color(string(result), colorGreen), task.ID, action.Summary)
+				}
 			case ResultSkip:
 				summary.Skipped++
-				fmt.Fprintf(w, "skip %s: %s\n", task.ID, action.Summary)
+				if verbose {
+					fmt.Fprintf(w, "skip %s: %s\n", task.ID, action.Summary)
+				}
 			case ResultWarn:
 				summary.Warnings++
-				fmt.Fprintf(w, "%s %s: %s\n", e.color(string(result), colorRed), task.ID, action.Summary)
+				if verbose {
+					fmt.Fprintf(w, "%s %s: %s\n", e.color(string(result), colorRed), task.ID, action.Summary)
+				}
 			case ResultStop:
 				summary.Skipped++
-				fmt.Fprintf(w, "skip %s: %s\n", task.ID, action.Summary)
+				if verbose {
+					fmt.Fprintf(w, "skip %s: %s\n", task.ID, action.Summary)
+				}
 				stop = true
+			}
+			if stop {
+				break
 			}
 		}
 		if stop {
@@ -631,462 +785,4 @@ func (e *Engine) applyVerbose(ctx context.Context, w io.Writer, selection Select
 		return errors.New("one or more tasks failed")
 	}
 	return nil
-}
-
-type failure struct {
-	TaskID   string
-	TaskName string
-	Action   string
-	Err      error
-}
-
-func taskFailure(failures []failure, task *Task) (failure, bool) {
-	for _, failure := range failures {
-		if failure.TaskID == task.ID && failure.Action == "" {
-			return failure, true
-		}
-	}
-	return failure{}, false
-}
-
-func (e *Engine) printReport(w io.Writer, summary Summary, dryRun bool) {
-	changeText := "changed"
-	if dryRun {
-		changeText = "would change"
-	}
-	fmt.Fprintf(w, "%s\n", e.color("Report:", colorBold))
-	fmt.Fprintf(w, "  Boot ran %d %s and checked %d %s.\n",
-		summary.Tasks,
-		plural(summary.Tasks, "task", "tasks"),
-		summary.Actions,
-		plural(summary.Actions, "action", "actions"),
-	)
-	fmt.Fprintf(w, "  It %s %s and skipped %s.\n",
-		changeText,
-		e.color(fmt.Sprintf("%d %s", summary.Changed, plural(summary.Changed, "action", "actions")), colorGreen),
-		fmt.Sprintf("%d %s", summary.Skipped, plural(summary.Skipped, "action", "actions")),
-	)
-	if summary.Warnings > 0 {
-		fmt.Fprintf(w, "  It reported %s.\n", e.color(fmt.Sprintf("%d %s", summary.Warnings, plural(summary.Warnings, "warning", "warnings")), colorRed))
-	}
-	if summary.Failed == 0 {
-		fmt.Fprintf(w, "  %s\n", e.color("No actions failed.", colorGreen))
-		return
-	}
-	fmt.Fprintf(w, "  %s\n", e.color(fmt.Sprintf("%d %s failed.", summary.Failed, plural(summary.Failed, "action", "actions")), colorRed))
-}
-
-func (e *Engine) printFailures(w io.Writer, failures []failure) error {
-	if len(failures) == 0 {
-		return nil
-	}
-	fmt.Fprintf(w, "%s\n", e.color("errors:", colorRed))
-	for _, failure := range failures {
-		logPath, err := writeFailureLog(failure)
-		if err != nil {
-			return err
-		}
-		if failure.TaskID != "" {
-			fmt.Fprintf(w, "%s\n", e.color(fmt.Sprintf("  task: %s (%s)", failure.TaskID, failure.TaskName), colorRed))
-		}
-		if failure.Action != "" {
-			fmt.Fprintf(w, "%s\n", e.color("    action: "+failure.Action, colorRed))
-		}
-		fmt.Fprintf(w, "%s\n", e.color("    error: "+firstLine(failure.Err.Error()), colorRed))
-		fmt.Fprintf(w, "%s\n", e.color("    log: "+logPath, colorRed))
-		if output := restLines(failure.Err.Error()); output != "" {
-			fmt.Fprintf(w, "%s\n", e.color("    output:", colorRed))
-			for line := range strings.SplitSeq(output, "\n") {
-				fmt.Fprintf(w, "%s\n", e.color("      "+line, colorRed))
-			}
-		}
-	}
-	return nil
-}
-
-func writeFailureLog(f failure) (string, error) {
-	file, err := os.CreateTemp("", "boot-error-*.log")
-	if err != nil {
-		return "", err
-	}
-	defer file.Close()
-	if f.TaskID != "" {
-		fmt.Fprintf(file, "task: %s (%s)\n", f.TaskID, f.TaskName)
-	}
-	if f.Action != "" {
-		fmt.Fprintf(file, "action: %s\n", f.Action)
-	}
-	fmt.Fprintf(file, "error:\n%s\n", f.Err)
-	return file.Name(), nil
-}
-
-func firstLine(s string) string {
-	line, _, _ := strings.Cut(s, "\n")
-	return line
-}
-
-func restLines(s string) string {
-	_, rest, ok := strings.Cut(strings.TrimSpace(s), "\n")
-	if !ok {
-		return ""
-	}
-	return strings.TrimSpace(rest)
-}
-
-func plural(n int, singular, plural string) string {
-	if n == 1 {
-		return singular
-	}
-	return plural
-}
-
-type jsonRun struct {
-	DryRun  bool         `json:"dry_run"`
-	Summary Summary      `json:"summary"`
-	Actions []jsonAction `json:"actions"`
-}
-
-type jsonAction struct {
-	TaskID   string `json:"task_id"`
-	TaskName string `json:"task_name"`
-	Summary  string `json:"summary,omitempty"`
-	Result   Result `json:"result,omitempty"`
-	Error    string `json:"error,omitempty"`
-}
-
-func (e *Engine) runJSON(ctx context.Context, w io.Writer, selection Selection, opts RunOptions) error {
-	if e.Runtime != nil {
-		oldStdout := e.Runtime.Stdout
-		e.Runtime.Stdout = io.Discard
-		defer func() { e.Runtime.Stdout = oldStdout }()
-	}
-	tasks, err := e.Selected(selection)
-	if err != nil {
-		return err
-	}
-	planned, summary, failures, stopOnError := e.prepare(ctx, tasks, opts)
-	if err := newSudoPrompter(e).prepare(ctx, io.Discard, tasks); err != nil {
-		return err
-	}
-	report := jsonRun{DryRun: opts.DryRun, Summary: summary}
-	for _, f := range failures {
-		report.Actions = append(report.Actions, jsonAction{TaskID: f.TaskID, TaskName: f.TaskName, Error: f.Err.Error()})
-	}
-
-	if stopOnError && opts.FailFast {
-		if err := json.NewEncoder(w).Encode(report); err != nil {
-			return err
-		}
-		return errors.New("one or more tasks failed")
-	}
-
-	for _, task := range tasks {
-		if !planned[task.ID] {
-			continue
-		}
-		stop := false
-		for _, action := range task.Actions {
-			report.Summary.Actions++
-			result, err := action.Apply(ctx, opts.DryRun)
-			item := jsonAction{TaskID: task.ID, TaskName: task.Name, Summary: action.Summary, Result: result}
-			if err != nil {
-				report.Summary.Failed++
-				item.Error = err.Error()
-				report.Actions = append(report.Actions, item)
-				if opts.FailFast && !task.ContinueOnError {
-					stop = true
-					break
-				}
-				continue
-			}
-			switch result {
-			case ResultChange:
-				report.Summary.Changed++
-			case ResultSkip, ResultStop:
-				report.Summary.Skipped++
-			case ResultWarn:
-				report.Summary.Warnings++
-			}
-			report.Actions = append(report.Actions, item)
-			if result == ResultStop && !opts.DryRun {
-				break
-			}
-		}
-		if stop {
-			break
-		}
-	}
-	if err := json.NewEncoder(w).Encode(report); err != nil {
-		return err
-	}
-	if report.Summary.Failed > 0 {
-		return errors.New("one or more tasks failed")
-	}
-	return nil
-}
-
-type colorCode string
-
-const (
-	colorBold  colorCode = "\033[1m"
-	colorGreen colorCode = "\033[32m"
-	colorRed   colorCode = "\033[31m"
-)
-
-func (e *Engine) color(s string, code colorCode) string {
-	if !e.colorEnabled() {
-		return s
-	}
-	return string(code) + s + "\033[0m"
-}
-
-func (e *Engine) colorEnabled() bool {
-	return e.Runtime == nil || e.Runtime.Getenv == nil || e.Runtime.Getenv("NO_COLOR") == ""
-}
-
-type actionLimiter struct {
-	ch chan struct{}
-}
-
-func newActionLimiter(limit int) actionLimiter {
-	return actionLimiter{ch: make(chan struct{}, max(limit, 1))}
-}
-
-func (l actionLimiter) acquire(ctx context.Context) error {
-	select {
-	case l.ch <- struct{}{}:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-}
-
-func (l actionLimiter) release() {
-	<-l.ch
-}
-
-type sudoPrompter struct {
-	engine   *Engine
-	prepared bool
-}
-
-func newSudoPrompter(engine *Engine) *sudoPrompter {
-	return &sudoPrompter{engine: engine}
-}
-
-func (p *sudoPrompter) prepare(ctx context.Context, w io.Writer, tasks []*Task) error {
-	if p.prepared || p.engine.Runtime == nil || !p.engine.Runtime.NeedsSudo() {
-		return nil
-	}
-	reasons := sudoReasons(tasks)
-	if len(reasons) == 0 {
-		return nil
-	}
-	if w == nil {
-		w = io.Discard
-	}
-	fmt.Fprintln(w, "Boot requests administrator permissions to run the following tasks and actions:")
-	for _, reason := range reasons {
-		fmt.Fprintf(w, "  - %s\n", reason)
-	}
-	cmd := exec.CommandContext(ctx, "sudo", "-v")
-	if out, err := cmd.CombinedOutput(); err != nil {
-		msg := strings.TrimSpace(string(out))
-		if msg == "" {
-			return fmt.Errorf("sudo authentication failed: %w", err)
-		}
-		return fmt.Errorf("sudo authentication failed: %w:\n%s", err, msg)
-	}
-	p.prepared = true
-	return nil
-}
-
-func sudoReasons(tasks []*Task) []string {
-	var reasons []string
-	for _, task := range tasks {
-		actions := sudoActionReasons(task)
-		if len(actions) == 0 && task.RequiresSudo {
-			reasons = append(reasons, fmt.Sprintf("task %s: %s", task.ID, task.Name))
-		}
-		reasons = append(reasons, actions...)
-	}
-	return reasons
-}
-
-func sudoActionReasons(task *Task) []string {
-	var reasons []string
-	for _, action := range task.Actions {
-		if action.RequiresSudo {
-			reasons = append(reasons, fmt.Sprintf("%s: %s", task.ID, action.Summary))
-		}
-	}
-	return reasons
-}
-
-// Selected returns tasks matching selection, topologically sorted.
-func (e *Engine) Selected(selection Selection) ([]*Task, error) {
-	tasks := slices.Clone(e.Tasks)
-	taskIDs := make(map[string]bool)
-	for _, task := range tasks {
-		taskIDs[task.ID] = true
-	}
-	var unknown []string
-	for _, id := range append(slices.Clone(selection.Only), selection.Skip...) {
-		if !taskIDs[id] {
-			unknown = append(unknown, id)
-		}
-	}
-	if len(unknown) > 0 {
-		slices.Sort(unknown)
-		unknown = slices.Compact(unknown)
-		return nil, fmt.Errorf("unknown task id(s): %s", strings.Join(unknown, ", "))
-	}
-	if len(selection.Only) > 0 {
-		tasks = slices.DeleteFunc(tasks, func(task *Task) bool {
-			return !slices.Contains(selection.Only, task.ID)
-		})
-	}
-	if len(selection.Skip) > 0 {
-		tasks = slices.DeleteFunc(tasks, func(task *Task) bool {
-			return slices.Contains(selection.Skip, task.ID)
-		})
-	}
-	if len(selection.Tags) > 0 {
-		tasks = slices.DeleteFunc(tasks, func(task *Task) bool {
-			return !task.hasAnyTag(selection.Tags)
-		})
-	}
-	if len(tasks) == 0 {
-		return nil, errors.New("no tasks selected")
-	}
-	return SortTasks(tasks)
-}
-
-// SortTasks topologically sorts tasks based on their DependsOn field.
-func SortTasks(tasks []*Task) ([]*Task, error) {
-	inDegree := make(map[string]int)
-	graph := make(map[string][]*Task)
-	taskMap := make(map[string]*Task)
-
-	for _, t := range tasks {
-		taskMap[t.ID] = t
-		inDegree[t.ID] = 0
-	}
-
-	for _, t := range tasks {
-		for _, dep := range t.DependsOn {
-			if _, ok := taskMap[dep]; ok {
-				graph[dep] = append(graph[dep], t)
-				inDegree[t.ID]++
-			}
-		}
-	}
-
-	var zeroInDegree []*Task
-	for _, t := range tasks {
-		if inDegree[t.ID] == 0 {
-			zeroInDegree = append(zeroInDegree, t)
-		}
-	}
-
-	var sorted []*Task
-	for len(zeroInDegree) > 0 {
-		n := zeroInDegree[0]
-		zeroInDegree = zeroInDegree[1:]
-		sorted = append(sorted, n)
-
-		for _, m := range graph[n.ID] {
-			inDegree[m.ID]--
-			if inDegree[m.ID] == 0 {
-				zeroInDegree = append(zeroInDegree, m)
-			}
-		}
-	}
-
-	if len(sorted) != len(tasks) {
-		return nil, errors.New("cycle detected in task dependencies")
-	}
-
-	return sorted, nil
-}
-
-func (task *Task) hasAnyTag(tags []string) bool {
-	for _, tag := range tags {
-		if slices.Contains(task.Tags, tag) {
-			return true
-		}
-	}
-	return false
-}
-
-func (e *Engine) starlarkTask(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	var (
-		id              string
-		name            string
-		tags            *starlark.List
-		dependsOn       *starlark.List
-		continueOnError bool
-		requiresSudo    bool
-		run             starlark.Callable
-		when            bool = true
-	)
-	if err := starlark.UnpackArgs(
-		b.Name(), args, kwargs,
-		"id", &id,
-		"name", &name,
-		"run", &run,
-		"tags?", &tags,
-		"depends_on?", &dependsOn,
-		"continue_on_error?", &continueOnError,
-		"requires_sudo?", &requiresSudo,
-		"when?", &when,
-	); err != nil {
-		return nil, err
-	}
-	if !when {
-		return starlark.None, nil
-	}
-	if id == "" {
-		return nil, fmt.Errorf("%s: id cannot be empty", b.Name())
-	}
-	if run == nil {
-		return nil, fmt.Errorf("%s: run is required", b.Name())
-	}
-
-	var tagStrings []string
-	if tags != nil {
-		for i := range tags.Len() {
-			tag, ok := starlark.AsString(tags.Index(i))
-			if !ok {
-				return nil, fmt.Errorf("%s: tags[%d] is not a string", b.Name(), i)
-			}
-			tagStrings = append(tagStrings, tag)
-		}
-	}
-
-	var depsStrings []string
-	if dependsOn != nil {
-		for i := range dependsOn.Len() {
-			dep, ok := starlark.AsString(dependsOn.Index(i))
-			if !ok {
-				return nil, fmt.Errorf("%s: depends_on[%d] is not a string", b.Name(), i)
-			}
-			depsStrings = append(depsStrings, dep)
-		}
-	}
-
-	if slices.ContainsFunc(e.Tasks, func(task *Task) bool { return task.ID == id }) {
-		return nil, fmt.Errorf("%s: duplicate task id %q", b.Name(), id)
-	}
-
-	e.Tasks = append(e.Tasks, &Task{
-		ID:              id,
-		Name:            name,
-		Tags:            tagStrings,
-		DependsOn:       depsStrings,
-		ContinueOnError: continueOnError,
-		RequiresSudo:    requiresSudo,
-		Run:             run,
-	})
-	return starlark.None, nil
 }

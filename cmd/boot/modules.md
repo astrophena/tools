@@ -8,6 +8,12 @@ These built-in functions and modules are available in the Starlark environment.
 
 Stop recipe or task execution with `message`.
 
+### `host()`
+
+Return host/runtime metadata as a struct with `hostname`, `home`, `root`,
+`needs_sudo`, and `interactive` fields. This is intended for top-level recipe
+branching before tasks are registered.
+
 ### `task(..., when = True)`
 
 Register a task. When `when` is false, the task is not registered; this is a

@@ -9,7 +9,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -43,8 +42,8 @@ type impl struct {
 }
 
 func (m *impl) checkOrphans(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	if !boot.InTask(thread) {
-		return nil, fmt.Errorf("%s: can only be called from a task", b.Name())
+	if err := boot.RequireTask(thread, b); err != nil {
+		return nil, err
 	}
 	if err := starlark.UnpackArgs(b.Name(), args, kwargs); err != nil {
 		return nil, err
@@ -65,8 +64,8 @@ func (m *impl) checkOrphans(thread *starlark.Thread, b *starlark.Builtin, args s
 			if len(orphans) == 0 {
 				return boot.ResultSkip, nil
 			}
-			fmt.Fprintf(output(m.rt), "orphaned packages found:\n%s\n", bulletList(orphans))
-			fmt.Fprintln(output(m.rt), "remove them with: sudo pacman -Rns $(pacman -Qtdq)")
+			fmt.Fprintf(boot.Output(m.rt), "orphaned packages found:\n%s\n", boot.BulletList(orphans))
+			fmt.Fprintln(boot.Output(m.rt), "remove them with: sudo pacman -Rns $(pacman -Qtdq)")
 			return boot.ResultWarn, nil
 		},
 	})
@@ -74,8 +73,8 @@ func (m *impl) checkOrphans(thread *starlark.Thread, b *starlark.Builtin, args s
 }
 
 func (m *impl) checkExplicitPackages(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	if !boot.InTask(thread) {
-		return nil, fmt.Errorf("%s: can only be called from a task", b.Name())
+	if err := boot.RequireTask(thread, b); err != nil {
+		return nil, err
 	}
 	var packages *starlark.List
 	if err := starlark.UnpackArgs(b.Name(), args, kwargs, "packages", &packages); err != nil {
@@ -110,7 +109,7 @@ func (m *impl) checkExplicitPackages(thread *starlark.Thread, b *starlark.Builti
 				return boot.ResultSkip, nil
 			}
 			slices.Sort(extra)
-			fmt.Fprintf(output(m.rt), "explicit packages missing from recipe:\n%s\n", bulletList(extra))
+			fmt.Fprintf(boot.Output(m.rt), "explicit packages missing from recipe:\n%s\n", boot.BulletList(extra))
 			return boot.ResultWarn, nil
 		},
 	})
@@ -118,8 +117,8 @@ func (m *impl) checkExplicitPackages(thread *starlark.Thread, b *starlark.Builti
 }
 
 func (m *impl) checkPacnew(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	if !boot.InTask(thread) {
-		return nil, fmt.Errorf("%s: can only be called from a task", b.Name())
+	if err := boot.RequireTask(thread, b); err != nil {
+		return nil, err
 	}
 	var managedEtc string
 	if err := starlark.UnpackArgs(b.Name(), args, kwargs, "managed_etc", &managedEtc); err != nil {
@@ -156,15 +155,15 @@ func (m *impl) checkPacnew(thread *starlark.Thread, b *starlark.Builtin, args st
 			fmt.Fprintln(&buf, ".pacnew files found")
 			if len(managed) > 0 {
 				fmt.Fprintln(&buf, "managed by recipe:")
-				fmt.Fprintln(&buf, bulletList(managed))
+				fmt.Fprintln(&buf, boot.BulletList(managed))
 				fmt.Fprintln(&buf, pacnewDiffs(ctx, managed))
 			}
 			if len(unmanaged) > 0 {
 				fmt.Fprintln(&buf, "unmanaged:")
-				fmt.Fprintln(&buf, bulletList(unmanaged))
+				fmt.Fprintln(&buf, boot.BulletList(unmanaged))
 				fmt.Fprintln(&buf, pacnewDiffs(ctx, unmanaged))
 			}
-			fmt.Fprintln(output(m.rt), strings.TrimSpace(buf.String()))
+			fmt.Fprintln(boot.Output(m.rt), strings.TrimSpace(buf.String()))
 			return boot.ResultWarn, nil
 		},
 	})
@@ -184,21 +183,6 @@ func pacnewFiles(root string) ([]string, error) {
 	})
 	slices.Sort(files)
 	return files, err
-}
-
-func bulletList(items []string) string {
-	var buf strings.Builder
-	for _, item := range items {
-		fmt.Fprintf(&buf, "  - %s\n", item)
-	}
-	return strings.TrimRight(buf.String(), "\n")
-}
-
-func output(rt *boot.Runtime) io.Writer {
-	if rt != nil && rt.Stdout != nil {
-		return rt.Stdout
-	}
-	return os.Stdout
 }
 
 func pacnewDiffs(ctx context.Context, files []string) string {

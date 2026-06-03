@@ -7,9 +7,7 @@ package flatpak
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"os/exec"
-	"strings"
 
 	boot "go.astrophena.name/tools/cmd/boot/internal"
 
@@ -35,8 +33,8 @@ type impl struct {
 }
 
 func (m *impl) update(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	if !boot.InTask(thread) {
-		return nil, fmt.Errorf("%s: can only be called from a task", b.Name())
+	if err := boot.RequireTask(thread, b); err != nil {
+		return nil, err
 	}
 	if err := starlark.UnpackArgs(b.Name(), args, kwargs); err != nil {
 		return nil, err
@@ -48,8 +46,7 @@ func (m *impl) update(thread *starlark.Thread, b *starlark.Builtin, args starlar
 			if _, err := exec.LookPath("flatpak"); err != nil {
 				return boot.ResultSkip, nil
 			}
-			cmd := exec.CommandContext(ctx, "flatpak", "remote-ls", "--updates")
-			out, err := cmd.Output()
+			out, err := boot.CommandOutput(ctx, "", "flatpak", "remote-ls", "--updates")
 			if err != nil {
 				return "", err
 			}
@@ -59,14 +56,8 @@ func (m *impl) update(thread *starlark.Thread, b *starlark.Builtin, args starlar
 			if dryRun {
 				return boot.ResultChange, nil
 			}
-			cmd = exec.CommandContext(ctx, "flatpak", "update", "-y")
-			out, err = cmd.CombinedOutput()
-			if err != nil {
-				msg := strings.TrimSpace(string(out))
-				if msg == "" {
-					return "", err
-				}
-				return "", fmt.Errorf("%w:\n%s", err, msg)
+			if err := boot.RunCommand(ctx, "", "flatpak", "update", "-y"); err != nil {
+				return "", err
 			}
 			return boot.ResultChange, nil
 		},

@@ -37,8 +37,8 @@ type impl struct {
 }
 
 func (m *impl) require(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	if !boot.InTask(thread) {
-		return nil, fmt.Errorf("%s: can only be called from a task", b.Name())
+	if err := boot.RequireTask(thread, b); err != nil {
+		return nil, err
 	}
 
 	var (

@@ -41,8 +41,8 @@ type impl struct {
 }
 
 func (m *impl) update(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	if !boot.InTask(thread) {
-		return nil, fmt.Errorf("%s: can only be called from a task", b.Name())
+	if err := boot.RequireTask(thread, b); err != nil {
+		return nil, err
 	}
 	var (
 		source string
@@ -234,13 +234,5 @@ func run(ctx context.Context, sudo bool, dir, name string, args ...string) error
 	if dir != "" {
 		cmd.Dir = dir
 	}
-	out, err := cmd.CombinedOutput()
-	if err == nil {
-		return nil
-	}
-	msg := strings.TrimSpace(string(out))
-	if msg == "" {
-		return fmt.Errorf("%s failed: %w", strings.Join(argv, " "), err)
-	}
-	return fmt.Errorf("%s failed: %w:\n%s", strings.Join(argv, " "), err, msg)
+	return boot.RunCmd(cmd)
 }

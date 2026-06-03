@@ -15,6 +15,41 @@ import (
 	"go.starlark.net/starlark"
 )
 
+func TestSystemUnitRequiresSudo(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("sudo is not needed when running as root")
+	}
+	task, thread := testutil.TaskThread("test")
+	m := &impl{rt: &boot.Runtime{Getenv: func(string) string { return "" }}}
+	_, err := m.systemUnit(thread, starlark.NewBuiltin("systemd.system_unit", m.systemUnit), nil, []starlark.Tuple{
+		{starlark.String("name"), starlark.String("sshd.service")},
+		{starlark.String("enabled"), starlark.True},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !task.Actions[0].RequiresSudo {
+		t.Fatal("RequiresSudo is false, want true")
+	}
+}
+
+func TestSystemctlQuietReturnsUnexpectedExitErrors(t *testing.T) {
+	bin := t.TempDir()
+	testutil.WriteCommand(t, bin, "systemctl", `#!/bin/sh
+echo "Failed to connect to bus" >&2
+exit 1
+`)
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	ok, err := systemctlQuiet(t.Context(), &boot.Runtime{}, true, "is-active", "demo.service")
+	if err == nil {
+		t.Fatalf("systemctlQuiet = %v, nil; want error", ok)
+	}
+	if !strings.Contains(err.Error(), "Failed to connect to bus") {
+		t.Fatalf("error = %v, want bus failure output", err)
+	}
+}
+
 func TestUserUnitSkipsWhenCurrent(t *testing.T) {
 	bin := t.TempDir()
 	log := filepath.Join(t.TempDir(), "systemctl.log")

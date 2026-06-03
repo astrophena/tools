@@ -51,8 +51,8 @@ type impl struct {
 }
 
 func (m *impl) chmod(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	if !boot.InTask(thread) {
-		return nil, fmt.Errorf("%s: can only be called from a task", b.Name())
+	if err := boot.RequireTask(thread, b); err != nil {
+		return nil, err
 	}
 
 	var (
@@ -63,7 +63,10 @@ func (m *impl) chmod(thread *starlark.Thread, b *starlark.Builtin, args starlark
 		return nil, err
 	}
 	abs := m.rt.ResolveTarget(path)
-	targetMode := os.FileMode(mode)
+	targetMode, err := boot.FileMode("mode", mode)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", b.Name(), err)
+	}
 	boot.AddAction(thread, boot.Action{
 		Summary: fmt.Sprintf("chmod %04o %s", targetMode.Perm(), abs),
 		Apply: func(_ context.Context, dryRun bool) (boot.Result, error) {
@@ -87,8 +90,8 @@ func (m *impl) chmod(thread *starlark.Thread, b *starlark.Builtin, args starlark
 }
 
 func (m *impl) remove(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	if !boot.InTask(thread) {
-		return nil, fmt.Errorf("%s: can only be called from a task", b.Name())
+	if err := boot.RequireTask(thread, b); err != nil {
+		return nil, err
 	}
 
 	var path string
@@ -119,8 +122,8 @@ func (m *impl) remove(thread *starlark.Thread, b *starlark.Builtin, args starlar
 }
 
 func (m *impl) syncTree(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	if !boot.InTask(thread) {
-		return nil, fmt.Errorf("%s: can only be called from a task", b.Name())
+	if err := boot.RequireTask(thread, b); err != nil {
+		return nil, err
 	}
 
 	var (
@@ -177,9 +180,8 @@ func (m *impl) syncTree(thread *starlark.Thread, b *starlark.Builtin, args starl
 
 			args = append(args, withTrailingSeparator(src), withTrailingSeparator(dst))
 			cmd := rsyncCommand(ctx, m.rt, sudo, args)
-			out, err := cmd.CombinedOutput()
-			if err != nil {
-				return "", boot.CommandError(cmd.Args, out, err)
+			if err := boot.RunCmd(cmd); err != nil {
+				return "", err
 			}
 			return boot.ResultChange, nil
 		},
@@ -223,8 +225,8 @@ func rsyncCommand(ctx context.Context, rt *boot.Runtime, sudo bool, args []strin
 }
 
 func (m *impl) file(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	if !boot.InTask(thread) {
-		return nil, fmt.Errorf("%s: can only be called from a task", b.Name())
+	if err := boot.RequireTask(thread, b); err != nil {
+		return nil, err
 	}
 
 	var (
@@ -241,11 +243,13 @@ func (m *impl) file(thread *starlark.Thread, b *starlark.Builtin, args starlark.
 		return nil, err
 	}
 	abs := m.rt.ResolveTarget(path)
+	targetMode, err := boot.FileMode("mode", mode)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", b.Name(), err)
+	}
 	boot.AddAction(thread, boot.Action{
 		Summary: "file " + abs,
 		Apply: func(_ context.Context, dryRun bool) (boot.Result, error) {
-			targetMode := os.FileMode(mode)
-
 			info, err := os.Stat(abs)
 			if err == nil {
 				got, err2 := os.ReadFile(abs)
@@ -273,8 +277,8 @@ func (m *impl) file(thread *starlark.Thread, b *starlark.Builtin, args starlark.
 }
 
 func (m *impl) template(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	if !boot.InTask(thread) {
-		return nil, fmt.Errorf("%s: can only be called from a task", b.Name())
+	if err := boot.RequireTask(thread, b); err != nil {
+		return nil, err
 	}
 
 	var (
@@ -291,6 +295,9 @@ func (m *impl) template(thread *starlark.Thread, b *starlark.Builtin, args starl
 		"mode?", &mode,
 	); err != nil {
 		return nil, err
+	}
+	if _, err := boot.FileMode("mode", mode); err != nil {
+		return nil, fmt.Errorf("%s: %w", b.Name(), err)
 	}
 	content, err := renderTemplate(text, values)
 	if err != nil {
@@ -356,8 +363,8 @@ func (m *impl) newer(thread *starlark.Thread, b *starlark.Builtin, args starlark
 }
 
 func (m *impl) dir(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	if !boot.InTask(thread) {
-		return nil, fmt.Errorf("%s: can only be called from a task", b.Name())
+	if err := boot.RequireTask(thread, b); err != nil {
+		return nil, err
 	}
 
 	var path string
@@ -387,8 +394,8 @@ func (m *impl) dir(thread *starlark.Thread, b *starlark.Builtin, args starlark.T
 }
 
 func (m *impl) symlink(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	if !boot.InTask(thread) {
-		return nil, fmt.Errorf("%s: can only be called from a task", b.Name())
+	if err := boot.RequireTask(thread, b); err != nil {
+		return nil, err
 	}
 
 	var (

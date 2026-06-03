@@ -8,7 +8,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -73,8 +72,8 @@ func (m *impl) manager(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tu
 }
 
 func (m *impl) install(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	if !boot.InTask(thread) {
-		return nil, fmt.Errorf("%s: can only be called from a task", b.Name())
+	if err := boot.RequireTask(thread, b); err != nil {
+		return nil, err
 	}
 
 	var packages *starlark.List
@@ -97,7 +96,8 @@ func (m *impl) install(thread *starlark.Thread, b *starlark.Builtin, args starla
 	}
 
 	boot.AddAction(thread, boot.Action{
-		Summary: fmt.Sprintf("install packages with %s: %s", pm.name, strings.Join(names, ", ")),
+		Summary:      fmt.Sprintf("install packages with %s: %s", pm.name, strings.Join(names, ", ")),
+		RequiresSudo: pm.requiresSudo,
 		Apply: func(ctx context.Context, dryRun bool) (boot.Result, error) {
 			m.mod.pkgMu.Lock()
 			defer m.mod.pkgMu.Unlock()
@@ -119,8 +119,8 @@ func (m *impl) install(thread *starlark.Thread, b *starlark.Builtin, args starla
 }
 
 func (m *impl) update(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	if !boot.InTask(thread) {
-		return nil, fmt.Errorf("%s: can only be called from a task", b.Name())
+	if err := boot.RequireTask(thread, b); err != nil {
+		return nil, err
 	}
 
 	if err := starlark.UnpackArgs(b.Name(), args, kwargs); err != nil {
@@ -133,7 +133,8 @@ func (m *impl) update(thread *starlark.Thread, b *starlark.Builtin, args starlar
 	}
 
 	boot.AddAction(thread, boot.Action{
-		Summary: fmt.Sprintf("update system with %s", pm.name),
+		Summary:      fmt.Sprintf("update system with %s", pm.name),
+		RequiresSudo: pm.requiresSudo,
 		Apply: func(ctx context.Context, dryRun bool) (boot.Result, error) {
 			m.mod.pkgMu.Lock()
 			defer m.mod.pkgMu.Unlock()
@@ -155,8 +156,8 @@ func (m *impl) update(thread *starlark.Thread, b *starlark.Builtin, args starlar
 }
 
 func (m *impl) checkExplicitPackages(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	if !boot.InTask(thread) {
-		return nil, fmt.Errorf("%s: can only be called from a task", b.Name())
+	if err := boot.RequireTask(thread, b); err != nil {
+		return nil, err
 	}
 	var packages *starlark.List
 	if err := starlark.UnpackArgs(b.Name(), args, kwargs, "packages", &packages); err != nil {
@@ -193,26 +194,11 @@ func (m *impl) checkExplicitPackages(thread *starlark.Thread, b *starlark.Builti
 				return boot.ResultSkip, nil
 			}
 			slices.Sort(extra)
-			fmt.Fprintf(output(m.rt), "explicit packages missing from recipe:\n%s\n", bulletList(extra))
+			fmt.Fprintf(boot.Output(m.rt), "explicit packages missing from recipe:\n%s\n", boot.BulletList(extra))
 			return boot.ResultWarn, nil
 		},
 	})
 	return starlark.None, nil
-}
-
-func output(rt *boot.Runtime) io.Writer {
-	if rt != nil && rt.Stdout != nil {
-		return rt.Stdout
-	}
-	return os.Stdout
-}
-
-func bulletList(items []string) string {
-	var buf strings.Builder
-	for _, item := range items {
-		fmt.Fprintf(&buf, "  - %s\n", item)
-	}
-	return strings.TrimRight(buf.String(), "\n")
 }
 
 func (m *impl) resolveManager() (packageManager, error) {
@@ -223,7 +209,7 @@ func (m *impl) resolveManager() (packageManager, error) {
 		return packageManagerByName(m.rt, m.mod.manager)
 	}
 
-	manager := m.rt.Getenv("BOOT_PACKAGE_MANAGER")
+	manager := m.rt.EnvValue("BOOT_PACKAGE_MANAGER")
 	if manager == "" {
 		if _, err := exec.LookPath("pacman"); err == nil {
 			manager = "pacman"
@@ -243,12 +229,13 @@ func (m *impl) resolveManager() (packageManager, error) {
 }
 
 type packageManager struct {
-	name        string
-	missing     func(context.Context, []string) ([]string, error)
-	explicit    func(context.Context) ([]string, error)
-	installArgv func([]string) []string
-	updates     func(context.Context) ([]string, error)
-	update      func(context.Context) error
+	name         string
+	requiresSudo bool
+	missing      func(context.Context, []string) ([]string, error)
+	explicit     func(context.Context) ([]string, error)
+	installArgv  func([]string) []string
+	updates      func(context.Context) ([]string, error)
+	update       func(context.Context) error
 }
 
 func (pm packageManager) install(ctx context.Context, packages []string) error {
@@ -325,16 +312,16 @@ func pacmanUpdates(ctx context.Context, rt *boot.Runtime) ([]string, error) {
 
 func pacmanCheckDBPath(rt *boot.Runtime) (string, error) {
 	cacheHome := ""
-	if rt != nil && rt.Getenv != nil {
-		cacheHome = rt.Getenv("XDG_CACHE_HOME")
+	if rt != nil {
+		cacheHome = rt.EnvValue("XDG_CACHE_HOME")
 	}
 	if cacheHome == "" {
 		home := ""
 		if rt != nil {
 			home = rt.Home
 		}
-		if home == "" && rt != nil && rt.Getenv != nil {
-			home = rt.Getenv("HOME")
+		if home == "" && rt != nil {
+			home = rt.EnvValue("HOME")
 		}
 		if home == "" {
 			var err error
@@ -365,7 +352,8 @@ func packageManagerByName(rt *boot.Runtime, name string) (packageManager, error)
 	switch name {
 	case "apt":
 		return packageManager{
-			name: "apt",
+			name:         "apt",
+			requiresSudo: rt.NeedsSudo(),
 			missing: func(ctx context.Context, packages []string) ([]string, error) {
 				// dpkg-query -W -f='${Package} ${Status}\n' pkg1 pkg2 ...
 				args := append([]string{"-W", "-f=${Package} ${Status}\n"}, packages...)
@@ -417,7 +405,8 @@ func packageManagerByName(rt *boot.Runtime, name string) (packageManager, error)
 		}, nil
 	case "pacman":
 		return packageManager{
-			name: "pacman",
+			name:         "pacman",
+			requiresSudo: rt.NeedsSudo(),
 			missing: func(ctx context.Context, packages []string) ([]string, error) {
 				// pacman -T lists missing packages.
 				args := append([]string{"-T"}, packages...)

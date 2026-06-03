@@ -97,6 +97,39 @@ func TestHostname(t *testing.T) {
 	}
 }
 
+func TestLoadDirOverridesRuntimeEnv(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "environment.d")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "10-base.conf"), []byte("BOOT_PACKAGE_MANAGER=pacman\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	rt := &boot.Runtime{
+		Root: root,
+		Getenv: func(key string) string {
+			if key == "BOOT_PACKAGE_MANAGER" {
+				return "apt"
+			}
+			return ""
+		},
+	}
+	members := Module().Members(rt)
+	loadDir := members["load_dir"].(*starlark.Builtin)
+	if _, err := loadDir.CallInternal(&starlark.Thread{Name: "test"}, starlark.Tuple{starlark.String("environment.d")}, nil); err != nil {
+		t.Fatal(err)
+	}
+	get := members["get"].(*starlark.Builtin)
+	got, err := get.CallInternal(&starlark.Thread{Name: "test"}, starlark.Tuple{starlark.String("BOOT_PACKAGE_MANAGER")}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != starlark.String("pacman") {
+		t.Fatalf("BOOT_PACKAGE_MANAGER = %s, want pacman", got)
+	}
+}
+
 func TestLoadDir(t *testing.T) {
 	root := t.TempDir()
 	dir := filepath.Join(root, "environment.d")

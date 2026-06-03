@@ -41,8 +41,8 @@ type impl struct {
 }
 
 func (m *impl) file(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	if !boot.InTask(thread) {
-		return nil, fmt.Errorf("%s: can only be called from a task", b.Name())
+	if err := boot.RequireTask(thread, b); err != nil {
+		return nil, err
 	}
 
 	var (
@@ -61,12 +61,19 @@ func (m *impl) file(thread *starlark.Thread, b *starlark.Builtin, args starlark.
 		return nil, err
 	}
 	abs := m.rt.ResolveTarget(path)
-	checksum = normalizeChecksum(checksum)
+	checksum, err := normalizeChecksum(checksum)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", b.Name(), err)
+	}
+	targetMode, err := boot.FileMode("mode", mode)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", b.Name(), err)
+	}
 
 	boot.AddAction(thread, boot.Action{
 		Summary: fmt.Sprintf("fetch %s to %s", url, abs),
 		Apply: func(ctx context.Context, dryRun bool) (boot.Result, error) {
-			ok, err := fileMatches(abs, checksum)
+			ok, err := fileMatches(abs, checksum, targetMode)
 			if err != nil {
 				return "", err
 			}
@@ -76,11 +83,11 @@ func (m *impl) file(thread *starlark.Thread, b *starlark.Builtin, args starlark.
 			if dryRun {
 				return boot.ResultChange, nil
 			}
-			if err := download(ctx, url, abs, os.FileMode(mode)); err != nil {
+			if err := download(ctx, url, abs, targetMode); err != nil {
 				return "", err
 			}
 			if checksum != "" {
-				ok, err := fileMatches(abs, checksum)
+				ok, err := fileMatches(abs, checksum, targetMode)
 				if err != nil {
 					return "", err
 				}
@@ -94,17 +101,33 @@ func (m *impl) file(thread *starlark.Thread, b *starlark.Builtin, args starlark.
 	return starlark.None, nil
 }
 
-func normalizeChecksum(checksum string) string {
-	return strings.TrimPrefix(strings.TrimSpace(checksum), "sha256:")
+func normalizeChecksum(checksum string) (string, error) {
+	checksum = strings.TrimPrefix(strings.TrimSpace(checksum), "sha256:")
+	if checksum == "" {
+		return "", nil
+	}
+	if len(checksum) != sha256.Size*2 {
+		return "", fmt.Errorf("checksum must be a SHA-256 hex digest")
+	}
+	if _, err := hex.DecodeString(checksum); err != nil {
+		return "", fmt.Errorf("checksum must be a SHA-256 hex digest")
+	}
+	return strings.ToLower(checksum), nil
 }
 
-func fileMatches(path, checksum string) (bool, error) {
+func fileMatches(path, checksum string, mode os.FileMode) (bool, error) {
+	info, err := os.Stat(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	if info.Mode().Perm() != mode.Perm() {
+		return false, nil
+	}
 	if checksum == "" {
-		_, err := os.Stat(path)
-		if errors.Is(err, fs.ErrNotExist) {
-			return false, nil
-		}
-		return err == nil, err
+		return true, nil
 	}
 	got, err := fileSHA256(path)
 	if errors.Is(err, fs.ErrNotExist) {
