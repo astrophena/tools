@@ -5,12 +5,12 @@
 package git
 
 import (
-	"context"
 	"errors"
 	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	boot "go.astrophena.name/tools/cmd/boot/internal"
@@ -51,7 +51,7 @@ func TestGitClone(t *testing.T) {
 	if len(task.Actions) != 1 {
 		t.Fatalf("got %d actions, want 1", len(task.Actions))
 	}
-	res, err := task.Actions[0].Apply(context.Background(), false)
+	res, err := task.Actions[0].Apply(t.Context(), false)
 	if err != nil {
 		t.Fatalf("apply failed: %v", err)
 	}
@@ -75,7 +75,7 @@ func TestGitClone(t *testing.T) {
 	if len(task.Actions) != 1 {
 		t.Fatalf("got %d actions, want 1", len(task.Actions))
 	}
-	res, err = task.Actions[0].Apply(context.Background(), false)
+	res, err = task.Actions[0].Apply(t.Context(), false)
 	if err != nil {
 		t.Fatalf("apply failed: %v", err)
 	}
@@ -125,7 +125,7 @@ func TestGitSync(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sync failed: %v", err)
 	}
-	res, err := task.Actions[0].Apply(context.Background(), false)
+	res, err := task.Actions[0].Apply(t.Context(), false)
 	if err != nil {
 		t.Fatalf("apply failed: %v", err)
 	}
@@ -136,7 +136,7 @@ func TestGitSync(t *testing.T) {
 		t.Fatalf("destination .git: %v", err)
 	}
 
-	res, err = task.Actions[0].Apply(context.Background(), false)
+	res, err = task.Actions[0].Apply(t.Context(), false)
 	if err != nil {
 		t.Fatalf("apply failed: %v", err)
 	}
@@ -188,11 +188,81 @@ func TestGitPullAlreadyCurrent(t *testing.T) {
 	if len(task.Actions) != 1 {
 		t.Fatalf("got %d actions, want 1", len(task.Actions))
 	}
-	res, err := task.Actions[0].Apply(context.Background(), false)
+	res, err := task.Actions[0].Apply(t.Context(), false)
 	if err != nil {
 		t.Fatalf("apply failed: %v", err)
 	}
 	if res != boot.ResultSkip {
 		t.Errorf("got result %v, want %v", res, boot.ResultSkip)
+	}
+}
+
+func TestGitSyncRevision(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not found in PATH")
+	}
+
+	root := t.TempDir()
+	remote := filepath.Join(root, "remote")
+	if err := os.Mkdir(remote, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	testutil.RunGit(t, remote, "init", "--bare")
+
+	work := filepath.Join(root, "work")
+	if err := os.Mkdir(work, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	testutil.RunGit(t, work, "init")
+	testutil.RunGit(t, work, "config", "user.email", "test@example.com")
+	testutil.RunGit(t, work, "config", "user.name", "Test User")
+	if err := os.WriteFile(filepath.Join(work, "README.md"), []byte("one\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	testutil.RunGit(t, work, "add", "README.md")
+	testutil.RunGit(t, work, "commit", "-m", "one")
+	first := strings.TrimSpace(testutil.RunGitOutput(t, work, "rev-parse", "HEAD"))
+	if err := os.WriteFile(filepath.Join(work, "README.md"), []byte("two\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	testutil.RunGit(t, work, "commit", "-am", "two")
+	testutil.RunGit(t, work, "branch", "-M", "main")
+	testutil.RunGit(t, work, "remote", "add", "origin", remote)
+	testutil.RunGit(t, work, "push", "-u", "origin", "main")
+	testutil.RunGit(t, remote, "symbolic-ref", "HEAD", "refs/heads/main")
+
+	rt := &boot.Runtime{Root: root}
+	task, thread := testutil.TaskThread("test")
+	m := &impl{rt: rt}
+	dest := filepath.Join(root, "local")
+	_, err := m.sync(thread, starlark.NewBuiltin("git.sync", m.sync), nil, []starlark.Tuple{
+		{starlark.String("url"), starlark.String(remote)},
+		{starlark.String("dest"), starlark.String(dest)},
+		{starlark.String("revision"), starlark.String(first)},
+	})
+	if err != nil {
+		t.Fatalf("sync failed: %v", err)
+	}
+	res, err := task.Actions[0].Apply(t.Context(), false)
+	if err != nil {
+		t.Fatalf("apply failed: %v", err)
+	}
+	if res != boot.ResultChange {
+		t.Errorf("got result %v, want %v", res, boot.ResultChange)
+	}
+	got := strings.TrimSpace(testutil.RunGitOutput(t, dest, "rev-parse", "HEAD"))
+	if got != first {
+		t.Fatalf("HEAD = %s, want %s", got, first)
+	}
+	branch := strings.TrimSpace(testutil.RunGitOutput(t, dest, "branch", "--show-current"))
+	if branch != "" {
+		t.Fatalf("branch = %q, want detached HEAD", branch)
+	}
+	res, err = task.Actions[0].Apply(t.Context(), true)
+	if err != nil {
+		t.Fatalf("dry-run apply failed: %v", err)
+	}
+	if res != boot.ResultSkip {
+		t.Errorf("got dry-run result %v, want %v", res, boot.ResultSkip)
 	}
 }

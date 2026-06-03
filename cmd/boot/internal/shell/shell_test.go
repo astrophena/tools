@@ -5,7 +5,6 @@
 package shell
 
 import (
-	"context"
 	"errors"
 	"io/fs"
 	"os"
@@ -115,7 +114,7 @@ func TestShellRun(t *testing.T) {
 				t.Fatalf("got %d actions, want 1", len(task.Actions))
 			}
 
-			res, err := task.Actions[0].Apply(context.Background(), tc.dryRun)
+			res, err := task.Actions[0].Apply(t.Context(), tc.dryRun)
 			if err != nil {
 				t.Fatalf("apply failed: %v", err)
 			}

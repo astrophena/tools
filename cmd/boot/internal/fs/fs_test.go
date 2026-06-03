@@ -5,10 +5,10 @@
 package fs
 
 import (
-	"context"
 	"errors"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 
@@ -36,7 +36,7 @@ func TestFSDir(t *testing.T) {
 		t.Fatalf("got %d actions, want 1", len(task.Actions))
 	}
 
-	res, err := task.Actions[0].Apply(context.Background(), false)
+	res, err := task.Actions[0].Apply(t.Context(), false)
 	if err != nil {
 		t.Fatalf("apply failed: %v", err)
 	}
@@ -63,7 +63,7 @@ func TestFSDir(t *testing.T) {
 		t.Fatalf("got %d actions, want 1", len(task.Actions))
 	}
 
-	res, err = task.Actions[0].Apply(context.Background(), false)
+	res, err = task.Actions[0].Apply(t.Context(), false)
 	if err != nil {
 		t.Fatalf("apply failed: %v", err)
 	}
@@ -99,7 +99,7 @@ func TestFSFile(t *testing.T) {
 		t.Fatalf("got %d actions, want 1", len(task.Actions))
 	}
 
-	res, err := task.Actions[0].Apply(context.Background(), false)
+	res, err := task.Actions[0].Apply(t.Context(), false)
 	if err != nil {
 		t.Fatalf("apply failed: %v", err)
 	}
@@ -134,7 +134,7 @@ func TestFSFile(t *testing.T) {
 		t.Fatalf("got %d actions, want 1", len(task.Actions))
 	}
 
-	res, err = task.Actions[0].Apply(context.Background(), false)
+	res, err = task.Actions[0].Apply(t.Context(), false)
 	if err != nil {
 		t.Fatalf("apply failed: %v", err)
 	}
@@ -155,7 +155,7 @@ func TestFSFile(t *testing.T) {
 		t.Fatalf("got %d actions, want 1", len(task.Actions))
 	}
 
-	res, err = task.Actions[0].Apply(context.Background(), false)
+	res, err = task.Actions[0].Apply(t.Context(), false)
 	if err != nil {
 		t.Fatalf("apply failed: %v", err)
 	}
@@ -190,7 +190,7 @@ func TestFSTemplate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := task.Actions[0].Apply(context.Background(), false); err != nil {
+	if _, err := task.Actions[0].Apply(t.Context(), false); err != nil {
 		t.Fatal(err)
 	}
 	got, err := os.ReadFile(filepath.Join(root, "out.txt"))
@@ -223,7 +223,7 @@ func TestFSChmod(t *testing.T) {
 	if len(task.Actions) != 1 {
 		t.Fatalf("got %d actions, want 1", len(task.Actions))
 	}
-	res, err := task.Actions[0].Apply(context.Background(), false)
+	res, err := task.Actions[0].Apply(t.Context(), false)
 	if err != nil {
 		t.Fatalf("apply failed: %v", err)
 	}
@@ -238,7 +238,7 @@ func TestFSChmod(t *testing.T) {
 		t.Errorf("got mode %o, want 0600", info.Mode().Perm())
 	}
 
-	res, err = task.Actions[0].Apply(context.Background(), false)
+	res, err = task.Actions[0].Apply(t.Context(), false)
 	if err != nil {
 		t.Fatalf("apply failed: %v", err)
 	}
@@ -266,7 +266,7 @@ func TestFSRemoveDanglingSymlink(t *testing.T) {
 		t.Fatalf("got %d actions, want 1", len(task.Actions))
 	}
 
-	res, err := task.Actions[0].Apply(context.Background(), false)
+	res, err := task.Actions[0].Apply(t.Context(), false)
 	if err != nil {
 		t.Fatalf("apply failed: %v", err)
 	}
@@ -307,7 +307,7 @@ func TestFSSymlink(t *testing.T) {
 		t.Fatalf("got %d actions, want 1", len(task.Actions))
 	}
 
-	res, err := task.Actions[0].Apply(context.Background(), false)
+	res, err := task.Actions[0].Apply(t.Context(), false)
 	if err != nil {
 		t.Fatalf("apply failed: %v", err)
 	}
@@ -334,11 +334,70 @@ func TestFSSymlink(t *testing.T) {
 		t.Fatalf("got %d actions, want 1", len(task.Actions))
 	}
 
-	res, err = task.Actions[0].Apply(context.Background(), false)
+	res, err = task.Actions[0].Apply(t.Context(), false)
 	if err != nil {
 		t.Fatalf("apply failed: %v", err)
 	}
 	if res != boot.ResultSkip {
 		t.Errorf("got result %v, want %v", res, boot.ResultSkip)
+	}
+}
+
+func TestFSSyncTreeChangeCheck(t *testing.T) {
+	if _, err := exec.LookPath("rsync"); err != nil {
+		t.Skip("rsync not found in PATH")
+	}
+
+	root := t.TempDir()
+	source := filepath.Join(root, "source")
+	target := filepath.Join(root, "target")
+	if err := os.Mkdir(source, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(source, "file.txt"), []byte("hello\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	rt := &boot.Runtime{Root: root}
+	task, thread := testutil.TaskThread("test")
+	m := &impl{rt: rt}
+	_, err := m.syncTree(thread, starlark.NewBuiltin("fs.sync_tree", m.syncTree), nil, []starlark.Tuple{
+		{starlark.String("source"), starlark.String(source)},
+		{starlark.String("target"), starlark.String(target)},
+	})
+	if err != nil {
+		t.Fatalf("fs.sync_tree failed: %v", err)
+	}
+	res, err := task.Actions[0].Apply(t.Context(), true)
+	if err != nil {
+		t.Fatalf("dry run failed: %v", err)
+	}
+	if res != boot.ResultChange {
+		t.Fatalf("dry-run before sync = %v, want %v", res, boot.ResultChange)
+	}
+	res, err = task.Actions[0].Apply(t.Context(), false)
+	if err != nil {
+		t.Fatalf("apply failed: %v", err)
+	}
+	if res != boot.ResultChange {
+		t.Fatalf("apply = %v, want %v", res, boot.ResultChange)
+	}
+	res, err = task.Actions[0].Apply(t.Context(), true)
+	if err != nil {
+		t.Fatalf("dry run after sync failed: %v", err)
+	}
+	if res != boot.ResultSkip {
+		t.Fatalf("dry-run after sync = %v, want %v", res, boot.ResultSkip)
+	}
+
+	if err := os.WriteFile(filepath.Join(source, "file.txt"), []byte("goodbye\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	res, err = task.Actions[0].Apply(t.Context(), true)
+	if err != nil {
+		t.Fatalf("dry run after source change failed: %v", err)
+	}
+	if res != boot.ResultChange {
+		t.Fatalf("dry-run after source change = %v, want %v", res, boot.ResultChange)
 	}
 }

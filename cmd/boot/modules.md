@@ -113,7 +113,10 @@ the package manager, so no-op runs are fast.
 
 ### `pkg.update()`
 
-Update the package manager's database and upgrade installed packages.
+Update the package manager's database and upgrade installed packages. With
+`pacman`, boot first checks for pending updates using a separate database under
+`$XDG_CACHE_HOME/boot/pacman` (or `~/.cache/boot/pacman`) and skips when the
+system is already current.
 
 ### `pkg.check_explicit_packages(packages)`
 
@@ -176,19 +179,22 @@ first when systemd reports that a daemon reload is needed.
 
 ## `git`
 
-### `git.clone(url, dest)`
+### `git.clone(url, dest, revision = "")`
 
-Ensure `url` is cloned to `dest`. Relative `dest` is resolved against the recipe
-root; paths beginning with `~/` use `HOME`.
+Ensure `url` is cloned to `dest`. If `revision` is set, check out that concrete
+revision as a detached HEAD. Relative `dest` is resolved against the recipe root;
+paths beginning with `~/` use `HOME`.
 
 ### `git.pull(dest)`
 
 Ensure the git repository at `dest` is up-to-date. It skips if the repository is dirty or has no upstream tracking branch.
 
-### `git.sync(url, dest)`
+### `git.sync(url, dest, revision = "")`
 
 Ensure `url` is cloned to `dest`, or fetch and fast-forward pull the existing
-repository when it is clean and has an upstream tracking branch.
+repository when it is clean and has an upstream tracking branch. If `revision` is
+set, fetch and check out that concrete revision as a detached HEAD instead of
+fast-forwarding the upstream branch.
 
 ## `go`
 

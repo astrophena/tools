@@ -5,7 +5,8 @@
 package rescue
 
 import (
-	"context"
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"testing"
@@ -59,7 +60,7 @@ done
 		writeFile(t, filepath.Join(root, name))
 	}
 
-	if err := pruneOutput(context.Background(), &boot.Runtime{Getenv: func(string) string { return "termux" }}, root, 2); err != nil {
+	if err := pruneOutput(t.Context(), &boot.Runtime{Getenv: func(string) string { return "termux" }}, root, 2); err != nil {
 		t.Fatal(err)
 	}
 
@@ -73,7 +74,7 @@ done
 			t.Fatalf("%s was removed: %v", name, err)
 		}
 	}
-	if _, err := os.Stat(filepath.Join(root, "arch-linux-rescue_202603010102.efi")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(root, "arch-linux-rescue_202603010102.efi")); !errors.Is(err, fs.ErrNotExist) {
 		t.Fatalf("old build still exists: %v", err)
 	}
 }

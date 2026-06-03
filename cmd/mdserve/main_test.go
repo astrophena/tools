@@ -53,7 +53,7 @@ func setupTestContext(t *testing.T) (context.Context, *bytes.Buffer) {
 		Logger: slog.New(h),
 		Level:  level,
 	}
-	ctx := logger.Put(context.Background(), l)
+	ctx := logger.Put(t.Context(), l)
 	return ctx, &buf
 }
 

@@ -397,7 +397,7 @@ func sqliteURIWithPragma(uri string, pragma string) string {
 }
 
 func execScript(ctx context.Context, db *sql.DB, script string) error {
-	for _, stmt := range strings.Split(script, ";") {
+	for stmt := range strings.SplitSeq(script, ";") {
 		stmt = strings.TrimSpace(stmt)
 		if stmt == "" {
 			continue

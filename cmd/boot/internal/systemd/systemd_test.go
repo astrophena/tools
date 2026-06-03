@@ -5,7 +5,6 @@
 package systemd
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -42,7 +41,7 @@ esac
 		t.Fatal(err)
 	}
 
-	got, err := task.Actions[0].Apply(context.Background(), true)
+	got, err := task.Actions[0].Apply(t.Context(), true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,7 +85,7 @@ esac
 		t.Fatal(err)
 	}
 
-	got, err := task.Actions[0].Apply(context.Background(), false)
+	got, err := task.Actions[0].Apply(t.Context(), false)
 	if err != nil {
 		t.Fatal(err)
 	}

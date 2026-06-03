@@ -5,7 +5,6 @@
 package golang
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -72,14 +71,14 @@ func TestGoInstallLocalConditions(t *testing.T) {
 		t.Fatalf("got %d actions, want 2", len(task.Actions))
 	}
 
-	res, err := task.Actions[0].Apply(context.Background(), true)
+	res, err := task.Actions[0].Apply(t.Context(), true)
 	if err != nil {
 		t.Fatalf("apply failed: %v", err)
 	}
 	if res != boot.ResultChange {
 		t.Errorf("got result %v, want %v", res, boot.ResultChange)
 	}
-	res, err = task.Actions[1].Apply(context.Background(), true)
+	res, err = task.Actions[1].Apply(t.Context(), true)
 	if err != nil {
 		t.Fatalf("apply failed: %v", err)
 	}
@@ -94,7 +93,7 @@ func TestProxyUpToDateFixedVersion(t *testing.T) {
 		Module:  "example.com/tool",
 		Version: "v1.2.3",
 	}
-	upToDate, err := proxyUpToDate(context.Background(), "example.com/tool@v1.2.3", info, nil)
+	upToDate, err := proxyUpToDate(t.Context(), "example.com/tool@v1.2.3", info, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,7 +117,7 @@ func TestLatestModuleUsesProxy(t *testing.T) {
 	defer server.Close()
 	goProxyURL = server.URL
 
-	info, err := latestModule(context.Background(), "example.com/hello")
+	info, err := latestModule(t.Context(), "example.com/hello")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -157,10 +156,10 @@ func TestLatestCacheFetchesConcurrently(t *testing.T) {
 	goProxyURL = server.URL
 
 	cache := newLatestCache([]string{"example.com/one", "example.com/two"})
-	if _, err := cache.Get(context.Background(), "example.com/one"); err != nil {
+	if _, err := cache.Get(t.Context(), "example.com/one"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := cache.Get(context.Background(), "example.com/two"); err != nil {
+	if _, err := cache.Get(t.Context(), "example.com/two"); err != nil {
 		t.Fatal(err)
 	}
 	if maxInFlight.Load() < 2 {
@@ -192,7 +191,7 @@ func TestLocalUpToDate(t *testing.T) {
 	testutil.RunGit(t, root, "commit", "-m", "initial")
 	head := strings.TrimSpace(testutil.RunGitOutput(t, root, "rev-parse", "HEAD"))
 
-	upToDate, err := localUpToDate(context.Background(), root, goBuildInfo{
+	upToDate, err := localUpToDate(t.Context(), root, goBuildInfo{
 		Settings: map[string]string{
 			"vcs.revision": head,
 			"vcs.modified": "false",
@@ -208,7 +207,7 @@ func TestLocalUpToDate(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "dirty.txt"), []byte("dirty\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	upToDate, err = localUpToDate(context.Background(), root, goBuildInfo{
+	upToDate, err = localUpToDate(t.Context(), root, goBuildInfo{
 		Settings: map[string]string{
 			"vcs.revision": head,
 			"vcs.modified": "false",

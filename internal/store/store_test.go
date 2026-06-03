@@ -6,7 +6,6 @@ package store
 
 import (
 	"bytes"
-	"context"
 	"path/filepath"
 	"testing"
 	"time"
@@ -27,7 +26,7 @@ func TestJSONFile(t *testing.T) {
 }
 
 func testStore(t *testing.T, s Store) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	value1 := []byte(`"value1"`)
 	value2 := []byte(`123`)

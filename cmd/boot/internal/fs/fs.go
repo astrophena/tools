@@ -154,29 +154,21 @@ func (m *impl) syncTree(thread *starlark.Thread, b *starlark.Builtin, args starl
 	}
 
 	boot.AddAction(thread, boot.Action{
-		Summary: summary,
+		Summary:      summary,
+		RequiresSudo: sudo,
 		Apply: func(ctx context.Context, dryRun bool) (boot.Result, error) {
 			if _, err := os.Stat(src); errors.Is(err, fs.ErrNotExist) && onlyIfExists {
 				return boot.ResultSkip, nil
 			} else if err != nil {
 				return "", err
 			}
-			if dryRun && sudo && m.rt.NeedsSudo() {
-				return boot.ResultChange, nil
-			}
 
-			args := []string{"-a"}
-			if owner != "" || group != "" {
-				args = append(args, "--chown="+owner+":"+group)
-			}
-			checkArgs := append([]string{"-ani"}, args[1:]...)
-			checkArgs = append(checkArgs, withTrailingSeparator(src), withTrailingSeparator(dst))
-			checkCmd := rsyncCommand(ctx, m.rt, sudo, checkArgs)
-			out, err := checkCmd.CombinedOutput()
+			args := syncTreeArgs(owner, group)
+			changed, err := syncTreeChanged(ctx, m.rt, sudo, args, src, dst)
 			if err != nil {
-				return "", boot.CommandError(checkCmd.Args, out, err)
+				return "", err
 			}
-			if len(bytes.TrimSpace(out)) == 0 {
+			if !changed {
 				return boot.ResultSkip, nil
 			}
 			if dryRun {
@@ -185,7 +177,7 @@ func (m *impl) syncTree(thread *starlark.Thread, b *starlark.Builtin, args starl
 
 			args = append(args, withTrailingSeparator(src), withTrailingSeparator(dst))
 			cmd := rsyncCommand(ctx, m.rt, sudo, args)
-			out, err = cmd.CombinedOutput()
+			out, err := cmd.CombinedOutput()
 			if err != nil {
 				return "", boot.CommandError(cmd.Args, out, err)
 			}
@@ -193,6 +185,27 @@ func (m *impl) syncTree(thread *starlark.Thread, b *starlark.Builtin, args starl
 		},
 	})
 	return starlark.None, nil
+}
+
+func syncTreeArgs(owner, group string) []string {
+	// Directory mtimes change as files are added or removed outside the recipe; do
+	// not let that churn make otherwise synchronized trees look non-idempotent.
+	args := []string{"-a", "--omit-dir-times"}
+	if owner != "" || group != "" {
+		args = append(args, "--chown="+owner+":"+group)
+	}
+	return args
+}
+
+func syncTreeChanged(ctx context.Context, rt *boot.Runtime, sudo bool, args []string, src, dst string) (bool, error) {
+	checkArgs := append([]string{"-ani"}, args[1:]...)
+	checkArgs = append(checkArgs, withTrailingSeparator(src), withTrailingSeparator(dst))
+	checkCmd := rsyncCommand(ctx, rt, sudo, checkArgs)
+	out, err := checkCmd.CombinedOutput()
+	if err != nil {
+		return false, boot.CommandError(checkCmd.Args, out, err)
+	}
+	return len(bytes.TrimSpace(out)) > 0, nil
 }
 
 func withTrailingSeparator(path string) string {

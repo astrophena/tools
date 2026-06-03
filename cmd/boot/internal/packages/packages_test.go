@@ -5,8 +5,8 @@
 package packages
 
 import (
-	"context"
 	"os"
+	"path/filepath"
 	"testing"
 
 	boot "go.astrophena.name/tools/cmd/boot/internal"
@@ -30,7 +30,7 @@ done
 	if err != nil {
 		t.Fatal(err)
 	}
-	missing, err := pm.missing(context.Background(), []string{"installed", "missing"})
+	missing, err := pm.missing(t.Context(), []string{"installed", "missing"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,7 +56,7 @@ exit 0
 	if err != nil {
 		t.Fatal(err)
 	}
-	missing, err := pm.missing(context.Background(), []string{"installed", "missing"})
+	missing, err := pm.missing(t.Context(), []string{"installed", "missing"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,8 +81,83 @@ esac
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := pm.update(context.Background()); err != nil {
+	if err := pm.update(t.Context()); err != nil {
 		t.Fatalf("update failed: %v", err)
+	}
+}
+
+func TestPackageManagerPacmanUpdates(t *testing.T) {
+	bin := t.TempDir()
+	systemDB := filepath.Join(t.TempDir(), "pacman")
+	if err := os.MkdirAll(filepath.Join(systemDB, "local"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	testutil.WriteCommand(t, bin, "pacman-conf", "#!/bin/sh\necho "+systemDB+"\n")
+	testutil.WriteCommand(t, bin, "fakeroot", `#!/bin/sh
+if [ "$1" != "--" ] || [ "$2" != "pacman" ] || [ "$3" != "-Sy" ]; then
+	exit 1
+fi
+exit 0
+`)
+	testutil.WriteCommand(t, bin, "pacman", `#!/bin/sh
+case "$1" in
+-Qu)
+	echo "linux 1-1 -> 1-2"
+	echo "ignored 1-1 -> 1-2 [ignored]"
+	exit 0 ;;
+*) exit 1 ;;
+esac
+`)
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	cache := t.TempDir()
+	rt := &boot.Runtime{Getenv: func(key string) string {
+		if key == "XDG_CACHE_HOME" {
+			return cache
+		}
+		return os.Getenv(key)
+	}}
+
+	updates, err := pacmanUpdates(t.Context(), rt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(updates) != 1 || updates[0] != "linux" {
+		t.Fatalf("updates = %v, want [linux]", updates)
+	}
+	if _, err := os.Lstat(filepath.Join(cache, "boot", "pacman", "local")); err != nil {
+		t.Fatalf("local database link was not created: %v", err)
+	}
+}
+
+func TestPackageManagerPacmanUpdatesNone(t *testing.T) {
+	bin := t.TempDir()
+	systemDB := filepath.Join(t.TempDir(), "pacman")
+	if err := os.MkdirAll(filepath.Join(systemDB, "local"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	testutil.WriteCommand(t, bin, "pacman-conf", "#!/bin/sh\necho "+systemDB+"\n")
+	testutil.WriteCommand(t, bin, "fakeroot", "#!/bin/sh\nexit 0\n")
+	testutil.WriteCommand(t, bin, "pacman", `#!/bin/sh
+case "$1" in
+-Qu) exit 1 ;;
+*) exit 1 ;;
+esac
+`)
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	cache := t.TempDir()
+	rt := &boot.Runtime{Getenv: func(key string) string {
+		if key == "XDG_CACHE_HOME" {
+			return cache
+		}
+		return os.Getenv(key)
+	}}
+
+	updates, err := pacmanUpdates(t.Context(), rt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(updates) != 0 {
+		t.Fatalf("updates = %v, want none", updates)
 	}
 }
 
@@ -107,7 +182,7 @@ exit 1
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := pm.update(context.Background()); err != nil {
+	if err := pm.update(t.Context()); err != nil {
 		t.Fatalf("update failed: %v", err)
 	}
 }

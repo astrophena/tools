@@ -5,7 +5,6 @@
 package consent
 
 import (
-	"context"
 	"strings"
 	"testing"
 
@@ -64,7 +63,7 @@ func TestRequire(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			got, err := task.Actions[0].Apply(context.Background(), tc.dryRun)
+			got, err := task.Actions[0].Apply(t.Context(), tc.dryRun)
 			if err != nil {
 				t.Fatal(err)
 			}

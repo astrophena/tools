@@ -20,14 +20,14 @@ func TestSleep(t *testing.T) {
 	}{
 		"elapsed": {
 			context: func() context.Context {
-				return context.Background()
+				return t.Context()
 			},
 			duration: 1 * time.Millisecond,
 			want:     true,
 		},
 		"canceled": {
 			context: func() context.Context {
-				ctx, cancel := context.WithCancel(context.Background())
+				ctx, cancel := context.WithCancel(t.Context())
 				cancel()
 				return ctx
 			},

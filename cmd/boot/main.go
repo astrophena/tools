@@ -62,7 +62,7 @@ func (a *app) Flags(fs *flag.FlagSet) {
 	fs.Var(&a.only, "only", "Run only the specified task ID. May be repeated.")
 	fs.Var(&a.skip, "skip", "Skip the specified task ID. May be repeated.")
 	fs.Var(&a.tags, "tag", "Run tasks with the specified tag. May be repeated.")
-	fs.IntVar(&a.concurrency, "j", 1, "Number of tasks to run in parallel.")
+	fs.IntVar(&a.concurrency, "j", 1, "Number of tasks and eligible actions to run in parallel.")
 }
 
 func (a *app) Run(ctx context.Context) error {
