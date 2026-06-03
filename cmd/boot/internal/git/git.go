@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	boot "go.astrophena.name/tools/cmd/boot/internal"
 
@@ -20,14 +21,17 @@ import (
 )
 
 // Module returns the Starlark git module.
-func Module() boot.Module { return module{} }
+func Module() boot.Module { return &module{} }
 
-type module struct{}
+type module struct {
+	mu    sync.Mutex
+	repos map[string]*sync.Mutex
+}
 
-func (module) Name() string { return "git" }
+func (*module) Name() string { return "git" }
 
-func (module) Members(rt *boot.Runtime) starlark.StringDict {
-	m := &impl{rt: rt}
+func (mod *module) Members(rt *boot.Runtime) starlark.StringDict {
+	m := &impl{rt: rt, mod: mod}
 	return starlark.StringDict{
 		"clone": starlark.NewBuiltin("git.clone", m.clone),
 		"pull":  starlark.NewBuiltin("git.pull", m.pull),
@@ -36,7 +40,27 @@ func (module) Members(rt *boot.Runtime) starlark.StringDict {
 }
 
 type impl struct {
-	rt *boot.Runtime
+	rt  *boot.Runtime
+	mod *module
+}
+
+func (m *module) lockRepo(dst string) func() {
+	if m == nil {
+		return func() {}
+	}
+	m.mu.Lock()
+	if m.repos == nil {
+		m.repos = make(map[string]*sync.Mutex)
+	}
+	lock := m.repos[filepath.Clean(dst)]
+	if lock == nil {
+		lock = new(sync.Mutex)
+		m.repos[filepath.Clean(dst)] = lock
+	}
+	m.mu.Unlock()
+
+	lock.Lock()
+	return lock.Unlock
 }
 
 func (m *impl) sync(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
@@ -45,39 +69,47 @@ func (m *impl) sync(thread *starlark.Thread, b *starlark.Builtin, args starlark.
 	}
 
 	var (
-		url  string
-		dest string
+		url      string
+		dest     string
+		revision string
 	)
-	if err := starlark.UnpackArgs(b.Name(), args, kwargs, "url", &url, "dest", &dest); err != nil {
+	if err := starlark.UnpackArgs(b.Name(), args, kwargs, "url", &url, "dest", &dest, "revision?", &revision); err != nil {
 		return nil, err
 	}
 
 	dst := m.rt.ResolveTarget(dest)
+	summary := fmt.Sprintf("git sync %s to %s", url, dst)
+	if revision != "" {
+		summary += " at " + revision
+	}
 
 	boot.AddAction(thread, boot.Action{
-		Summary: fmt.Sprintf("git sync %s to %s", url, dst),
+		Summary:    summary,
+		Concurrent: true,
 		Apply: func(ctx context.Context, dryRun bool) (boot.Result, error) {
+			unlock := m.mod.lockRepo(dst)
+			defer unlock()
+
 			if _, err := os.Stat(filepath.Join(dst, ".git")); errors.Is(err, fs.ErrNotExist) {
 				if dryRun {
 					return boot.ResultChange, nil
 				}
-				if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-					return "", err
-				}
-				cmd := exec.CommandContext(ctx, "git", "clone", url, dst)
-				if err := run(cmd); err != nil {
+				if err := cloneRepository(ctx, url, dst, revision); err != nil {
 					return "", err
 				}
 				return boot.ResultChange, nil
-			}
-
-			cmd := exec.CommandContext(ctx, "git", "-C", dst, "status", "--porcelain")
-			out, err := cmd.Output()
-			if err != nil {
+			} else if err != nil {
 				return "", err
 			}
-			if len(out) > 0 {
+
+			if dirty, err := isDirty(ctx, dst); err != nil {
+				return "", err
+			} else if dirty {
 				return boot.ResultSkip, nil
+			}
+
+			if revision != "" {
+				return syncRevision(ctx, dst, revision, dryRun)
 			}
 
 			if !hasUpstream(ctx, dst) {
@@ -119,8 +151,12 @@ func (m *impl) pull(thread *starlark.Thread, b *starlark.Builtin, args starlark.
 	dst := m.rt.ResolveTarget(dest)
 
 	boot.AddAction(thread, boot.Action{
-		Summary: fmt.Sprintf("git pull %s", dst),
+		Summary:    fmt.Sprintf("git pull %s", dst),
+		Concurrent: true,
 		Apply: func(ctx context.Context, dryRun bool) (boot.Result, error) {
+			unlock := m.mod.lockRepo(dst)
+			defer unlock()
+
 			if _, err := os.Stat(filepath.Join(dst, ".git")); errors.Is(err, fs.ErrNotExist) {
 				return "", fmt.Errorf("not a git repository: %s", dst)
 			}
@@ -166,36 +202,51 @@ func (m *impl) clone(thread *starlark.Thread, b *starlark.Builtin, args starlark
 	}
 
 	var (
-		url  string
-		dest string
+		url      string
+		dest     string
+		revision string
 	)
 	if err := starlark.UnpackArgs(
 		b.Name(), args, kwargs,
 		"url", &url,
 		"dest", &dest,
+		"revision?", &revision,
 	); err != nil {
 		return nil, err
 	}
 
 	dst := m.rt.ResolveTarget(dest)
+	summary := fmt.Sprintf("git clone %s to %s", url, dst)
+	if revision != "" {
+		summary += " at " + revision
+	}
 
 	boot.AddAction(thread, boot.Action{
-		Summary: fmt.Sprintf("git clone %s to %s", url, dst),
+		Summary:    summary,
+		Concurrent: true,
 		Apply: func(ctx context.Context, dryRun bool) (boot.Result, error) {
+			unlock := m.mod.lockRepo(dst)
+			defer unlock()
+
 			if _, err := os.Stat(filepath.Join(dst, ".git")); err == nil {
-				return boot.ResultSkip, nil
+				if revision == "" {
+					return boot.ResultSkip, nil
+				}
+				if dirty, err := isDirty(ctx, dst); err != nil {
+					return "", err
+				} else if dirty {
+					return boot.ResultSkip, nil
+				}
+				return syncRevision(ctx, dst, revision, dryRun)
+			} else if !errors.Is(err, fs.ErrNotExist) {
+				return "", err
 			}
 
 			if dryRun {
 				return boot.ResultChange, nil
 			}
 
-			if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-				return "", err
-			}
-
-			cmd := exec.CommandContext(ctx, "git", "clone", url, dst)
-			if err := run(cmd); err != nil {
+			if err := cloneRepository(ctx, url, dst, revision); err != nil {
 				return "", err
 			}
 
@@ -264,4 +315,69 @@ func gitRevision(ctx context.Context, dst, rev string) (string, error) {
 		return "", err
 	}
 	return strings.TrimSpace(string(out)), nil
+}
+
+func cloneRepository(ctx context.Context, url, dst, revision string) error {
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		return err
+	}
+	cmd := exec.CommandContext(ctx, "git", "clone", url, dst)
+	if err := run(cmd); err != nil {
+		return err
+	}
+	if revision == "" {
+		return nil
+	}
+	return checkoutRevision(ctx, dst, revision)
+}
+
+func isDirty(ctx context.Context, dst string) (bool, error) {
+	cmd := exec.CommandContext(ctx, "git", "-C", dst, "status", "--porcelain")
+	out, err := cmd.Output()
+	if err != nil {
+		return false, err
+	}
+	return len(out) > 0, nil
+}
+
+func syncRevision(ctx context.Context, dst, revision string, dryRun bool) (boot.Result, error) {
+	current, err := gitRevision(ctx, dst, "HEAD")
+	if err != nil {
+		return "", err
+	}
+	resolved, err := resolveRevision(ctx, dst, revision)
+	if err == nil && current == resolved {
+		return boot.ResultSkip, nil
+	}
+	if dryRun {
+		return boot.ResultChange, nil
+	}
+	if err := fetchRepository(ctx, dst); err != nil {
+		return "", err
+	}
+	resolved, err = resolveRevision(ctx, dst, revision)
+	if err != nil {
+		return "", err
+	}
+	if current == resolved {
+		return boot.ResultSkip, nil
+	}
+	if err := checkoutRevision(ctx, dst, resolved); err != nil {
+		return "", err
+	}
+	return boot.ResultChange, nil
+}
+
+func fetchRepository(ctx context.Context, dst string) error {
+	cmd := exec.CommandContext(ctx, "git", "-C", dst, "fetch", "--tags", "--prune", "origin")
+	return run(cmd)
+}
+
+func checkoutRevision(ctx context.Context, dst, revision string) error {
+	cmd := exec.CommandContext(ctx, "git", "-C", dst, "checkout", "--detach", revision)
+	return run(cmd)
+}
+
+func resolveRevision(ctx context.Context, dst, revision string) (string, error) {
+	return gitRevision(ctx, dst, revision+"^{commit}")
 }

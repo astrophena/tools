@@ -16,6 +16,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"text/tabwriter"
 
 	"go.astrophena.name/base/cli/progressbar"
@@ -52,6 +53,10 @@ type Action struct {
 	Summary   string
 	Apply     func(context.Context, bool) (Result, error)
 	IsConsent bool
+	// RequiresSudo marks an action as needing sudo even in dry-run mode.
+	RequiresSudo bool
+	// Concurrent marks an action as eligible to run in parallel with adjacent concurrent actions.
+	Concurrent bool
 }
 
 // Result describes what an action did.
@@ -206,11 +211,12 @@ func (e *Engine) prepare(ctx context.Context, tasks []*Task, opts RunOptions) (p
 						}
 						continue
 					}
-					if result == ResultSkip || result == ResultStop {
+					switch result {
+					case ResultSkip, ResultStop:
 						summary.Skipped++
-					} else if result == ResultChange {
+					case ResultChange:
 						summary.Changed++
-					} else if result == ResultWarn {
+					case ResultWarn:
 						summary.Warnings++
 					}
 					if result == ResultStop {
@@ -240,22 +246,27 @@ func (e *Engine) RunPlan(ctx context.Context, w io.Writer, selection Selection, 
 	if err != nil {
 		return err
 	}
-	summary := Summary{Tasks: len(tasks)}
+	if opts.FailFast {
+		return e.runPlanSequential(ctx, w, tasks, opts)
+	}
+	planned, summary, failures, stopOnError := e.prepare(ctx, tasks, opts)
+	if err := newSudoPrompter(e).prepare(ctx, w, tasks); err != nil {
+		return err
+	}
 
 	for i, task := range tasks {
-		stop := false
-		fmt.Fprintf(w, "[%d/%d] Planning task %s: %s\n", i+1, len(tasks), task.ID, task.Name)
-		task.Actions = nil
-		thread := &starlark.Thread{Name: "boot:" + task.ID}
-		SetTask(thread, task)
-		if _, err := starlark.Call(thread, task.Run, nil, nil); err != nil {
-			summary.Failed++
-			fmt.Fprintf(w, "%s %s: %v\n", e.color("fail", colorRed), task.ID, err)
-			if opts.FailFast && !task.ContinueOnError {
+		if !planned[task.ID] {
+			if failure, ok := taskFailure(failures, task); ok {
+				fmt.Fprintf(w, "[%d/%d] Planning task %s: %s\n", i+1, len(tasks), task.ID, task.Name)
+				fmt.Fprintf(w, "%s %s: %v\n", e.color("fail", colorRed), task.ID, failure.Err)
+			}
+			if stopOnError && opts.FailFast {
 				break
 			}
 			continue
 		}
+		stop := false
+		fmt.Fprintf(w, "[%d/%d] Planning task %s: %s\n", i+1, len(tasks), task.ID, task.Name)
 		for _, action := range task.Actions {
 			summary.Actions++
 			result, err := action.Apply(ctx, true)
@@ -274,11 +285,90 @@ func (e *Engine) RunPlan(ctx context.Context, w io.Writer, selection Selection, 
 				fmt.Fprintf(w, "%s %s: %s\n", e.color(string(result), colorGreen), task.ID, action.Summary)
 			case ResultSkip:
 				summary.Skipped++
+				if opts.Verbose {
+					fmt.Fprintf(w, "skip %s: %s\n", task.ID, action.Summary)
+				}
 			case ResultWarn:
 				summary.Warnings++
 				fmt.Fprintf(w, "%s %s: %s\n", e.color(string(result), colorRed), task.ID, action.Summary)
 			case ResultStop:
 				summary.Skipped++
+				if opts.Verbose {
+					fmt.Fprintf(w, "skip %s: %s\n", task.ID, action.Summary)
+				}
+			}
+		}
+		if stop {
+			break
+		}
+	}
+
+	fmt.Fprintf(
+		w,
+		"summary: %d tasks, %d actions, %d would change, %d skipped, %d warnings, %d failed\n",
+		summary.Tasks,
+		summary.Actions,
+		summary.Changed,
+		summary.Skipped,
+		summary.Warnings,
+		summary.Failed,
+	)
+	if summary.Failed > 0 {
+		return errors.New("one or more tasks failed")
+	}
+	return nil
+}
+
+func (e *Engine) runPlanSequential(ctx context.Context, w io.Writer, tasks []*Task, opts RunOptions) error {
+	summary := Summary{Tasks: len(tasks)}
+	sudo := newSudoPrompter(e)
+
+	for i, task := range tasks {
+		stop := false
+		fmt.Fprintf(w, "[%d/%d] Planning task %s: %s\n", i+1, len(tasks), task.ID, task.Name)
+		task.Actions = nil
+		thread := &starlark.Thread{Name: "boot:" + task.ID}
+		SetTask(thread, task)
+		if _, err := starlark.Call(thread, task.Run, nil, nil); err != nil {
+			summary.Failed++
+			fmt.Fprintf(w, "%s %s: %v\n", e.color("fail", colorRed), task.ID, err)
+			if !task.ContinueOnError {
+				break
+			}
+			continue
+		}
+		if err := sudo.prepare(ctx, w, []*Task{task}); err != nil {
+			return err
+		}
+		for _, action := range task.Actions {
+			summary.Actions++
+			result, err := action.Apply(ctx, true)
+			if err != nil {
+				summary.Failed++
+				fmt.Fprintf(w, "%s %s: %s: %v\n", e.color("fail", colorRed), task.ID, action.Summary, err)
+				if !task.ContinueOnError {
+					stop = true
+					break
+				}
+				continue
+			}
+			switch result {
+			case ResultChange:
+				summary.Changed++
+				fmt.Fprintf(w, "%s %s: %s\n", e.color(string(result), colorGreen), task.ID, action.Summary)
+			case ResultSkip:
+				summary.Skipped++
+				if opts.Verbose {
+					fmt.Fprintf(w, "skip %s: %s\n", task.ID, action.Summary)
+				}
+			case ResultWarn:
+				summary.Warnings++
+				fmt.Fprintf(w, "%s %s: %s\n", e.color(string(result), colorRed), task.ID, action.Summary)
+			case ResultStop:
+				summary.Skipped++
+				if opts.Verbose {
+					fmt.Fprintf(w, "skip %s: %s\n", task.ID, action.Summary)
+				}
 			}
 		}
 		if stop {
@@ -307,11 +397,11 @@ func (e *Engine) apply(ctx context.Context, w io.Writer, selection Selection, op
 	if err != nil {
 		return err
 	}
-	if err := e.prepareSudo(ctx, tasks); err != nil {
-		return err
-	}
 
 	planned, summary, failures, stopOnError := e.prepare(ctx, tasks, opts)
+	if err := newSudoPrompter(e).prepare(ctx, w, tasks); err != nil {
+		return err
+	}
 	hadFailures := len(failures) > 0
 
 	if stopOnError && opts.FailFast {
@@ -331,7 +421,7 @@ func (e *Engine) apply(ctx context.Context, w io.Writer, selection Selection, op
 	}
 
 	g, ctx := errgroup.WithContext(ctx)
-	g.SetLimit(concurrency)
+	actions := newActionLimiter(concurrency)
 
 	var mu sync.Mutex
 
@@ -359,14 +449,22 @@ func (e *Engine) apply(ctx context.Context, w io.Writer, selection Selection, op
 
 			pb.SetTitle(task.Name)
 
-			for _, action := range task.Actions {
+			applyAction := func(action Action) (Result, error) {
 				mu.Lock()
 				summary.Actions++
 				mu.Unlock()
 
-				result, err := action.Apply(ctx, opts.DryRun)
+				var (
+					result Result
+					err    error
+				)
+				if err = actions.acquire(ctx); err == nil {
+					result, err = action.Apply(ctx, opts.DryRun)
+					actions.release()
+				}
+				mu.Lock()
+				defer mu.Unlock()
 				if err != nil {
-					mu.Lock()
 					hadFailures = true
 					if !task.ContinueOnError {
 						stopOnError = true
@@ -378,16 +476,8 @@ func (e *Engine) apply(ctx context.Context, w io.Writer, selection Selection, op
 						Action:   action.Summary,
 						Err:      err,
 					})
-					mu.Unlock()
-
-					if opts.FailFast && !task.ContinueOnError {
-						pb.Increment()
-						return err
-					}
-					continue
+					return result, err
 				}
-
-				mu.Lock()
 				switch result {
 				case ResultChange:
 					summary.Changed++
@@ -398,10 +488,55 @@ func (e *Engine) apply(ctx context.Context, w io.Writer, selection Selection, op
 				case ResultStop:
 					summary.Skipped++
 				}
-				mu.Unlock()
-				if result == ResultStop {
+				return result, nil
+			}
+
+			for i := 0; i < len(task.Actions); {
+				action := task.Actions[i]
+				if !action.Concurrent || concurrency == 1 {
+					result, err := applyAction(action)
+					if err != nil && opts.FailFast && !task.ContinueOnError {
+						pb.Increment()
+						return err
+					}
+					if result == ResultStop {
+						break
+					}
+					i++
+					continue
+				}
+
+				end := i + 1
+				for end < len(task.Actions) && task.Actions[end].Concurrent {
+					end++
+				}
+				batch, batchCtx := errgroup.WithContext(ctx)
+				var shouldStop atomic.Bool
+				for _, action := range task.Actions[i:end] {
+					batch.Go(func() error {
+						result, err := applyAction(action)
+						if result == ResultStop {
+							shouldStop.Store(true)
+						}
+						if err != nil && opts.FailFast && !task.ContinueOnError {
+							return err
+						}
+						select {
+						case <-batchCtx.Done():
+							return batchCtx.Err()
+						default:
+							return nil
+						}
+					})
+				}
+				if err := batch.Wait(); err != nil {
+					pb.Increment()
+					return err
+				}
+				if shouldStop.Load() {
 					break
 				}
+				i = end
 			}
 
 			pb.Increment()
@@ -433,11 +568,11 @@ func (e *Engine) applyVerbose(ctx context.Context, w io.Writer, selection Select
 	if err != nil {
 		return err
 	}
-	if err := e.prepareSudo(ctx, tasks); err != nil {
-		return err
-	}
 
 	planned, summary, failures, stopOnError := e.prepare(ctx, tasks, opts)
+	if err := newSudoPrompter(e).prepare(ctx, w, tasks); err != nil {
+		return err
+	}
 	if stopOnError && opts.FailFast {
 		e.printReport(w, summary, false)
 		e.printFailures(w, failures)
@@ -503,6 +638,15 @@ type failure struct {
 	TaskName string
 	Action   string
 	Err      error
+}
+
+func taskFailure(failures []failure, task *Task) (failure, bool) {
+	for _, failure := range failures {
+		if failure.TaskID == task.ID && failure.Action == "" {
+			return failure, true
+		}
+	}
+	return failure{}, false
 }
 
 func (e *Engine) printReport(w io.Writer, summary Summary, dryRun bool) {
@@ -620,13 +764,10 @@ func (e *Engine) runJSON(ctx context.Context, w io.Writer, selection Selection, 
 	if err != nil {
 		return err
 	}
-	if !opts.DryRun {
-		if err := e.prepareSudo(ctx, tasks); err != nil {
-			return err
-		}
-	}
-
 	planned, summary, failures, stopOnError := e.prepare(ctx, tasks, opts)
+	if err := newSudoPrompter(e).prepare(ctx, io.Discard, tasks); err != nil {
+		return err
+	}
 	report := jsonRun{DryRun: opts.DryRun, Summary: summary}
 	for _, f := range failures {
 		report.Actions = append(report.Actions, jsonAction{TaskID: f.TaskID, TaskName: f.TaskName, Error: f.Err.Error()})
@@ -703,12 +844,50 @@ func (e *Engine) colorEnabled() bool {
 	return e.Runtime == nil || e.Runtime.Getenv == nil || e.Runtime.Getenv("NO_COLOR") == ""
 }
 
-func (e *Engine) prepareSudo(ctx context.Context, tasks []*Task) error {
-	if e.Runtime == nil || !e.Runtime.NeedsSudo() {
+type actionLimiter struct {
+	ch chan struct{}
+}
+
+func newActionLimiter(limit int) actionLimiter {
+	return actionLimiter{ch: make(chan struct{}, max(limit, 1))}
+}
+
+func (l actionLimiter) acquire(ctx context.Context) error {
+	select {
+	case l.ch <- struct{}{}:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (l actionLimiter) release() {
+	<-l.ch
+}
+
+type sudoPrompter struct {
+	engine   *Engine
+	prepared bool
+}
+
+func newSudoPrompter(engine *Engine) *sudoPrompter {
+	return &sudoPrompter{engine: engine}
+}
+
+func (p *sudoPrompter) prepare(ctx context.Context, w io.Writer, tasks []*Task) error {
+	if p.prepared || p.engine.Runtime == nil || !p.engine.Runtime.NeedsSudo() {
 		return nil
 	}
-	if !slices.ContainsFunc(tasks, func(task *Task) bool { return task.RequiresSudo }) {
+	reasons := sudoReasons(tasks)
+	if len(reasons) == 0 {
 		return nil
+	}
+	if w == nil {
+		w = io.Discard
+	}
+	fmt.Fprintln(w, "Boot requests administrator permissions to run the following tasks and actions:")
+	for _, reason := range reasons {
+		fmt.Fprintf(w, "  - %s\n", reason)
 	}
 	cmd := exec.CommandContext(ctx, "sudo", "-v")
 	if out, err := cmd.CombinedOutput(); err != nil {
@@ -718,7 +897,30 @@ func (e *Engine) prepareSudo(ctx context.Context, tasks []*Task) error {
 		}
 		return fmt.Errorf("sudo authentication failed: %w:\n%s", err, msg)
 	}
+	p.prepared = true
 	return nil
+}
+
+func sudoReasons(tasks []*Task) []string {
+	var reasons []string
+	for _, task := range tasks {
+		actions := sudoActionReasons(task)
+		if len(actions) == 0 && task.RequiresSudo {
+			reasons = append(reasons, fmt.Sprintf("task %s: %s", task.ID, task.Name))
+		}
+		reasons = append(reasons, actions...)
+	}
+	return reasons
+}
+
+func sudoActionReasons(task *Task) []string {
+	var reasons []string
+	for _, action := range task.Actions {
+		if action.RequiresSudo {
+			reasons = append(reasons, fmt.Sprintf("%s: %s", task.ID, action.Summary))
+		}
+	}
+	return reasons
 }
 
 // Selected returns tasks matching selection, topologically sorted.

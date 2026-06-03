@@ -6,7 +6,9 @@ package rescue
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -178,7 +180,7 @@ type outputBuild struct {
 
 func rescueOutputBuilds(dir string) ([]outputBuild, error) {
 	entries, err := os.ReadDir(dir)
-	if os.IsNotExist(err) {
+	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil
 	}
 	if err != nil {

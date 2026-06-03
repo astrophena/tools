@@ -17,7 +17,7 @@ func TestTracker(t *testing.T) {
 	os.Setenv("EXIT_IDLE_TIME", "50ms")
 	t.Cleanup(func() { os.Unsetenv("EXIT_IDLE_TIME") })
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	tracker := newTracker(cancel, func() bool { return true })

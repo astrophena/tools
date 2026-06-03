@@ -5,7 +5,6 @@
 package fetch
 
 import (
-	"context"
 	"crypto/sha256"
 	"fmt"
 	"net/http"
@@ -46,7 +45,7 @@ func TestFetchFile(t *testing.T) {
 	if len(task.Actions) != 1 {
 		t.Fatalf("got %d actions, want 1", len(task.Actions))
 	}
-	res, err := task.Actions[0].Apply(context.Background(), false)
+	res, err := task.Actions[0].Apply(t.Context(), false)
 	if err != nil {
 		t.Fatalf("apply failed: %v", err)
 	}
@@ -68,7 +67,7 @@ func TestFetchFile(t *testing.T) {
 		t.Errorf("got mode %o, want 0600", info.Mode().Perm())
 	}
 
-	res, err = task.Actions[0].Apply(context.Background(), false)
+	res, err = task.Actions[0].Apply(t.Context(), false)
 	if err != nil {
 		t.Fatalf("apply failed: %v", err)
 	}

@@ -5,7 +5,6 @@
 package ssh
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -36,7 +35,7 @@ func TestSSHKeySkipsExistingKey(t *testing.T) {
 	if len(task.Actions) != 1 {
 		t.Fatalf("got %d actions, want 1", len(task.Actions))
 	}
-	res, err := task.Actions[0].Apply(context.Background(), false)
+	res, err := task.Actions[0].Apply(t.Context(), false)
 	if err != nil {
 		t.Fatalf("apply failed: %v", err)
 	}

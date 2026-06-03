@@ -11,7 +11,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"go.starlark.net/starlark"
 )
@@ -86,7 +88,7 @@ func TestPlanFailFastStopsAfterActionFailure(t *testing.T) {
 	}}
 
 	var out bytes.Buffer
-	err := engine.Run(context.Background(), &out, Selection{}, RunOptions{DryRun: true, FailFast: true})
+	err := engine.Run(t.Context(), &out, Selection{}, RunOptions{DryRun: true, FailFast: true})
 	if err == nil {
 		t.Fatal("Run succeeded, want failure")
 	}
@@ -128,7 +130,7 @@ func TestApplyVerboseFailFastStopsAfterActionFailure(t *testing.T) {
 	}}
 
 	var out bytes.Buffer
-	err := engine.Run(context.Background(), &out, Selection{}, RunOptions{Verbose: true, FailFast: true})
+	err := engine.Run(t.Context(), &out, Selection{}, RunOptions{Verbose: true, FailFast: true})
 	if err == nil {
 		t.Fatal("Run succeeded, want failure")
 	}
@@ -171,7 +173,7 @@ func TestApplyFailFastPreservesContinueOnError(t *testing.T) {
 	}}
 
 	var out bytes.Buffer
-	err := engine.Run(context.Background(), &out, Selection{}, RunOptions{FailFast: true, Concurrency: 1})
+	err := engine.Run(t.Context(), &out, Selection{}, RunOptions{FailFast: true, Concurrency: 1})
 	if err == nil {
 		t.Fatal("Run succeeded, want failure report")
 	}
@@ -209,7 +211,7 @@ func TestApplyStopsCurrentTaskOnResultStop(t *testing.T) {
 	}}
 
 	var out bytes.Buffer
-	err := engine.Run(context.Background(), &out, Selection{}, RunOptions{Concurrency: 1})
+	err := engine.Run(t.Context(), &out, Selection{}, RunOptions{Concurrency: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -244,7 +246,7 @@ func TestPlanDoesNotStopOnResultStop(t *testing.T) {
 	}}
 
 	var out bytes.Buffer
-	err := engine.Run(context.Background(), &out, Selection{}, RunOptions{DryRun: true})
+	err := engine.Run(t.Context(), &out, Selection{}, RunOptions{DryRun: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -295,11 +297,251 @@ func TestPrepareSudo(t *testing.T) {
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 
 	engine := &Engine{Runtime: &Runtime{Getenv: func(string) string { return "" }}}
-	err := engine.prepareSudo(context.Background(), []*Task{{ID: "root_task", RequiresSudo: true}})
+	var out bytes.Buffer
+	err := newSudoPrompter(engine).prepare(t.Context(), &out, []*Task{{ID: "root_task", Name: "Root task", RequiresSudo: true}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(marker); err != nil {
 		t.Fatalf("sudo was not called: %v", err)
+	}
+	assertContains(t, out.String(), "Boot requests administrator permissions to run the following tasks and actions:", "sudo prompt")
+	assertContains(t, out.String(), "  - task root_task: Root task", "sudo prompt")
+}
+
+func TestSudoReasonsPreferActionDetails(t *testing.T) {
+	reasons := sudoReasons([]*Task{{
+		ID:           "setup_etc",
+		Name:         "Install /etc files",
+		RequiresSudo: true,
+		Actions: []Action{{
+			Summary:      "sync tree prefs/etc to /etc (sudo)",
+			RequiresSudo: true,
+		}},
+	}})
+	if len(reasons) != 1 || reasons[0] != "setup_etc: sync tree prefs/etc to /etc (sudo)" {
+		t.Fatalf("sudo reasons = %v, want action reason only", reasons)
+	}
+}
+
+func TestRunPlanPromptsForSudoOnceBeforeTasks(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("sudo is not needed when running as root")
+	}
+	bin := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, "sudo"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	engine := &Engine{
+		Runtime: &Runtime{Getenv: func(string) string { return "" }},
+		Tasks: []*Task{
+			{
+				ID:   "first",
+				Name: "First",
+				Run:  sudoAction("first action"),
+			},
+			{
+				ID:   "second",
+				Name: "Second",
+				Run:  sudoAction("second action"),
+			},
+		},
+	}
+
+	var out bytes.Buffer
+	if err := engine.Run(t.Context(), &out, Selection{}, RunOptions{DryRun: true, Verbose: true}); err != nil {
+		t.Fatal(err)
+	}
+	got := out.String()
+	prompt := "Boot requests administrator permissions to run the following tasks and actions:"
+	if strings.Count(got, prompt) != 1 {
+		t.Fatalf("sudo prompt count = %d, want 1:\n%s", strings.Count(got, prompt), got)
+	}
+	if strings.Index(got, prompt) > strings.Index(got, "[1/2] Planning task first") {
+		t.Fatalf("sudo prompt was not printed before planning tasks:\n%s", got)
+	}
+	assertContains(t, got, "  - first: first action", "sudo prompt")
+	assertContains(t, got, "  - second: second action", "sudo prompt")
+}
+
+func sudoAction(summary string) starlark.Callable {
+	return starlark.NewBuiltin("sudo", func(thread *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, _ []starlark.Tuple) (starlark.Value, error) {
+		AddAction(thread, Action{
+			Summary:      summary,
+			RequiresSudo: true,
+			Apply: func(context.Context, bool) (Result, error) {
+				return ResultSkip, nil
+			},
+		})
+		return starlark.None, nil
+	})
+}
+
+func TestRunPlanVerbosePrintsSkippedActions(t *testing.T) {
+	out := runSkippedActionEngine(t, RunOptions{DryRun: true, Verbose: true})
+	assertContains(t, out, "skip noop: already current", "verbose plan output")
+}
+
+func TestApplyVerbosePrintsSkippedActions(t *testing.T) {
+	out := runSkippedActionEngine(t, RunOptions{Verbose: true})
+	assertContains(t, out, "skip noop: already current", "verbose output")
+}
+
+func runSkippedActionEngine(t *testing.T, opts RunOptions) string {
+	t.Helper()
+
+	engine := &Engine{Tasks: []*Task{{
+		ID:   "noop",
+		Name: "No-op",
+		Run: starlark.NewBuiltin("noop", func(thread *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, _ []starlark.Tuple) (starlark.Value, error) {
+			AddAction(thread, Action{
+				Summary: "already current",
+				Apply: func(context.Context, bool) (Result, error) {
+					return ResultSkip, nil
+				},
+			})
+			return starlark.None, nil
+		}),
+	}}}
+
+	var out bytes.Buffer
+	if err := engine.Run(t.Context(), &out, Selection{}, opts); err != nil {
+		t.Fatal(err)
+	}
+	return out.String()
+}
+
+func assertContains(t *testing.T, got, want, name string) {
+	t.Helper()
+
+	if !strings.Contains(got, want) {
+		t.Fatalf("%s did not include %q:\n%s", name, want, got)
+	}
+}
+
+func TestApplyUsesGlobalConcurrentActionLimit(t *testing.T) {
+	var running atomic.Int32
+	var maxRunning atomic.Int32
+	engine := &Engine{Tasks: []*Task{
+		{
+			ID:   "repos-a",
+			Name: "repos a",
+			Run:  concurrentTestActions(&running, &maxRunning),
+		},
+		{
+			ID:   "repos-b",
+			Name: "repos b",
+			Run:  concurrentTestActions(&running, &maxRunning),
+		},
+	}}
+
+	var out bytes.Buffer
+	if err := engine.Run(t.Context(), &out, Selection{}, RunOptions{Concurrency: 2}); err != nil {
+		t.Fatal(err)
+	}
+	if got := maxRunning.Load(); got > 2 {
+		t.Fatalf("max concurrent actions = %d, want at most 2", got)
+	}
+}
+
+func concurrentTestActions(running, maxRunning *atomic.Int32) starlark.Callable {
+	return starlark.NewBuiltin("repos", func(thread *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, _ []starlark.Tuple) (starlark.Value, error) {
+		for range 2 {
+			AddAction(thread, Action{
+				Summary:    "clone",
+				Concurrent: true,
+				Apply: func(context.Context, bool) (Result, error) {
+					current := running.Add(1)
+					for {
+						max := maxRunning.Load()
+						if current <= max || maxRunning.CompareAndSwap(max, current) {
+							break
+						}
+					}
+					time.Sleep(25 * time.Millisecond)
+					running.Add(-1)
+					return ResultSkip, nil
+				},
+			})
+		}
+		return starlark.None, nil
+	})
+}
+
+func TestApplyStopsAfterConcurrentStopResult(t *testing.T) {
+	var ranAfterStop atomic.Bool
+	engine := &Engine{Tasks: []*Task{{
+		ID:   "repos",
+		Name: "repos",
+		Run: starlark.NewBuiltin("repos", func(thread *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, _ []starlark.Tuple) (starlark.Value, error) {
+			AddAction(thread, Action{
+				Summary:    "stop",
+				Concurrent: true,
+				Apply: func(context.Context, bool) (Result, error) {
+					return ResultStop, nil
+				},
+			})
+			AddAction(thread, Action{
+				Summary:    "skip",
+				Concurrent: true,
+				Apply: func(context.Context, bool) (Result, error) {
+					return ResultSkip, nil
+				},
+			})
+			AddAction(thread, Action{
+				Summary: "must not run",
+				Apply: func(context.Context, bool) (Result, error) {
+					ranAfterStop.Store(true)
+					return ResultSkip, nil
+				},
+			})
+			return starlark.None, nil
+		}),
+	}}}
+
+	var out bytes.Buffer
+	if err := engine.Run(t.Context(), &out, Selection{}, RunOptions{Concurrency: 2}); err != nil {
+		t.Fatal(err)
+	}
+	if ranAfterStop.Load() {
+		t.Fatal("action after concurrent ResultStop ran")
+	}
+}
+
+func TestApplyRunsConcurrentActionsInParallel(t *testing.T) {
+	var running atomic.Int32
+	var overlapped atomic.Bool
+	engine := &Engine{Tasks: []*Task{
+		{
+			ID:   "repos",
+			Name: "repos",
+			Run: starlark.NewBuiltin("repos", func(thread *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, _ []starlark.Tuple) (starlark.Value, error) {
+				for range 2 {
+					AddAction(thread, Action{
+						Summary:    "clone",
+						Concurrent: true,
+						Apply: func(context.Context, bool) (Result, error) {
+							if running.Add(1) == 2 {
+								overlapped.Store(true)
+							}
+							time.Sleep(25 * time.Millisecond)
+							running.Add(-1)
+							return ResultSkip, nil
+						},
+					})
+				}
+				return starlark.None, nil
+			}),
+		},
+	}}
+
+	var out bytes.Buffer
+	if err := engine.Run(t.Context(), &out, Selection{}, RunOptions{Concurrency: 2}); err != nil {
+		t.Fatal(err)
+	}
+	if !overlapped.Load() {
+		t.Fatal("concurrent actions did not overlap")
 	}
 }

@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -137,6 +138,13 @@ func (m *impl) update(thread *starlark.Thread, b *starlark.Builtin, args starlar
 			m.mod.pkgMu.Lock()
 			defer m.mod.pkgMu.Unlock()
 
+			updates, err := pm.updates(ctx)
+			if err != nil {
+				return "", err
+			}
+			if len(updates) == 0 {
+				return boot.ResultSkip, nil
+			}
 			if dryRun {
 				return boot.ResultChange, nil
 			}
@@ -239,6 +247,7 @@ type packageManager struct {
 	missing     func(context.Context, []string) ([]string, error)
 	explicit    func(context.Context) ([]string, error)
 	installArgv func([]string) []string
+	updates     func(context.Context) ([]string, error)
 	update      func(context.Context) error
 }
 
@@ -252,6 +261,104 @@ func sudoArgs(rt *boot.Runtime, args ...string) []string {
 		return append([]string{"sudo"}, args...)
 	}
 	return args
+}
+
+func pacmanUpdates(ctx context.Context, rt *boot.Runtime) ([]string, error) {
+	// Follow checkupdates' safe-update pattern: synchronize a separate pacman
+	// database, then compare the installed local database against that copy. This
+	// avoids running pacman -Sy against the system database without immediately
+	// upgrading, which can leave the host in a partial-upgrade-prone state.
+	dbpath, err := pacmanCheckDBPath(rt)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := os.MkdirAll(dbpath, 0o755); err != nil {
+		return nil, err
+	}
+	local := filepath.Join(dbpath, "local")
+	// pacman -Qu needs the installed package database. Like checkupdates, keep
+	// using the system "local" database through a symlink while storing synced
+	// repository databases in boot's cache directory.
+	if _, err := os.Lstat(local); errors.Is(err, os.ErrNotExist) {
+		pacmanDBPath := pacmanSystemDBPath(ctx)
+		if err := os.Symlink(filepath.Join(pacmanDBPath, "local"), local); err != nil {
+			return nil, err
+		}
+	} else if err != nil {
+		return nil, err
+	}
+
+	// Sync only the cached database. fakeroot lets pacman create root-owned
+	// database metadata in the cache without requiring actual privileges.
+	cmd := exec.CommandContext(ctx, "fakeroot", "--", "pacman", "-Sy", "--disable-sandbox-filesystem", "--dbpath", dbpath, "--logfile", os.DevNull)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return nil, boot.CommandError(cmd.Args, out, err)
+	}
+
+	// Query pending upgrades against the cached sync database. pacman exits 1
+	// when no upgrades are available, which is a successful no-op for boot.
+	cmd = exec.CommandContext(ctx, "pacman", "-Qu", "--dbpath", dbpath)
+	out, err := cmd.Output()
+	if err != nil {
+		var exitErr *exec.ExitError
+		if !errors.As(err, &exitErr) || exitErr.ExitCode() != 1 {
+			return nil, err
+		}
+	}
+
+	var updates []string
+	for line := range strings.SplitSeq(string(out), "\n") {
+		line = strings.TrimSpace(line)
+		// checkupdates suppresses bracketed pacman notes such as ignored packages;
+		// they are not actionable updates for pkg.update.
+		if line == "" || strings.Contains(line, "[") && strings.Contains(line, "]") {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) > 0 {
+			updates = append(updates, fields[0])
+		}
+	}
+	return updates, nil
+}
+
+func pacmanCheckDBPath(rt *boot.Runtime) (string, error) {
+	cacheHome := ""
+	if rt != nil && rt.Getenv != nil {
+		cacheHome = rt.Getenv("XDG_CACHE_HOME")
+	}
+	if cacheHome == "" {
+		home := ""
+		if rt != nil {
+			home = rt.Home
+		}
+		if home == "" && rt != nil && rt.Getenv != nil {
+			home = rt.Getenv("HOME")
+		}
+		if home == "" {
+			var err error
+			home, err = os.UserHomeDir()
+			if err != nil {
+				return "", err
+			}
+		}
+		cacheHome = filepath.Join(home, ".cache")
+	}
+	return filepath.Join(cacheHome, "boot", "pacman"), nil
+}
+
+func pacmanSystemDBPath(ctx context.Context) string {
+	cmd := exec.CommandContext(ctx, "pacman-conf", "DBPath")
+	out, err := cmd.Output()
+	if err != nil {
+		return "/var/lib/pacman"
+	}
+	path := strings.TrimSpace(string(out))
+	if path == "" {
+		return "/var/lib/pacman"
+	}
+	return path
 }
 
 func packageManagerByName(rt *boot.Runtime, name string) (packageManager, error) {
@@ -295,6 +402,9 @@ func packageManagerByName(rt *boot.Runtime, name string) (packageManager, error)
 			installArgv: func(packages []string) []string {
 				return sudoArgs(rt, append([]string{"apt", "install", "-y"}, packages...)...)
 			},
+			updates: func(context.Context) ([]string, error) {
+				return []string{"system"}, nil
+			},
 			update: func(ctx context.Context) error {
 				var cmdLine string
 				if rt.NeedsSudo() {
@@ -334,6 +444,9 @@ func packageManagerByName(rt *boot.Runtime, name string) (packageManager, error)
 			},
 			installArgv: func(packages []string) []string {
 				return sudoArgs(rt, append([]string{"pacman", "-S", "--noconfirm", "--needed"}, packages...)...)
+			},
+			updates: func(ctx context.Context) ([]string, error) {
+				return pacmanUpdates(ctx, rt)
 			},
 			update: func(ctx context.Context) error {
 				args := sudoArgs(rt, "pacman", "-Syu", "--noconfirm")
