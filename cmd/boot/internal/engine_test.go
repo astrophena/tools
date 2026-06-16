@@ -72,6 +72,32 @@ func TestSelectedRejectsIncompleteDependencies(t *testing.T) {
 	}
 }
 
+func TestRunPlanPrintsDynamicActionDescription(t *testing.T) {
+	summary := "check packages"
+	engine := &Engine{Tasks: []*Task{{
+		ID:   "packages",
+		Name: "packages",
+		Run: starlark.NewBuiltin("packages", func(thread *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, _ []starlark.Tuple) (starlark.Value, error) {
+			AddAction(thread, Action{
+				Summary: "check packages",
+				Describe: func() string {
+					return summary
+				},
+				Apply: func(context.Context, bool) (Result, error) {
+					summary = "check packages: would update linux, git"
+					return ResultChange, nil
+				},
+			})
+			return starlark.None, nil
+		}),
+	}}}
+	var out bytes.Buffer
+	if err := engine.RunPlan(t.Context(), &out, Selection{}, RunOptions{DryRun: true}); err != nil {
+		t.Fatal(err)
+	}
+	assertContains(t, out.String(), "packages: check packages: would update linux, git", "plan output")
+}
+
 func TestPlanFailFastStopsAfterActionFailure(t *testing.T) {
 	var ranSecond bool
 	engine := &Engine{Tasks: []*Task{
