@@ -15,6 +15,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	boot "go.astrophena.name/tools/cmd/boot/internal"
@@ -60,22 +61,43 @@ func (m *impl) update(thread *starlark.Thread, b *starlark.Builtin, args starlar
 	src := m.rt.ResolveSource(source)
 	esp := m.rt.ResolveTarget(espDir)
 
+	summary := fmt.Sprintf("update rescue image from %s to %s (keep %d)", src, esp, keep)
+	currentSummary := summary
+	var summaryMu sync.Mutex
+	setSummary := func(next string) {
+		summaryMu.Lock()
+		currentSummary = next
+		summaryMu.Unlock()
+	}
+
 	boot.AddAction(thread, boot.Action{
-		Summary: fmt.Sprintf("update rescue image from %s", src),
+		Summary: summary,
+		Describe: func() string {
+			summaryMu.Lock()
+			defer summaryMu.Unlock()
+			return currentSummary
+		},
 		Apply: func(ctx context.Context, dryRun bool) (boot.Result, error) {
 			if _, err := os.Stat(src); err != nil {
 				return "", err
 			}
 			if _, err := os.Stat(esp); err != nil {
-				return boot.ResultSkip, nil
+				if errors.Is(err, fs.ErrNotExist) {
+					setSummary(fmt.Sprintf("%s: ESP directory does not exist", summary))
+					return boot.ResultSkip, nil
+				}
+				return "", err
 			}
 			images, err := rescueImages(esp)
 			if err != nil {
 				return "", err
 			}
-			if len(images) > 0 && sameMonth(images[0].modTime, time.Now()) {
+			now := time.Now()
+			if len(images) > 0 && sameMonth(images[0].modTime, now) {
+				setSummary(fmt.Sprintf("%s: latest installed image %s is from %s", summary, filepath.Base(images[0].path), monthName(images[0].modTime)))
 				return boot.ResultSkip, nil
 			}
+			setSummary(rescuePlanSummary(summary, images, now))
 			if dryRun {
 				return boot.ResultChange, nil
 			}
@@ -152,6 +174,23 @@ func latestBuiltImage(dir string) (string, error) {
 
 func sameMonth(a, b time.Time) bool {
 	return a.Year() == b.Year() && a.Month() == b.Month()
+}
+
+func rescuePlanSummary(summary string, images []image, now time.Time) string {
+	if len(images) == 0 {
+		return fmt.Sprintf("%s: would build and install initial %s image", summary, monthName(now))
+	}
+	return fmt.Sprintf(
+		"%s: would build and install %s image; latest installed image is %s from %s",
+		summary,
+		monthName(now),
+		filepath.Base(images[0].path),
+		monthName(images[0].modTime),
+	)
+}
+
+func monthName(t time.Time) string {
+	return t.Format("January 2006")
 }
 
 func prune(ctx context.Context, rt *boot.Runtime, esp string, keep int) error {

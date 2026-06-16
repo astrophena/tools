@@ -108,6 +108,24 @@ once before apply. Individual modules still decide when sudo is necessary.
 The apply command holds a per-recipe advisory lock so two Boot runs cannot race
 the same package manager or filesystem actions.
 
+# Configuration
+
+Boot optionally reads a Starlark configuration file from
+$XDG_CONFIG_HOME/boot/config.star, or ~/.config/boot/config.star when
+XDG_CONFIG_HOME is unset. The file may call boot.configure to set default CLI
+options. Explicit command-line flags always override configuration values:
+
+	boot.configure(
+	    workspace="~/code/prefs",
+	    entry="BOOT.star",
+	    concurrency=4,
+	    fail_fast=False,
+	    verbose=False,
+	    json=False,
+	)
+
+The workspace option is the configuration equivalent of -C.
+
 # Environment Variables
 
 Boot reads the following environment variables:

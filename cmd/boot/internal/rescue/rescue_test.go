@@ -9,11 +9,63 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	boot "go.astrophena.name/tools/cmd/boot/internal"
 	"go.astrophena.name/tools/cmd/boot/internal/testutil"
+	"go.starlark.net/starlark"
 )
+
+func TestUpdateDescribesPlannedRescueImageBuild(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "rescue")
+	esp := filepath.Join(root, "efi")
+	if err := os.MkdirAll(source, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(esp, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	oldImage := filepath.Join(esp, "arch-linux-rescue_202601010102.efi")
+	writeFile(t, oldImage)
+	oldTime := time.Now().AddDate(0, -1, 0)
+	if err := os.Chtimes(oldImage, oldTime, oldTime); err != nil {
+		t.Fatal(err)
+	}
+	task, thread := testutil.TaskThread("test")
+	m := &impl{rt: &boot.Runtime{Root: root, Home: filepath.Join(root, "home"), Getenv: func(string) string { return "termux" }}}
+
+	_, err := m.update(thread, starlark.NewBuiltin("rescue.update", m.update), nil, []starlark.Tuple{
+		{starlark.String("source"), starlark.String("rescue")},
+		{starlark.String("esp_dir"), starlark.String("efi")},
+		{starlark.String("keep"), starlark.MakeInt(2)},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(task.Actions) != 1 {
+		t.Fatalf("actions = %d, want 1", len(task.Actions))
+	}
+	result, err := task.Actions[0].Apply(t.Context(), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result != boot.ResultChange {
+		t.Fatalf("result = %s, want %s", result, boot.ResultChange)
+	}
+	description := task.Actions[0].Describe()
+	for _, want := range []string{
+		"update rescue image from " + source + " to " + esp + " (keep 2)",
+		"would build and install",
+		"latest installed image is arch-linux-rescue_202601010102.efi from",
+	} {
+		if !strings.Contains(description, want) {
+			t.Fatalf("description does not contain %q:\n%s", want, description)
+		}
+	}
+}
 
 func TestRescueOutputBuildsGroupsTimestampedFiles(t *testing.T) {
 	dir := t.TempDir()
