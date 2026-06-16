@@ -132,8 +132,16 @@ func (m *impl) update(thread *starlark.Thread, b *starlark.Builtin, args starlar
 		return nil, err
 	}
 
+	summary := fmt.Sprintf("update system with %s", pm.name)
+	currentSummary := summary
+	var summaryMu sync.Mutex
 	boot.AddAction(thread, boot.Action{
-		Summary:      fmt.Sprintf("update system with %s", pm.name),
+		Summary: summary,
+		Describe: func() string {
+			summaryMu.Lock()
+			defer summaryMu.Unlock()
+			return currentSummary
+		},
 		RequiresSudo: pm.requiresSudo,
 		Apply: func(ctx context.Context, dryRun bool) (boot.Result, error) {
 			m.mod.pkgMu.Lock()
@@ -147,6 +155,9 @@ func (m *impl) update(thread *starlark.Thread, b *starlark.Builtin, args starlar
 				return boot.ResultSkip, nil
 			}
 			if dryRun {
+				summaryMu.Lock()
+				currentSummary = fmt.Sprintf("%s: would update %s", summary, strings.Join(updates, ", "))
+				summaryMu.Unlock()
 				return boot.ResultChange, nil
 			}
 			return boot.ResultChange, pm.update(ctx)

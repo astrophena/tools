@@ -181,6 +181,53 @@ esac
 	}
 }
 
+func TestUpdateDescribesPacmanUpdatesInPlan(t *testing.T) {
+	bin := t.TempDir()
+	systemDB := filepath.Join(t.TempDir(), "pacman")
+	if err := os.MkdirAll(filepath.Join(systemDB, "local"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	testutil.WriteCommand(t, bin, "pacman-conf", "#!/bin/sh\necho "+systemDB+"\n")
+	testutil.WriteCommand(t, bin, "fakeroot", "#!/bin/sh\nexit 0\n")
+	testutil.WriteCommand(t, bin, "pacman", `#!/bin/sh
+case "$1" in
+-Qu)
+	echo "linux 1-1 -> 1-2"
+	echo "git 1-1 -> 1-2"
+	exit 0 ;;
+*) exit 1 ;;
+esac
+`)
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	cache := t.TempDir()
+	rt := &boot.Runtime{Getenv: func(key string) string {
+		if key == "XDG_CACHE_HOME" {
+			return cache
+		}
+		return os.Getenv(key)
+	}}
+	task, thread := testutil.TaskThread("test")
+	m := &impl{rt: rt, mod: &module{manager: "pacman"}}
+
+	_, err := m.update(thread, starlark.NewBuiltin("pkg.update", m.update), nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(task.Actions) != 1 {
+		t.Fatalf("actions = %d, want 1", len(task.Actions))
+	}
+	result, err := task.Actions[0].Apply(t.Context(), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result != boot.ResultChange {
+		t.Fatalf("result = %s, want %s", result, boot.ResultChange)
+	}
+	if got, want := task.Actions[0].Describe(), "update system with pacman: would update linux, git"; got != want {
+		t.Fatalf("description = %q, want %q", got, want)
+	}
+}
+
 func TestPackageManagerPacmanUpdate(t *testing.T) {
 	bin := t.TempDir()
 	testutil.WriteCommand(t, bin, "sudo", `#!/bin/sh

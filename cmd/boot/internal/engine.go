@@ -71,8 +71,13 @@ type Task struct {
 // host. When dryRun is false it should bring the host to the requested state and
 // return ResultChange only when it actually changed something.
 type Action struct {
+	// Summary describes the action in plan, apply, and failure output.
 	Summary string
-	Apply   func(context.Context, bool) (Result, error)
+	// Describe returns the current action summary. Actions that discover useful
+	// details while probing may use it to refine Summary before the engine prints
+	// the result.
+	Describe func() string
+	Apply    func(context.Context, bool) (Result, error)
 	// IsConsent marks an action that must be evaluated during prepare in
 	// interactive apply runs. Consent can remove the remaining actions from a task
 	// before sudo prompting and before concurrent execution starts.
@@ -81,6 +86,15 @@ type Action struct {
 	RequiresSudo bool
 	// Concurrent marks an action as eligible to run in parallel with adjacent concurrent actions.
 	Concurrent bool
+}
+
+func (a Action) description() string {
+	if a.Describe != nil {
+		if summary := a.Describe(); summary != "" {
+			return summary
+		}
+	}
+	return a.Summary
 }
 
 // Result describes what an action did.
@@ -247,7 +261,7 @@ func (e *Engine) prepare(ctx context.Context, tasks []*Task, opts RunOptions) (p
 							stopOnError = true
 						}
 						summary.Failed++
-						failures = append(failures, failure{TaskID: task.ID, TaskName: task.Name, Action: action.Summary, Err: err})
+						failures = append(failures, failure{TaskID: task.ID, TaskName: task.Name, Action: action.description(), Err: err})
 						if opts.FailFast && !task.ContinueOnError {
 							stop = true
 							break
@@ -319,7 +333,7 @@ func (e *Engine) RunPlan(ctx context.Context, w io.Writer, selection Selection, 
 			result, err := action.Apply(ctx, true)
 			if err != nil {
 				summary.Failed++
-				fmt.Fprintf(w, "%s %s: %s: %v\n", e.color("fail", colorRed), task.ID, action.Summary, err)
+				fmt.Fprintf(w, "%s %s: %s: %v\n", e.color("fail", colorRed), task.ID, action.description(), err)
 				if opts.FailFast && !task.ContinueOnError {
 					stop = true
 					break
@@ -329,19 +343,19 @@ func (e *Engine) RunPlan(ctx context.Context, w io.Writer, selection Selection, 
 			switch result {
 			case ResultChange:
 				summary.Changed++
-				fmt.Fprintf(w, "%s %s: %s\n", e.color(string(result), colorGreen), task.ID, action.Summary)
+				fmt.Fprintf(w, "%s %s: %s\n", e.color(string(result), colorGreen), task.ID, action.description())
 			case ResultSkip:
 				summary.Skipped++
 				if opts.Verbose {
-					fmt.Fprintf(w, "skip %s: %s\n", task.ID, action.Summary)
+					fmt.Fprintf(w, "skip %s: %s\n", task.ID, action.description())
 				}
 			case ResultWarn:
 				summary.Warnings++
-				fmt.Fprintf(w, "%s %s: %s\n", e.color(string(result), colorRed), task.ID, action.Summary)
+				fmt.Fprintf(w, "%s %s: %s\n", e.color(string(result), colorRed), task.ID, action.description())
 			case ResultStop:
 				summary.Skipped++
 				if opts.Verbose {
-					fmt.Fprintf(w, "skip %s: %s\n", task.ID, action.Summary)
+					fmt.Fprintf(w, "skip %s: %s\n", task.ID, action.description())
 				}
 			}
 		}
@@ -392,7 +406,7 @@ func (e *Engine) runPlanSequential(ctx context.Context, w io.Writer, tasks []*Ta
 			result, err := action.Apply(ctx, true)
 			if err != nil {
 				summary.Failed++
-				fmt.Fprintf(w, "%s %s: %s: %v\n", e.color("fail", colorRed), task.ID, action.Summary, err)
+				fmt.Fprintf(w, "%s %s: %s: %v\n", e.color("fail", colorRed), task.ID, action.description(), err)
 				if !task.ContinueOnError {
 					stop = true
 					break
@@ -402,19 +416,19 @@ func (e *Engine) runPlanSequential(ctx context.Context, w io.Writer, tasks []*Ta
 			switch result {
 			case ResultChange:
 				summary.Changed++
-				fmt.Fprintf(w, "%s %s: %s\n", e.color(string(result), colorGreen), task.ID, action.Summary)
+				fmt.Fprintf(w, "%s %s: %s\n", e.color(string(result), colorGreen), task.ID, action.description())
 			case ResultSkip:
 				summary.Skipped++
 				if opts.Verbose {
-					fmt.Fprintf(w, "skip %s: %s\n", task.ID, action.Summary)
+					fmt.Fprintf(w, "skip %s: %s\n", task.ID, action.description())
 				}
 			case ResultWarn:
 				summary.Warnings++
-				fmt.Fprintf(w, "%s %s: %s\n", e.color(string(result), colorRed), task.ID, action.Summary)
+				fmt.Fprintf(w, "%s %s: %s\n", e.color(string(result), colorRed), task.ID, action.description())
 			case ResultStop:
 				summary.Skipped++
 				if opts.Verbose {
-					fmt.Fprintf(w, "skip %s: %s\n", task.ID, action.Summary)
+					fmt.Fprintf(w, "skip %s: %s\n", task.ID, action.description())
 				}
 			}
 		}
@@ -586,7 +600,7 @@ func (e *Engine) apply(ctx context.Context, w io.Writer, selection Selection, op
 					failures = append(failures, failure{
 						TaskID:   task.ID,
 						TaskName: task.Name,
-						Action:   action.Summary,
+						Action:   action.description(),
 						Err:      err,
 					})
 					return result, err
@@ -736,7 +750,7 @@ func (e *Engine) applySequentialPrepared(ctx context.Context, w io.Writer, tasks
 				failures = append(failures, failure{
 					TaskID:   task.ID,
 					TaskName: task.Name,
-					Action:   action.Summary,
+					Action:   action.description(),
 					Err:      err,
 				})
 				if opts.FailFast && !task.ContinueOnError {
@@ -749,22 +763,22 @@ func (e *Engine) applySequentialPrepared(ctx context.Context, w io.Writer, tasks
 			case ResultChange:
 				summary.Changed++
 				if verbose {
-					fmt.Fprintf(w, "%s %s: %s\n", e.color(string(result), colorGreen), task.ID, action.Summary)
+					fmt.Fprintf(w, "%s %s: %s\n", e.color(string(result), colorGreen), task.ID, action.description())
 				}
 			case ResultSkip:
 				summary.Skipped++
 				if verbose {
-					fmt.Fprintf(w, "skip %s: %s\n", task.ID, action.Summary)
+					fmt.Fprintf(w, "skip %s: %s\n", task.ID, action.description())
 				}
 			case ResultWarn:
 				summary.Warnings++
 				if verbose {
-					fmt.Fprintf(w, "%s %s: %s\n", e.color(string(result), colorRed), task.ID, action.Summary)
+					fmt.Fprintf(w, "%s %s: %s\n", e.color(string(result), colorRed), task.ID, action.description())
 				}
 			case ResultStop:
 				summary.Skipped++
 				if verbose {
-					fmt.Fprintf(w, "skip %s: %s\n", task.ID, action.Summary)
+					fmt.Fprintf(w, "skip %s: %s\n", task.ID, action.description())
 				}
 				stop = true
 			}
