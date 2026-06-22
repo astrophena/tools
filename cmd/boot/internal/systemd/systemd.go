@@ -150,8 +150,7 @@ func systemctlQuiet(ctx context.Context, rt *boot.Runtime, user bool, args ...st
 	if !isSystemctlInactiveStatus(out) {
 		return false, boot.CommandError(cmd.Args, out, err)
 	}
-	var exitErr *exec.ExitError
-	if !errors.As(err, &exitErr) {
+	if _, ok := errors.AsType[*exec.ExitError](err); !ok {
 		return false, err
 	}
 	return false, nil

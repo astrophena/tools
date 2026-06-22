@@ -199,7 +199,7 @@ func binaryPath(ctx context.Context, pkg string) (string, error) {
 	if lines[0] != "" {
 		return filepath.Join(lines[0], name+lines[2]), nil
 	}
-	gopath := strings.Split(lines[1], string(os.PathListSeparator))[0]
+	gopath, _, _ := strings.Cut(lines[1], string(os.PathListSeparator))
 	if gopath == "" {
 		return "", fmt.Errorf("go env GOPATH is empty")
 	}

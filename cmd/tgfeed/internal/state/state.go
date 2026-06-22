@@ -167,8 +167,7 @@ func (s *Store) LoadErrorTemplate(ctx context.Context) (string, error) {
 func (s *Store) fetch(ctx context.Context, url string) ([]byte, error) {
 	b, err := request.Make[request.Bytes](ctx, request.Params{Method: http.MethodGet, Headers: map[string]string{"User-Agent": version.UserAgent()}, URL: s.apiURL(url), HTTPClient: s.httpClient()})
 	if err != nil {
-		var statusErr *request.StatusError
-		if errors.As(err, &statusErr) {
+		if statusErr, ok := errors.AsType[*request.StatusError](err); ok {
 			var errResp *errorResponse
 			if jsonErr := json.Unmarshal(statusErr.Body, &errResp); jsonErr == nil {
 				err = errors.New(errResp.Error)
