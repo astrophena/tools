@@ -131,6 +131,32 @@ done
 	}
 }
 
+func TestPruneOutputAllowsKeepLargerThanBuildCount(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "arch-linux-rescue_202605010102.efi"))
+
+	if err := pruneOutput(t.Context(), &boot.Runtime{Getenv: func(string) string { return "termux" }}, root, 3); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := os.Stat(filepath.Join(root, "arch-linux-rescue_202605010102.efi")); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestPruneAllowsKeepLargerThanImageCount(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "arch-linux-rescue_202605010102.efi"))
+
+	if err := prune(t.Context(), &boot.Runtime{Getenv: func(string) string { return "termux" }}, root, 3); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := os.Stat(filepath.Join(root, "arch-linux-rescue_202605010102.efi")); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func writeFile(t *testing.T, path string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte("test"), 0o644); err != nil {
