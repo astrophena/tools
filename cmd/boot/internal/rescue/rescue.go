@@ -201,6 +201,9 @@ func prune(ctx context.Context, rt *boot.Runtime, esp string, keep int) error {
 	if err != nil {
 		return err
 	}
+	if len(images) <= keep {
+		return nil
+	}
 	for _, image := range images[keep:] {
 		if err := run(ctx, rt.NeedsSudo(), "", "rm", "-f", image.path); err != nil {
 			return err
@@ -253,6 +256,9 @@ func pruneOutput(ctx context.Context, rt *boot.Runtime, dir string, keep int) er
 	builds, err := rescueOutputBuilds(dir)
 	if err != nil {
 		return err
+	}
+	if len(builds) <= keep {
+		return nil
 	}
 	for _, build := range builds[keep:] {
 		for _, path := range build.paths {
