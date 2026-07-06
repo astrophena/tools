@@ -14,10 +14,9 @@ import (
 
 // jsonRun is the complete machine-readable report for a run.
 //
-// JSON mode is intentionally collected and emitted once at the end instead of
-// streaming. That keeps stdout valid JSON even when an action fails midway and
-// makes it safe for other programs to parse boot output without watching event
-// boundaries.
+// JSON mode is collected and emitted once at the end instead of streaming. That
+// keeps stdout valid JSON even when an action fails midway and makes it safe
+// for other programs to parse boot output without watching event boundaries.
 type jsonRun struct {
 	DryRun  bool         `json:"dry_run"`
 	Summary Summary      `json:"summary"`

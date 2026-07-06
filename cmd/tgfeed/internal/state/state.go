@@ -42,7 +42,7 @@ import (
 
 // Feed stores persisted runtime information for a single feed.
 //
-// The concrete JSON representation is intentionally private to this package.
+// The concrete JSON representation is private to this package.
 // Callers should mutate feed state via methods rather than raw field access.
 type Feed struct {
 	Disabled              bool                 `json:"disabled"`

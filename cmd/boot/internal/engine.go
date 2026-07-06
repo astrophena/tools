@@ -51,7 +51,7 @@ type Engine struct {
 // Run is a Starlark callable registered by task(...). It should not do host
 // mutation directly; instead it calls module functions such as fs.file or
 // pkg.install, and those functions append actions to task.Actions via AddAction.
-// Actions is intentionally reset every time the task is prepared so repeated
+// Actions is reset every time the task is prepared so repeated
 // plan/apply calls do not reuse stale closures or stale host checks.
 type Task struct {
 	ID              string
@@ -299,9 +299,9 @@ func (e *Engine) prepare(ctx context.Context, tasks []*Task, opts RunOptions) (p
 
 // RunPlan plans the selected tasks, evaluating actions without applying changes.
 //
-// Plan output intentionally runs actions sequentially. Planning should be
-// deterministic and easy to read; parallelism is reserved for apply where it can
-// reduce real wall-clock time.
+// Plan output runs actions sequentially. Planning should be deterministic and
+// easy to read; parallelism is reserved for apply where it can reduce real
+// wall-clock time.
 func (e *Engine) RunPlan(ctx context.Context, w io.Writer, selection Selection, opts RunOptions) error {
 	tasks, err := e.Selected(selection)
 	if err != nil {

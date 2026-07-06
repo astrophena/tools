@@ -164,7 +164,7 @@ def _new(
     ):
         """Handles one Telegram message.
 
-        The ordering here is intentional:
+        The ordering here:
         1. leave unauthorized groups before doing any message-specific work;
         2. drop unsupported message shapes and ignored group chatter;
         3. let the application cache context for messages on the handling path;
@@ -465,10 +465,8 @@ def _is_reply_to_bot(message, bot_id=0):
 
 
 def _contains_bot_mention(message, bot_username=""):
-    """Reports whether the message text contains this bot's username mention.
-
-    This helper intentionally performs simple text matching. It is appropriate
-    for group-addressing policy; command parsing above remains entity-based.
+    """
+    Reports whether the message text contains this bot's username mention.
     """
     if bot_username == "" or not _has_text(message):
         return False
