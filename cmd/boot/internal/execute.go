@@ -42,8 +42,8 @@ func failedDependency(status map[string]taskStatus, task *Task) (string, bool) {
 	return "", false
 }
 
-// colorCode is intentionally tiny instead of using a terminal styling package;
-// boot only needs a few stable labels in human output.
+// colorCode is tiny instead of using a terminal styling package; boot only
+// needs a few stable labels in human output.
 type colorCode string
 
 const (

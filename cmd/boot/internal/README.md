@@ -9,8 +9,8 @@ contracts used by the built-in modules.
 `main.go` builds an `internal.Engine` with:
 
 - a `Runtime`, which stores recipe root, home directory, environment access,
-  runtime environment overrides, stdio, color preference, and whether the current
-  run is interactive;
+  runtime environment overrides, stdio, color preference, and whether the
+  current run is interactive;
 - an entrypoint, normally `BOOT.star`;
 - a list of modules, each exposed as a Starlark module.
 
@@ -88,14 +88,14 @@ $ go run ./cmd/boot -only setup_packages plan
 $ go run ./cmd/boot -only setup_packages -verbose apply
 ```
 
-Use `plan` to verify the action list and idempotency checks. Use `-verbose
-apply` when you need per-action skip/change output. For task filtering bugs,
-`boot list`, `-only`, `-skip`, and `-tag` exercise the selection path without
-running actions.
+Use `plan` to verify the action list and idempotency checks. Use
+`-verbose
+apply` when you need per-action skip/change output. For task filtering
+bugs, `boot list`, `-only`, `-skip`, and `-tag` exercise the selection path
+without running actions.
 
-Use `--json` when another program needs stable output. JSON runs intentionally
-use a simpler sequential execution path so action results are ordered and easy
-to consume.
+Use `--json` when another program needs stable output. JSON runs use a simpler
+sequential execution path so action results are ordered and easy to consume.
 
 Task selection is strict: if `-only`, `-skip`, or `-tag` leaves a selected task
 without one of its declared dependencies, selection fails instead of silently
