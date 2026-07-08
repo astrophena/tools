@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -432,6 +433,80 @@ func TestPrepareSudo(t *testing.T) {
 	assertContains(t, out.String(), "  - task root_task: Root task", "sudo prompt")
 }
 
+func TestSudoAuthenticateUsesCachedCredentials(t *testing.T) {
+	log := filepath.Join(t.TempDir(), "sudo.log")
+	writeFakeSudo(t, `#!/bin/sh
+printf '%s\n' "$*" >> `+log+`
+case "$*" in
+"-n -v") exit 0 ;;
+*) exit 2 ;;
+esac
+`)
+
+	prompter := newSudoPrompter(&Engine{Runtime: &Runtime{Interactive: true}})
+	var out bytes.Buffer
+	if err := prompter.authenticate(t.Context(), &out); err != nil {
+		t.Fatal(err)
+	}
+	if out.Len() != 0 {
+		t.Fatalf("output = %q, want none", out.String())
+	}
+	got := strings.TrimSpace(readFile(t, log))
+	if got != "-n -v" {
+		t.Fatalf("sudo calls = %q, want cached validation only", got)
+	}
+}
+
+func TestSudoAuthenticateFallsBackInteractively(t *testing.T) {
+	log := filepath.Join(t.TempDir(), "sudo.log")
+	writeFakeSudo(t, `#!/bin/sh
+printf '%s\n' "$*" >> `+log+`
+case "$*" in
+"-n -v") printf 'sudo: a password is required\n' >&2; exit 1 ;;
+"-v") printf '[sudo] password for test:' >&2; exit 0 ;;
+*) exit 2 ;;
+esac
+`)
+
+	prompter := newSudoPrompter(&Engine{Runtime: &Runtime{
+		Stdin:       strings.NewReader("password\n"),
+		Interactive: true,
+	}})
+	var out bytes.Buffer
+	if err := prompter.authenticate(t.Context(), &out); err != nil {
+		t.Fatal(err)
+	}
+	assertContains(t, out.String(), "[sudo] password for test:\n", "sudo prompt output")
+	got := strings.TrimSpace(readFile(t, log))
+	if got != "-n -v\n-v" {
+		t.Fatalf("sudo calls = %q, want cached validation then interactive fallback", got)
+	}
+}
+
+func TestSudoAuthenticateReportsNonInteractiveFailure(t *testing.T) {
+	log := filepath.Join(t.TempDir(), "sudo.log")
+	writeFakeSudo(t, `#!/bin/sh
+printf '%s\n' "$*" >> `+log+`
+case "$*" in
+"-n -v") printf 'sudo: a password is required\n' >&2; exit 1 ;;
+*) exit 2 ;;
+esac
+`)
+
+	prompter := newSudoPrompter(&Engine{Runtime: &Runtime{}})
+	err := prompter.authenticate(t.Context(), io.Discard)
+	if err == nil {
+		t.Fatal("sudo authentication succeeded, want failure")
+	}
+	if !strings.Contains(err.Error(), "sudo: a password is required") {
+		t.Fatalf("error = %v, want sudo output", err)
+	}
+	got := strings.TrimSpace(readFile(t, log))
+	if got != "-n -v" {
+		t.Fatalf("sudo calls = %q, want non-interactive cached validation only", got)
+	}
+}
+
 func TestSudoReasonsPreferActionDetails(t *testing.T) {
 	reasons := sudoReasons([]*Task{{
 		ID:           "setup_etc",
@@ -489,6 +564,26 @@ func TestRunPlanPromptsForSudoOnceBeforeTasks(t *testing.T) {
 	assertContains(t, got, "  - second: second action", "sudo prompt")
 }
 
+func writeFakeSudo(t *testing.T, script string) {
+	t.Helper()
+
+	bin := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, "sudo"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+}
+
+func readFile(t *testing.T, path string) string {
+	t.Helper()
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
+}
+
 func sudoAction(summary string) starlark.Callable {
 	return starlark.NewBuiltin("sudo", func(thread *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, _ []starlark.Tuple) (starlark.Value, error) {
 		AddAction(thread, Action{
@@ -534,6 +629,37 @@ func runSkippedActionEngine(t *testing.T, opts RunOptions) string {
 		t.Fatal(err)
 	}
 	return out.String()
+}
+
+func TestApplyProgressOutputSeparatesActionDetails(t *testing.T) {
+	var out bytes.Buffer
+	rt := &Runtime{Stdout: &out}
+	engine := &Engine{
+		Runtime: rt,
+		Tasks: []*Task{{
+			ID:   "packages",
+			Name: "Checking packages",
+			Run: starlark.NewBuiltin("packages", func(thread *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, _ []starlark.Tuple) (starlark.Value, error) {
+				AddAction(thread, Action{
+					Summary: "check packages",
+					Apply: func(context.Context, bool) (Result, error) {
+						if _, err := Output(rt).Write([]byte("orphaned packages found:\n  - oldlib")); err != nil {
+							return "", err
+						}
+						return ResultWarn, nil
+					},
+				})
+				return starlark.None, nil
+			}),
+		}},
+	}
+
+	if err := engine.Run(t.Context(), &out, Selection{}, RunOptions{Concurrency: 2, Interactive: true}); err != nil {
+		t.Fatal(err)
+	}
+	got := out.String()
+	assertContains(t, got, "\r\x1b[Korphaned packages found:\n", "progress action detail output")
+	assertContains(t, got, "\r\x1b[K  - oldlib\n", "progress action detail output")
 }
 
 func assertContains(t *testing.T, got, want, name string) {

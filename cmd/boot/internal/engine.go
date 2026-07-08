@@ -485,6 +485,19 @@ func (e *Engine) apply(ctx context.Context, w io.Writer, selection Selection, op
 
 	pb := progressbar.New(w, len(tasks), opts.Interactive)
 	pb.Start()
+	var progressOut *progressOutput
+	var restoreOutput func()
+	if opts.Interactive {
+		progressOut = newProgressOutput(pb)
+		if e.Runtime != nil {
+			stdout := e.Runtime.Stdout
+			e.Runtime.Stdout = progressOut
+			restoreOutput = func() {
+				progressOut.Flush()
+				e.Runtime.Stdout = stdout
+			}
+		}
+	}
 
 	// doneCh records completion of every selected task. status records whether a
 	// completed dependency succeeded. Both maps include unplanned tasks so
@@ -680,6 +693,13 @@ func (e *Engine) apply(ctx context.Context, w io.Writer, selection Selection, op
 	}
 
 	err = g.Wait()
+	if progressOut != nil {
+		if restoreOutput != nil {
+			restoreOutput()
+		} else {
+			progressOut.Flush()
+		}
+	}
 	pb.Stop(hadFailures || err != nil)
 
 	if err != nil && !hadFailures {
