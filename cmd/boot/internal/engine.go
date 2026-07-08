@@ -485,6 +485,20 @@ func (e *Engine) apply(ctx context.Context, w io.Writer, selection Selection, op
 
 	pb := progressbar.New(w, len(tasks), opts.Interactive)
 	pb.Start()
+	// Progress titles describe the task just accounted for, so serialize updates
+	// through one reporter instead of letting worker starts race to set the title.
+	progressCh := make(chan string)
+	progressDone := make(chan struct{})
+	go func() {
+		defer close(progressDone)
+		for title := range progressCh {
+			pb.SetTitle(title)
+			pb.Increment()
+		}
+	}()
+	reportProgress := func(task *Task) {
+		progressCh <- task.Name
+	}
 	var progressOut *progressOutput
 	var restoreOutput func()
 	if opts.Interactive {
@@ -563,7 +577,7 @@ func (e *Engine) apply(ctx context.Context, w io.Writer, selection Selection, op
 						failures = append(failures, failure{TaskID: task.ID, TaskName: task.Name, Err: err})
 						status[task.ID] = taskFailed
 						mu.Unlock()
-						pb.Increment()
+						reportProgress(task)
 						if opts.FailFast && !task.ContinueOnError {
 							return err
 						}
@@ -580,12 +594,11 @@ func (e *Engine) apply(ctx context.Context, w io.Writer, selection Selection, op
 			mu.Lock()
 			if !planned[task.ID] || (stopOnError && opts.FailFast) {
 				mu.Unlock()
-				pb.Increment()
+				reportProgress(task)
 				return nil
 			}
 			mu.Unlock()
 
-			pb.SetTitle(task.Name)
 			taskHadFailure := false
 
 			applyAction := func(action Action) (Result, error) {
@@ -636,7 +649,7 @@ func (e *Engine) apply(ctx context.Context, w io.Writer, selection Selection, op
 				if !action.Concurrent || concurrency == 1 {
 					result, err := applyAction(action)
 					if err != nil && opts.FailFast && !task.ContinueOnError {
-						pb.Increment()
+						reportProgress(task)
 						return err
 					}
 					if result == ResultStop {
@@ -673,7 +686,7 @@ func (e *Engine) apply(ctx context.Context, w io.Writer, selection Selection, op
 					})
 				}
 				if err := batch.Wait(); err != nil {
-					pb.Increment()
+					reportProgress(task)
 					return err
 				}
 				if shouldStop.Load() {
@@ -687,12 +700,14 @@ func (e *Engine) apply(ctx context.Context, w io.Writer, selection Selection, op
 			} else {
 				setStatus(taskSucceeded)
 			}
-			pb.Increment()
+			reportProgress(task)
 			return nil
 		})
 	}
 
 	err = g.Wait()
+	close(progressCh)
+	<-progressDone
 	if progressOut != nil {
 		if restoreOutput != nil {
 			restoreOutput()

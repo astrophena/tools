@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -660,6 +661,108 @@ func TestApplyProgressOutputSeparatesActionDetails(t *testing.T) {
 	got := out.String()
 	assertContains(t, got, "\r\x1b[Korphaned packages found:\n", "progress action detail output")
 	assertContains(t, got, "\r\x1b[K  - oldlib\n", "progress action detail output")
+}
+
+func TestApplyProgressTitleReportsCompletedTask(t *testing.T) {
+	slowStarted := make(chan struct{})
+	fastReported := make(chan struct{})
+	out := &notifyingBuffer{
+		done: fastReported,
+		match: func(output string) bool {
+			return renderContains(output, "Fast task", "1/2")
+		},
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+
+	engine := &Engine{Tasks: []*Task{
+		{
+			ID:   "slow",
+			Name: "Slow task",
+			Run: starlark.NewBuiltin("slow", func(thread *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, _ []starlark.Tuple) (starlark.Value, error) {
+				AddAction(thread, Action{
+					Summary: "wait",
+					Apply: func(context.Context, bool) (Result, error) {
+						close(slowStarted)
+						select {
+						case <-fastReported:
+							return ResultSkip, nil
+						case <-ctx.Done():
+							return "", ctx.Err()
+						}
+					},
+				})
+				return starlark.None, nil
+			}),
+		},
+		{
+			ID:   "fast",
+			Name: "Fast task",
+			Run: starlark.NewBuiltin("fast", func(thread *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, _ []starlark.Tuple) (starlark.Value, error) {
+				AddAction(thread, Action{
+					Summary: "finish",
+					Apply: func(context.Context, bool) (Result, error) {
+						select {
+						case <-slowStarted:
+							return ResultSkip, nil
+						case <-ctx.Done():
+							return "", ctx.Err()
+						}
+					},
+				})
+				return starlark.None, nil
+			}),
+		},
+	}}
+
+	if err := engine.Run(ctx, out, Selection{}, RunOptions{Concurrency: 2, Interactive: true}); err != nil {
+		t.Fatal(err)
+	}
+	got := out.String()
+	if !renderContains(got, "Fast task", "1/2") {
+		t.Fatalf("progress output did not report fast completion:\n%s", got)
+	}
+	if renderContains(got, "Slow task", "0/2") {
+		t.Fatalf("progress output reported slow task title before completion:\n%s", got)
+	}
+}
+
+type notifyingBuffer struct {
+	mu    sync.Mutex
+	buf   bytes.Buffer
+	done  chan struct{}
+	once  sync.Once
+	match func(string) bool
+}
+
+func (b *notifyingBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	n, err := b.buf.Write(p)
+	output := b.buf.String()
+	b.mu.Unlock()
+
+	if b.match != nil && b.match(output) {
+		b.once.Do(func() {
+			close(b.done)
+		})
+	}
+	return n, err
+}
+
+func (b *notifyingBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	return b.buf.String()
+}
+
+func renderContains(output, title, progress string) bool {
+	for render := range strings.SplitSeq(output, "\r") {
+		if strings.Contains(render, title) && strings.Contains(render, progress) {
+			return true
+		}
+	}
+	return false
 }
 
 func assertContains(t *testing.T, got, want, name string) {
