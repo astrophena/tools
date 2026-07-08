@@ -1,6 +1,6 @@
 module go.astrophena.name/tools
 
-go 1.26.4
+go 1.26.5
 
 require (
 	crawshaw.dev/jsonfile v0.0.0-20240206193014-699d1dad804e
