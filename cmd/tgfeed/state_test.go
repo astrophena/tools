@@ -206,9 +206,12 @@ func TestFeedStatePrepareSeenItems(t *testing.T) {
 					"stale":  old,
 					"recent": recent,
 				},
+				PendingItems: map[string]time.Time{
+					"pending-stale": old,
+				},
 			},
 			wantJustEnabled:  false,
-			wantPruned:       1,
+			wantPruned:       2,
 			wantSeenItemKeys: []string{"recent"},
 		},
 	}

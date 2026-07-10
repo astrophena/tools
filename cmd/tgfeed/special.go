@@ -5,6 +5,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -37,4 +38,13 @@ func (f *fetcher) handleSpecialFeed(req *http.Request) (*http.Response, error) {
 
 	h.ServeHTTP(rec, req)
 	return rec.Result(), nil
+}
+
+func (f *fetcher) specialFeedAcknowledger(url string) func(context.Context, []string) error {
+	if url != "tgfeed://github-notifications" {
+		return nil
+	}
+	return func(ctx context.Context, ids []string) error {
+		return ghnotify.MarkAsDone(ctx, f.ghToken, f.httpc, ids)
+	}
 }

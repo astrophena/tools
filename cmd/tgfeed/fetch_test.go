@@ -7,10 +7,12 @@ package main
 import (
 	"context"
 	_ "embed"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -19,6 +21,7 @@ import (
 	"time"
 
 	"github.com/mmcdole/gofeed"
+	"go.astrophena.name/base/cli"
 	"go.astrophena.name/base/syncx"
 	"go.astrophena.name/base/testutil"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/sender"
@@ -193,6 +196,9 @@ func TestBlockAndKeepRules(t *testing.T) {
 
 		f := newTestFetcher(t, env)
 		if err := f.run(t.Context()); err != nil {
+			if filepath.Base(match) == "invalid.star" {
+				return []byte("rule error\n")
+			}
 			t.Fatal(err)
 		}
 
@@ -584,12 +590,27 @@ func TestFeedItemPassesRules(t *testing.T) {
 			item: &gofeed.Item{Link: "https://example.com/a"},
 			want: false,
 		},
+		"return rule error": {
+			fd: &feed{
+				blockRule: makeRule(t, "def rule(item):\n  return 1 / 0\n", "rule"),
+			},
+			item: &gofeed.Item{Link: "https://example.com/a"},
+		},
 	}
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			f := newTestFetcher(t, newTestEnv(t, nil, nil))
-			got := f.feedItemPassesRules(tc.fd, tc.item, f.itemToStarlark(tc.item))
+			got, err := f.feedItemPassesRules(tc.fd, tc.item, f.itemToStarlark(tc.item))
+			if name == "return rule error" {
+				if err == nil {
+					t.Fatal("want error")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
 			testutil.AssertEqual(t, got, tc.want)
 		})
 	}
@@ -688,12 +709,42 @@ func TestHandleFeedStatus(t *testing.T) {
 }
 
 type captureSender struct {
+	mu       sync.Mutex
+	err      error
 	messages []sender.Message
+	ctxErrs  []error
 }
 
-func (s *captureSender) Send(_ context.Context, msg sender.Message) error {
+func (s *captureSender) Send(ctx context.Context, msg sender.Message) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.ctxErrs = append(s.ctxErrs, ctx.Err())
 	s.messages = append(s.messages, msg)
-	return nil
+	return s.err
+}
+
+func TestRunCommandPreservesDeliveryError(t *testing.T) {
+	t.Parallel()
+
+	env := newDefaultTestEnv(t, map[string]http.HandlerFunc{
+		atomFeedRoute: func(w http.ResponseWriter, _ *http.Request) {
+			w.Write(atomFeed)
+		},
+	})
+	f := newTestFetcher(t, env)
+	wantErr := errors.New("delivery failed")
+	f.sender = &captureSender{err: wantErr}
+
+	err := f.Run(cli.WithEnv(t.Context(), &cli.Env{
+		Args:   []string{"run"},
+		Getenv: func(string) string { return "" },
+		Stdin:  strings.NewReader(""),
+		Stdout: t.Output(),
+		Stderr: t.Output(),
+	}))
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("run error = %v, want delivery error", err)
+	}
 }
 
 func TestSendUpdateUsesInjectedSender(t *testing.T) {
@@ -709,12 +760,162 @@ func TestSendUpdateUsesInjectedSender(t *testing.T) {
 		items: []*gofeed.Item{{Title: "hello", Link: "https://example.com/a"}},
 	}
 
-	f.sendUpdate(t.Context(), u)
+	if err := f.sendUpdate(t.Context(), u); err != nil {
+		t.Fatal(err)
+	}
 	testutil.AssertEqual(t, len(mock.messages), 1)
 	testutil.AssertEqual(t, mock.messages[0].Target.Thread, "7")
 	if !strings.Contains(mock.messages[0].Body, "hello") {
 		t.Fatalf("sent body %q does not include title", mock.messages[0].Body)
 	}
+}
+
+func TestDeliverUpdatesCommitsOnlyAfterSuccess(t *testing.T) {
+	t.Parallel()
+
+	cases := map[string]struct {
+		cancelContext bool
+		sendErr       error
+		ackErr        error
+		wantErr       bool
+		wantSeen      bool
+		wantAck       bool
+	}{
+		"successful delivery": {
+			wantSeen: true,
+			wantAck:  true,
+		},
+		"failed delivery": {
+			sendErr: errors.New("send failed"),
+			wantErr: true,
+		},
+		"failed acknowledgment": {
+			ackErr:  errors.New("ack failed"),
+			wantErr: true,
+			wantAck: true,
+		},
+		"canceled parent context drains delivery": {
+			cancelContext: true,
+			wantSeen:      true,
+			wantAck:       true,
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			const feedURL = "https://example.com/feed.xml"
+			f := &fetcher{
+				slog:  slog.Default(),
+				state: map[string]*state.Feed{feedURL: state.NewFeed(time.Now())},
+			}
+			f.stats = syncx.Protect(&tgstats.Run{})
+			mock := &captureSender{err: tc.sendErr}
+			f.sender = mock
+			ackCalls := 0
+
+			ctx := t.Context()
+			if tc.cancelContext {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithCancel(ctx)
+				cancel()
+			}
+			err := f.deliverUpdates(ctx, []*update{{
+				feed:       &feed{url: feedURL},
+				items:      []*gofeed.Item{{Title: "hello", Link: "https://example.com/a"}},
+				dedupeKeys: []string{"item-1"},
+				acknowledge: func(context.Context, []string) error {
+					ackCalls++
+					return tc.ackErr
+				},
+			}})
+			testutil.AssertEqual(t, err != nil, tc.wantErr)
+			testutil.AssertEqual(t, ackCalls > 0, tc.wantAck)
+			_, seen := f.state[feedURL].SeenItems["item-1"]
+			testutil.AssertEqual(t, seen, tc.wantSeen)
+			if tc.cancelContext {
+				testutil.AssertEqual(t, mock.ctxErrs, []error{nil})
+			}
+		})
+	}
+}
+
+func TestRunReturnsDeliveryFailureWithoutCommittingSeenItems(t *testing.T) {
+	t.Parallel()
+
+	var failDelivery atomic.Bool
+	failDelivery.Store(true)
+	stateMap := map[string]*state.Feed{
+		atomFeedURL: {LastUpdated: time.Time{}},
+	}
+	env := newTestEnv(t, stateArchive(t, []byte(`feed(url="https://example.com/feed.xml")`), stateMap), map[string]http.HandlerFunc{
+		atomFeedRoute: func(w http.ResponseWriter, _ *http.Request) {
+			w.Write(atomFeed)
+		},
+		sendTelegram: func(w http.ResponseWriter, _ *http.Request) {
+			if failDelivery.Load() {
+				http.Error(w, "telegram unavailable", http.StatusServiceUnavailable)
+				return
+			}
+			w.Write([]byte("{}"))
+		},
+	})
+	f := newTestFetcher(t, env)
+
+	err := f.run(t.Context())
+	if err == nil || !strings.Contains(err.Error(), "sending update") {
+		t.Fatalf("run error = %v, want delivery failure", err)
+	}
+	failedState := env.state(t)[atomFeedURL]
+	if got := len(failedState.SeenItems); got != 0 {
+		t.Fatalf("seen items = %d, want 0 after failed delivery", got)
+	}
+	if got := len(failedState.PendingItems); got == 0 {
+		t.Fatal("failed delivery was not persisted as pending")
+	}
+
+	failDelivery.Store(false)
+	if err := f.run(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	deliveredState := env.state(t)[atomFeedURL]
+	if got := len(deliveredState.PendingItems); got != 0 {
+		t.Fatalf("pending items = %d, want 0 after retry succeeds", got)
+	}
+	if got := len(deliveredState.SeenItems); got == 0 {
+		t.Fatal("successful retry did not commit seen items")
+	}
+}
+
+func TestFormatterFailureDoesNotCommitSeenItem(t *testing.T) {
+	t.Parallel()
+
+	globals, err := starlark.ExecFileOptions(&syntax.FileOptions{}, &starlark.Thread{Name: "test"}, "format.star", "def format(item):\n  return 1 / 0\n", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	formatFn := globals["format"].(*starlark.Function)
+
+	const feedURL = "https://example.com/feed.xml"
+	f := &fetcher{
+		slog:   slog.Default(),
+		state:  map[string]*state.Feed{feedURL: state.NewFeed(time.Now())},
+		sender: &captureSender{},
+	}
+	f.stats = syncx.Protect(&tgstats.Run{})
+	err = f.sendUpdate(t.Context(), &update{
+		feed:       &feed{url: feedURL, format: formatFn},
+		items:      []*gofeed.Item{{Title: "hello", Link: "https://example.com/a"}},
+		dedupeKeys: []string{"item-1"},
+	})
+	if err == nil || !strings.Contains(err.Error(), "formatting update") {
+		t.Fatalf("send error = %v, want formatting failure", err)
+	}
+	if f.state[feedURL].IsSeen("item-1") {
+		t.Fatal("formatter failure committed item as seen")
+	}
+	f.stats.ReadAccess(func(s *tgstats.Run) {
+		testutil.AssertEqual(t, s.MessagesFormattingFailed, 1)
+	})
 }
 
 func TestItemToStarlarkStripsHTML(t *testing.T) {

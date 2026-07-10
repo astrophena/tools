@@ -53,7 +53,10 @@ var (
 	errNoEditor       = errors.New("environment variable EDITOR is not defined")
 )
 
-const finalStateSaveTimeout = 30 * time.Second
+const (
+	deliveryDrainTimeout  = 30 * time.Second
+	finalStateSaveTimeout = 30 * time.Second
+)
 
 // Entry point and program state.
 
@@ -164,7 +167,10 @@ func (f *fetcher) Run(ctx context.Context) error {
 		rctx, cancel := context.WithTimeout(ctx, maxRunTime)
 		defer cancel()
 		if err := f.run(rctx); err != nil {
-			return f.errNotify(ctx, err)
+			if f.dry {
+				return err
+			}
+			return errors.Join(err, f.errNotify(ctx, err))
 		}
 		return nil
 	case "reenable":
@@ -219,27 +225,17 @@ func (f *fetcher) run(ctx context.Context) error {
 		return fmt.Errorf("loading state failed: %w", err)
 	}
 
-	// Buffered updates prevent fetch workers from stalling on Telegram delivery.
+	// Buffered updates decouple fetch workers from update collection. Delivery
+	// starts after fetching so accepted items can be committed only after their
+	// messages and source acknowledgments succeed.
 	updates := make(chan *update, 100)
+	var queuedUpdates []*update
 
 	var baseWg sync.WaitGroup
 	baseWg.Go(func() {
-		sendWg := syncx.NewLimitedWaitGroup(sendConcurrencyLimit)
-
-	loop:
-		for {
-			select {
-			case feedItem, valid := <-updates:
-				if !valid {
-					break loop
-				}
-				sendWg.Go(func() { f.sendUpdate(ctx, feedItem) })
-			case <-ctx.Done():
-				break loop
-			}
+		for feedItem := range updates {
+			queuedUpdates = append(queuedUpdates, feedItem)
 		}
-
-		sendWg.Wait()
 	})
 
 	var fetchedFeeds atomic.Int64
@@ -267,6 +263,11 @@ func (f *fetcher) run(ctx context.Context) error {
 	fetchWg.Wait()
 	close(updates)
 	baseWg.Wait()
+
+	runErr := f.deliverUpdates(ctx, queuedUpdates)
+	if err := ctx.Err(); err != nil {
+		runErr = errors.Join(runErr, err)
+	}
 
 	f.cleanState()
 
@@ -324,22 +325,53 @@ func (f *fetcher) run(ctx context.Context) error {
 	f.slog.Debug("fetch finished", "fetched_count", fetchedFeeds.Load(), "all_count", len(f.feeds))
 
 	if f.dry {
-		return nil
+		return runErr
 	}
 
 	saveCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), finalStateSaveTimeout)
 	defer cancel()
 	if err := f.saveFeedState(saveCtx); err != nil {
-		return fmt.Errorf("saving state failed: %w", err)
+		runErr = errors.Join(runErr, fmt.Errorf("saving state failed: %w", err))
 	}
 
 	f.stats.ReadAccess(func(s *stats.Run) {
-		if err := f.statsStore.SaveRun(ctx, s); err != nil {
+		if err := f.statsStore.SaveRun(saveCtx, s); err != nil {
 			f.slog.Warn("failed to upload stats", "error", err)
 		}
 	})
 
-	return nil
+	return runErr
+}
+
+func (f *fetcher) deliverUpdates(ctx context.Context, updates []*update) error {
+	baseCtx := context.WithoutCancel(ctx)
+	var (
+		deliveryCtx context.Context
+		cancel      context.CancelFunc
+	)
+	if deadline, ok := ctx.Deadline(); ok {
+		deliveryCtx, cancel = context.WithDeadline(baseCtx, deadline.Add(deliveryDrainTimeout))
+	} else {
+		deliveryCtx, cancel = context.WithTimeout(baseCtx, deliveryDrainTimeout)
+	}
+	defer cancel()
+
+	var (
+		errsMu sync.Mutex
+		errs   []error
+	)
+	wg := syncx.NewLimitedWaitGroup(sendConcurrencyLimit)
+	for _, item := range updates {
+		wg.Go(func() {
+			if err := f.sendUpdate(deliveryCtx, item); err != nil {
+				errsMu.Lock()
+				errs = append(errs, err)
+				errsMu.Unlock()
+			}
+		})
+	}
+	wg.Wait()
+	return errors.Join(errs...)
 }
 
 func (f *fetcher) runFeedFetch(ctx context.Context, fd *feed, updates chan *update) {

@@ -19,6 +19,10 @@ func (f *Feed) Clone() *Feed {
 		cp.SeenItems = make(map[string]time.Time, len(f.SeenItems))
 		maps.Copy(cp.SeenItems, f.SeenItems)
 	}
+	if f.PendingItems != nil {
+		cp.PendingItems = make(map[string]time.Time, len(f.PendingItems))
+		maps.Copy(cp.PendingItems, f.PendingItems)
+	}
 	return &cp
 }
 
@@ -89,6 +93,12 @@ func (f *Feed) PrepareSeenItems(now time.Time, cleanupPeriod time.Duration) (jus
 			pruned += 1
 		}
 	}
+	for guid, pendingAt := range f.PendingItems {
+		if now.Sub(pendingAt) > cleanupPeriod {
+			delete(f.PendingItems, guid)
+			pruned += 1
+		}
+	}
 	return justEnabled, pruned
 }
 
@@ -104,4 +114,27 @@ func (f *Feed) MarkSeen(guid string, now time.Time) {
 		f.SeenItems = make(map[string]time.Time)
 	}
 	f.SeenItems[guid] = now
+}
+
+// IsPending reports whether guid was accepted but not completely delivered.
+func (f *Feed) IsPending(guid string) bool {
+	_, ok := f.PendingItems[guid]
+	return ok
+}
+
+// MarkPending records guid as awaiting successful delivery.
+func (f *Feed) MarkPending(guid string, now time.Time) {
+	if guid == "" {
+		return
+	}
+	if f.PendingItems == nil {
+		f.PendingItems = make(map[string]time.Time)
+	}
+	f.PendingItems[guid] = now
+}
+
+// CommitPending records guid as seen and removes its pending delivery marker.
+func (f *Feed) CommitPending(guid string, now time.Time) {
+	delete(f.PendingItems, guid)
+	f.MarkSeen(guid, now)
 }

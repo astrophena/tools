@@ -164,7 +164,10 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		slog.Int("total_count", len(allNotifications)),
 	)
 
-	var items []feedItem
+	var (
+		items      []feedItem
+		ignoredIDs []string
+	)
 	for _, n := range allNotifications {
 		h.logger.DebugContext(r.Context(), "processing notification",
 			slog.String("id", n.ID),
@@ -188,6 +191,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 							slog.String("author", pr.User.Login),
 							slog.String("pr_url", prURL),
 						)
+						ignoredIDs = append(ignoredIDs, n.ID)
 						continue
 					}
 				} else {
@@ -223,33 +227,32 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		HomePageURL: "https://github.com",
 		Items:       items,
 	}
-
-	if err := h.markAsDone(r.Context(), allNotifications); err != nil {
-		web.RespondJSONError(w, r, fmt.Errorf("marking notifications as done failed: %v", err))
+	// Source-level ignores are intentional terminal decisions, so they do not
+	// need a downstream delivery acknowledgment.
+	if err := MarkAsDone(r.Context(), h.token, h.client, ignoredIDs); err != nil {
+		web.RespondJSONError(w, r, fmt.Errorf("marking ignored notifications as done failed: %v", err))
 		return
 	}
-
-	h.logger.InfoContext(r.Context(), "marked notifications as done",
-		slog.Int("count", len(allNotifications)),
-	)
 
 	w.Header().Set("Content-Type", "application/json")
 	web.RespondJSON(w, feed)
 }
 
-func (h *handler) markAsDone(ctx context.Context, notifications []notification) error {
-	for _, n := range notifications {
-		u := fmt.Sprintf("%s/notifications/threads/%s", ghAPI, n.ID)
+// MarkAsDone marks GitHub notification threads as read after their downstream
+// delivery has succeeded.
+func MarkAsDone(ctx context.Context, token string, client *http.Client, ids []string) error {
+	for _, id := range ids {
+		u := fmt.Sprintf("%s/notifications/threads/%s", ghAPI, id)
 		req, err := http.NewRequestWithContext(ctx, http.MethodDelete, u, nil)
 		if err != nil {
 			return err
 		}
 
-		req.Header.Set("Authorization", "Bearer "+h.token)
+		req.Header.Set("Authorization", "Bearer "+token)
 		req.Header.Set("Accept", "application/vnd.github.v3+json")
 		req.Header.Set("User-Agent", "ghnotify (+https://astrophena.name/bleep-bloop)")
 
-		res, err := h.client.Do(req)
+		res, err := client.Do(req)
 		if err != nil {
 			return err
 		}
