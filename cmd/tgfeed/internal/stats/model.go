@@ -48,9 +48,10 @@ type Run struct {
 	ItemsSkippedOldTotal int `json:"items_skipped_old_total"`
 	ItemsEnqueuedTotal   int `json:"items_enqueued_total"`
 
-	MessagesAttempted int `json:"messages_attempted"`
-	MessagesSent      int `json:"messages_sent"`
-	MessagesFailed    int `json:"messages_failed"`
+	MessagesAttempted        int `json:"messages_attempted"`
+	MessagesSent             int `json:"messages_sent"`
+	MessagesFailed           int `json:"messages_failed"`
+	MessagesFormattingFailed int `json:"messages_formatting_failed"`
 
 	FetchRetriesTotal       int           `json:"fetch_retries_total"`
 	FeedsRetriedCount       int           `json:"feeds_retried_count"`

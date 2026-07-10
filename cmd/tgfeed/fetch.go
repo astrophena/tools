@@ -60,8 +60,12 @@ var messageTemplate string
 // It can contain either a single item or a digest batch depending on feed
 // configuration.
 type update struct {
-	feed  *feed
-	items []*gofeed.Item
+	feed            *feed
+	items           []*gofeed.Item
+	dedupeKeys      []string
+	preparation     error
+	acknowledge     func(context.Context, []string) error
+	acknowledgeOnly bool
 }
 
 // feedStatusResult describes what a response status handler decided to do next.
@@ -423,7 +427,10 @@ func (r *timingReadCloser) Close() error {
 // Item processing.
 
 func (f *fetcher) enqueueFeedItems(fd *feed, state *state.Feed, exists bool, items []*gofeed.Item, updates chan *update) {
-	var validItems []*gofeed.Item
+	var (
+		validItems []*gofeed.Item
+		dedupeKeys []string
+	)
 
 	itemCtx := feedItemContext{
 		feed:                 fd,
@@ -439,36 +446,71 @@ func (f *fetcher) enqueueFeedItems(fd *feed, state *state.Feed, exists bool, ite
 	now := time.Now()
 	for _, feedItem := range items {
 		decision := decideFeedItem(now, itemCtx, feedItem)
-		// Seen state is updated even when we later skip the item so future runs do
-		// not repeatedly reconsider the same entry.
-		if decision.markSeen != "" {
-			state.MarkSeen(decision.markSeen, now)
-		}
 		if !decision.process {
+			// Deliberately skipped items are committed without Telegram delivery so
+			// future runs do not repeatedly reconsider them.
+			acknowledge := f.specialFeedAcknowledger(fd.url)
+			if acknowledge != nil && decision.skipReason != stats.FeedItemSkipReasonSeen {
+				updates <- &update{
+					feed:            fd,
+					dedupeKeys:      appendDedupeKey(nil, cmp.Or(decision.markSeen, feedItem.GUID, feedItem.Link)),
+					acknowledge:     acknowledge,
+					acknowledgeOnly: true,
+				}
+			} else if decision.markSeen != "" {
+				state.MarkSeen(decision.markSeen, now)
+			}
 			f.stats.WriteAccess(func(s *stats.Run) {
 				s.RecordItemDecision(decision.skipReason)
 			})
 			continue
 		}
+		state.MarkPending(decision.markSeen, now)
 
 		starlarkVal := f.itemToStarlark(feedItem)
-		if !f.feedItemPassesRules(fd, feedItem, starlarkVal) {
+		passes, err := f.feedItemPassesRules(fd, feedItem, starlarkVal)
+		if err != nil {
+			updates <- &update{feed: fd, preparation: err}
+			continue
+		}
+		if !passes {
+			acknowledge := f.specialFeedAcknowledger(fd.url)
+			if acknowledge != nil {
+				updates <- &update{
+					feed:            fd,
+					dedupeKeys:      appendDedupeKey(nil, decision.markSeen),
+					acknowledge:     acknowledge,
+					acknowledgeOnly: true,
+				}
+			} else if decision.markSeen != "" {
+				state.CommitPending(decision.markSeen, now)
+			}
 			continue
 		}
 
 		if fd.digest {
 			validItems = append(validItems, feedItem)
+			dedupeKeys = appendDedupeKey(dedupeKeys, decision.markSeen)
 			f.recordItemEnqueued(fd.url)
 			continue
 		}
 
 		f.recordItemEnqueued(fd.url)
 		updates <- &update{
-			feed:  fd,
-			items: []*gofeed.Item{feedItem},
+			feed:        fd,
+			items:       []*gofeed.Item{feedItem},
+			dedupeKeys:  appendDedupeKey(nil, decision.markSeen),
+			acknowledge: f.specialFeedAcknowledger(fd.url),
 		}
 	}
-	publishDigestUpdate(fd, validItems, updates)
+	f.publishDigestUpdate(fd, validItems, dedupeKeys, updates)
+}
+
+func appendDedupeKey(keys []string, key string) []string {
+	if key == "" {
+		return keys
+	}
+	return append(keys, key)
 }
 
 func (f *fetcher) recordItemEnqueued(feedURL string) {
@@ -479,11 +521,13 @@ func (f *fetcher) recordItemEnqueued(feedURL string) {
 	})
 }
 
-func publishDigestUpdate(fd *feed, validItems []*gofeed.Item, updates chan *update) {
+func (f *fetcher) publishDigestUpdate(fd *feed, validItems []*gofeed.Item, dedupeKeys []string, updates chan *update) {
 	if len(validItems) > 0 {
 		updates <- &update{
-			feed:  fd,
-			items: validItems,
+			feed:        fd,
+			items:       validItems,
+			dedupeKeys:  dedupeKeys,
+			acknowledge: f.specialFeedAcknowledger(fd.url),
 		}
 	}
 }
@@ -518,14 +562,17 @@ func decideFeedItem(now time.Time, itemCtx feedItemContext, feedItem *gofeed.Ite
 	if guid == "" {
 		return feedItemDecision{skipReason: stats.FeedItemSkipReasonUnknown}
 	}
+	if itemCtx.state.IsSeen(guid) {
+		return feedItemDecision{skipReason: stats.FeedItemSkipReasonSeen}
+	}
+	if itemCtx.state.IsPending(guid) {
+		return feedItemDecision{process: true, markSeen: guid}
+	}
 
 	if itemCtx.feed.alwaysSendNewItems {
 		itemDate := feedItemPublishedTime(feedItem)
 		if itemDate != nil && now.Sub(*itemDate) > lookbackPeriod {
 			return feedItemDecision{skipReason: stats.FeedItemSkipReasonOld}
-		}
-		if itemCtx.state.IsSeen(guid) {
-			return feedItemDecision{skipReason: stats.FeedItemSkipReasonSeen}
 		}
 		decision := feedItemDecision{markSeen: guid}
 		if !itemCtx.exists || itemCtx.seenItemsInitialized {
@@ -533,10 +580,6 @@ func decideFeedItem(now time.Time, itemCtx feedItemContext, feedItem *gofeed.Ite
 		}
 		decision.process = true
 		return decision
-	}
-
-	if itemCtx.state.IsSeen(guid) {
-		return feedItemDecision{skipReason: stats.FeedItemSkipReasonSeen}
 	}
 
 	itemDate := feedItemActivityTime(feedItem)
@@ -551,7 +594,7 @@ func decideFeedItem(now time.Time, itemCtx feedItemContext, feedItem *gofeed.Ite
 	return feedItemDecision{process: true, markSeen: guid}
 }
 
-func (f *fetcher) applyRule(rule *starlark.Function, item *gofeed.Item, starlarkVal starlark.Value) bool {
+func (f *fetcher) applyRule(rule *starlark.Function, item *gofeed.Item, starlarkVal starlark.Value) (bool, error) {
 	val, err := starlark.Call(
 		&starlark.Thread{
 			Print: func(_ *starlark.Thread, msg string) { f.slog.Info(msg) },
@@ -561,16 +604,14 @@ func (f *fetcher) applyRule(rule *starlark.Function, item *gofeed.Item, starlark
 		[]starlark.Tuple{},
 	)
 	if err != nil {
-		f.slog.Warn("applying rule for item", "item", item.Link, "error", err)
-		return false
+		return false, fmt.Errorf("applying rule for item %q: %w", item.Link, err)
 	}
 
 	ret, ok := val.(starlark.Bool)
 	if !ok {
-		f.slog.Warn("rule returned non-boolean value", "item", item.Link)
-		return false
+		return false, fmt.Errorf("rule for item %q returned %s, want bool", item.Link, val.Type())
 	}
-	return bool(ret)
+	return bool(ret), nil
 }
 
 var bmStripper = bluemonday.StrictPolicy()
@@ -583,22 +624,30 @@ func (f *fetcher) itemToStarlark(item *gofeed.Item) starlark.Value {
 	return format.ItemToStarlark(&cleanedItem)
 }
 
-func (f *fetcher) feedItemPassesRules(fd *feed, feedItem *gofeed.Item, starlarkVal starlark.Value) bool {
+func (f *fetcher) feedItemPassesRules(fd *feed, feedItem *gofeed.Item, starlarkVal starlark.Value) (bool, error) {
 	if fd.blockRule != nil {
-		if blocked := f.applyRule(fd.blockRule, feedItem, starlarkVal); blocked {
+		blocked, err := f.applyRule(fd.blockRule, feedItem, starlarkVal)
+		if err != nil {
+			return false, err
+		}
+		if blocked {
 			f.slog.Debug("blocked by block rule", "item", feedItem.Link)
-			return false
+			return false, nil
 		}
 	}
 
 	if fd.keepRule != nil {
-		if keep := f.applyRule(fd.keepRule, feedItem, starlarkVal); !keep {
+		keep, err := f.applyRule(fd.keepRule, feedItem, starlarkVal)
+		if err != nil {
+			return false, err
+		}
+		if !keep {
 			f.slog.Debug("skipped by keep rule", "item", feedItem.Link)
-			return false
+			return false, nil
 		}
 	}
 
-	return true
+	return true, nil
 }
 
 func (f *fetcher) markFetchSuccess(url string, parsedItems int, startTime time.Time) {
@@ -614,15 +663,32 @@ func (f *fetcher) markFetchSuccess(url string, parsedItems int, startTime time.T
 
 // Rendering and delivery.
 
-func (f *fetcher) sendUpdate(ctx context.Context, u *update) {
-	rendered, ok := f.buildUpdateMessage(u)
-	if !ok {
-		return
+func (f *fetcher) sendUpdate(ctx context.Context, u *update) error {
+	if u.preparation != nil {
+		return fmt.Errorf("preparing update for feed %q: %w", u.feed.url, u.preparation)
+	}
+	if f.dry && u.acknowledgeOnly {
+		return nil
+	}
+	if u.acknowledgeOnly {
+		if err := u.acknowledge(ctx, u.dedupeKeys); err != nil {
+			return fmt.Errorf("acknowledging skipped update for feed %q: %w", u.feed.url, err)
+		}
+		f.markFeedItemsSeen(u.feed.url, u.dedupeKeys, time.Now())
+		return nil
+	}
+
+	rendered, err := f.buildUpdateMessage(u)
+	if err != nil {
+		f.stats.WriteAccess(func(s *stats.Run) {
+			s.MessagesFormattingFailed += 1
+		})
+		return err
 	}
 
 	f.slog.Debug("sending message", "feed", u.feed.url, "message", rendered.Body)
 	if f.dry {
-		return
+		return nil
 	}
 
 	f.stats.WriteAccess(func(s *stats.Run) {
@@ -647,16 +713,24 @@ func (f *fetcher) sendUpdate(ctx context.Context, u *update) {
 			s.SendLatencySamples = append(s.SendLatencySamples, time.Since(start))
 		})
 		f.slog.Warn("failed to send message", "chat_id", f.chatID, "error", err)
-		return
+		return fmt.Errorf("sending update for feed %q: %w", u.feed.url, err)
 	}
 
 	f.stats.WriteAccess(func(s *stats.Run) {
 		s.MessagesSent += 1
 		s.SendLatencySamples = append(s.SendLatencySamples, time.Since(start))
 	})
+
+	if u.acknowledge != nil {
+		if err := u.acknowledge(ctx, u.dedupeKeys); err != nil {
+			return fmt.Errorf("acknowledging update for feed %q: %w", u.feed.url, err)
+		}
+	}
+	f.markFeedItemsSeen(u.feed.url, u.dedupeKeys, time.Now())
+	return nil
 }
 
-func (f *fetcher) buildUpdateMessage(u *update) (format.Rendered, bool) {
+func (f *fetcher) buildUpdateMessage(u *update) (format.Rendered, error) {
 	fmtUpdate := format.Update{
 		Feed:  format.Feed{URL: u.feed.url, Title: u.feed.title, Digest: u.feed.digest},
 		Items: u.items,
@@ -667,8 +741,7 @@ func (f *fetcher) buildUpdateMessage(u *update) (format.Rendered, bool) {
 	if u.feed.format != nil {
 		val, err := format.CallStarlarkFormatter(u.feed.format, items, func(msg string) { f.slog.Info(msg) })
 		if err != nil {
-			f.slog.Warn("formatting message", "feed", u.feed.url, "error", err)
-			return format.Rendered{}, false
+			return format.Rendered{}, fmt.Errorf("formatting update for feed %q: %w", u.feed.url, err)
 		}
 
 		rendered, err := format.ParseFormattedMessage(val)
@@ -683,13 +756,13 @@ func (f *fetcher) buildUpdateMessage(u *update) (format.Rendered, bool) {
 				)
 			}
 			f.slog.Warn("format function returned invalid output", attrs...)
-			return format.Rendered{}, false
+			return format.Rendered{}, fmt.Errorf("formatting update for feed %q: %w", u.feed.url, err)
 		}
 		rendered.DisablePreview = u.feed.digest
-		return rendered, true
+		return rendered, nil
 	}
 
-	return format.DefaultUpdateMessage(fmtUpdate, defaultTitle, messageTemplate), true
+	return format.DefaultUpdateMessage(fmtUpdate, defaultTitle, messageTemplate), nil
 }
 
 func (f *fetcher) errNotify(ctx context.Context, err error) error {

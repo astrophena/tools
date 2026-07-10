@@ -39,6 +39,8 @@ func TestGitHubNotificationsFeed(t *testing.T) {
 	state := env.state(t)["tgfeed://github-notifications"]
 	testutil.AssertEqual(t, state.ErrorCount, 0)
 	testutil.AssertEqual(t, state.LastError, "")
+	testutil.AssertEqual(t, len(state.SeenItems), 4)
+	testutil.AssertEqual(t, len(env.sentMessages), 4)
 }
 
 type roundTripper struct{ main, notifications http.RoundTripper }

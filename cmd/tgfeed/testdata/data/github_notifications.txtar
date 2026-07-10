@@ -3,3 +3,9 @@ feed(
     title = "GitHub Notifications",
     url = "tgfeed://github-notifications",
 )
+-- state.json --
+{
+  "tgfeed://github-notifications": {
+    "last_updated": "0001-01-01T00:00:00Z"
+  }
+}

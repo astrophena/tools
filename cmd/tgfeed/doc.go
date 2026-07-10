@@ -133,9 +133,10 @@ tgfeed stores its state in local files within STATE_DIRECTORY.
 
 It maintains a state for each feed, including last modified time, last updated
 time, ETag, error count, and last error message. It keeps track of failing feeds
-and disables them after a certain threshold of consecutive failures. State
-information is stored and updated in the state.json file. You won't need to
-touch this file at all, except in very rare cases.
+and disables them after a certain threshold of consecutive failures. Accepted
+items remain pending until Telegram delivery and any source acknowledgment
+succeed. State information is stored and updated in the state.json file. You
+won't need to touch this file at all, except in very rare cases.
 
 The following files and directories are used:
 

@@ -14,7 +14,7 @@
 //
 //   - call [Store.LoadSnapshot] during startup
 //   - mutate feed state with [Feed] methods such as [Feed.MarkFetchSuccess],
-//     [Feed.MarkNotModified], and [Feed.MarkFetchFailure]
+//     [Feed.MarkPending], [Feed.CommitPending], and [Feed.MarkFetchFailure]
 //   - call [Store.SaveState] to persist the updated state map
 //
 // For admin endpoints that accept raw JSON, [Store.SaveStateJSON] and
@@ -53,6 +53,7 @@ type Feed struct {
 	ErrorCount            int                  `json:"error_count,omitempty"`
 	LastError             string               `json:"last_error,omitempty"`
 	SeenItems             map[string]time.Time `json:"seen_items,omitempty"`
+	PendingItems          map[string]time.Time `json:"pending_items,omitempty"`
 	FetchCount            int64                `json:"fetch_count"`
 	FetchFailCount        int64                `json:"fetch_fail_count"`
 }

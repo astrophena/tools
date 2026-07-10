@@ -217,6 +217,19 @@ func (f *fetcher) saveFeedState(ctx context.Context) error {
 	return f.store.SaveState(ctx, f.feedStateSnapshot())
 }
 
+func (f *fetcher) markFeedItemsSeen(url string, keys []string, now time.Time) {
+	f.stateMu.Lock()
+	defer f.stateMu.Unlock()
+
+	fd, ok := f.state[url]
+	if !ok {
+		return
+	}
+	for _, key := range keys {
+		fd.CommitPending(key, now)
+	}
+}
+
 func cloneFeedStateMap(input map[string]*state.Feed) map[string]*state.Feed {
 	out := make(map[string]*state.Feed, len(input))
 	for k, v := range input {
