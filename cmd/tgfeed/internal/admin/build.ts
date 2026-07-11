@@ -8,16 +8,14 @@ await Deno.mkdir(jsDir, { recursive: true });
 
 await esbuild.build({
   plugins: [denoPlugin()],
-  entryPoints: ["frontend/app.tsx"],
+  entryPoints: ["frontend/app.ts"],
   bundle: true,
   outdir: jsDir,
   entryNames: "app.min",
-  chunkNames: "chunk-[hash]",
+  chunkNames: "chunk-[name]-[hash].min",
   format: "esm",
   splitting: true,
   minify: true,
-  jsx: "automatic",
-  jsxImportSource: "react",
 });
 
 await esbuild.build({

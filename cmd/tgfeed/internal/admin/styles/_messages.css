@@ -24,11 +24,3 @@
   background: rgba(91, 205, 164, 0.11);
   border-color: rgba(91, 205, 164, 0.3);
 }
-
-.error-message {
-  border-radius: var(--radius-md);
-  border: 1px solid rgba(255, 127, 136, 0.24);
-  color: var(--danger);
-  background: rgba(255, 127, 136, 0.1);
-  padding: 0.9rem 1rem;
-}

@@ -1,0 +1,28 @@
+.htmx-progress-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 3px;
+  background-color: var(--brand);
+  z-index: 10000;
+  transition: width 0.4s ease, opacity 0.4s ease;
+  width: 0;
+  opacity: 0;
+}
+
+.htmx-request .htmx-progress-bar,
+.htmx-request.htmx-progress-bar {
+  width: 70%;
+  opacity: 1;
+  animation: htmx-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes htmx-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}

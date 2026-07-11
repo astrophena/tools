@@ -3,12 +3,13 @@
 // license that can be found in the LICENSE.md file.
 
 //go:generate deno run -A build.ts
+//go:generate go tool templ fmt .
+//go:generate go tool templ generate -include-version=false
 
 // Package admin implements the administrative web UI and API for tgfeed.
 package admin
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
 	"embed"
@@ -18,9 +19,7 @@ import (
 	"io"
 	"io/fs"
 	"net/http"
-	"slices"
 	"strconv"
-	"text/template"
 
 	"go.astrophena.name/base/web"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/state"
@@ -59,6 +58,9 @@ type Config struct {
 	IsRunLocked func() bool
 	// StatsStore reads persisted tgfeed run stats.
 	StatsStore *stats.Store
+	// StaticHashName returns a cache-busting static asset name. It defaults to
+	// [web.StaticHashName].
+	StaticHashName func(context.Context, string) string
 }
 
 // Handler returns an HTTP handler serving the tgfeed admin API.
@@ -68,31 +70,18 @@ func Handler(cfg Config) (*http.ServeMux, error) {
 		return nil, err
 	}
 	api := newAPI(cfg)
+	ui := newUI(api, cfg.StaticHashName)
 
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if !slices.Contains([]string{"/", "/stats", "/config", "/configuration"}, r.URL.Path) {
-			web.RespondJSONError(w, r, web.ErrNotFound)
-			return
-		}
-		var buf bytes.Buffer
-		if err := appTemplate.Execute(&buf, struct {
-			JS   string
-			CSS  string
-			Icon string
-			Logo string
-		}{
-			JS:   web.StaticHashName(r.Context(), "static/js/app.min.js"),
-			CSS:  web.StaticHashName(r.Context(), "static/css/app.min.css"),
-			Icon: web.StaticHashName(r.Context(), "static/icons/icon.webp"),
-			Logo: web.StaticHashName(r.Context(), "static/icons/logo.webp"),
-		}); err != nil {
-			web.RespondError(w, r, err)
-			return
-		}
-		buf.WriteTo(w)
-	})
+	mux.HandleFunc("GET /{$}", ui.handleStats)
+	mux.HandleFunc("GET /stats", ui.handleStats)
+	mux.HandleFunc("POST /stats", ui.handleStatsNothingToSave)
+	mux.HandleFunc("GET /config", ui.handleConfiguration)
+	mux.HandleFunc("POST /config", ui.handleSaveAll)
+	mux.HandleFunc("GET /configuration", ui.handleConfiguration)
+	mux.HandleFunc("POST /config/config", ui.handleSaveConfig)
+	mux.HandleFunc("POST /config/error-template", ui.handleSaveErrorTemplate)
 
 	mux.HandleFunc("/api/config", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
@@ -154,12 +143,6 @@ func Handler(cfg Config) (*http.ServeMux, error) {
 //go:embed static/*
 var staticFS embed.FS
 
-var (
-	//go:embed templates/app.tmpl
-	appTemplateStr string
-	appTemplate    = template.Must(template.New("").Parse(appTemplateStr))
-)
-
 // Run starts the tgfeed admin HTTP API.
 func Run(ctx context.Context, cfg Config) error {
 	mux, err := Handler(cfg)
@@ -215,6 +198,9 @@ func normalizeConfig(cfg Config) (Config, error) {
 		if err := cfg.StatsStore.Bootstrap(context.Background()); err != nil {
 			return Config{}, err
 		}
+	}
+	if cfg.StaticHashName == nil {
+		cfg.StaticHashName = web.StaticHashName
 	}
 	return cfg, nil
 }

@@ -1,0 +1,52 @@
+package components
+
+templ AppShell(p PageProps) {
+	<div id={ FragmentAppShell } class="app-shell">
+		<header class="panel hero">
+			<div class="hero-title">
+				<div class="hero-brand">
+					<img class="hero-logo" src={ "/" + p.Logo } alt="tgfeed logo"/>
+					<div><p class="eyebrow">tgfeed</p><h1>Admin Dashboard</h1></div>
+				</div>
+				<p class="subtitle">Inspect run metrics and edit tgfeed configuration from one place.</p>
+			</div>
+			<div class="hero-actions">
+				<button id="refresh-all" class="button button-ghost" type="button" hx-get={ routeURL(p.Route) } hx-target={ "#" + FragmentDashboardContent } hx-swap="outerHTML">Refresh all</button>
+				<button
+					id="save-all"
+					class="button button-solid"
+					type="button"
+					hx-post={ routeURL(p.Route) }
+					if p.Route == "configuration" {
+						hx-include="#configuration-form"
+					}
+					hx-target={ "#" + FragmentDashboardContent }
+					hx-swap="outerHTML"
+				>Save all</button>
+			</div>
+		</header>
+		<nav class="tab-nav" aria-label="Dashboard sections">
+			<button type="button" class={ "tab-button", templ.KV("active", p.Route == "stats") } hx-get="/stats" hx-target={ "#" + FragmentDashboardContent } hx-swap="outerHTML" hx-push-url="true">Stats</button>
+			<button type="button" class={ "tab-button", templ.KV("active", p.Route == "configuration") } hx-get="/config" hx-target={ "#" + FragmentDashboardContent } hx-swap="outerHTML" hx-push-url="true">Configuration</button>
+		</nav>
+		@DashboardContent(p)
+	</div>
+}
+
+templ DashboardContent(p PageProps) {
+	@templ.Fragment(FragmentDashboardContent) {
+		<div id={ FragmentDashboardContent } data-route={ p.Route } data-page-title={ pageTitle(p.Title) }>
+			if p.Banner != "" {
+				<p class="message message-banner">{ p.Banner }</p>
+			}
+			<main class="dashboard-grid">
+				if p.Route == "stats" && p.Stats != nil {
+					@Stats(*p.Stats)
+				}
+				if p.Route == "configuration" && p.Configuration != nil {
+					@Configuration(*p.Configuration)
+				}
+			</main>
+		</div>
+	}
+}

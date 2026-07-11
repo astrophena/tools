@@ -1,0 +1,169 @@
+package components
+
+import (
+	"fmt"
+	"strconv"
+	"time"
+
+	"go.astrophena.name/tools/cmd/tgfeed/internal/stats"
+)
+
+templ Stats(p StatsProps) {
+	@templ.Fragment(FragmentStatsContent) {
+		<div
+			id={ FragmentStatsContent }
+			class="column"
+			if p.AutoRefresh {
+				hx-get={ statsURL(p.SelectedAt, true, p.DetailsOpen) }
+				hx-trigger="every 30s"
+				hx-target="this"
+				hx-swap="outerHTML"
+			}
+		>
+			@SystemHealth(p)
+			@RunExplorer(p)
+			@FeedInsights(p.Active)
+		</div>
+	}
+}
+
+templ SystemHealth(p StatsProps) {
+	<section class="panel stats-panel">
+		<header class="panel-header">
+			<div><h2>System Health</h2><p>Latest-run triage. Not changed feeds count as healthy.</p></div>
+			<div class="panel-header-actions">
+				<button class="button button-ghost" type="button" hx-get={ statsURL(p.SelectedAt, p.AutoRefresh, p.DetailsOpen) } hx-target={ "#" + FragmentStatsContent } hx-swap="outerHTML">Refresh stats</button>
+				<form method="get" action="/stats">
+					if p.SelectedAt != 0 {
+						<input type="hidden" name="started_at_unix" value={ strconv.FormatInt(p.SelectedAt, 10) }/>
+					}
+					if p.DetailsOpen {
+						<input type="hidden" name="details" value="true"/>
+					}
+					<label class="auto-refresh-toggle" for="auto-refresh">
+						<input id="auto-refresh" type="checkbox" name="auto_refresh" value="true" checked?={ p.AutoRefresh } hx-get="/stats" hx-trigger="change" hx-include="closest form" hx-target={ "#" + FragmentStatsContent } hx-swap="outerHTML" hx-push-url="true"/>
+						Auto-refresh (30s)
+					</label>
+				</form>
+			</div>
+		</header>
+		{{ label, tone, detail := health(p.Runs) }}
+		<div class="system-meta"><span>Last refreshed: <time datetime={ p.RefreshedAt.Format(time.RFC3339) } data-local-time>{ formatDateTime(p.RefreshedAt) }</time></span><span class={ "health-badge health-badge-" + tone }>{ label }</span></div>
+		<p class="system-detail">{ detail }</p>
+		if p.Error != "" {
+			<p class="message message-error">{ p.Error }</p>
+		}
+		if p.Error == "" && len(p.Runs) == 0 {
+			<p class="message message-info">No stats available yet.</p>
+		}
+		if len(p.Runs) > 0 {
+			@Indicators(p)
+		}
+	</section>
+}
+
+templ Indicators(p StatsProps) {
+	{{ latest := p.Runs[0] }}
+	{{ previous, hasPrevious := previousRun(p) }}
+	{{ healthy := healthyFeeds(latest) }}
+	{{ healthyRate := percent(healthy, latest.TotalFeeds) }}
+	{{ healthDelta, healthTone := delta(healthyRate, percent(healthyFeeds(previous), previous.TotalFeeds), hasPrevious, true, 1, " pp") }}
+	{{ failedDelta, failedTone := delta(float64(latest.FailedFeeds), float64(previous.FailedFeeds), hasPrevious, false, 0, "") }}
+	{{ delivery := percent(latest.MessagesSent, latest.MessagesAttempted) }}
+	{{ deliveryDelta, deliveryTone := delta(delivery, percent(previous.MessagesSent, previous.MessagesAttempted), hasPrevious, true, 1, " pp") }}
+	{{ p99Delta, p99Tone := delta(float64(latest.FetchLatencyMS.P99), float64(previous.FetchLatencyMS.P99), hasPrevious, false, 0, " ms") }}
+	{{ durationDelta, durationTone := delta(latest.Duration.Seconds(), previous.Duration.Seconds(), hasPrevious, false, 1, " s") }}
+	{{ memoryDelta, memoryTone := delta(float64(latest.MemoryUsage), float64(previous.MemoryUsage), hasPrevious, false, 0, " B") }}
+	<div class="indicator-grid">
+		@Indicator("Last run", formatRelativeTime(latest.StartTime), formatDateTime(latest.StartTime), "Context: latest run", "neutral", "indicator-primary")
+		@Indicator("Healthy feeds", fmt.Sprintf("%d/%d", healthy, latest.TotalFeeds), "Rate: "+formatPercent(healthyRate, latest.TotalFeeds > 0), healthDelta, healthTone, "")
+		@Indicator("Failed feeds", strconv.Itoa(latest.FailedFeeds), "From total: "+strconv.Itoa(latest.TotalFeeds), failedDelta, failedTone, "indicator-danger")
+		@Indicator("Delivery success", formatPercent(delivery, latest.MessagesAttempted > 0), fmt.Sprintf("Sent %d/%d", latest.MessagesSent, latest.MessagesAttempted), deliveryDelta, deliveryTone, "")
+		@Indicator("Fetch latency p99", fmt.Sprintf("%d ms", latest.FetchLatencyMS.P99), "Lower is better", p99Delta, p99Tone, "")
+		@Indicator("Run duration", formatDuration(latest.Duration), "Lower is better", durationDelta, durationTone, "")
+		@Indicator("Memory usage", formatBytes(latest.MemoryUsage), "Lower is better", memoryDelta, memoryTone, "")
+	</div>
+}
+
+templ Indicator(label, value, note, change, tone, extra string) {
+	<article class={ "indicator", extra }><p>{ label }</p><h3>{ value }</h3><span>{ note }</span><span class={ "delta delta-" + tone }>{ change }</span></article>
+}
+
+templ RunExplorer(p StatsProps) {
+	<section class="panel chart-panel">
+		<header class="panel-header"><div><h2>Run Explorer</h2><p>Inspect one run in detail, or track latest run continuously.</p></div></header>
+		if p.Active != nil {
+			<div class="run-context-row">
+				<div class="run-context-copy"><p>{ runContextLabel(p) }</p><h3><time datetime={ p.Active.StartTime.Format(time.RFC3339) } data-local-time>{ formatDateTime(p.Active.StartTime) }</time></h3><span>{ formatRelativeTime(p.Active.StartTime) }</span></div>
+				<div class="run-context-actions">
+					<button type="button" class={ "tab-button", templ.KV("active", p.SelectedAt == 0) } hx-get={ statsURL(0, p.AutoRefresh, p.DetailsOpen) } hx-target={ "#" + FragmentStatsContent } hx-swap="outerHTML" hx-push-url="true">Track latest</button>
+					<button type="button" class={ "tab-button", templ.KV("active", p.SelectedAt != 0) } disabled?={ len(p.Runs) < 2 } hx-get={ pinURL(p) } hx-target={ "#" + FragmentStatsContent } hx-swap="outerHTML" hx-push-url="true">Pin selected run</button>
+				</div>
+			</div>
+		}
+		if len(p.Runs) == 0 {
+			<p class="message message-info">No chart data yet.</p>
+		}
+		if len(p.Runs) > 0 {
+			<div class="chart-stack">
+				@ChartCard("Health Trend", "Healthy feed rate across recent runs. Not changed feeds count as healthy.", "chart-canvas chart-canvas-lg", timelineChart(p))
+				<div class="runs-table-wrap">
+					<table class="runs-table">
+						<thead><tr><th>Run</th><th>Duration</th><th>Healthy feeds</th><th>Sent</th></tr></thead>
+						<tbody>
+							for i, run := range p.Runs {
+								if i < 12 {
+									<tr class={ templ.KV("selected", i == selectedIndex(p) && p.SelectedAt != 0) } hx-get={ statsURL(run.StartedAtUnix, p.AutoRefresh, p.DetailsOpen) } hx-target={ "#" + FragmentStatsContent } hx-swap="outerHTML" hx-push-url="true"><td><time datetime={ run.StartTime.Format(time.RFC3339) } data-local-time>{ formatDateTime(run.StartTime) }</time></td><td>{ formatDuration(run.Duration) }</td><td>{ fmt.Sprintf("%d/%d", healthyFeeds(run), run.TotalFeeds) }</td><td>{ strconv.Itoa(run.MessagesSent) }</td></tr>
+								}
+							}
+						</tbody>
+					</table>
+				</div>
+				<details class="detail-toggle" open?={ p.DetailsOpen } data-stats-details>
+					<summary>Show detailed analytics for this run</summary>
+					if p.Active != nil {
+						{{ charts := detailsCharts(p) }}
+						<div class="chart-matrix">
+							@ChartCard("Feed health by run", "Healthy feeds include successful and not changed feeds.", "chart-canvas", charts[0])
+							@ChartCard("Healthy feed composition", "Active run split into success, not changed, and failed feeds.", "chart-canvas", charts[1])
+							@ChartCard("Delivery outcome", "Counts for sent, failed, and pending messages.", "chart-canvas chart-canvas-compact", charts[2])
+							@ChartCard("HTTP status classes", "Response class distribution for the active run.", "chart-canvas chart-canvas-compact", charts[3])
+							@ChartCard("Latency percentiles", "Fetch and send latency percentiles in seconds.", "chart-canvas", charts[4])
+							@ChartCard("Error and retry sources", "Timeout, network and parse errors, plus retry pressure indicators.", "chart-canvas", charts[5])
+							@ChartCard("Memory usage by run", "Total allocated memory usage at the end of the run.", "chart-canvas", charts[6])
+						</div>
+					}
+				</details>
+			</div>
+		}
+	</section>
+}
+
+templ ChartCard(title, note, class, spec string) {
+	<article class="chart-card"><h3>{ title }</h3><p class="chart-note">{ note }</p><div class={ class } data-chart-spec={ spec }><p class="chart-empty-hint">This chart can't be rendered.</p></div></article>
+}
+
+templ FeedInsights(r *stats.Run) {
+	<section class="panel feed-panel">
+		<header class="panel-header"><div><h2>Feed Insights</h2><p>Top feed contributors for the active run context.</p></div></header>
+		<div class="feed-groups">
+			@FeedGroup("Slowest feeds", slowFeeds(r))
+			@FeedGroup("Most error-prone", errorFeeds(r))
+			@FeedGroup("Most new items", itemFeeds(r))
+		</div>
+	</section>
+}
+
+templ FeedGroup(title string, items []feedDisplay) {
+	<article class="feed-group">
+		<h3>{ title }</h3>
+		<ol class="feed-list">
+			if len(items) == 0 {
+				<li class="empty-line">No entries</li>
+			}
+			for _, item := range items {
+				<li><div><strong>{ item.Name }</strong><span>{ item.Note }</span></div><b>{ item.Value }</b></li>
+			}
+		</ol>
+	</article>
+}

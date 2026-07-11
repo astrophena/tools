@@ -11,6 +11,7 @@ import (
 	"io/fs"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -77,6 +78,9 @@ func TestAdmin(t *testing.T) {
 				return filelock.IsLocked(filepath.Join(stateDir, ".run.lock"))
 			},
 			StatsStore: statsStore,
+			StaticHashName: func(context.Context, string) string {
+				return "static-test"
+			},
 		}
 	}
 
@@ -206,5 +210,52 @@ func TestAdmin(t *testing.T) {
 		cfg := setup(t, nil)
 		req := httptest.NewRequest(http.MethodGet, "/api/stats", nil)
 		runTest(t, cfg, req, http.StatusNotFound, "No stats available")
+	})
+
+	t.Run("stats page", func(t *testing.T) {
+		cfg := setup(t, initialFS)
+		req := httptest.NewRequest(http.MethodGet, "/stats", nil)
+		runTest(t, cfg, req, http.StatusOK, "This chart can't be rendered.")
+	})
+	t.Run("stats fragment", func(t *testing.T) {
+		cfg := setup(t, initialFS)
+		req := httptest.NewRequest(http.MethodGet, "/stats?auto_refresh=true", nil)
+		req.Header.Set("HX-Target", "stats-content")
+		h, err := Handler(cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, req)
+		testutil.AssertEqual(t, w.Code, http.StatusOK)
+		body := w.Body.String()
+		if !strings.Contains(body, `id="stats-content"`) || !strings.Contains(body, `hx-trigger="every 30s"`) {
+			t.Fatalf("unexpected stats fragment: %s", body)
+		}
+		if strings.Contains(body, "<!DOCTYPE html>") {
+			t.Fatalf("fragment contains page layout: %s", body)
+		}
+	})
+	t.Run("configuration page", func(t *testing.T) {
+		cfg := setup(t, initialFS)
+		req := httptest.NewRequest(http.MethodGet, "/config", nil)
+		runTest(t, cfg, req, http.StatusOK, `data-code-editor`)
+	})
+	t.Run("save config form", func(t *testing.T) {
+		cfg := setup(t, nil)
+		cfg.ValidateConfig = func(context.Context, string) error { return nil }
+		body := "config=" + url.QueryEscape(`feed(url="https://form.example.com")`)
+		req := httptest.NewRequest(http.MethodPost, "/config/config", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("HX-Target", "config-panel")
+		runTest(t, cfg, req, http.StatusOK, "Synced")
+	})
+	t.Run("save invalid config form", func(t *testing.T) {
+		cfg := setup(t, nil)
+		body := "config=" + url.QueryEscape("broken")
+		req := httptest.NewRequest(http.MethodPost, "/config/config", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("HX-Target", "config-panel")
+		runTest(t, cfg, req, http.StatusOK, "invalid config")
 	})
 }

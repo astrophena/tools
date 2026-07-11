@@ -1,0 +1,21 @@
+package components
+
+templ Page(p PageProps) {
+	<!DOCTYPE html>
+	<html lang="en">
+		<head>
+			<meta charset="utf-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+			<title>{ pageTitle(p.Title) }</title>
+			<link rel="stylesheet" href={ "/" + p.CSS }/>
+			<link rel="icon" href={ "/" + p.Icon }/>
+			<script type="module" src={ "/" + p.JS }></script>
+		</head>
+		<body hx-ext="chart,code-editor" hx-indicator=".htmx-progress-bar">
+			<div class="htmx-progress-bar"></div>
+			<div id="root">
+				@AppShell(p)
+			</div>
+		</body>
+	</html>
+}

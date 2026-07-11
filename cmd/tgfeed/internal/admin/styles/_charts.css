@@ -1,38 +1,6 @@
-.chart-kpis {
-  margin-top: 1rem;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.6rem;
-}
-
-.chart-kpi {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  padding: 0.4rem 0.75rem;
-  background: rgba(10, 18, 24, 0.55);
-  color: var(--text-main);
-  font-size: 0.82rem;
-}
-
-.chart-kpi b {
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  font-size: 0.7rem;
-}
-
 .chart-stack {
   margin-top: 1.4rem;
   display: grid;
-  gap: 1.2rem;
-}
-
-.chart-row {
-  display: grid;
-  grid-template-columns: 2fr 1fr;
   gap: 1.2rem;
 }
 
@@ -40,10 +8,6 @@
   display: grid;
   gap: 1.2rem;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.chart-card-wide {
-  grid-column: 1 / -1;
 }
 
 .chart-card {
@@ -84,38 +48,4 @@
 
 .chart-canvas-lg {
   height: 320px;
-}
-
-.bar-summary {
-  list-style: none;
-  margin: 0.8rem 0 0;
-  padding: 0;
-  display: grid;
-  gap: 0.35rem;
-}
-
-.bar-summary li {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.7rem;
-  font-size: 0.8rem;
-  color: var(--text-muted);
-}
-
-.bar-summary li b {
-  color: var(--text-main);
-  font-size: 0.82rem;
-}
-
-.chart-card.skeleton {
-  min-height: 250px;
-  background: linear-gradient(
-    90deg,
-    rgba(20, 27, 33, 0.92) 25%,
-    rgba(26, 34, 41, 0.98) 50%,
-    rgba(20, 27, 33, 0.92) 75%
-  );
-  background-size: 200% 100%;
-  animation: shimmer 2s infinite linear;
 }
