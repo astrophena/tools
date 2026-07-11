@@ -8,6 +8,22 @@
   /* background and color are provided by CodeMirror dark theme */
 }
 
+textarea.editor {
+  display: block;
+  min-height: 320px;
+  max-height: 65vh;
+  padding: 0.75rem;
+  resize: vertical;
+  color: #abb2bf;
+  background: #282c34;
+  font-family: "IBM Plex Mono", "Cascadia Mono", "Consolas", monospace;
+  line-height: 1.5;
+}
+
+textarea.editor[hidden] {
+  display: none;
+}
+
 /* Use cm-focused instead of :focus-visible since CodeMirror manages focus on lower elements */
 .editor.cm-focused {
   outline: 2px solid rgba(112, 223, 182, 0.3);

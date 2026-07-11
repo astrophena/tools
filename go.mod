@@ -4,6 +4,7 @@ go 1.26.5
 
 require (
 	crawshaw.dev/jsonfile v0.0.0-20240206193014-699d1dad804e
+	github.com/a-h/templ v0.3.1020
 	github.com/arl/statsviz v0.8.0
 	github.com/dhowden/tag v0.0.0-20240417053706-3d75831295e8
 	github.com/landlock-lsm/go-landlock v0.9.0
@@ -22,17 +23,25 @@ require (
 require (
 	github.com/BurntSushi/toml v1.6.0 // indirect
 	github.com/PuerkitoBio/goquery v1.12.0 // indirect
-	github.com/a-h/templ v0.3.1020 // indirect
+	github.com/a-h/parse v0.0.0-20250122154542-74294addb73e // indirect
+	github.com/andybalholm/brotli v1.1.0 // indirect
 	github.com/andybalholm/cascadia v1.3.3 // indirect
 	github.com/aymerick/douceur v0.2.0 // indirect
+	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
+	github.com/cli/browser v1.3.0 // indirect
+	github.com/fatih/color v1.16.0 // indirect
+	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/go4org/hashtriemap v0.0.0-20251130024219-545ba229f689 // indirect
 	github.com/gorilla/css v1.0.1 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/lmittmann/tint v1.1.3 // indirect
+	github.com/mattn/go-colorable v0.1.13 // indirect
+	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mmcdole/goxpp v1.1.1 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
+	github.com/natefinch/atomic v1.0.1 // indirect
 	github.com/restic/chunker v0.4.0 // indirect
 	github.com/tobischo/argon2 v0.1.0 // indirect
 	golang.org/x/crypto v0.51.0 // indirect
@@ -49,6 +58,7 @@ require (
 retract [v0.0.1, v0.2.0]
 
 tool (
+	github.com/a-h/templ/cmd/templ
 	go.astrophena.name/base/devtools/addcopyright
 	go.astrophena.name/base/devtools/deploy
 	go.astrophena.name/base/devtools/pre-commit

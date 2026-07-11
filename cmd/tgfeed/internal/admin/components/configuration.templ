@@ -1,0 +1,30 @@
+package components
+
+templ Configuration(p ConfigurationProps) {
+	<form id="configuration-form" class="column" method="post" action="/config">
+		@Editor(p.Config, FragmentConfigPanel)
+		@Editor(p.ErrorTemplate, FragmentErrorPanel)
+	</form>
+}
+
+templ Editor(p EditorProps, fragment string) {
+	@templ.Fragment(fragment) {
+		<section id={ fragment } class="panel editor-panel" data-editor-panel>
+			<header class="panel-header">
+				<div><h2>{ p.Title }</h2><p>{ p.Description }</p></div>
+				<div class="status-cluster">
+					<span class={ "pill", templ.KV("pill-warning", p.Value != p.Baseline) } data-editor-status>{ editorStatus(p) }</span>
+					<span class="pill pill-subtle">{ p.Language }</span>
+				</div>
+			</header>
+			<div class="panel-actions">
+				<button class="button button-ghost" type="button" hx-get="/config" hx-target={ "#" + fragment } hx-swap="outerHTML">Reload</button>
+				<button class="button button-solid" type="button" hx-post={ p.SaveURL } hx-include={ "#" + p.ID } hx-target={ "#" + fragment } hx-swap="outerHTML" disabled?={ p.Value == p.Baseline } data-editor-save>Save</button>
+			</div>
+			<textarea id={ p.ID } class="editor" name={ p.Name } placeholder={ p.Placeholder } data-code-editor data-baseline={ p.Baseline } data-error={ p.Error }>{ p.Value }</textarea>
+			if p.Error != "" {
+				<p class="message message-error">{ p.Error }</p>
+			}
+		</section>
+	}
+}
