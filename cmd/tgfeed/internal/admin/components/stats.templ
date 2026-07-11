@@ -1,3 +1,7 @@
+// © 2026 Ilya Mateyko. All rights reserved.
+// Use of this source code is governed by the ISC
+// license that can be found in the LICENSE.md file.
+
 package components
 
 import (
@@ -5,9 +9,11 @@ import (
 	"strconv"
 	"time"
 
+	"go.astrophena.name/base/humanfmt"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/stats"
 )
 
+// Stats renders the independently refreshed statistics dashboard.
 templ Stats(p StatsProps) {
 	@templ.Fragment(FragmentStatsContent) {
 		<div
@@ -27,6 +33,7 @@ templ Stats(p StatsProps) {
 	}
 }
 
+// SystemHealth renders latest-run status and overview indicators.
 templ SystemHealth(p StatsProps) {
 	<section class="panel stats-panel">
 		<header class="panel-header">
@@ -62,6 +69,7 @@ templ SystemHealth(p StatsProps) {
 	</section>
 }
 
+// Indicators renders headline metrics compared with the previous run.
 templ Indicators(p StatsProps) {
 	{{ latest := p.Runs[0] }}
 	{{ previous, hasPrevious := previousRun(p) }}
@@ -75,29 +83,30 @@ templ Indicators(p StatsProps) {
 	{{ durationDelta, durationTone := delta(latest.Duration.Seconds(), previous.Duration.Seconds(), hasPrevious, false, 1, " s") }}
 	{{ memoryDelta, memoryTone := delta(float64(latest.MemoryUsage), float64(previous.MemoryUsage), hasPrevious, false, 0, " B") }}
 	<div class="indicator-grid">
-		@Indicator("Last run", formatRelativeTime(latest.StartTime), formatDateTime(latest.StartTime), "Context: latest run", "neutral", "indicator-primary")
+		@Indicator("Last run", formatRelativeTime(latest.StartTime, p.RefreshedAt), formatDateTime(latest.StartTime), "Context: latest run", "neutral", "indicator-primary")
 		@Indicator("Healthy feeds", fmt.Sprintf("%d/%d", healthy, latest.TotalFeeds), "Rate: "+formatPercent(healthyRate, latest.TotalFeeds > 0), healthDelta, healthTone, "")
 		@Indicator("Failed feeds", strconv.Itoa(latest.FailedFeeds), "From total: "+strconv.Itoa(latest.TotalFeeds), failedDelta, failedTone, "indicator-danger")
 		@Indicator("Delivery success", formatPercent(delivery, latest.MessagesAttempted > 0), fmt.Sprintf("Sent %d/%d", latest.MessagesSent, latest.MessagesAttempted), deliveryDelta, deliveryTone, "")
 		@Indicator("Fetch latency p99", fmt.Sprintf("%d ms", latest.FetchLatencyMS.P99), "Lower is better", p99Delta, p99Tone, "")
 		@Indicator("Run duration", formatDuration(latest.Duration), "Lower is better", durationDelta, durationTone, "")
-		@Indicator("Memory usage", formatBytes(latest.MemoryUsage), "Lower is better", memoryDelta, memoryTone, "")
+		@Indicator("Memory usage", humanfmt.Bytes(latest.MemoryUsage), "Lower is better", memoryDelta, memoryTone, "")
 	</div>
 }
 
+// Indicator renders one headline metric and its run-over-run change.
 templ Indicator(label, value, note, change, tone, extra string) {
 	<article class={ "indicator", extra }><p>{ label }</p><h3>{ value }</h3><span>{ note }</span><span class={ "delta delta-" + tone }>{ change }</span></article>
 }
 
+// RunExplorer renders run selection, history, and detailed charts.
 templ RunExplorer(p StatsProps) {
 	<section class="panel chart-panel">
 		<header class="panel-header"><div><h2>Run Explorer</h2><p>Inspect one run in detail, or track latest run continuously.</p></div></header>
 		if p.Active != nil {
 			<div class="run-context-row">
-				<div class="run-context-copy"><p>{ runContextLabel(p) }</p><h3><time datetime={ p.Active.StartTime.Format(time.RFC3339) } data-local-time>{ formatDateTime(p.Active.StartTime) }</time></h3><span>{ formatRelativeTime(p.Active.StartTime) }</span></div>
+				<div class="run-context-copy"><p>{ runContextLabel(p) }</p><h3><time datetime={ p.Active.StartTime.Format(time.RFC3339) } data-local-time>{ formatDateTime(p.Active.StartTime) }</time></h3><span>{ formatRelativeTime(p.Active.StartTime, p.RefreshedAt) }</span></div>
 				<div class="run-context-actions">
-					<button type="button" class={ "tab-button", templ.KV("active", p.SelectedAt == 0) } hx-get={ statsURL(0, p.AutoRefresh, p.DetailsOpen) } hx-target={ "#" + FragmentStatsContent } hx-swap="outerHTML" hx-push-url="true">Track latest</button>
-					<button type="button" class={ "tab-button", templ.KV("active", p.SelectedAt != 0) } disabled?={ len(p.Runs) < 2 } hx-get={ pinURL(p) } hx-target={ "#" + FragmentStatsContent } hx-swap="outerHTML" hx-push-url="true">Pin selected run</button>
+					<a href={ statsURL(0, p.AutoRefresh, p.DetailsOpen) } class={ "tab-button", templ.KV("active", p.SelectedAt == 0) } hx-get={ statsURL(0, p.AutoRefresh, p.DetailsOpen) } hx-target={ "#" + FragmentStatsContent } hx-swap="outerHTML" hx-push-url="true">Track latest</a>
 				</div>
 			</div>
 		}
@@ -113,7 +122,7 @@ templ RunExplorer(p StatsProps) {
 						<tbody>
 							for i, run := range p.Runs {
 								if i < 12 {
-									<tr class={ templ.KV("selected", i == selectedIndex(p) && p.SelectedAt != 0) } hx-get={ statsURL(run.StartedAtUnix, p.AutoRefresh, p.DetailsOpen) } hx-target={ "#" + FragmentStatsContent } hx-swap="outerHTML" hx-push-url="true"><td><time datetime={ run.StartTime.Format(time.RFC3339) } data-local-time>{ formatDateTime(run.StartTime) }</time></td><td>{ formatDuration(run.Duration) }</td><td>{ fmt.Sprintf("%d/%d", healthyFeeds(run), run.TotalFeeds) }</td><td>{ strconv.Itoa(run.MessagesSent) }</td></tr>
+									<tr class={ templ.KV("selected", i == selectedIndex(p) && p.SelectedAt != 0) } hx-get={ statsURL(run.StartedAtUnix, p.AutoRefresh, p.DetailsOpen) } hx-target={ "#" + FragmentStatsContent } hx-swap="outerHTML" hx-push-url="true"><td><a href={ statsURL(run.StartedAtUnix, p.AutoRefresh, p.DetailsOpen) }><time datetime={ run.StartTime.Format(time.RFC3339) } data-local-time>{ formatDateTime(run.StartTime) }</time></a></td><td>{ formatDuration(run.Duration) }</td><td>{ fmt.Sprintf("%d/%d", healthyFeeds(run), run.TotalFeeds) }</td><td>{ strconv.Itoa(run.MessagesSent) }</td></tr>
 								}
 							}
 						</tbody>
@@ -124,13 +133,13 @@ templ RunExplorer(p StatsProps) {
 					if p.Active != nil {
 						{{ charts := detailsCharts(p) }}
 						<div class="chart-matrix">
-							@ChartCard("Feed health by run", "Healthy feeds include successful and not changed feeds.", "chart-canvas", charts[0])
-							@ChartCard("Healthy feed composition", "Active run split into success, not changed, and failed feeds.", "chart-canvas", charts[1])
-							@ChartCard("Delivery outcome", "Counts for sent, failed, and pending messages.", "chart-canvas chart-canvas-compact", charts[2])
-							@ChartCard("HTTP status classes", "Response class distribution for the active run.", "chart-canvas chart-canvas-compact", charts[3])
-							@ChartCard("Latency percentiles", "Fetch and send latency percentiles in seconds.", "chart-canvas", charts[4])
-							@ChartCard("Error and retry sources", "Timeout, network and parse errors, plus retry pressure indicators.", "chart-canvas", charts[5])
-							@ChartCard("Memory usage by run", "Total allocated memory usage at the end of the run.", "chart-canvas", charts[6])
+							@ChartCard("Feed health by run", "Healthy feeds include successful and not changed feeds.", "chart-canvas", charts.FeedHealth)
+							@ChartCard("Healthy feed composition", "Active run split into success, not changed, and failed feeds.", "chart-canvas", charts.Composition)
+							@ChartCard("Delivery outcome", "Counts for sent, failed, and pending messages.", "chart-canvas chart-canvas-compact", charts.Delivery)
+							@ChartCard("HTTP status classes", "Response class distribution for the active run.", "chart-canvas chart-canvas-compact", charts.HTTPStatus)
+							@ChartCard("Latency percentiles", "Fetch and send latency percentiles in seconds.", "chart-canvas", charts.Latency)
+							@ChartCard("Error and retry sources", "Timeout, network and parse errors, plus retry pressure indicators.", "chart-canvas", charts.Errors)
+							@ChartCard("Memory usage by run", "Total allocated memory usage at the end of the run.", "chart-canvas", charts.Memory)
 						</div>
 					}
 				</details>
@@ -139,10 +148,12 @@ templ RunExplorer(p StatsProps) {
 	</section>
 }
 
+// ChartCard renders a titled container enhanced by Chart.js.
 templ ChartCard(title, note, class, spec string) {
 	<article class="chart-card"><h3>{ title }</h3><p class="chart-note">{ note }</p><div class={ class } data-chart-spec={ spec }><p class="chart-empty-hint">This chart can't be rendered.</p></div></article>
 }
 
+// FeedInsights renders top feed contributors for the active run.
 templ FeedInsights(r *stats.Run) {
 	<section class="panel feed-panel">
 		<header class="panel-header"><div><h2>Feed Insights</h2><p>Top feed contributors for the active run context.</p></div></header>
@@ -154,6 +165,7 @@ templ FeedInsights(r *stats.Run) {
 	</section>
 }
 
+// FeedGroup renders one ranked feed metric list.
 templ FeedGroup(title string, items []feedDisplay) {
 	<article class="feed-group">
 		<h3>{ title }</h3>

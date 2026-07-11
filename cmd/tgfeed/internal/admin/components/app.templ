@@ -1,5 +1,10 @@
+// © 2026 Ilya Mateyko. All rights reserved.
+// Use of this source code is governed by the ISC
+// license that can be found in the LICENSE.md file.
+
 package components
 
+// AppShell renders the stable header, navigation, and active dashboard body.
 templ AppShell(p PageProps) {
 	<div id={ FragmentAppShell } class="app-shell">
 		<header class="panel hero">
@@ -11,13 +16,14 @@ templ AppShell(p PageProps) {
 				<p class="subtitle">Inspect run metrics and edit tgfeed configuration from one place.</p>
 			</div>
 			<div class="hero-actions">
-				<button id="refresh-all" class="button button-ghost" type="button" hx-get={ routeURL(p.Route) } hx-target={ "#" + FragmentDashboardContent } hx-swap="outerHTML">Refresh all</button>
+				<a id="refresh-all" class="button button-ghost" href={ routeURL(p.Route) } hx-get={ routeURL(p.Route) } hx-target={ "#" + FragmentDashboardContent } hx-swap="outerHTML">Refresh all</a>
 				<button
 					id="save-all"
 					class="button button-solid"
-					type="button"
+					type="submit"
+					form="configuration-form"
 					hx-post={ routeURL(p.Route) }
-					if p.Route == "configuration" {
+					if p.Route == RouteConfiguration {
 						hx-include="#configuration-form"
 					}
 					hx-target={ "#" + FragmentDashboardContent }
@@ -26,13 +32,14 @@ templ AppShell(p PageProps) {
 			</div>
 		</header>
 		<nav class="tab-nav" aria-label="Dashboard sections">
-			<button type="button" class={ "tab-button", templ.KV("active", p.Route == "stats") } hx-get="/stats" hx-target={ "#" + FragmentDashboardContent } hx-swap="outerHTML" hx-push-url="true">Stats</button>
-			<button type="button" class={ "tab-button", templ.KV("active", p.Route == "configuration") } hx-get="/config" hx-target={ "#" + FragmentDashboardContent } hx-swap="outerHTML" hx-push-url="true">Configuration</button>
+			<a href="/stats" class={ "tab-button", templ.KV("active", p.Route == RouteStats) } hx-get="/stats" hx-target={ "#" + FragmentDashboardContent } hx-swap="outerHTML" hx-push-url="true">Stats</a>
+			<a href="/config" class={ "tab-button", templ.KV("active", p.Route == RouteConfiguration) } hx-get="/config" hx-target={ "#" + FragmentDashboardContent } hx-swap="outerHTML" hx-push-url="true">Configuration</a>
 		</nav>
 		@DashboardContent(p)
 	</div>
 }
 
+// DashboardContent renders the fragment replaced when switching sections.
 templ DashboardContent(p PageProps) {
 	@templ.Fragment(FragmentDashboardContent) {
 		<div id={ FragmentDashboardContent } data-route={ p.Route } data-page-title={ pageTitle(p.Title) }>
@@ -40,10 +47,10 @@ templ DashboardContent(p PageProps) {
 				<p class="message message-banner">{ p.Banner }</p>
 			}
 			<main class="dashboard-grid">
-				if p.Route == "stats" && p.Stats != nil {
+				if p.Route == RouteStats && p.Stats != nil {
 					@Stats(*p.Stats)
 				}
-				if p.Route == "configuration" && p.Configuration != nil {
+				if p.Route == RouteConfiguration && p.Configuration != nil {
 					@Configuration(*p.Configuration)
 				}
 			</main>

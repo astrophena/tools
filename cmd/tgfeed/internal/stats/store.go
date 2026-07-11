@@ -275,6 +275,21 @@ func (s *Store) GetRunByStartedAt(ctx context.Context, startedAtUnix int64) (jso
 	return json.RawMessage(payload), nil
 }
 
+// LoadRunByStartedAt returns a decoded run with the given start time.
+func (s *Store) LoadRunByStartedAt(ctx context.Context, startedAtUnix int64) (*Run, error) {
+	// Raw payload access remains available to the public stats API, while typed
+	// consumers use this helper and keep storage decoding inside the package.
+	payload, err := s.GetRunByStartedAt(ctx, startedAtUnix)
+	if err != nil {
+		return nil, err
+	}
+	run := new(Run)
+	if err := json.Unmarshal(payload, run); err != nil {
+		return nil, fmt.Errorf("decode run started at %d: %w", startedAtUnix, err)
+	}
+	return run, nil
+}
+
 func normalizeLimit(limit int) int {
 	if limit <= 0 {
 		return defaultListLimit
