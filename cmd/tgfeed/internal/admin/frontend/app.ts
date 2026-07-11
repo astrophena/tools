@@ -10,7 +10,10 @@ declare global {
 
 (globalThis as typeof globalThis & { htmx: typeof htmx }).htmx = htmx;
 
-function refreshPageMetadata(): void {
+function refreshPageMetadata(root: ParentNode = document): void {
+  // Tab navigation swaps only dashboard-content to keep the surrounding shell
+  // stable. Synchronize the shell state that the server would otherwise set
+  // during a full-page navigation.
   const content = document.getElementById("dashboard-content");
   const title = content?.dataset.pageTitle;
   if (title) document.title = title;
@@ -27,6 +30,7 @@ function refreshPageMetadata(): void {
     );
     const refresh = document.getElementById("refresh-all");
     refresh?.setAttribute("hx-get", route === "stats" ? "/stats" : "/config");
+    refresh?.setAttribute("href", route === "stats" ? "/stats" : "/config");
     const save = document.getElementById("save-all");
     save?.setAttribute("hx-post", route === "stats" ? "/stats" : "/config");
     if (route === "configuration") {
@@ -35,7 +39,7 @@ function refreshPageMetadata(): void {
       save?.removeAttribute("hx-include");
     }
   }
-  document.querySelectorAll<HTMLElement>("time[data-local-time]").forEach(
+  root.querySelectorAll<HTMLElement>("time[data-local-time]").forEach(
     (element) => {
       const date = new Date(element.getAttribute("datetime") ?? "");
       if (Number.isNaN(date.getTime())) return;
@@ -53,6 +57,8 @@ function refreshPageMetadata(): void {
 }
 
 async function loadEnhancements(root: ParentNode = document): Promise<void> {
+  // Charts and CodeMirror dominate the JavaScript payload. Load each feature
+  // only when the server-rendered subtree contains a matching enhancement.
   const jobs: Promise<void>[] = [];
   if (root.querySelector("[data-chart-spec]")) {
     jobs.push(
@@ -68,16 +74,21 @@ async function loadEnhancements(root: ParentNode = document): Promise<void> {
 }
 
 function preloadEditorForConfiguration(event: Event): void {
+  // Start fetching CodeMirror on intent so it is usually available by the time
+  // the configuration fragment arrives, without adding it to the stats page.
   const target = event.target as Element | null;
   if (!target?.closest('.tab-nav [hx-get="/config"]')) return;
   void import("./editor.ts");
 }
 
-document.addEventListener("htmx:afterSwap", () => {
-  refreshPageMetadata();
-  void loadEnhancements();
+document.addEventListener("htmx:afterSwap", (event) => {
+  const target = (event as CustomEvent).detail?.target as
+    | ParentNode
+    | undefined;
+  refreshPageMetadata(target);
+  void loadEnhancements(target);
 });
-document.addEventListener("htmx:historyRestore", refreshPageMetadata);
+document.addEventListener("htmx:historyRestore", () => refreshPageMetadata());
 document.addEventListener("pointerover", preloadEditorForConfiguration);
 document.addEventListener("pointerdown", preloadEditorForConfiguration);
 document.addEventListener("focusin", preloadEditorForConfiguration);
@@ -90,6 +101,8 @@ document.addEventListener("DOMContentLoaded", () => {
 document.addEventListener("toggle", (event) => {
   const details = event.target as HTMLDetailsElement;
   if (!details.matches("details[data-stats-details]")) return;
+  // Details is ordinary HTML state, but keeping it in the URL lets refreshes,
+  // history restoration, and subsequent HTMX requests preserve the choice.
   const url = new URL(location.href);
   if (details.open) url.searchParams.set("details", "true");
   else url.searchParams.delete("details");
@@ -101,6 +114,8 @@ document.addEventListener("htmx:configRequest", (event) => {
     "details[data-stats-details]",
   );
   if (!details?.open) return;
+  // Not every control lives inside the details element, so explicitly carry
+  // its open state into all stats requests.
   const detail = (event as CustomEvent).detail;
   detail.parameters.set("details", "true");
 });

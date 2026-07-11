@@ -236,10 +236,69 @@ func TestAdmin(t *testing.T) {
 			t.Fatalf("fragment contains page layout: %s", body)
 		}
 	})
+	t.Run("stats invalid query", func(t *testing.T) {
+		cfg := setup(t, initialFS)
+		req := httptest.NewRequest(http.MethodGet, "/stats?auto_refresh=invalid", nil)
+		runTest(t, cfg, req, http.StatusOK, `invalid &#34;auto_refresh&#34; query parameter`)
+	})
+	t.Run("stats missing selected run", func(t *testing.T) {
+		cfg := setup(t, initialFS)
+		req := httptest.NewRequest(http.MethodGet, "/stats?started_at_unix=1", nil)
+		runTest(t, cfg, req, http.StatusOK, "selected run 1 is no longer available")
+	})
+	t.Run("reject unknown fragment", func(t *testing.T) {
+		cfg := setup(t, initialFS)
+		req := httptest.NewRequest(http.MethodGet, "/stats", nil)
+		req.Header.Set("HX-Target", "unknown")
+		runTest(t, cfg, req, http.StatusBadRequest, "Your request is invalid")
+	})
 	t.Run("configuration page", func(t *testing.T) {
 		cfg := setup(t, initialFS)
 		req := httptest.NewRequest(http.MethodGet, "/config", nil)
 		runTest(t, cfg, req, http.StatusOK, `data-code-editor`)
+	})
+	t.Run("configuration page has native controls", func(t *testing.T) {
+		cfg := setup(t, initialFS)
+		req := httptest.NewRequest(http.MethodGet, "/config", nil)
+		h, err := Handler(cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, req)
+		body := w.Body.String()
+		wantControls := []string{
+			`href="/stats"`,
+			`href="/config"`,
+			`formaction="/config/config"`,
+			`formmethod="post"`,
+		}
+		for _, want := range wantControls {
+			if !strings.Contains(body, want) {
+				t.Errorf("response body does not contain %q", want)
+			}
+		}
+	})
+	t.Run("configuration page escapes editor content", func(t *testing.T) {
+		cfg := setup(t, fstest.MapFS{
+			"config.star": {
+				Data: []byte(`</textarea><script>alert("x")</script>`),
+			},
+		})
+		req := httptest.NewRequest(http.MethodGet, "/config", nil)
+		h, err := Handler(cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, req)
+		body := w.Body.String()
+		if strings.Contains(body, `<script>alert("x")</script>`) {
+			t.Fatal("editor content was rendered as executable markup")
+		}
+		if !strings.Contains(body, `&lt;/textarea&gt;`) {
+			t.Fatalf("escaped editor content is missing: %s", body)
+		}
 	})
 	t.Run("save config form", func(t *testing.T) {
 		cfg := setup(t, nil)
@@ -257,5 +316,38 @@ func TestAdmin(t *testing.T) {
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		req.Header.Set("HX-Target", "config-panel")
 		runTest(t, cfg, req, http.StatusOK, "invalid config")
+	})
+	t.Run("save locked config form", func(t *testing.T) {
+		cfg := setup(t, initialFS)
+		lockFile, err := filelock.Acquire(filepath.Join(cfg.StateDir, ".run.lock"), "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() {
+			if err := lockFile.Release(); err != nil {
+				t.Error(err)
+			}
+		})
+		body := "config=" + url.QueryEscape(`feed(url="https://form.example.com")`)
+		req := httptest.NewRequest(http.MethodPost, "/config/config", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("HX-Target", "config-panel")
+		runTest(t, cfg, req, http.StatusOK, "run is in progress")
+	})
+	t.Run("save all reports partial failure", func(t *testing.T) {
+		cfg := setup(t, initialFS)
+		body := url.Values{
+			"config":         {"broken"},
+			"error_template": {"Updated template"},
+		}.Encode()
+		req := httptest.NewRequest(http.MethodPost, "/config", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("HX-Target", "dashboard-content")
+		runTest(t, cfg, req, http.StatusOK, "Some changes failed to save")
+		content, err := os.ReadFile(filepath.Join(cfg.StateDir, "error.tmpl"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.AssertEqual(t, string(content), "Updated template")
 	})
 }

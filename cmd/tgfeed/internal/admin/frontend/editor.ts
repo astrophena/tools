@@ -63,6 +63,8 @@ function initialize(textarea: HTMLTextAreaElement): void {
   const panel = textarea.closest<HTMLElement>("[data-editor-panel]");
   const status = panel?.querySelector<HTMLElement>("[data-editor-status]");
   const save = panel?.querySelector<HTMLButtonElement>("[data-editor-save]");
+  // The textarea remains the form control and source of truth. CodeMirror is
+  // only a visual enhancement, so native submission still works without it.
   const baseline = textarea.dataset.baseline ?? textarea.value;
   const parent = document.createElement("div");
   textarea.insertAdjacentElement("afterend", parent);
@@ -137,6 +139,8 @@ function cleanup(root: HTMLElement): void {
 
 export function registerEditors(root: ParentNode = document): void {
   if (!registered) {
+    // Register once for cleanup and future swaps, then process the subtree that
+    // caused this lazily loaded module to be imported.
     registered = true;
     hx.defineExtension("code-editor", {
       onEvent(name, event) {

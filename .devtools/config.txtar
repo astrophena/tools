@@ -2,7 +2,8 @@
 [
   "cmd/tgfeed/internal/diff/diff.go",
   "internal/starlark/interpreter/interpreter.go",
-  "internal/starlark/interpreter/loaders.go"
+  "internal/starlark/interpreter/loaders.go",
+  "cmd/tgfeed/internal/admin/components/*_templ.go"
 ]
 -- copyright/template.go --
 // © %d Ilya Mateyko. All rights reserved.

@@ -135,6 +135,9 @@ function initialize(container: HTMLElement): void {
     render(container);
     return;
   }
+  // Charts inside a closed details element have no usable size. Defer their
+  // construction until the container becomes visible instead of rendering a
+  // permanently zero-sized canvas.
   if (!("ResizeObserver" in globalThis)) {
     fail(container, new Error("ResizeObserver is unavailable"));
     return;
@@ -170,6 +173,8 @@ function cleanup(root: HTMLElement): void {
 
 export function registerCharts(root: ParentNode = document): void {
   if (!registered) {
+    // Register once for future HTMX swaps; the explicit processing below also
+    // covers the initial document and a fragment that triggered lazy import.
     registered = true;
     hx.defineExtension("chart", {
       onEvent(name, event) {
@@ -189,12 +194,14 @@ export function registerCharts(root: ParentNode = document): void {
 }
 
 function formatBytes(bytes: number): string {
-  const units = ["B", "KB", "MB", "GB", "TB"];
+  // Match humanfmt.Bytes used by the server-rendered memory indicator.
+  const units = ["B", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB"];
   let value = bytes;
   let unit = 0;
   while (value >= 1024 && unit < units.length - 1) {
     value /= 1024;
     unit++;
   }
-  return `${value.toFixed(unit === 0 ? 0 : 1)} ${units[unit]}`;
+  const formatted = value.toFixed(unit === 0 ? 0 : 1).replace(/\.0$/, "");
+  return `${formatted} ${units[unit]}`;
 }

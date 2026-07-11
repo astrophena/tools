@@ -1,5 +1,10 @@
+// © 2026 Ilya Mateyko. All rights reserved.
+// Use of this source code is governed by the ISC
+// license that can be found in the LICENSE.md file.
+
 package components
 
+// Configuration renders the form containing all editable resources.
 templ Configuration(p ConfigurationProps) {
 	<form id="configuration-form" class="column" method="post" action="/config">
 		@Editor(p.Config, FragmentConfigPanel)
@@ -7,6 +12,7 @@ templ Configuration(p ConfigurationProps) {
 	</form>
 }
 
+// Editor renders one text resource with native and HTMX save controls.
 templ Editor(p EditorProps, fragment string) {
 	@templ.Fragment(fragment) {
 		<section id={ fragment } class="panel editor-panel" data-editor-panel>
@@ -18,8 +24,8 @@ templ Editor(p EditorProps, fragment string) {
 				</div>
 			</header>
 			<div class="panel-actions">
-				<button class="button button-ghost" type="button" hx-get="/config" hx-target={ "#" + fragment } hx-swap="outerHTML">Reload</button>
-				<button class="button button-solid" type="button" hx-post={ p.SaveURL } hx-include={ "#" + p.ID } hx-target={ "#" + fragment } hx-swap="outerHTML" disabled?={ p.Value == p.Baseline } data-editor-save>Save</button>
+				<a class="button button-ghost" href="/config" hx-get="/config" hx-target={ "#" + fragment } hx-swap="outerHTML">Reload</a>
+				<button class="button button-solid" type="submit" formaction={ p.SaveURL } formmethod="post" hx-post={ p.SaveURL } hx-include={ "#" + p.ID } hx-target={ "#" + fragment } hx-swap="outerHTML" disabled?={ p.Value == p.Baseline } data-editor-save>Save</button>
 			</div>
 			<textarea id={ p.ID } class="editor" name={ p.Name } placeholder={ p.Placeholder } data-code-editor data-baseline={ p.Baseline } data-error={ p.Error }>{ p.Value }</textarea>
 			if p.Error != "" {

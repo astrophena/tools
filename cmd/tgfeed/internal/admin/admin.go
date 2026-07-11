@@ -26,7 +26,10 @@ import (
 	"go.astrophena.name/tools/cmd/tgfeed/internal/stats"
 )
 
-var errConflict = web.StatusErr(http.StatusConflict)
+var (
+	errConflict      = web.StatusErr(http.StatusConflict)
+	errInvalidConfig = errors.New("invalid config")
+)
 
 // Store reads and writes the persisted resources exposed by the admin API.
 type Store interface {
@@ -79,56 +82,17 @@ func Handler(cfg Config) (*http.ServeMux, error) {
 	mux.HandleFunc("POST /stats", ui.handleStatsNothingToSave)
 	mux.HandleFunc("GET /config", ui.handleConfiguration)
 	mux.HandleFunc("POST /config", ui.handleSaveAll)
-	mux.HandleFunc("GET /configuration", ui.handleConfiguration)
 	mux.HandleFunc("POST /config/config", ui.handleSaveConfig)
 	mux.HandleFunc("POST /config/error-template", ui.handleSaveErrorTemplate)
 
-	mux.HandleFunc("/api/config", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodGet:
-			api.handleGetConfig(w, r)
-		case http.MethodPut:
-			api.handlePutConfig(w, r)
-		default:
-			web.RespondJSONError(w, r, fmt.Errorf("%w: method not allowed", web.ErrMethodNotAllowed))
-		}
-	})
-	mux.HandleFunc("/api/state", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodGet:
-			api.handleGetState(w, r)
-		case http.MethodPut:
-			api.handlePutState(w, r)
-		default:
-			web.RespondJSONError(w, r, fmt.Errorf("%w: method not allowed", web.ErrMethodNotAllowed))
-		}
-	})
-	mux.HandleFunc("/api/error-template", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodGet:
-			api.handleGetErrorTemplate(w, r)
-		case http.MethodPut:
-			api.handlePutErrorTemplate(w, r)
-		default:
-			web.RespondJSONError(w, r, fmt.Errorf("%w: method not allowed", web.ErrMethodNotAllowed))
-		}
-	})
-	mux.HandleFunc("/api/stats", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodGet:
-			api.handleGetStats(w, r)
-		default:
-			web.RespondJSONError(w, r, fmt.Errorf("%w: method not allowed", web.ErrMethodNotAllowed))
-		}
-	})
-	mux.HandleFunc("/api/stats/run", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodGet:
-			api.handleGetStatsRun(w, r)
-		default:
-			web.RespondJSONError(w, r, fmt.Errorf("%w: method not allowed", web.ErrMethodNotAllowed))
-		}
-	})
+	mux.HandleFunc("GET /api/config", api.handleGetConfig)
+	mux.HandleFunc("PUT /api/config", api.handlePutConfig)
+	mux.HandleFunc("GET /api/state", api.handleGetState)
+	mux.HandleFunc("PUT /api/state", api.handlePutState)
+	mux.HandleFunc("GET /api/error-template", api.handleGetErrorTemplate)
+	mux.HandleFunc("PUT /api/error-template", api.handlePutErrorTemplate)
+	mux.HandleFunc("GET /api/stats", api.handleGetStats)
+	mux.HandleFunc("GET /api/stats/run", api.handleGetStatsRun)
 
 	dbg := web.Debugger(mux)
 	dbg.Link("/api/config", "Config")
@@ -232,22 +196,15 @@ func (a *api) handleGetConfig(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *api) handlePutConfig(w http.ResponseWriter, r *http.Request) {
-	if !a.guardRunUnlocked(w, r) {
-		return
-	}
-
 	content, ok := readBody(w, r)
 	if !ok {
 		return
 	}
-
-	if err := a.validateConfig(content, r); err != nil {
+	if err := a.saveConfig(r.Context(), string(content)); err != nil {
+		if errors.Is(err, errInvalidConfig) {
+			err = fmt.Errorf("%w: %v", web.ErrBadRequest, err)
+		}
 		web.RespondJSONError(w, r, err)
-		return
-	}
-
-	if err := a.store.SaveConfig(r.Context(), string(content)); err != nil {
-		web.RespondJSONError(w, r, fmt.Errorf("failed to write config: %v", err))
 		return
 	}
 
@@ -303,17 +260,13 @@ func (a *api) handleGetErrorTemplate(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *api) handlePutErrorTemplate(w http.ResponseWriter, r *http.Request) {
-	if !a.guardRunUnlocked(w, r) {
-		return
-	}
-
 	content, ok := readBody(w, r)
 	if !ok {
 		return
 	}
 
-	if err := a.store.SaveErrorTemplate(r.Context(), string(content)); err != nil {
-		web.RespondJSONError(w, r, fmt.Errorf("failed to write error template: %v", err))
+	if err := a.saveErrorTemplate(r.Context(), string(content)); err != nil {
+		web.RespondJSONError(w, r, err)
 		return
 	}
 
@@ -325,17 +278,7 @@ func (a *api) guardRunUnlocked(w http.ResponseWriter, r *http.Request) bool {
 		return true
 	}
 
-	context := "cannot modify resource"
-	switch r.URL.Path {
-	case "/api/config":
-		context = "cannot modify config"
-	case "/api/state":
-		context = "cannot modify state"
-	case "/api/error-template":
-		context = "cannot modify error template"
-	}
-
-	web.RespondJSONError(w, r, fmt.Errorf("%w: %s: run is in progress", errConflict, context))
+	web.RespondJSONError(w, r, fmt.Errorf("%w: cannot modify state: run is in progress", errConflict))
 	return false
 }
 
@@ -352,9 +295,29 @@ func writeNoContent(w http.ResponseWriter) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (a *api) validateConfig(content []byte, r *http.Request) error {
-	if err := a.validateConfigFn(r.Context(), string(content)); err != nil {
-		return fmt.Errorf("%w: invalid config: %v", web.ErrBadRequest, err)
+func (a *api) saveConfig(ctx context.Context, content string) error {
+	// Both the JSON API and SSR forms use this mutation path so locking and
+	// validation cannot drift between the two transports.
+	if a.isRunLocked() {
+		return fmt.Errorf("%w: cannot modify config: run is in progress", errConflict)
+	}
+	if err := a.validateConfigFn(ctx, content); err != nil {
+		return fmt.Errorf("%w: %v", errInvalidConfig, err)
+	}
+	if err := a.store.SaveConfig(ctx, content); err != nil {
+		return fmt.Errorf("failed to write config: %v", err)
+	}
+	return nil
+}
+
+func (a *api) saveErrorTemplate(ctx context.Context, content string) error {
+	// Keep the run-lock check beside persistence for the same reason as config:
+	// callers should not need to remember a separate guard.
+	if a.isRunLocked() {
+		return fmt.Errorf("%w: cannot modify error template: run is in progress", errConflict)
+	}
+	if err := a.store.SaveErrorTemplate(ctx, content); err != nil {
+		return fmt.Errorf("failed to write error template: %v", err)
 	}
 	return nil
 }

@@ -7,16 +7,15 @@ package admin
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
 	"net/http"
+	"slices"
 	"time"
 
 	"go.astrophena.name/base/web"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/admin/components"
-	"go.astrophena.name/tools/cmd/tgfeed/internal/stats"
 
 	"github.com/a-h/templ"
 )
@@ -27,127 +26,150 @@ type ui struct {
 }
 
 func newUI(api *api, staticHashName func(context.Context, string) string) *ui {
-	return &ui{api: api, staticHashName: staticHashName}
+	return &ui{
+		api:            api,
+		staticHashName: staticHashName,
+	}
 }
 
 func (u *ui) handleStats(w http.ResponseWriter, r *http.Request) {
 	p := u.statsPage(r)
-	u.render(w, r, p)
+	u.render(w, r, p, components.FragmentDashboardContent, components.FragmentStatsContent)
 }
 
 func (u *ui) handleStatsNothingToSave(w http.ResponseWriter, r *http.Request) {
 	p := u.statsPage(r)
 	p.Banner = "Nothing to save"
-	u.render(w, r, p)
+	u.render(w, r, p, components.FragmentDashboardContent)
 }
 
 func (u *ui) statsPage(r *http.Request) components.PageProps {
-	p := u.page("Stats", "stats")
-	auto, err := queryBool(r, "auto_refresh", false)
+	p := u.page("Stats", components.RouteStats)
+	query, err := parseStatsQuery(r)
 	if err != nil {
-		auto = false
-	}
-	details, err := queryBool(r, "details", false)
-	if err != nil {
-		details = false
-	}
-	selected, err := queryInt64Optional(r, "started_at_unix")
-	if err != nil {
-		p.Stats = &components.StatsProps{Error: err.Error(), RefreshedAt: time.Now(), AutoRefresh: auto, DetailsOpen: details}
-		return p
-	}
-	runs, err := u.api.statsStore.ListRunSummaries(r.Context(), 100, nil)
-	if err != nil {
-		if !errors.Is(err, fs.ErrNotExist) {
-			p.Stats = &components.StatsProps{Error: fmt.Sprintf("failed to read stats: %v", err), RefreshedAt: time.Now(), AutoRefresh: auto, DetailsOpen: details}
-		} else {
-			p.Stats = &components.StatsProps{RefreshedAt: time.Now(), AutoRefresh: auto, DetailsOpen: details}
+		p.Stats = &components.StatsProps{
+			Error:       err.Error(),
+			RefreshedAt: time.Now(),
 		}
 		return p
 	}
+	p.Stats = u.loadStats(r.Context(), query)
+	return p
+}
+
+type statsQuery struct {
+	SelectedAt  *int64
+	AutoRefresh bool
+	DetailsOpen bool
+}
+
+func parseStatsQuery(r *http.Request) (statsQuery, error) {
+	autoRefresh, err := queryBool(r, "auto_refresh", false)
+	if err != nil {
+		return statsQuery{}, err
+	}
+	detailsOpen, err := queryBool(r, "details", false)
+	if err != nil {
+		return statsQuery{}, err
+	}
+	selectedAt, err := queryInt64Optional(r, "started_at_unix")
+	if err != nil {
+		return statsQuery{}, err
+	}
+	return statsQuery{
+		SelectedAt:  selectedAt,
+		AutoRefresh: autoRefresh,
+		DetailsOpen: detailsOpen,
+	}, nil
+}
+
+func (u *ui) loadStats(ctx context.Context, query statsQuery) *components.StatsProps {
+	props := &components.StatsProps{
+		AutoRefresh: query.AutoRefresh,
+		DetailsOpen: query.DetailsOpen,
+		RefreshedAt: time.Now(),
+	}
+	// Summaries provide the history needed by overview cards and charts without
+	// decoding every stored run. Only the active run is loaded in full below.
+	runs, err := u.api.statsStore.ListRunSummaries(ctx, 100, nil)
+	if err != nil {
+		if !errors.Is(err, fs.ErrNotExist) {
+			props.Error = fmt.Sprintf("failed to read stats: %v", err)
+		}
+		return props
+	}
+	props.Runs = runs
 	var startedAt int64
-	if selected != nil {
-		startedAt = *selected
+	if query.SelectedAt != nil {
+		startedAt = *query.SelectedAt
+		props.SelectedAt = startedAt
 	} else if len(runs) > 0 {
 		startedAt = runs[0].StartedAtUnix
 	}
-	var active *stats.Run
 	if startedAt != 0 {
-		raw, loadErr := u.api.statsStore.GetRunByStartedAt(r.Context(), startedAt)
+		loaded, loadErr := u.api.statsStore.LoadRunByStartedAt(ctx, startedAt)
 		if loadErr == nil {
-			active = new(stats.Run)
-			if decodeErr := json.Unmarshal(raw, active); decodeErr != nil {
-				err = decodeErr
+			props.Active = loaded
+		} else if errors.Is(loadErr, sql.ErrNoRows) || errors.Is(loadErr, fs.ErrNotExist) {
+			if query.SelectedAt != nil {
+				err = fmt.Errorf("selected run %d is no longer available", startedAt)
 			}
-		} else if !errors.Is(loadErr, sql.ErrNoRows) && !errors.Is(loadErr, fs.ErrNotExist) {
+		} else {
 			err = loadErr
 		}
-	}
-	props := &components.StatsProps{Runs: runs, Active: active, AutoRefresh: auto, DetailsOpen: details, RefreshedAt: time.Now()}
-	if selected != nil {
-		props.SelectedAt = *selected
 	}
 	if err != nil {
 		props.Error = fmt.Sprintf("failed to read stats: %v", err)
 	}
-	p.Stats = props
-	return p
+	return props
 }
 
 func (u *ui) handleConfiguration(w http.ResponseWriter, r *http.Request) {
-	u.render(w, r, u.configurationPage(r, ""))
+	u.render(w, r, u.configurationPage(r, ""),
+		components.FragmentDashboardContent,
+		components.FragmentConfigPanel,
+		components.FragmentErrorPanel,
+	)
 }
 
 func (u *ui) configurationPage(r *http.Request, banner string) components.PageProps {
-	p := u.page("Configuration", "configuration")
+	p := u.page("Configuration", components.RouteConfiguration)
 	p.Banner = banner
-	config, configErr := u.api.store.LoadConfig(r.Context())
-	errorTemplate, templateErr := u.api.store.LoadErrorTemplate(r.Context())
-	p.Configuration = &components.ConfigurationProps{
-		Config:        editorConfig(config, config, errorString(configErr)),
-		ErrorTemplate: editorErrorTemplate(errorTemplate, errorTemplate, errorString(templateErr)),
+	p.Configuration = new(components.ConfigurationProps)
+	for _, resource := range u.editorResources() {
+		value, err := resource.load(r.Context())
+		*resource.Props(p.Configuration) = resource.NewProps(value, value, errorString(err))
 	}
 	return p
 }
 
 func (u *ui) handleSaveConfig(w http.ResponseWriter, r *http.Request) {
-	value, ok := formValue(w, r, "config")
-	if !ok {
-		return
-	}
-	baseline, loadErr := u.api.store.LoadConfig(r.Context())
-	if errors.Is(loadErr, fs.ErrNotExist) {
-		loadErr = nil
-		baseline = ""
-	}
-	err := loadErr
-	if err == nil {
-		err = u.saveConfig(r, value)
-		if err == nil {
-			baseline = value
-		}
-	}
-	p := u.configurationPage(r, "")
-	p.Configuration.Config = editorConfig(value, baseline, errorString(err))
-	u.render(w, r, p)
+	u.handleSaveEditor(w, r, configResource(u.api))
 }
 
 func (u *ui) handleSaveErrorTemplate(w http.ResponseWriter, r *http.Request) {
-	value, ok := formValue(w, r, "error_template")
+	u.handleSaveEditor(w, r, errorTemplateResource(u.api))
+}
+
+func (u *ui) handleSaveEditor(w http.ResponseWriter, r *http.Request, resource editorResource) {
+	value, ok := formValue(w, r, resource.Name)
 	if !ok {
 		return
 	}
-	baseline, loadErr := u.api.store.LoadErrorTemplate(r.Context())
-	err := loadErr
+	p := u.configurationPage(r, "")
+	props := resource.Props(p.Configuration)
+	// Keep the persisted value as the baseline when saving fails. The submitted
+	// value is rendered back to the user and remains visibly unsaved.
+	baseline := props.Baseline
+	err := errorFromProps(*props)
 	if err == nil {
-		err = u.saveErrorTemplate(r, value)
+		err = resource.Save(r.Context(), value)
 		if err == nil {
 			baseline = value
 		}
 	}
-	p := u.configurationPage(r, "")
-	p.Configuration.ErrorTemplate = editorErrorTemplate(value, baseline, errorString(err))
-	u.render(w, r, p)
+	*props = resource.NewProps(value, baseline, errorString(err))
+	u.render(w, r, p, resource.Fragment)
 }
 
 func (u *ui) handleSaveAll(w http.ResponseWriter, r *http.Request) {
@@ -155,34 +177,26 @@ func (u *ui) handleSaveAll(w http.ResponseWriter, r *http.Request) {
 		web.RespondError(w, r, fmt.Errorf("%w: invalid form payload", web.ErrBadRequest))
 		return
 	}
-	config, configOK := r.Form["config"]
-	templateValue, templateOK := r.Form["error_template"]
 	p := u.configurationPage(r, "Nothing to save")
+	// Resources are saved independently so one invalid editor does not discard
+	// a valid change in the other editor. The banner summarizes the aggregate.
 	jobs, successes := 0, 0
-	if configOK {
-		value := config[0]
-		baseline := p.Configuration.Config.Baseline
-		if value != baseline {
-			jobs++
-			err := u.saveConfig(r, value)
-			if err == nil {
-				successes++
-				baseline = value
-			}
-			p.Configuration.Config = editorConfig(value, baseline, errorString(err))
+	for _, resource := range u.editorResources() {
+		values := r.Form[resource.Name]
+		if len(values) == 0 {
+			continue
 		}
-	}
-	if templateOK {
-		value := templateValue[0]
-		baseline := p.Configuration.ErrorTemplate.Baseline
+		value := values[0]
+		props := resource.Props(p.Configuration)
+		baseline := props.Baseline
 		if value != baseline {
 			jobs++
-			err := u.saveErrorTemplate(r, value)
+			err := resource.Save(r.Context(), value)
 			if err == nil {
 				successes++
 				baseline = value
 			}
-			p.Configuration.ErrorTemplate = editorErrorTemplate(value, baseline, errorString(err))
+			*props = resource.NewProps(value, baseline, errorString(err))
 		}
 	}
 	if jobs > 0 && successes == jobs {
@@ -190,60 +204,136 @@ func (u *ui) handleSaveAll(w http.ResponseWriter, r *http.Request) {
 	} else if jobs > 0 {
 		p.Banner = "Some changes failed to save"
 	}
-	u.render(w, r, p)
+	u.render(w, r, p, components.FragmentDashboardContent)
 }
 
-func (u *ui) saveConfig(r *http.Request, value string) error {
-	if u.api.isRunLocked() {
-		return fmt.Errorf("%w: cannot modify config: run is in progress", errConflict)
+func (u *ui) page(title string, route components.Route) components.PageProps {
+	return components.PageProps{
+		Title: title,
+		Route: route,
+		JS:    "static/js/app.min.js",
+		CSS:   "static/css/app.min.css",
+		Icon:  "static/icons/icon.webp",
+		Logo:  "static/icons/logo.webp",
 	}
-	if err := u.api.validateConfigFn(r.Context(), value); err != nil {
-		return fmt.Errorf("invalid config: %v", err)
-	}
-	if err := u.api.store.SaveConfig(r.Context(), value); err != nil {
-		return fmt.Errorf("failed to write config: %v", err)
-	}
-	return nil
 }
 
-func (u *ui) saveErrorTemplate(r *http.Request, value string) error {
-	if u.api.isRunLocked() {
-		return fmt.Errorf("%w: cannot modify error template: run is in progress", errConflict)
-	}
-	if err := u.api.store.SaveErrorTemplate(r.Context(), value); err != nil {
-		return fmt.Errorf("failed to write error template: %v", err)
-	}
-	return nil
-}
-
-func (u *ui) page(title, route string) components.PageProps {
-	return components.PageProps{Title: title, Route: route, JS: "static/js/app.min.js", CSS: "static/css/app.min.css", Icon: "static/icons/icon.webp", Logo: "static/icons/logo.webp"}
-}
-
-func (u *ui) render(w http.ResponseWriter, r *http.Request, p components.PageProps) {
+func (u *ui) render(w http.ResponseWriter, r *http.Request, p components.PageProps, fragments ...string) {
 	p.JS = u.staticHashName(r.Context(), p.JS)
 	p.CSS = u.staticHashName(r.Context(), p.CSS)
 	p.Icon = u.staticHashName(r.Context(), p.Icon)
 	p.Logo = u.staticHashName(r.Context(), p.Logo)
-	var options []func(*templ.ComponentHandler)
 	if target := r.Header.Get("HX-Target"); target != "" {
-		options = append(options, templ.WithFragments(target))
+		// A handler declares the fragments it can produce. Do not let an arbitrary
+		// client header select unrelated template fragments or an empty response.
+		if !slices.Contains(fragments, target) {
+			web.RespondError(w, r, fmt.Errorf("%w: invalid fragment target %q", web.ErrBadRequest, target))
+			return
+		}
+		templ.Handler(components.Page(p), templ.WithFragments(target)).ServeHTTP(w, r)
+		return
 	}
-	templ.Handler(components.Page(p), options...).ServeHTTP(w, r)
+	templ.Handler(components.Page(p)).ServeHTTP(w, r)
+}
+
+// editorResource captures the small differences between persisted text
+// editors so loading, dirty-state handling, and partial saves share one path.
+type editorResource struct {
+	Name           string
+	Fragment       string
+	MissingIsEmpty bool
+	Load           func(context.Context) (string, error)
+	Save           func(context.Context, string) error
+	Props          func(*components.ConfigurationProps) *components.EditorProps
+	NewProps       func(string, string, string) components.EditorProps
+}
+
+func (u *ui) editorResources() []editorResource {
+	return []editorResource{
+		configResource(u.api),
+		errorTemplateResource(u.api),
+	}
+}
+
+func (r editorResource) load(ctx context.Context) (string, error) {
+	value, err := r.Load(ctx)
+	if r.MissingIsEmpty && errors.Is(err, fs.ErrNotExist) {
+		return "", nil
+	}
+	return value, err
+}
+
+func configResource(a *api) editorResource {
+	return editorResource{
+		Name:           "config",
+		Fragment:       components.FragmentConfigPanel,
+		MissingIsEmpty: true,
+		Load:           a.store.LoadConfig,
+		Save:           a.saveConfig,
+		Props: func(p *components.ConfigurationProps) *components.EditorProps {
+			return &p.Config
+		},
+		NewProps: editorConfig,
+	}
+}
+
+func errorTemplateResource(a *api) editorResource {
+	return editorResource{
+		Name:     "error_template",
+		Fragment: components.FragmentErrorPanel,
+		Load:     a.store.LoadErrorTemplate,
+		Save:     a.saveErrorTemplate,
+		Props: func(p *components.ConfigurationProps) *components.EditorProps {
+			return &p.ErrorTemplate
+		},
+		NewProps: editorErrorTemplate,
+	}
+}
+
+func errorFromProps(p components.EditorProps) error {
+	if p.Error == "" {
+		return nil
+	}
+	return errors.New(p.Error)
 }
 
 func editorConfig(value, baseline, err string) components.EditorProps {
-	return components.EditorProps{ID: "config-editor", Name: "config", Title: "Config", Description: "Starlark feed definitions and filters.", Placeholder: `feed(url = "https://example.com/rss.xml")`, Language: "starlark", Value: value, Baseline: baseline, Error: err, SaveURL: "/config/config"}
+	return components.EditorProps{
+		ID:          "config-editor",
+		Name:        "config",
+		Title:       "Config",
+		Description: "Starlark feed definitions and filters.",
+		Placeholder: `feed(url = "https://example.com/rss.xml")`,
+		Language:    "starlark",
+		Value:       value,
+		Baseline:    baseline,
+		Error:       err,
+		SaveURL:     "/config/config",
+	}
 }
+
 func editorErrorTemplate(value, baseline, err string) components.EditorProps {
-	return components.EditorProps{ID: "error-template-editor", Name: "error_template", Title: "Error Template", Description: "Template used for posting error notifications.", Placeholder: "Fetch failed: %v", Language: "template", Value: value, Baseline: baseline, Error: err, SaveURL: "/config/error-template"}
+	return components.EditorProps{
+		ID:          "error-template-editor",
+		Name:        "error_template",
+		Title:       "Error Template",
+		Description: "Template used for posting error notifications.",
+		Placeholder: "Fetch failed: %v",
+		Language:    "template",
+		Value:       value,
+		Baseline:    baseline,
+		Error:       err,
+		SaveURL:     "/config/error-template",
+	}
 }
+
 func errorString(err error) string {
 	if err == nil {
 		return ""
 	}
 	return err.Error()
 }
+
 func formValue(w http.ResponseWriter, r *http.Request, key string) (string, bool) {
 	if err := r.ParseForm(); err != nil {
 		web.RespondError(w, r, fmt.Errorf("%w: invalid form payload", web.ErrBadRequest))
