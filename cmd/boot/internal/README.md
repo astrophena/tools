@@ -96,8 +96,8 @@ apply` when you need per-action skip/change output. For task filtering
 bugs, `boot list`, `-only`, `-skip`, and `-tag` exercise the selection path
 without running actions.
 
-Use `--json` when another program needs stable output. JSON runs use a simpler
-sequential execution path so action results are ordered and easy to consume.
+Use `--json` when another program needs stable output. JSON runs use the same
+scheduler as human-readable runs and sort action results before encoding them.
 
 Task selection is strict: if `-only`, `-skip`, or `-tag` leaves a selected task
 without one of its declared dependencies, selection fails instead of silently

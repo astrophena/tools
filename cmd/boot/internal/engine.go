@@ -12,8 +12,6 @@ import (
 	"io/fs"
 	"slices"
 	"strings"
-	"sync"
-	"sync/atomic"
 	"text/tabwriter"
 
 	"go.astrophena.name/base/cli/progressbar"
@@ -21,7 +19,6 @@ import (
 
 	"go.starlark.net/starlark"
 	"go.starlark.net/starlarkstruct"
-	"golang.org/x/sync/errgroup"
 )
 
 // Engine owns one loaded recipe run.
@@ -197,26 +194,13 @@ func (e *Engine) List(w io.Writer, selection Selection) error {
 	return tw.Flush()
 }
 
-// Run runs selected tasks.
-//
-// Output mode is chosen here, but all modes share the same preparation step:
-// selected task bodies are evaluated into action lists, consent actions may run
-// early, and sudo prompts are computed from the resulting actions.
+// Run prepares and executes selected tasks.
 func (e *Engine) Run(ctx context.Context, w io.Writer, selection Selection, opts RunOptions) error {
 	if e.Runtime != nil {
 		e.Runtime.Interactive = opts.Interactive
 		e.Runtime.Color = opts.Color
 	}
-	if opts.JSON {
-		return e.runJSON(ctx, w, selection, opts)
-	}
-	if opts.DryRun {
-		return e.RunPlan(ctx, w, selection, opts)
-	}
-	if opts.Verbose {
-		return e.applyVerbose(ctx, w, selection, opts)
-	}
-	return e.apply(ctx, w, selection, opts)
+	return e.run(ctx, w, selection, opts)
 }
 
 // prepare evaluates task bodies and records which tasks are ready to execute.
@@ -293,529 +277,116 @@ func (e *Engine) prepare(ctx context.Context, tasks []*Task, opts RunOptions, wa
 	return planned, summary, failures, stopOnError
 }
 
-// RunPlan plans the selected tasks, evaluating actions without applying changes.
-//
-// Plan output runs actions sequentially. Planning should be deterministic and
-// easy to read; parallelism is reserved for apply where it can reduce real
-// wall-clock time.
+// RunPlan plans selected tasks without applying changes.
 func (e *Engine) RunPlan(ctx context.Context, w io.Writer, selection Selection, opts RunOptions) error {
+	opts.DryRun = true
+	return e.Run(ctx, w, selection, opts)
+}
+
+func (e *Engine) run(ctx context.Context, w io.Writer, selection Selection, opts RunOptions) error {
+	if opts.JSON && e.Runtime != nil {
+		oldStdout := e.Runtime.Stdout
+		e.Runtime.Stdout = io.Discard
+		defer func() { e.Runtime.Stdout = oldStdout }()
+	}
 	tasks, err := e.Selected(selection)
 	if err != nil {
 		return err
 	}
-	if opts.FailFast {
-		return e.runPlanSequential(ctx, w, tasks, opts)
-	}
 	warnings := &warningCollector{}
 	planned, summary, failures, stopOnError := e.prepare(ctx, tasks, opts, warnings)
-	if err := newSudoPrompter(e).prepare(ctx, w, tasks); err != nil {
+	promptOutput := w
+	if opts.JSON {
+		promptOutput = io.Discard
+	}
+	if err := newSudoPrompter(e).prepare(ctx, promptOutput, tasks); err != nil {
 		return err
 	}
+	run := execution{planned: planned, summary: summary, failures: failures}
+	taskDone := func(*Task) {}
+	var pb *progressbar.Bar
+	if !opts.DryRun && !opts.Verbose && !opts.JSON && !(stopOnError && opts.FailFast) {
+		pb = progressbar.New(w, len(tasks), opts.Interactive)
+		pb.Start()
+		taskDone = func(task *Task) {
+			pb.SetTitle(task.Name)
+			pb.Increment()
+		}
+	}
+	if !(stopOnError && opts.FailFast) {
+		run = e.execute(ctx, tasks, run, opts, warnings, taskDone)
+	}
+	if pb != nil {
+		pb.Stop(run.summary.Failed > 0)
+	}
+	collectedWarnings := warnings.all()
+	run.summary.Warnings = len(collectedWarnings)
+	if opts.JSON {
+		err = e.printJSON(w, run, collectedWarnings, opts.DryRun)
+	} else if opts.DryRun {
+		e.printPlan(w, tasks, run, opts.Verbose)
+		e.printWarnings(w, collectedWarnings)
+	} else {
+		if opts.Verbose {
+			e.printVerbose(w, tasks, run)
+		}
+		e.printReport(w, run.summary, false)
+		e.printWarnings(w, collectedWarnings)
+		err = e.printFailures(w, run.failures)
+	}
+	if err != nil {
+		return err
+	}
+	if run.summary.Failed > 0 {
+		return errors.New("one or more tasks failed")
+	}
+	return nil
+}
 
+func (e *Engine) printPlan(w io.Writer, tasks []*Task, run execution, verbose bool) {
+	actions := run.orderedActions()
 	for i, task := range tasks {
-		if !planned[task.ID] {
-			if failure, ok := taskFailure(failures, task); ok {
+		if !run.planned[task.ID] {
+			if failure, ok := taskFailure(run.failures, task); ok {
 				fmt.Fprintf(w, "[%d/%d] Planning task %s: %s\n", i+1, len(tasks), task.ID, task.Name)
 				fmt.Fprintf(w, "%s %s: %v\n", e.color("fail", colorRed), task.ID, failure.Err)
 			}
-			if stopOnError && opts.FailFast {
-				break
-			}
 			continue
 		}
-		stop := false
 		fmt.Fprintf(w, "[%d/%d] Planning task %s: %s\n", i+1, len(tasks), task.ID, task.Name)
-		for _, action := range task.Actions {
-			summary.Actions++
-			result, err := warnings.run(ctx, task, action, true)
-			if err != nil {
-				summary.Failed++
-				fmt.Fprintf(w, "%s %s: %s: %v\n", e.color("fail", colorRed), task.ID, action.description(), err)
-				if opts.FailFast && !task.ContinueOnError {
-					stop = true
-					break
-				}
+		for _, action := range actions {
+			if action.task != task {
 				continue
 			}
-			switch result {
-			case ResultChange:
-				summary.Changed++
-				fmt.Fprintf(w, "%s %s: %s\n", e.color(string(result), colorGreen), task.ID, action.description())
-			case ResultSkip:
-				summary.Skipped++
-				if opts.Verbose {
-					fmt.Fprintf(w, "skip %s: %s\n", task.ID, action.description())
-				}
-			case ResultStop:
-				summary.Skipped++
-				if opts.Verbose {
-					fmt.Fprintf(w, "skip %s: %s\n", task.ID, action.description())
-				}
+			if action.err != nil {
+				fmt.Fprintf(w, "%s %s: %s: %v\n", e.color("fail", colorRed), task.ID, action.action.description(), action.err)
+			} else if action.result == ResultChange {
+				fmt.Fprintf(w, "%s %s: %s\n", e.color(string(action.result), colorGreen), task.ID, action.action.description())
+			} else if verbose {
+				fmt.Fprintf(w, "skip %s: %s\n", task.ID, action.action.description())
 			}
 		}
-		if stop {
-			break
-		}
 	}
-
-	collectedWarnings := warnings.all()
-	summary.Warnings = len(collectedWarnings)
-	fmt.Fprintf(
-		w,
-		"summary: %d tasks, %d actions, %d would change, %d skipped, %d warnings, %d failed\n",
-		summary.Tasks,
-		summary.Actions,
-		summary.Changed,
-		summary.Skipped,
-		summary.Warnings,
-		summary.Failed,
-	)
-	e.printWarnings(w, collectedWarnings)
-	if summary.Failed > 0 {
-		return errors.New("one or more tasks failed")
-	}
-	return nil
+	fmt.Fprintf(w, "summary: %d tasks, %d actions, %d would change, %d skipped, %d warnings, %d failed\n",
+		run.summary.Tasks, run.summary.Actions, run.summary.Changed, run.summary.Skipped, run.summary.Warnings, run.summary.Failed)
 }
 
-func (e *Engine) runPlanSequential(ctx context.Context, w io.Writer, tasks []*Task, opts RunOptions) error {
-	summary := Summary{Tasks: len(tasks)}
-	sudo := newSudoPrompter(e)
-	warnings := &warningCollector{}
-
+func (e *Engine) printVerbose(w io.Writer, tasks []*Task, run execution) {
+	actions := run.orderedActions()
 	for i, task := range tasks {
-		stop := false
-		fmt.Fprintf(w, "[%d/%d] Planning task %s: %s\n", i+1, len(tasks), task.ID, task.Name)
-		task.Actions = nil
-		thread := &starlark.Thread{Name: "boot:" + task.ID}
-		SetTask(thread, task)
-		if _, err := starlark.Call(thread, task.Run, nil, nil); err != nil {
-			summary.Failed++
-			fmt.Fprintf(w, "%s %s: %v\n", e.color("fail", colorRed), task.ID, err)
-			if !task.ContinueOnError {
-				break
-			}
+		if !run.planned[task.ID] {
 			continue
 		}
-		if err := sudo.prepare(ctx, w, []*Task{task}); err != nil {
-			return err
-		}
-		for _, action := range task.Actions {
-			summary.Actions++
-			result, err := warnings.run(ctx, task, action, true)
-			if err != nil {
-				summary.Failed++
-				fmt.Fprintf(w, "%s %s: %s: %v\n", e.color("fail", colorRed), task.ID, action.description(), err)
-				if !task.ContinueOnError {
-					stop = true
-					break
-				}
+		fmt.Fprintf(w, "[%d/%d] Applying task %s: %s\n", i+1, len(tasks), task.ID, task.Name)
+		for _, action := range actions {
+			if action.task != task || action.err != nil {
 				continue
 			}
-			switch result {
-			case ResultChange:
-				summary.Changed++
-				fmt.Fprintf(w, "%s %s: %s\n", e.color(string(result), colorGreen), task.ID, action.description())
-			case ResultSkip:
-				summary.Skipped++
-				if opts.Verbose {
-					fmt.Fprintf(w, "skip %s: %s\n", task.ID, action.description())
-				}
-			case ResultStop:
-				summary.Skipped++
-				if opts.Verbose {
-					fmt.Fprintf(w, "skip %s: %s\n", task.ID, action.description())
-				}
+			label := string(action.result)
+			if action.result == ResultChange {
+				label = e.color(label, colorGreen)
 			}
-		}
-		if stop {
-			break
+			fmt.Fprintf(w, "%s %s: %s\n", label, task.ID, action.action.description())
 		}
 	}
-
-	collectedWarnings := warnings.all()
-	summary.Warnings = len(collectedWarnings)
-	fmt.Fprintf(
-		w,
-		"summary: %d tasks, %d actions, %d would change, %d skipped, %d warnings, %d failed\n",
-		summary.Tasks,
-		summary.Actions,
-		summary.Changed,
-		summary.Skipped,
-		summary.Warnings,
-		summary.Failed,
-	)
-	e.printWarnings(w, collectedWarnings)
-	if summary.Failed > 0 {
-		return errors.New("one or more tasks failed")
-	}
-	return nil
-}
-
-// apply runs prepared actions, using parallelism only when requested.
-//
-// For -j 1 this delegates to the sequential path so fail-fast and dependency
-// behavior is deterministic. For -j N, each task waits for its declared
-// dependencies to finish, then competes for a task slot. Concurrent action runs
-// also share the same global limit; this keeps a recipe from multiplying
-// parallelism by running N tasks each with N concurrent actions.
-func (e *Engine) apply(ctx context.Context, w io.Writer, selection Selection, opts RunOptions) error {
-	tasks, err := e.Selected(selection)
-	if err != nil {
-		return err
-	}
-
-	warnings := &warningCollector{}
-	planned, summary, failures, stopOnError := e.prepare(ctx, tasks, opts, warnings)
-	if err := newSudoPrompter(e).prepare(ctx, w, tasks); err != nil {
-		return err
-	}
-	hadFailures := len(failures) > 0
-
-	if stopOnError && opts.FailFast {
-		collectedWarnings := warnings.all()
-		summary.Warnings = len(collectedWarnings)
-		e.printReport(w, summary, false)
-		e.printWarnings(w, collectedWarnings)
-		e.printFailures(w, failures)
-		return errors.New("one or more tasks failed")
-	}
-
-	concurrency := max(opts.Concurrency, 1)
-	if concurrency == 1 {
-		return e.applySequentialPrepared(ctx, w, tasks, planned, summary, failures, opts, false, warnings)
-	}
-
-	pb := progressbar.New(w, len(tasks), opts.Interactive)
-	pb.Start()
-	// Progress titles describe the task just accounted for, so serialize updates
-	// through one reporter instead of letting worker starts race to set the title.
-	progressCh := make(chan string)
-	progressDone := make(chan struct{})
-	go func() {
-		defer close(progressDone)
-		for title := range progressCh {
-			pb.SetTitle(title)
-			pb.Increment()
-		}
-	}()
-	reportProgress := func(task *Task) {
-		progressCh <- task.Name
-	}
-	// doneCh records completion of every selected task. status records whether a
-	// completed dependency succeeded. Both maps include unplanned tasks so
-	// dependents can distinguish "dependency skipped during preparation" from
-	// "dependency failed during preparation".
-	doneCh := make(map[string]chan struct{})
-	status := make(map[string]taskStatus)
-	for _, task := range tasks {
-		doneCh[task.ID] = make(chan struct{})
-		status[task.ID] = taskPending
-	}
-	for _, task := range tasks {
-		if planned[task.ID] {
-			continue
-		}
-		if _, ok := taskFailure(failures, task); ok {
-			status[task.ID] = taskFailed
-		} else {
-			status[task.ID] = taskSucceeded
-		}
-	}
-
-	g, ctx := errgroup.WithContext(ctx)
-	// Two limiters are deliberate: task concurrency bounds how many independent
-	// task streams can be active, while action concurrency bounds the number of
-	// expensive operations inside those streams. Using the same numeric limit for
-	// both keeps the CLI simple while preserving a global cap on concurrent host
-	// mutations.
-	tasksLimiter := newActionLimiter(concurrency)
-	actions := newActionLimiter(concurrency)
-
-	var mu sync.Mutex
-
-	for _, task := range tasks {
-		g.Go(func() error {
-			// Each goroutine owns one task's action stream. Shared summary/failure state
-			// is protected by mu; dependency completion is signaled by closing doneCh.
-			setStatus := func(next taskStatus) {
-				mu.Lock()
-				status[task.ID] = next
-				mu.Unlock()
-			}
-			defer close(doneCh[task.ID])
-
-			for _, dep := range task.DependsOn {
-				if ch, ok := doneCh[dep]; ok {
-					select {
-					case <-ch:
-					case <-ctx.Done():
-						return ctx.Err()
-					}
-					mu.Lock()
-					depFailed := status[dep] == taskFailed
-					mu.Unlock()
-					if depFailed {
-						err := fmt.Errorf("dependency %s failed", dep)
-						mu.Lock()
-						hadFailures = true
-						if !task.ContinueOnError {
-							stopOnError = true
-						}
-						summary.Failed++
-						failures = append(failures, failure{TaskID: task.ID, TaskName: task.Name, Err: err})
-						status[task.ID] = taskFailed
-						mu.Unlock()
-						reportProgress(task)
-						if opts.FailFast && !task.ContinueOnError {
-							return err
-						}
-						return nil
-					}
-				}
-			}
-
-			if err := tasksLimiter.acquire(ctx); err != nil {
-				return err
-			}
-			defer tasksLimiter.release()
-
-			mu.Lock()
-			if !planned[task.ID] || (stopOnError && opts.FailFast) {
-				mu.Unlock()
-				reportProgress(task)
-				return nil
-			}
-			mu.Unlock()
-
-			taskHadFailure := false
-
-			applyAction := func(action Action) (Result, error) {
-				mu.Lock()
-				summary.Actions++
-				mu.Unlock()
-
-				var (
-					result Result
-					err    error
-				)
-				if err = actions.acquire(ctx); err == nil {
-					result, err = warnings.run(ctx, task, action, opts.DryRun)
-					actions.release()
-				}
-				mu.Lock()
-				defer mu.Unlock()
-				if err != nil {
-					taskHadFailure = true
-					hadFailures = true
-					if !task.ContinueOnError {
-						stopOnError = true
-					}
-					summary.Failed++
-					failures = append(failures, failure{
-						TaskID:   task.ID,
-						TaskName: task.Name,
-						Action:   action.description(),
-						Err:      err,
-					})
-					return result, err
-				}
-				switch result {
-				case ResultChange:
-					summary.Changed++
-				case ResultSkip:
-					summary.Skipped++
-				case ResultStop:
-					summary.Skipped++
-				}
-				return result, nil
-			}
-
-			for i := 0; i < len(task.Actions); {
-				action := task.Actions[i]
-				if !action.Concurrent || concurrency == 1 {
-					result, err := applyAction(action)
-					if err != nil && opts.FailFast && !task.ContinueOnError {
-						reportProgress(task)
-						return err
-					}
-					if result == ResultStop {
-						break
-					}
-					i++
-					continue
-				}
-
-				// Adjacent Concurrent actions form a batch. Non-concurrent actions act as
-				// ordering barriers, which is useful for recipes such as "sync files, then
-				// restart service".
-				end := i + 1
-				for end < len(task.Actions) && task.Actions[end].Concurrent {
-					end++
-				}
-				batch, batchCtx := errgroup.WithContext(ctx)
-				var shouldStop atomic.Bool
-				for _, action := range task.Actions[i:end] {
-					batch.Go(func() error {
-						result, err := applyAction(action)
-						if result == ResultStop {
-							shouldStop.Store(true)
-						}
-						if err != nil && opts.FailFast && !task.ContinueOnError {
-							return err
-						}
-						select {
-						case <-batchCtx.Done():
-							return batchCtx.Err()
-						default:
-							return nil
-						}
-					})
-				}
-				if err := batch.Wait(); err != nil {
-					reportProgress(task)
-					return err
-				}
-				if shouldStop.Load() {
-					break
-				}
-				i = end
-			}
-
-			if taskHadFailure {
-				setStatus(taskFailed)
-			} else {
-				setStatus(taskSucceeded)
-			}
-			reportProgress(task)
-			return nil
-		})
-	}
-
-	err = g.Wait()
-	close(progressCh)
-	<-progressDone
-	pb.Stop(hadFailures || err != nil)
-
-	if err != nil && !hadFailures {
-		failures = append(failures, failure{Err: err})
-	}
-	collectedWarnings := warnings.all()
-	summary.Warnings = len(collectedWarnings)
-	e.printReport(w, summary, false)
-	e.printWarnings(w, collectedWarnings)
-	if err := e.printFailures(w, failures); err != nil {
-		return err
-	}
-	if err != nil {
-		return err
-	}
-	if hadFailures {
-		return errors.New("one or more tasks failed")
-	}
-	return nil
-}
-
-func (e *Engine) applyVerbose(ctx context.Context, w io.Writer, selection Selection, opts RunOptions) error {
-	tasks, err := e.Selected(selection)
-	if err != nil {
-		return err
-	}
-
-	warnings := &warningCollector{}
-	planned, summary, failures, stopOnError := e.prepare(ctx, tasks, opts, warnings)
-	if err := newSudoPrompter(e).prepare(ctx, w, tasks); err != nil {
-		return err
-	}
-	if stopOnError && opts.FailFast {
-		collectedWarnings := warnings.all()
-		summary.Warnings = len(collectedWarnings)
-		e.printReport(w, summary, false)
-		e.printWarnings(w, collectedWarnings)
-		e.printFailures(w, failures)
-		return errors.New("one or more tasks failed")
-	}
-	return e.applySequentialPrepared(ctx, w, tasks, planned, summary, failures, opts, true, warnings)
-}
-
-// applySequentialPrepared is used for verbose apply and for non-verbose -j 1.
-// It shares dependency failure handling with the parallel path but avoids the
-// progress bar and goroutine scheduling, making the single-threaded behavior
-// predictable and easier to debug.
-func (e *Engine) applySequentialPrepared(ctx context.Context, w io.Writer, tasks []*Task, planned map[string]bool, summary Summary, failures []failure, opts RunOptions, verbose bool, warnings *warningCollector) error {
-	status := initialTaskStatus(tasks, planned, failures)
-	for i, task := range tasks {
-		if !planned[task.ID] {
-			continue
-		}
-		if dep, failed := failedDependency(status, task); failed {
-			err := fmt.Errorf("dependency %s failed", dep)
-			summary.Failed++
-			failures = append(failures, failure{TaskID: task.ID, TaskName: task.Name, Err: err})
-			status[task.ID] = taskFailed
-			if opts.FailFast && !task.ContinueOnError {
-				break
-			}
-			continue
-		}
-		status[task.ID] = taskSucceeded
-		stop := false
-		if verbose {
-			fmt.Fprintf(w, "[%d/%d] Applying task %s: %s\n", i+1, len(tasks), task.ID, task.Name)
-		}
-		for _, action := range task.Actions {
-			summary.Actions++
-			result, err := warnings.run(ctx, task, action, false)
-			if err != nil {
-				status[task.ID] = taskFailed
-				summary.Failed++
-				failures = append(failures, failure{
-					TaskID:   task.ID,
-					TaskName: task.Name,
-					Action:   action.description(),
-					Err:      err,
-				})
-				if opts.FailFast && !task.ContinueOnError {
-					stop = true
-					break
-				}
-				continue
-			}
-			switch result {
-			case ResultChange:
-				summary.Changed++
-				if verbose {
-					fmt.Fprintf(w, "%s %s: %s\n", e.color(string(result), colorGreen), task.ID, action.description())
-				}
-			case ResultSkip:
-				summary.Skipped++
-				if verbose {
-					fmt.Fprintf(w, "skip %s: %s\n", task.ID, action.description())
-				}
-			case ResultStop:
-				summary.Skipped++
-				if verbose {
-					fmt.Fprintf(w, "skip %s: %s\n", task.ID, action.description())
-				}
-				stop = true
-			}
-			if stop {
-				break
-			}
-		}
-		if stop {
-			break
-		}
-	}
-
-	collectedWarnings := warnings.all()
-	summary.Warnings = len(collectedWarnings)
-	e.printReport(w, summary, false)
-	e.printWarnings(w, collectedWarnings)
-	if err := e.printFailures(w, failures); err != nil {
-		return err
-	}
-	if summary.Failed > 0 {
-		return errors.New("one or more tasks failed")
-	}
-	return nil
 }

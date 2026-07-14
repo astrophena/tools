@@ -159,8 +159,14 @@ func TestPlanFailFastStopsAfterActionFailure(t *testing.T) {
 		{
 			ID:   "second",
 			Name: "second",
-			Run: starlark.NewBuiltin("second", func(*starlark.Thread, *starlark.Builtin, starlark.Tuple, []starlark.Tuple) (starlark.Value, error) {
-				ranSecond = true
+			Run: starlark.NewBuiltin("second", func(thread *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, _ []starlark.Tuple) (starlark.Value, error) {
+				AddAction(thread, Action{
+					Summary: "must not run",
+					Apply: func(context.Context, bool) (Result, error) {
+						ranSecond = true
+						return ResultSkip, nil
+					},
+				})
 				return starlark.None, nil
 			}),
 		},
@@ -172,7 +178,7 @@ func TestPlanFailFastStopsAfterActionFailure(t *testing.T) {
 		t.Fatal("Run succeeded, want failure")
 	}
 	if ranSecond {
-		t.Fatal("second task ran after action failure")
+		t.Fatal("second task action ran after action failure")
 	}
 }
 
@@ -939,5 +945,51 @@ func TestApplyRunsConcurrentActionsInParallel(t *testing.T) {
 	}
 	if !overlapped.Load() {
 		t.Fatal("concurrent actions did not overlap")
+	}
+}
+
+func TestRunModesUseConfiguredConcurrency(t *testing.T) {
+	cases := map[string]struct {
+		opts RunOptions
+	}{
+		"json":    {opts: RunOptions{Concurrency: 2, JSON: true}},
+		"plan":    {opts: RunOptions{Concurrency: 2, DryRun: true}},
+		"verbose": {opts: RunOptions{Concurrency: 2, Verbose: true}},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+			defer cancel()
+
+			bothStarted := make(chan struct{})
+			var started atomic.Int32
+			var once sync.Once
+			run := func(thread *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, _ []starlark.Tuple) (starlark.Value, error) {
+				AddAction(thread, Action{
+					Summary: "wait for peer",
+					Apply: func(context.Context, bool) (Result, error) {
+						if started.Add(1) == 2 {
+							once.Do(func() { close(bothStarted) })
+						}
+						select {
+						case <-bothStarted:
+							return ResultSkip, nil
+						case <-ctx.Done():
+							return "", ctx.Err()
+						}
+					},
+				})
+				return starlark.None, nil
+			}
+			engine := &Engine{Tasks: []*Task{
+				{ID: "first", Name: "first", Run: starlark.NewBuiltin("first", run)},
+				{ID: "second", Name: "second", Run: starlark.NewBuiltin("second", run)},
+			}}
+
+			var out bytes.Buffer
+			if err := engine.Run(ctx, &out, Selection{}, tc.opts); err != nil {
+				t.Fatal(err)
+			}
+		})
 	}
 }
