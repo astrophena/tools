@@ -5,7 +5,6 @@
 package packages
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -275,10 +274,14 @@ esac
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(task.Actions) != 2 {
-		t.Fatalf("actions = %d, want 2", len(task.Actions))
+	if len(task.Actions) != 1 {
+		t.Fatalf("actions = %d, want 1", len(task.Actions))
 	}
-	result, err := task.Actions[0].Apply(t.Context(), true)
+	var warnings []string
+	ctx := boot.WithWarningSink(t.Context(), func(message string) {
+		warnings = append(warnings, message)
+	})
+	result, err := task.Actions[0].Apply(ctx, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -288,48 +291,37 @@ esac
 	if got, want := task.Actions[0].Describe(), "update system with pacman: would update linux, git"; got != want {
 		t.Fatalf("description = %q, want %q", got, want)
 	}
-	result, err = task.Actions[1].Apply(t.Context(), true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if result != boot.ResultWarn {
-		t.Fatalf("reboot result = %s, want %s", result, boot.ResultWarn)
-	}
-	if got, want := task.Actions[1].Describe(), "reboot will be required after updating linux"; got != want {
-		t.Fatalf("reboot description = %q, want %q", got, want)
+	if got, want := warnings, []string{"reboot will be required after updating linux"}; !slices.Equal(got, want) {
+		t.Fatalf("warnings = %q, want %q", got, want)
 	}
 }
 
 func TestUpdateReportsRebootAfterSuccessfulApply(t *testing.T) {
 	cases := map[string]struct {
-		updates          []string
-		rebootPackages   []string
-		updateErr        error
-		wantRebootResult boot.Result
-		wantOutput       string
+		updates        []string
+		rebootPackages []string
+		updateErr      error
+		wantWarning    string
 	}{
 		"kernel modules updated": {
-			updates:          []string{"linux", "git", "nvidia-open"},
-			rebootPackages:   []string{"linux", "nvidia-open"},
-			wantRebootResult: boot.ResultWarn,
-			wantOutput:       "machine needs rebooting after updating linux, nvidia-open\n",
+			updates:        []string{"linux", "git", "nvidia-open"},
+			rebootPackages: []string{"linux", "nvidia-open"},
+			wantWarning:    "machine needs rebooting after updating linux, nvidia-open",
 		},
 		"ordinary package updated": {
-			updates:          []string{"git"},
-			wantRebootResult: boot.ResultSkip,
+			updates: []string{"git"},
 		},
 		"update failed": {
-			updates:          []string{"linux"},
-			rebootPackages:   []string{"linux"},
-			updateErr:        errors.New("update failed"),
-			wantRebootResult: boot.ResultSkip,
+			updates:        []string{"linux"},
+			rebootPackages: []string{"linux"},
+			updateErr:      errors.New("update failed"),
 		},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			var out bytes.Buffer
+			var warnings []string
 			task, thread := testutil.TaskThread("test")
-			m := &impl{rt: &boot.Runtime{Stdout: &out}, mod: &module{}}
+			m := &impl{rt: &boot.Runtime{}, mod: &module{}}
 			m.addUpdateActions(thread, packageManager{
 				name: "pacman",
 				updates: func(context.Context) ([]string, error) {
@@ -342,27 +334,22 @@ func TestUpdateReportsRebootAfterSuccessfulApply(t *testing.T) {
 					return tc.updateErr
 				},
 			})
-			if len(task.Actions) != 2 {
-				t.Fatalf("actions = %d, want 2", len(task.Actions))
+			if len(task.Actions) != 1 {
+				t.Fatalf("actions = %d, want 1", len(task.Actions))
 			}
 
-			result, err := task.Actions[0].Apply(t.Context(), false)
+			ctx := boot.WithWarningSink(t.Context(), func(message string) {
+				warnings = append(warnings, message)
+			})
+			result, err := task.Actions[0].Apply(ctx, false)
 			if !errors.Is(err, tc.updateErr) {
 				t.Fatalf("update error = %v, want %v", err, tc.updateErr)
 			}
 			if result != boot.ResultChange {
 				t.Fatalf("update result = %s, want %s", result, boot.ResultChange)
 			}
-
-			result, err = task.Actions[1].Apply(t.Context(), false)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if result != tc.wantRebootResult {
-				t.Fatalf("reboot result = %s, want %s", result, tc.wantRebootResult)
-			}
-			if got := out.String(); got != tc.wantOutput {
-				t.Fatalf("output = %q, want %q", got, tc.wantOutput)
+			if got := strings.Join(warnings, "\n"); got != tc.wantWarning {
+				t.Fatalf("warning = %q, want %q", got, tc.wantWarning)
 			}
 		})
 	}

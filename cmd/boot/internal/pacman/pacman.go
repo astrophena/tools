@@ -64,9 +64,11 @@ func (m *impl) checkOrphans(thread *starlark.Thread, b *starlark.Builtin, args s
 			if len(orphans) == 0 {
 				return boot.ResultSkip, nil
 			}
-			fmt.Fprintf(boot.Output(m.rt), "orphaned packages found:\n%s\n", boot.BulletList(orphans))
-			fmt.Fprintln(boot.Output(m.rt), "remove them with: sudo pacman -Rns $(pacman -Qtdq)")
-			return boot.ResultWarn, nil
+			boot.Warn(ctx, fmt.Sprintf(
+				"orphaned packages found:\n%s\nremove them with: sudo pacman -Rns $(pacman -Qtdq)",
+				boot.BulletList(orphans),
+			))
+			return boot.ResultSkip, nil
 		},
 	})
 	return starlark.None, nil
@@ -109,8 +111,8 @@ func (m *impl) checkExplicitPackages(thread *starlark.Thread, b *starlark.Builti
 				return boot.ResultSkip, nil
 			}
 			slices.Sort(extra)
-			fmt.Fprintf(boot.Output(m.rt), "explicit packages missing from recipe:\n%s\n", boot.BulletList(extra))
-			return boot.ResultWarn, nil
+			boot.Warn(ctx, fmt.Sprintf("explicit packages missing from recipe:\n%s", boot.BulletList(extra)))
+			return boot.ResultSkip, nil
 		},
 	})
 	return starlark.None, nil
@@ -163,8 +165,8 @@ func (m *impl) checkPacnew(thread *starlark.Thread, b *starlark.Builtin, args st
 				fmt.Fprintln(&buf, boot.BulletList(unmanaged))
 				fmt.Fprintln(&buf, pacnewDiffs(ctx, unmanaged))
 			}
-			fmt.Fprintln(boot.Output(m.rt), strings.TrimSpace(buf.String()))
-			return boot.ResultWarn, nil
+			boot.Warn(ctx, buf.String())
+			return boot.ResultSkip, nil
 		},
 	})
 	return starlark.None, nil

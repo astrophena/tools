@@ -131,14 +131,6 @@ func (r *Runtime) SetEnv(key, value string) error {
 	return nil
 }
 
-// Output returns the writer modules should use for user-visible action details.
-func Output(r *Runtime) io.Writer {
-	if r != nil && r.Stdout != nil {
-		return r.Stdout
-	}
-	return os.Stdout
-}
-
 // BulletList formats items as an indented Markdown-style bullet list.
 func BulletList(items []string) string {
 	var buf strings.Builder

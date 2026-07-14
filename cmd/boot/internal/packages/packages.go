@@ -138,18 +138,12 @@ func (m *impl) update(thread *starlark.Thread, b *starlark.Builtin, args starlar
 func (m *impl) addUpdateActions(thread *starlark.Thread, pm packageManager) {
 	summary := fmt.Sprintf("update system with %s", pm.name)
 	currentSummary := summary
-	rebootSummary := "check whether package updates require reboot"
-	currentRebootSummary := rebootSummary
-	var (
-		stateMu         sync.Mutex
-		rebootPackages  []string
-		updateSucceeded bool
-	)
+	var summaryMu sync.Mutex
 	boot.AddAction(thread, boot.Action{
 		Summary: summary,
 		Describe: func() string {
-			stateMu.Lock()
-			defer stateMu.Unlock()
+			summaryMu.Lock()
+			defer summaryMu.Unlock()
 			return currentSummary
 		},
 		RequiresSudo: pm.requiresSudo,
@@ -171,55 +165,24 @@ func (m *impl) addUpdateActions(thread *starlark.Thread, pm packageManager) {
 					return "", err
 				}
 			}
-			stateMu.Lock()
-			rebootPackages = slices.Clone(rebootRequired)
-			stateMu.Unlock()
 			if dryRun {
-				stateMu.Lock()
+				summaryMu.Lock()
 				currentSummary = fmt.Sprintf("%s: would update %s", summary, strings.Join(updates, ", "))
-				stateMu.Unlock()
+				summaryMu.Unlock()
+				if len(rebootRequired) > 0 {
+					boot.Warn(ctx, fmt.Sprintf("reboot will be required after updating %s", strings.Join(rebootRequired, ", ")))
+				}
 				return boot.ResultChange, nil
 			}
 			if err := pm.update(ctx); err != nil {
 				return boot.ResultChange, err
 			}
-			stateMu.Lock()
-			updateSucceeded = true
-			stateMu.Unlock()
+			if len(rebootRequired) > 0 {
+				boot.Warn(ctx, fmt.Sprintf("machine needs rebooting after updating %s", strings.Join(rebootRequired, ", ")))
+			}
 			return boot.ResultChange, nil
 		},
 	})
-	if pm.rebootRequired != nil {
-		boot.AddAction(thread, boot.Action{
-			Summary: rebootSummary,
-			Describe: func() string {
-				stateMu.Lock()
-				defer stateMu.Unlock()
-				return currentRebootSummary
-			},
-			Apply: func(_ context.Context, dryRun bool) (boot.Result, error) {
-				stateMu.Lock()
-				packages := slices.Clone(rebootPackages)
-				succeeded := updateSucceeded
-				stateMu.Unlock()
-				if len(packages) == 0 || !dryRun && !succeeded {
-					return boot.ResultSkip, nil
-				}
-
-				message := fmt.Sprintf("machine needs rebooting after updating %s", strings.Join(packages, ", "))
-				if dryRun {
-					message = fmt.Sprintf("reboot will be required after updating %s", strings.Join(packages, ", "))
-				}
-				stateMu.Lock()
-				currentRebootSummary = message
-				stateMu.Unlock()
-				if !dryRun {
-					fmt.Fprintln(boot.Output(m.rt), message)
-				}
-				return boot.ResultWarn, nil
-			},
-		})
-	}
 }
 
 func (m *impl) checkExplicitPackages(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
@@ -261,8 +224,8 @@ func (m *impl) checkExplicitPackages(thread *starlark.Thread, b *starlark.Builti
 				return boot.ResultSkip, nil
 			}
 			slices.Sort(extra)
-			fmt.Fprintf(boot.Output(m.rt), "explicit packages missing from recipe:\n%s\n", boot.BulletList(extra))
-			return boot.ResultWarn, nil
+			boot.Warn(ctx, fmt.Sprintf("explicit packages missing from recipe:\n%s", boot.BulletList(extra)))
+			return boot.ResultSkip, nil
 		},
 	})
 	return starlark.None, nil

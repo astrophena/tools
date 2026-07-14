@@ -45,13 +45,29 @@ func (e *Engine) printReport(w io.Writer, summary Summary, dryRun bool) {
 		fmt.Sprintf("%d %s", summary.Skipped, plural(summary.Skipped, "action", "actions")),
 	)
 	if summary.Warnings > 0 {
-		fmt.Fprintf(w, "  It reported %s.\n", e.color(fmt.Sprintf("%d %s", summary.Warnings, plural(summary.Warnings, "warning", "warnings")), colorRed))
+		fmt.Fprintf(w, "  It reported %s.\n", e.color(fmt.Sprintf("%d %s", summary.Warnings, plural(summary.Warnings, "warning", "warnings")), colorYellow))
 	}
 	if summary.Failed == 0 {
 		fmt.Fprintf(w, "  %s\n", e.color("No actions failed.", colorGreen))
 		return
 	}
 	fmt.Fprintf(w, "  %s\n", e.color(fmt.Sprintf("%d %s failed.", summary.Failed, plural(summary.Failed, "action", "actions")), colorRed))
+}
+
+func (e *Engine) printWarnings(w io.Writer, warnings []warning) {
+	if len(warnings) == 0 {
+		return
+	}
+	fmt.Fprintf(w, "%s\n", e.color("warnings:", colorYellow))
+	for _, warning := range warnings {
+		fmt.Fprintf(w, "%s\n", e.color(fmt.Sprintf("  task: %s (%s)", warning.TaskID, warning.TaskName), colorYellow))
+		fmt.Fprintf(w, "%s\n", e.color("    action: "+warning.Action, colorYellow))
+		lines := strings.Split(warning.Message, "\n")
+		fmt.Fprintf(w, "%s\n", e.color("    warning: "+lines[0], colorYellow))
+		for _, line := range lines[1:] {
+			fmt.Fprintf(w, "%s\n", e.color("      "+line, colorYellow))
+		}
+	}
 }
 
 func (e *Engine) printFailures(w io.Writer, failures []failure) error {

@@ -18,9 +18,10 @@ import (
 // keeps stdout valid JSON even when an action fails midway and makes it safe
 // for other programs to parse boot output without watching event boundaries.
 type jsonRun struct {
-	DryRun  bool         `json:"dry_run"`
-	Summary Summary      `json:"summary"`
-	Actions []jsonAction `json:"actions"`
+	DryRun   bool         `json:"dry_run"`
+	Summary  Summary      `json:"summary"`
+	Actions  []jsonAction `json:"actions"`
+	Warnings []warning    `json:"warnings,omitempty"`
 }
 
 type jsonAction struct {
@@ -31,12 +32,9 @@ type jsonAction struct {
 	Error    string `json:"error,omitempty"`
 }
 
-// runJSON executes tasks in deterministic order and suppresses module chatter.
-//
-// Human modes allow check modules to print details through Runtime.Stdout. JSON
-// mode redirects that writer to io.Discard while actions run so stdout contains
-// only the final JSON object. If a caller needs verbose diagnostics, it should
-// run without -json.
+// runJSON executes tasks in deterministic order and suppresses interactive
+// output. Runtime.Stdout is redirected while actions run so consent prompts or
+// future module chatter cannot corrupt the final JSON object.
 func (e *Engine) runJSON(ctx context.Context, w io.Writer, selection Selection, opts RunOptions) error {
 	if e.Runtime != nil {
 		oldStdout := e.Runtime.Stdout
@@ -47,7 +45,8 @@ func (e *Engine) runJSON(ctx context.Context, w io.Writer, selection Selection, 
 	if err != nil {
 		return err
 	}
-	planned, summary, failures, stopOnError := e.prepare(ctx, tasks, opts)
+	warnings := &warningCollector{}
+	planned, summary, failures, stopOnError := e.prepare(ctx, tasks, opts, warnings)
 	status := initialTaskStatus(tasks, planned, failures)
 	if err := newSudoPrompter(e).prepare(ctx, io.Discard, tasks); err != nil {
 		return err
@@ -58,6 +57,8 @@ func (e *Engine) runJSON(ctx context.Context, w io.Writer, selection Selection, 
 	}
 
 	if stopOnError && opts.FailFast {
+		report.Warnings = warnings.all()
+		report.Summary.Warnings = len(report.Warnings)
 		if err := json.NewEncoder(w).Encode(report); err != nil {
 			return err
 		}
@@ -82,7 +83,7 @@ func (e *Engine) runJSON(ctx context.Context, w io.Writer, selection Selection, 
 		stop := false
 		for _, action := range task.Actions {
 			report.Summary.Actions++
-			result, err := action.Apply(ctx, opts.DryRun)
+			result, err := warnings.run(ctx, task, action, opts.DryRun)
 			item := jsonAction{TaskID: task.ID, TaskName: task.Name, Summary: action.description(), Result: result}
 			if err != nil {
 				status[task.ID] = taskFailed
@@ -100,8 +101,6 @@ func (e *Engine) runJSON(ctx context.Context, w io.Writer, selection Selection, 
 				report.Summary.Changed++
 			case ResultSkip, ResultStop:
 				report.Summary.Skipped++
-			case ResultWarn:
-				report.Summary.Warnings++
 			}
 			report.Actions = append(report.Actions, item)
 			if result == ResultStop && !opts.DryRun {
@@ -112,6 +111,8 @@ func (e *Engine) runJSON(ctx context.Context, w io.Writer, selection Selection, 
 			break
 		}
 	}
+	report.Warnings = warnings.all()
+	report.Summary.Warnings = len(report.Warnings)
 	if err := json.NewEncoder(w).Encode(report); err != nil {
 		return err
 	}

@@ -105,8 +105,6 @@ const (
 	ResultSkip Result = "skip"
 	// ResultChange means the action changed the host or would change it in dry-run mode.
 	ResultChange Result = "change"
-	// ResultWarn means the action found a non-fatal problem.
-	ResultWarn Result = "warn"
 	// ResultStop means no further actions in the current task should run.
 	ResultStop Result = "stop"
 )
@@ -230,7 +228,7 @@ func (e *Engine) Run(ctx context.Context, w io.Writer, selection Selection, opts
 // being prepared. Accepted consent actions are deleted from the action list so
 // they are not counted or executed twice; denied/non-interactive consent marks
 // the task as unplanned by returning ResultStop.
-func (e *Engine) prepare(ctx context.Context, tasks []*Task, opts RunOptions) (planned map[string]bool, summary Summary, failures []failure, stopOnError bool) {
+func (e *Engine) prepare(ctx context.Context, tasks []*Task, opts RunOptions, warnings *warningCollector) (planned map[string]bool, summary Summary, failures []failure, stopOnError bool) {
 	planned = make(map[string]bool)
 	summary.Tasks = len(tasks)
 
@@ -255,7 +253,7 @@ func (e *Engine) prepare(ctx context.Context, tasks []*Task, opts RunOptions) (p
 				action := task.Actions[i]
 				if action.IsConsent {
 					summary.Actions++
-					result, err := action.Apply(ctx, false)
+					result, err := warnings.run(ctx, task, action, false)
 					if err != nil {
 						if !task.ContinueOnError {
 							stopOnError = true
@@ -273,8 +271,6 @@ func (e *Engine) prepare(ctx context.Context, tasks []*Task, opts RunOptions) (p
 						summary.Skipped++
 					case ResultChange:
 						summary.Changed++
-					case ResultWarn:
-						summary.Warnings++
 					}
 					if result == ResultStop {
 						task.Actions = nil
@@ -310,7 +306,8 @@ func (e *Engine) RunPlan(ctx context.Context, w io.Writer, selection Selection, 
 	if opts.FailFast {
 		return e.runPlanSequential(ctx, w, tasks, opts)
 	}
-	planned, summary, failures, stopOnError := e.prepare(ctx, tasks, opts)
+	warnings := &warningCollector{}
+	planned, summary, failures, stopOnError := e.prepare(ctx, tasks, opts, warnings)
 	if err := newSudoPrompter(e).prepare(ctx, w, tasks); err != nil {
 		return err
 	}
@@ -330,7 +327,7 @@ func (e *Engine) RunPlan(ctx context.Context, w io.Writer, selection Selection, 
 		fmt.Fprintf(w, "[%d/%d] Planning task %s: %s\n", i+1, len(tasks), task.ID, task.Name)
 		for _, action := range task.Actions {
 			summary.Actions++
-			result, err := action.Apply(ctx, true)
+			result, err := warnings.run(ctx, task, action, true)
 			if err != nil {
 				summary.Failed++
 				fmt.Fprintf(w, "%s %s: %s: %v\n", e.color("fail", colorRed), task.ID, action.description(), err)
@@ -349,9 +346,6 @@ func (e *Engine) RunPlan(ctx context.Context, w io.Writer, selection Selection, 
 				if opts.Verbose {
 					fmt.Fprintf(w, "skip %s: %s\n", task.ID, action.description())
 				}
-			case ResultWarn:
-				summary.Warnings++
-				fmt.Fprintf(w, "%s %s: %s\n", e.color(string(result), colorRed), task.ID, action.description())
 			case ResultStop:
 				summary.Skipped++
 				if opts.Verbose {
@@ -364,6 +358,8 @@ func (e *Engine) RunPlan(ctx context.Context, w io.Writer, selection Selection, 
 		}
 	}
 
+	collectedWarnings := warnings.all()
+	summary.Warnings = len(collectedWarnings)
 	fmt.Fprintf(
 		w,
 		"summary: %d tasks, %d actions, %d would change, %d skipped, %d warnings, %d failed\n",
@@ -374,6 +370,7 @@ func (e *Engine) RunPlan(ctx context.Context, w io.Writer, selection Selection, 
 		summary.Warnings,
 		summary.Failed,
 	)
+	e.printWarnings(w, collectedWarnings)
 	if summary.Failed > 0 {
 		return errors.New("one or more tasks failed")
 	}
@@ -383,6 +380,7 @@ func (e *Engine) RunPlan(ctx context.Context, w io.Writer, selection Selection, 
 func (e *Engine) runPlanSequential(ctx context.Context, w io.Writer, tasks []*Task, opts RunOptions) error {
 	summary := Summary{Tasks: len(tasks)}
 	sudo := newSudoPrompter(e)
+	warnings := &warningCollector{}
 
 	for i, task := range tasks {
 		stop := false
@@ -403,7 +401,7 @@ func (e *Engine) runPlanSequential(ctx context.Context, w io.Writer, tasks []*Ta
 		}
 		for _, action := range task.Actions {
 			summary.Actions++
-			result, err := action.Apply(ctx, true)
+			result, err := warnings.run(ctx, task, action, true)
 			if err != nil {
 				summary.Failed++
 				fmt.Fprintf(w, "%s %s: %s: %v\n", e.color("fail", colorRed), task.ID, action.description(), err)
@@ -422,9 +420,6 @@ func (e *Engine) runPlanSequential(ctx context.Context, w io.Writer, tasks []*Ta
 				if opts.Verbose {
 					fmt.Fprintf(w, "skip %s: %s\n", task.ID, action.description())
 				}
-			case ResultWarn:
-				summary.Warnings++
-				fmt.Fprintf(w, "%s %s: %s\n", e.color(string(result), colorRed), task.ID, action.description())
 			case ResultStop:
 				summary.Skipped++
 				if opts.Verbose {
@@ -437,6 +432,8 @@ func (e *Engine) runPlanSequential(ctx context.Context, w io.Writer, tasks []*Ta
 		}
 	}
 
+	collectedWarnings := warnings.all()
+	summary.Warnings = len(collectedWarnings)
 	fmt.Fprintf(
 		w,
 		"summary: %d tasks, %d actions, %d would change, %d skipped, %d warnings, %d failed\n",
@@ -447,6 +444,7 @@ func (e *Engine) runPlanSequential(ctx context.Context, w io.Writer, tasks []*Ta
 		summary.Warnings,
 		summary.Failed,
 	)
+	e.printWarnings(w, collectedWarnings)
 	if summary.Failed > 0 {
 		return errors.New("one or more tasks failed")
 	}
@@ -466,21 +464,25 @@ func (e *Engine) apply(ctx context.Context, w io.Writer, selection Selection, op
 		return err
 	}
 
-	planned, summary, failures, stopOnError := e.prepare(ctx, tasks, opts)
+	warnings := &warningCollector{}
+	planned, summary, failures, stopOnError := e.prepare(ctx, tasks, opts, warnings)
 	if err := newSudoPrompter(e).prepare(ctx, w, tasks); err != nil {
 		return err
 	}
 	hadFailures := len(failures) > 0
 
 	if stopOnError && opts.FailFast {
+		collectedWarnings := warnings.all()
+		summary.Warnings = len(collectedWarnings)
 		e.printReport(w, summary, false)
+		e.printWarnings(w, collectedWarnings)
 		e.printFailures(w, failures)
 		return errors.New("one or more tasks failed")
 	}
 
 	concurrency := max(opts.Concurrency, 1)
 	if concurrency == 1 {
-		return e.applySequentialPrepared(ctx, w, tasks, planned, summary, failures, opts, false)
+		return e.applySequentialPrepared(ctx, w, tasks, planned, summary, failures, opts, false, warnings)
 	}
 
 	pb := progressbar.New(w, len(tasks), opts.Interactive)
@@ -499,20 +501,6 @@ func (e *Engine) apply(ctx context.Context, w io.Writer, selection Selection, op
 	reportProgress := func(task *Task) {
 		progressCh <- task.Name
 	}
-	var progressOut *progressOutput
-	var restoreOutput func()
-	if opts.Interactive {
-		progressOut = newProgressOutput(pb)
-		if e.Runtime != nil {
-			stdout := e.Runtime.Stdout
-			e.Runtime.Stdout = progressOut
-			restoreOutput = func() {
-				progressOut.Flush()
-				e.Runtime.Stdout = stdout
-			}
-		}
-	}
-
 	// doneCh records completion of every selected task. status records whether a
 	// completed dependency succeeded. Both maps include unplanned tasks so
 	// dependents can distinguish "dependency skipped during preparation" from
@@ -611,7 +599,7 @@ func (e *Engine) apply(ctx context.Context, w io.Writer, selection Selection, op
 					err    error
 				)
 				if err = actions.acquire(ctx); err == nil {
-					result, err = action.Apply(ctx, opts.DryRun)
+					result, err = warnings.run(ctx, task, action, opts.DryRun)
 					actions.release()
 				}
 				mu.Lock()
@@ -636,8 +624,6 @@ func (e *Engine) apply(ctx context.Context, w io.Writer, selection Selection, op
 					summary.Changed++
 				case ResultSkip:
 					summary.Skipped++
-				case ResultWarn:
-					summary.Warnings++
 				case ResultStop:
 					summary.Skipped++
 				}
@@ -708,19 +694,15 @@ func (e *Engine) apply(ctx context.Context, w io.Writer, selection Selection, op
 	err = g.Wait()
 	close(progressCh)
 	<-progressDone
-	if progressOut != nil {
-		if restoreOutput != nil {
-			restoreOutput()
-		} else {
-			progressOut.Flush()
-		}
-	}
 	pb.Stop(hadFailures || err != nil)
 
 	if err != nil && !hadFailures {
 		failures = append(failures, failure{Err: err})
 	}
+	collectedWarnings := warnings.all()
+	summary.Warnings = len(collectedWarnings)
 	e.printReport(w, summary, false)
+	e.printWarnings(w, collectedWarnings)
 	if err := e.printFailures(w, failures); err != nil {
 		return err
 	}
@@ -739,23 +721,27 @@ func (e *Engine) applyVerbose(ctx context.Context, w io.Writer, selection Select
 		return err
 	}
 
-	planned, summary, failures, stopOnError := e.prepare(ctx, tasks, opts)
+	warnings := &warningCollector{}
+	planned, summary, failures, stopOnError := e.prepare(ctx, tasks, opts, warnings)
 	if err := newSudoPrompter(e).prepare(ctx, w, tasks); err != nil {
 		return err
 	}
 	if stopOnError && opts.FailFast {
+		collectedWarnings := warnings.all()
+		summary.Warnings = len(collectedWarnings)
 		e.printReport(w, summary, false)
+		e.printWarnings(w, collectedWarnings)
 		e.printFailures(w, failures)
 		return errors.New("one or more tasks failed")
 	}
-	return e.applySequentialPrepared(ctx, w, tasks, planned, summary, failures, opts, true)
+	return e.applySequentialPrepared(ctx, w, tasks, planned, summary, failures, opts, true, warnings)
 }
 
 // applySequentialPrepared is used for verbose apply and for non-verbose -j 1.
 // It shares dependency failure handling with the parallel path but avoids the
 // progress bar and goroutine scheduling, making the single-threaded behavior
 // predictable and easier to debug.
-func (e *Engine) applySequentialPrepared(ctx context.Context, w io.Writer, tasks []*Task, planned map[string]bool, summary Summary, failures []failure, opts RunOptions, verbose bool) error {
+func (e *Engine) applySequentialPrepared(ctx context.Context, w io.Writer, tasks []*Task, planned map[string]bool, summary Summary, failures []failure, opts RunOptions, verbose bool, warnings *warningCollector) error {
 	status := initialTaskStatus(tasks, planned, failures)
 	for i, task := range tasks {
 		if !planned[task.ID] {
@@ -778,7 +764,7 @@ func (e *Engine) applySequentialPrepared(ctx context.Context, w io.Writer, tasks
 		}
 		for _, action := range task.Actions {
 			summary.Actions++
-			result, err := action.Apply(ctx, false)
+			result, err := warnings.run(ctx, task, action, false)
 			if err != nil {
 				status[task.ID] = taskFailed
 				summary.Failed++
@@ -805,11 +791,6 @@ func (e *Engine) applySequentialPrepared(ctx context.Context, w io.Writer, tasks
 				if verbose {
 					fmt.Fprintf(w, "skip %s: %s\n", task.ID, action.description())
 				}
-			case ResultWarn:
-				summary.Warnings++
-				if verbose {
-					fmt.Fprintf(w, "%s %s: %s\n", e.color(string(result), colorRed), task.ID, action.description())
-				}
 			case ResultStop:
 				summary.Skipped++
 				if verbose {
@@ -826,7 +807,10 @@ func (e *Engine) applySequentialPrepared(ctx context.Context, w io.Writer, tasks
 		}
 	}
 
+	collectedWarnings := warnings.all()
+	summary.Warnings = len(collectedWarnings)
 	e.printReport(w, summary, false)
+	e.printWarnings(w, collectedWarnings)
 	if err := e.printFailures(w, failures); err != nil {
 		return err
 	}

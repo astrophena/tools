@@ -47,9 +47,10 @@ func failedDependency(status map[string]taskStatus, task *Task) (string, bool) {
 type colorCode string
 
 const (
-	colorBold  colorCode = "\033[1m"
-	colorGreen colorCode = "\033[32m"
-	colorRed   colorCode = "\033[31m"
+	colorBold   colorCode = "\033[1m"
+	colorGreen  colorCode = "\033[32m"
+	colorYellow colorCode = "\033[33m"
+	colorRed    colorCode = "\033[31m"
 )
 
 func (e *Engine) color(s string, code colorCode) string {

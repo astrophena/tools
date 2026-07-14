@@ -112,9 +112,10 @@ func TestRunJSONUsesDynamicActionDescription(t *testing.T) {
 				Describe: func() string {
 					return summary
 				},
-				Apply: func(context.Context, bool) (Result, error) {
+				Apply: func(ctx context.Context, _ bool) (Result, error) {
 					summary = "reboot will be required after updating linux"
-					return ResultWarn, nil
+					Warn(ctx, summary)
+					return ResultSkip, nil
 				},
 			})
 			return starlark.None, nil
@@ -133,6 +134,9 @@ func TestRunJSONUsesDynamicActionDescription(t *testing.T) {
 	}
 	if report.Summary.Warnings != 1 {
 		t.Fatalf("warnings = %d, want 1", report.Summary.Warnings)
+	}
+	if got, want := report.Warnings[0].Message, "reboot will be required after updating linux"; got != want {
+		t.Fatalf("warning = %q, want %q", got, want)
 	}
 }
 
@@ -668,22 +672,20 @@ func runSkippedActionEngine(t *testing.T, opts RunOptions) string {
 	return out.String()
 }
 
-func TestApplyProgressOutputSeparatesActionDetails(t *testing.T) {
+func TestApplyReportsWarningsAfterProgress(t *testing.T) {
 	var out bytes.Buffer
-	rt := &Runtime{Stdout: &out}
 	engine := &Engine{
-		Runtime: rt,
+		Runtime: &Runtime{},
 		Tasks: []*Task{{
 			ID:   "packages",
 			Name: "Checking packages",
 			Run: starlark.NewBuiltin("packages", func(thread *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, _ []starlark.Tuple) (starlark.Value, error) {
 				AddAction(thread, Action{
 					Summary: "check packages",
-					Apply: func(context.Context, bool) (Result, error) {
-						if _, err := Output(rt).Write([]byte("orphaned packages found:\n  - oldlib")); err != nil {
-							return "", err
-						}
-						return ResultWarn, nil
+					Apply: func(ctx context.Context, _ bool) (Result, error) {
+						Warn(ctx, "orphaned packages found:\n  - oldlib")
+						Warn(ctx, "reboot required")
+						return ResultSkip, nil
 					},
 				})
 				return starlark.None, nil
@@ -691,12 +693,18 @@ func TestApplyProgressOutputSeparatesActionDetails(t *testing.T) {
 		}},
 	}
 
-	if err := engine.Run(t.Context(), &out, Selection{}, RunOptions{Concurrency: 2, Interactive: true}); err != nil {
+	if err := engine.Run(t.Context(), &out, Selection{}, RunOptions{Concurrency: 2, Interactive: true, Color: true}); err != nil {
 		t.Fatal(err)
 	}
 	got := out.String()
-	assertContains(t, got, "\r\x1b[Korphaned packages found:\n", "progress action detail output")
-	assertContains(t, got, "\r\x1b[K  - oldlib\n", "progress action detail output")
+	assertContains(t, got, "\x1b[33mwarnings:\x1b[0m", "colored warning report")
+	assertContains(t, got, "It reported \x1b[33m2 warnings\x1b[0m.", "warning count")
+	assertContains(t, got, "orphaned packages found:", "warning report")
+	assertContains(t, got, "  - oldlib", "warning report")
+	assertContains(t, got, "reboot required", "warning report")
+	if strings.Index(got, "Report:") > strings.Index(got, "warnings:") {
+		t.Fatalf("warnings were printed before the report:\n%s", got)
+	}
 }
 
 func TestApplyProgressTitleReportsCompletedTask(t *testing.T) {

@@ -5,7 +5,6 @@
 package pacman
 
 import (
-	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -26,13 +25,12 @@ esac
 `)
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 
-	var out bytes.Buffer
-	result := runOrphansAction(t, &out)
+	result, warnings := runOrphansAction(t)
 	if result != boot.ResultSkip {
 		t.Fatalf("result = %s, want %s", result, boot.ResultSkip)
 	}
-	if out.Len() != 0 {
-		t.Fatalf("output = %q, want none", out.String())
+	if len(warnings) != 0 {
+		t.Fatalf("warnings = %q, want none", warnings)
 	}
 }
 
@@ -46,13 +44,12 @@ esac
 `)
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 
-	var out bytes.Buffer
-	result := runOrphansAction(t, &out)
-	if result != boot.ResultWarn {
-		t.Fatalf("result = %s, want %s", result, boot.ResultWarn)
+	result, warnings := runOrphansAction(t)
+	if result != boot.ResultSkip {
+		t.Fatalf("result = %s, want %s", result, boot.ResultSkip)
 	}
-	if !strings.Contains(out.String(), "orphaned packages found") || !strings.Contains(out.String(), "oldlib") {
-		t.Fatalf("output missing orphan details:\n%s", out.String())
+	if len(warnings) != 1 || !strings.Contains(warnings[0], "orphaned packages found") || !strings.Contains(warnings[0], "oldlib") {
+		t.Fatalf("warning missing orphan details: %q", warnings)
 	}
 }
 
@@ -75,10 +72,10 @@ func TestPacnewFilesSorted(t *testing.T) {
 	}
 }
 
-func runOrphansAction(t *testing.T, out *bytes.Buffer) boot.Result {
+func runOrphansAction(t *testing.T) (boot.Result, []string) {
 	t.Helper()
 	task, thread := testutil.TaskThread("test")
-	m := &impl{rt: &boot.Runtime{Stdout: out}}
+	m := &impl{rt: &boot.Runtime{}}
 	_, err := m.checkOrphans(thread, starlark.NewBuiltin("pacman.check_orphans", m.checkOrphans), nil, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -86,9 +83,13 @@ func runOrphansAction(t *testing.T, out *bytes.Buffer) boot.Result {
 	if len(task.Actions) != 1 {
 		t.Fatalf("got %d actions, want 1", len(task.Actions))
 	}
-	result, err := task.Actions[0].Apply(t.Context(), false)
+	var warnings []string
+	ctx := boot.WithWarningSink(t.Context(), func(message string) {
+		warnings = append(warnings, message)
+	})
+	result, err := task.Actions[0].Apply(ctx, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return result
+	return result, warnings
 }

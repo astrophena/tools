@@ -39,11 +39,13 @@ Action results are:
 
 - `ResultSkip`: the host already matched the requested state;
 - `ResultChange`: the action changed the host or would change it in dry-run;
-- `ResultWarn`: the action found a non-fatal issue;
 - `ResultStop`: stop the remaining actions in this task without failing.
 
 Use `ResultStop` only for gating actions such as `consent.require`; normal
 idempotency should use skip/change.
+
+Warnings are independent of action results. Call `boot.Warn(ctx, message)` from
+`Apply` to add a non-fatal diagnostic to the run's final warning report.
 
 ## Writing Modules
 
@@ -71,7 +73,7 @@ Module function checklist:
 - In dry-run, perform enough checks to decide skip/change but do not write.
 - Include command output in returned errors; prefer `boot.RunCommand`,
   `boot.RunCmd`, `boot.CommandOutput`, or `boot.CommandError`.
-- Use `boot.Output` and `boot.BulletList` for user-visible check details.
+- Use `boot.Warn` and `boot.BulletList` for user-visible check details.
 - Validate Starlark file modes with `boot.FileMode`.
 - Keep successful JSON or textual output minimal; noisy reporting belongs in
   explicit check modules.
