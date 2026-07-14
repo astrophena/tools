@@ -83,7 +83,7 @@ func (e *Engine) runJSON(ctx context.Context, w io.Writer, selection Selection, 
 		for _, action := range task.Actions {
 			report.Summary.Actions++
 			result, err := action.Apply(ctx, opts.DryRun)
-			item := jsonAction{TaskID: task.ID, TaskName: task.Name, Summary: action.Summary, Result: result}
+			item := jsonAction{TaskID: task.ID, TaskName: task.Name, Summary: action.description(), Result: result}
 			if err != nil {
 				status[task.ID] = taskFailed
 				report.Summary.Failed++

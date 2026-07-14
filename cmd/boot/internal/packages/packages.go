@@ -131,15 +131,25 @@ func (m *impl) update(thread *starlark.Thread, b *starlark.Builtin, args starlar
 	if err != nil {
 		return nil, err
 	}
+	m.addUpdateActions(thread, pm)
+	return starlark.None, nil
+}
 
+func (m *impl) addUpdateActions(thread *starlark.Thread, pm packageManager) {
 	summary := fmt.Sprintf("update system with %s", pm.name)
 	currentSummary := summary
-	var summaryMu sync.Mutex
+	rebootSummary := "check whether package updates require reboot"
+	currentRebootSummary := rebootSummary
+	var (
+		stateMu         sync.Mutex
+		rebootPackages  []string
+		updateSucceeded bool
+	)
 	boot.AddAction(thread, boot.Action{
 		Summary: summary,
 		Describe: func() string {
-			summaryMu.Lock()
-			defer summaryMu.Unlock()
+			stateMu.Lock()
+			defer stateMu.Unlock()
 			return currentSummary
 		},
 		RequiresSudo: pm.requiresSudo,
@@ -154,16 +164,62 @@ func (m *impl) update(thread *starlark.Thread, b *starlark.Builtin, args starlar
 			if len(updates) == 0 {
 				return boot.ResultSkip, nil
 			}
+			var rebootRequired []string
+			if pm.rebootRequired != nil {
+				rebootRequired, err = pm.rebootRequired(ctx, updates)
+				if err != nil {
+					return "", err
+				}
+			}
+			stateMu.Lock()
+			rebootPackages = slices.Clone(rebootRequired)
+			stateMu.Unlock()
 			if dryRun {
-				summaryMu.Lock()
+				stateMu.Lock()
 				currentSummary = fmt.Sprintf("%s: would update %s", summary, strings.Join(updates, ", "))
-				summaryMu.Unlock()
+				stateMu.Unlock()
 				return boot.ResultChange, nil
 			}
-			return boot.ResultChange, pm.update(ctx)
+			if err := pm.update(ctx); err != nil {
+				return boot.ResultChange, err
+			}
+			stateMu.Lock()
+			updateSucceeded = true
+			stateMu.Unlock()
+			return boot.ResultChange, nil
 		},
 	})
-	return starlark.None, nil
+	if pm.rebootRequired != nil {
+		boot.AddAction(thread, boot.Action{
+			Summary: rebootSummary,
+			Describe: func() string {
+				stateMu.Lock()
+				defer stateMu.Unlock()
+				return currentRebootSummary
+			},
+			Apply: func(_ context.Context, dryRun bool) (boot.Result, error) {
+				stateMu.Lock()
+				packages := slices.Clone(rebootPackages)
+				succeeded := updateSucceeded
+				stateMu.Unlock()
+				if len(packages) == 0 || !dryRun && !succeeded {
+					return boot.ResultSkip, nil
+				}
+
+				message := fmt.Sprintf("machine needs rebooting after updating %s", strings.Join(packages, ", "))
+				if dryRun {
+					message = fmt.Sprintf("reboot will be required after updating %s", strings.Join(packages, ", "))
+				}
+				stateMu.Lock()
+				currentRebootSummary = message
+				stateMu.Unlock()
+				if !dryRun {
+					fmt.Fprintln(boot.Output(m.rt), message)
+				}
+				return boot.ResultWarn, nil
+			},
+		})
+	}
 }
 
 func (m *impl) checkExplicitPackages(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
@@ -240,13 +296,14 @@ func (m *impl) resolveManager() (packageManager, error) {
 }
 
 type packageManager struct {
-	name         string
-	requiresSudo bool
-	missing      func(context.Context, []string) ([]string, error)
-	explicit     func(context.Context) ([]string, error)
-	installArgv  func([]string) []string
-	updates      func(context.Context) ([]string, error)
-	update       func(context.Context) error
+	name           string
+	requiresSudo   bool
+	missing        func(context.Context, []string) ([]string, error)
+	explicit       func(context.Context) ([]string, error)
+	installArgv    func([]string) []string
+	updates        func(context.Context) ([]string, error)
+	rebootRequired func(context.Context, []string) ([]string, error)
+	update         func(context.Context) error
 }
 
 func (pm packageManager) install(ctx context.Context, packages []string) error {
@@ -319,6 +376,37 @@ func pacmanUpdates(ctx context.Context, rt *boot.Runtime) ([]string, error) {
 		}
 	}
 	return updates, nil
+}
+
+func pacmanRebootRequired(ctx context.Context, packages []string) ([]string, error) {
+	if len(packages) == 0 {
+		return nil, nil
+	}
+	argv := append([]string{"pacman", "-Ql"}, packages...)
+	out, err := boot.CommandOutput(ctx, "", argv...)
+	if err != nil {
+		return nil, err
+	}
+
+	owners := make(map[string]bool)
+	for line := range strings.SplitSeq(string(out), "\n") {
+		name, path, ok := strings.Cut(strings.TrimSpace(line), " ")
+		if !ok {
+			continue
+		}
+		path = strings.TrimSpace(path)
+		if path == "/usr/lib/modules" || strings.HasPrefix(path, "/usr/lib/modules/") {
+			owners[name] = true
+		}
+	}
+
+	var rebootRequired []string
+	for _, name := range packages {
+		if owners[name] {
+			rebootRequired = append(rebootRequired, name)
+		}
+	}
+	return rebootRequired, nil
 }
 
 func pacmanCheckDBPath(rt *boot.Runtime) (string, error) {
@@ -448,6 +536,7 @@ func packageManagerByName(rt *boot.Runtime, name string) (packageManager, error)
 			updates: func(ctx context.Context) ([]string, error) {
 				return pacmanUpdates(ctx, rt)
 			},
+			rebootRequired: pacmanRebootRequired,
 			update: func(ctx context.Context) error {
 				args := sudoArgs(rt, "pacman", "-Syu", "--noconfirm")
 				return boot.RunCommand(ctx, "", args...)

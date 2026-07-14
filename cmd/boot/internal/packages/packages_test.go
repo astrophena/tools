@@ -5,8 +5,14 @@
 package packages
 
 import (
+	"bytes"
+	"context"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 
 	boot "go.astrophena.name/tools/cmd/boot/internal"
@@ -181,6 +187,58 @@ esac
 	}
 }
 
+func TestPacmanRebootRequired(t *testing.T) {
+	cases := map[string]struct {
+		packages []string
+		output   string
+		exitCode int
+		want     []string
+		wantErr  bool
+	}{
+		"kernel module owners": {
+			packages: []string{"linux", "git", "nvidia-open"},
+			output: strings.Join([]string{
+				"linux /usr/lib/modules/6.15.1-arch1-1/kernel/fs/btrfs/btrfs.ko.zst",
+				"git /usr/bin/git",
+				"nvidia-open /usr/lib/modules/6.15.1-arch1-1/extramodules/nvidia.ko.zst",
+			}, "\n"),
+			want: []string{"linux", "nvidia-open"},
+		},
+		"duplicate module paths": {
+			packages: []string{"linux"},
+			output: strings.Join([]string{
+				"linux /usr/lib/modules/",
+				"linux /usr/lib/modules/6.15.1-arch1-1/vmlinuz",
+			}, "\n"),
+			want: []string{"linux"},
+		},
+		"ordinary packages": {
+			packages: []string{"git"},
+			output:   "git /usr/bin/git",
+		},
+		"query failure": {
+			packages: []string{"linux"},
+			exitCode: 1,
+			wantErr:  true,
+		},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			bin := t.TempDir()
+			testutil.WriteCommand(t, bin, "pacman", fmt.Sprintf("#!/bin/sh\nprintf '%%b' %q\nexit %d\n", tc.output, tc.exitCode))
+			t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+			got, err := pacmanRebootRequired(t.Context(), tc.packages)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("error = %v, want error %v", err, tc.wantErr)
+			}
+			if !slices.Equal(got, tc.want) {
+				t.Fatalf("packages = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestUpdateDescribesPacmanUpdatesInPlan(t *testing.T) {
 	bin := t.TempDir()
 	systemDB := filepath.Join(t.TempDir(), "pacman")
@@ -194,6 +252,10 @@ case "$1" in
 -Qu)
 	echo "linux 1-1 -> 1-2"
 	echo "git 1-1 -> 1-2"
+	exit 0 ;;
+-Ql)
+	echo "linux /usr/lib/modules/6.15.1-arch1-1/vmlinuz"
+	echo "git /usr/bin/git"
 	exit 0 ;;
 *) exit 1 ;;
 esac
@@ -213,8 +275,8 @@ esac
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(task.Actions) != 1 {
-		t.Fatalf("actions = %d, want 1", len(task.Actions))
+	if len(task.Actions) != 2 {
+		t.Fatalf("actions = %d, want 2", len(task.Actions))
 	}
 	result, err := task.Actions[0].Apply(t.Context(), true)
 	if err != nil {
@@ -225,6 +287,84 @@ esac
 	}
 	if got, want := task.Actions[0].Describe(), "update system with pacman: would update linux, git"; got != want {
 		t.Fatalf("description = %q, want %q", got, want)
+	}
+	result, err = task.Actions[1].Apply(t.Context(), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result != boot.ResultWarn {
+		t.Fatalf("reboot result = %s, want %s", result, boot.ResultWarn)
+	}
+	if got, want := task.Actions[1].Describe(), "reboot will be required after updating linux"; got != want {
+		t.Fatalf("reboot description = %q, want %q", got, want)
+	}
+}
+
+func TestUpdateReportsRebootAfterSuccessfulApply(t *testing.T) {
+	cases := map[string]struct {
+		updates          []string
+		rebootPackages   []string
+		updateErr        error
+		wantRebootResult boot.Result
+		wantOutput       string
+	}{
+		"kernel modules updated": {
+			updates:          []string{"linux", "git", "nvidia-open"},
+			rebootPackages:   []string{"linux", "nvidia-open"},
+			wantRebootResult: boot.ResultWarn,
+			wantOutput:       "machine needs rebooting after updating linux, nvidia-open\n",
+		},
+		"ordinary package updated": {
+			updates:          []string{"git"},
+			wantRebootResult: boot.ResultSkip,
+		},
+		"update failed": {
+			updates:          []string{"linux"},
+			rebootPackages:   []string{"linux"},
+			updateErr:        errors.New("update failed"),
+			wantRebootResult: boot.ResultSkip,
+		},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			var out bytes.Buffer
+			task, thread := testutil.TaskThread("test")
+			m := &impl{rt: &boot.Runtime{Stdout: &out}, mod: &module{}}
+			m.addUpdateActions(thread, packageManager{
+				name: "pacman",
+				updates: func(context.Context) ([]string, error) {
+					return tc.updates, nil
+				},
+				rebootRequired: func(context.Context, []string) ([]string, error) {
+					return tc.rebootPackages, nil
+				},
+				update: func(context.Context) error {
+					return tc.updateErr
+				},
+			})
+			if len(task.Actions) != 2 {
+				t.Fatalf("actions = %d, want 2", len(task.Actions))
+			}
+
+			result, err := task.Actions[0].Apply(t.Context(), false)
+			if !errors.Is(err, tc.updateErr) {
+				t.Fatalf("update error = %v, want %v", err, tc.updateErr)
+			}
+			if result != boot.ResultChange {
+				t.Fatalf("update result = %s, want %s", result, boot.ResultChange)
+			}
+
+			result, err = task.Actions[1].Apply(t.Context(), false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if result != tc.wantRebootResult {
+				t.Fatalf("reboot result = %s, want %s", result, tc.wantRebootResult)
+			}
+			if got := out.String(); got != tc.wantOutput {
+				t.Fatalf("output = %q, want %q", got, tc.wantOutput)
+			}
+		})
 	}
 }
 
