@@ -34,28 +34,22 @@ func TestUpdateDescribesPlannedRescueImageBuild(t *testing.T) {
 	if err := os.Chtimes(oldImage, oldTime, oldTime); err != nil {
 		t.Fatal(err)
 	}
-	task, thread := testutil.TaskThread("test")
+	h := testutil.NewTask(t, "test")
 	m := &impl{rt: &boot.Runtime{Root: root, Home: filepath.Join(root, "home"), Getenv: func(string) string { return "termux" }}}
 
-	_, err := m.update(thread, starlark.NewBuiltin("rescue.update", m.update), nil, []starlark.Tuple{
+	action := h.EmitOne("rescue.update", m.update, nil, []starlark.Tuple{
 		{starlark.String("source"), starlark.String("rescue")},
 		{starlark.String("esp_dir"), starlark.String("efi")},
 		{starlark.String("keep"), starlark.MakeInt(2)},
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(task.Actions) != 1 {
-		t.Fatalf("actions = %d, want 1", len(task.Actions))
-	}
-	result, err := task.Actions[0].Apply(t.Context(), true)
+	result, err := action.Apply(t.Context(), true)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if result != boot.ResultChange {
 		t.Fatalf("result = %s, want %s", result, boot.ResultChange)
 	}
-	description := task.Actions[0].Describe()
+	description := action.Describe()
 	for _, want := range []string{
 		"update rescue image from " + source + " to " + esp + " (keep 2)",
 		"would build and install",
@@ -91,15 +85,13 @@ func TestRescueOutputBuildsGroupsTimestampedFiles(t *testing.T) {
 
 func TestPruneOutputKeepsNewestBuilds(t *testing.T) {
 	root := t.TempDir()
-	bin := t.TempDir()
-	testutil.WriteCommand(t, bin, "rm", `#!/bin/sh
+	testutil.Commands(t, map[string]string{"rm": `#!/bin/sh
 for arg in "$@"; do
 	if [ "$arg" != "-f" ]; then
 		/bin/rm -f "$arg"
 	fi
 done
-`)
-	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+`})
 
 	files := []string{
 		"arch-linux-rescue_202605010102.efi",

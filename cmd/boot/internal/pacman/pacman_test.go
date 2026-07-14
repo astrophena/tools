@@ -12,18 +12,15 @@ import (
 
 	boot "go.astrophena.name/tools/cmd/boot/internal"
 	"go.astrophena.name/tools/cmd/boot/internal/testutil"
-	"go.starlark.net/starlark"
 )
 
 func TestCheckOrphansSkipsWhenNone(t *testing.T) {
-	bin := t.TempDir()
-	testutil.WriteCommand(t, bin, "pacman", `#!/bin/sh
+	testutil.Commands(t, map[string]string{"pacman": `#!/bin/sh
 case "$*" in
 "-Qtdq") exit 1 ;;
 *) exit 2 ;;
 esac
-`)
-	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+`})
 
 	result, warnings := runOrphansAction(t)
 	if result != boot.ResultSkip {
@@ -35,14 +32,12 @@ esac
 }
 
 func TestCheckOrphansWarnsWhenPresent(t *testing.T) {
-	bin := t.TempDir()
-	testutil.WriteCommand(t, bin, "pacman", `#!/bin/sh
+	testutil.Commands(t, map[string]string{"pacman": `#!/bin/sh
 case "$*" in
 "-Qtdq") printf 'oldlib\nunused\n'; exit 0 ;;
 *) exit 2 ;;
 esac
-`)
-	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+`})
 
 	result, warnings := runOrphansAction(t)
 	if result != boot.ResultSkip {
@@ -74,20 +69,10 @@ func TestPacnewFilesSorted(t *testing.T) {
 
 func runOrphansAction(t *testing.T) (boot.Result, []string) {
 	t.Helper()
-	task, thread := testutil.TaskThread("test")
+	h := testutil.NewTask(t, "test")
 	m := &impl{rt: &boot.Runtime{}}
-	_, err := m.checkOrphans(thread, starlark.NewBuiltin("pacman.check_orphans", m.checkOrphans), nil, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(task.Actions) != 1 {
-		t.Fatalf("got %d actions, want 1", len(task.Actions))
-	}
-	var warnings []string
-	ctx := boot.WithWarningSink(t.Context(), func(message string) {
-		warnings = append(warnings, message)
-	})
-	result, err := task.Actions[0].Apply(ctx, false)
+	action := h.EmitOne("pacman.check_orphans", m.checkOrphans, nil, nil)
+	result, warnings, err := testutil.RunAction(t.Context(), action, false)
 	if err != nil {
 		t.Fatal(err)
 	}

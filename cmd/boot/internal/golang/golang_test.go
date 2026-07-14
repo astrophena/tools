@@ -26,10 +26,10 @@ import (
 func TestGoInstallCreatesOneActionPerPackage(t *testing.T) {
 	root := t.TempDir()
 	rt := &boot.Runtime{Root: root}
-	task, thread := testutil.TaskThread("test")
+	h := testutil.NewTask(t, "test")
 
 	m := &impl{rt: rt}
-	_, err := m.install(thread, starlark.NewBuiltin("go.install", m.install), starlark.Tuple{
+	_, err := m.install(h.Thread, starlark.NewBuiltin("go.install", m.install), starlark.Tuple{
 		starlark.NewList([]starlark.Value{
 			starlark.String("example.com/one@latest"),
 			starlark.String("example.com/two@latest"),
@@ -38,13 +38,13 @@ func TestGoInstallCreatesOneActionPerPackage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("go.install failed: %v", err)
 	}
-	if len(task.Actions) != 2 {
-		t.Fatalf("got %d actions, want 2", len(task.Actions))
+	if len(h.Task.Actions) != 2 {
+		t.Fatalf("got %d actions, want 2", len(h.Task.Actions))
 	}
-	if got := task.Actions[0].Summary; !strings.Contains(got, "example.com/one@latest") {
+	if got := h.Task.Actions[0].Summary; !strings.Contains(got, "example.com/one@latest") {
 		t.Errorf("first action summary = %q", got)
 	}
-	if got := task.Actions[1].Summary; !strings.Contains(got, "example.com/two@latest") {
+	if got := h.Task.Actions[1].Summary; !strings.Contains(got, "example.com/two@latest") {
 		t.Errorf("second action summary = %q", got)
 	}
 }
@@ -57,28 +57,28 @@ func TestGoInstallLocalConditions(t *testing.T) {
 	}
 
 	rt := &boot.Runtime{Root: root}
-	task, thread := testutil.TaskThread("test")
+	h := testutil.NewTask(t, "test")
 
 	m := &impl{rt: rt}
-	_, err := m.installLocal(thread, starlark.NewBuiltin("go.install_local", m.installLocal), nil, []starlark.Tuple{
+	_, err := m.installLocal(h.Thread, starlark.NewBuiltin("go.install_local", m.installLocal), nil, []starlark.Tuple{
 		{starlark.String("package"), starlark.String("example.com/tool")},
 		{starlark.String("cwd"), starlark.String(localDir)},
 	})
 	if err != nil {
 		t.Fatalf("go.install_local failed: %v", err)
 	}
-	if len(task.Actions) != 2 {
-		t.Fatalf("got %d actions, want 2", len(task.Actions))
+	if len(h.Task.Actions) != 2 {
+		t.Fatalf("got %d actions, want 2", len(h.Task.Actions))
 	}
 
-	res, err := task.Actions[0].Apply(t.Context(), true)
+	res, err := h.Task.Actions[0].Apply(t.Context(), true)
 	if err != nil {
 		t.Fatalf("apply failed: %v", err)
 	}
 	if res != boot.ResultChange {
 		t.Errorf("got result %v, want %v", res, boot.ResultChange)
 	}
-	res, err = task.Actions[1].Apply(t.Context(), true)
+	res, err = h.Task.Actions[1].Apply(t.Context(), true)
 	if err != nil {
 		t.Fatalf("apply failed: %v", err)
 	}

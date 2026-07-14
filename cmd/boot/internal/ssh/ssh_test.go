@@ -23,19 +23,12 @@ func TestSSHKeySkipsExistingKey(t *testing.T) {
 	}
 
 	rt := &boot.Runtime{Root: root}
-	task, thread := testutil.TaskThread("test")
-
+	h := testutil.NewTask(t, "test")
 	m := &impl{rt: rt}
-	_, err := m.key(thread, starlark.NewBuiltin("ssh.key", m.key), nil, []starlark.Tuple{
+	action := h.EmitOne("ssh.key", m.key, nil, []starlark.Tuple{
 		{starlark.String("path"), starlark.String(keyPath)},
 	})
-	if err != nil {
-		t.Fatalf("ssh.key failed: %v", err)
-	}
-	if len(task.Actions) != 1 {
-		t.Fatalf("got %d actions, want 1", len(task.Actions))
-	}
-	res, err := task.Actions[0].Apply(t.Context(), false)
+	res, err := action.Apply(t.Context(), false)
 	if err != nil {
 		t.Fatalf("apply failed: %v", err)
 	}

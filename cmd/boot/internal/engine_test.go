@@ -140,167 +140,56 @@ func TestRunJSONUsesDynamicActionDescription(t *testing.T) {
 	}
 }
 
-func TestPlanFailFastStopsAfterActionFailure(t *testing.T) {
-	var ranSecond bool
-	engine := &Engine{Tasks: []*Task{
-		{
-			ID:   "first",
-			Name: "first",
-			Run: starlark.NewBuiltin("first", func(thread *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, _ []starlark.Tuple) (starlark.Value, error) {
-				AddAction(thread, Action{
-					Summary: "fail",
-					Apply: func(context.Context, bool) (Result, error) {
-						return "", errors.New("boom")
-					},
-				})
-				return starlark.None, nil
-			}),
-		},
-		{
-			ID:   "second",
-			Name: "second",
-			Run: starlark.NewBuiltin("second", func(thread *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, _ []starlark.Tuple) (starlark.Value, error) {
-				AddAction(thread, Action{
-					Summary: "must not run",
-					Apply: func(context.Context, bool) (Result, error) {
-						ranSecond = true
-						return ResultSkip, nil
-					},
-				})
-				return starlark.None, nil
-			}),
-		},
-	}}
-
-	var out bytes.Buffer
-	err := engine.Run(t.Context(), &out, Selection{}, RunOptions{DryRun: true, FailFast: true})
-	if err == nil {
-		t.Fatal("Run succeeded, want failure")
+func TestFailFastStopsBeforeStartingLaterTasks(t *testing.T) {
+	cases := map[string]struct {
+		opts RunOptions
+	}{
+		"apply":         {opts: RunOptions{Concurrency: 1}},
+		"plan":          {opts: RunOptions{DryRun: true}},
+		"verbose apply": {opts: RunOptions{Verbose: true}},
 	}
-	if ranSecond {
-		t.Fatal("second task action ran after action failure")
-	}
-}
-
-func TestApplyVerboseFailFastStopsAfterActionFailure(t *testing.T) {
-	var ranSecond bool
-	engine := &Engine{Tasks: []*Task{
-		{
-			ID:   "first",
-			Name: "first",
-			Run: starlark.NewBuiltin("first", func(thread *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, _ []starlark.Tuple) (starlark.Value, error) {
-				AddAction(thread, Action{
-					Summary: "fail",
-					Apply: func(context.Context, bool) (Result, error) {
-						return "", errors.New("boom")
-					},
-				})
-				return starlark.None, nil
-			}),
-		},
-		{
-			ID:   "second",
-			Name: "second",
-			Run: starlark.NewBuiltin("second", func(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-				AddAction(thread, Action{
-					Summary: "second",
-					Apply: func(context.Context, bool) (Result, error) {
-						ranSecond = true
-						return ResultSkip, nil
-					},
-				})
-				return starlark.None, nil
-			}),
-		},
-	}}
-
-	var out bytes.Buffer
-	err := engine.Run(t.Context(), &out, Selection{}, RunOptions{Verbose: true, FailFast: true})
-	if err == nil {
-		t.Fatal("Run succeeded, want failure")
-	}
-	if ranSecond {
-		t.Fatal("second task actions ran after action failure")
-	}
-}
-
-func TestApplyFailFastStopsBeforeStartingLaterTasks(t *testing.T) {
-	var ranSecond bool
-	engine := &Engine{Tasks: []*Task{
-		{
-			ID:   "first",
-			Name: "first",
-			Run: starlark.NewBuiltin("first", func(thread *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, _ []starlark.Tuple) (starlark.Value, error) {
-				AddAction(thread, Action{
-					Summary: "fail",
-					Apply: func(context.Context, bool) (Result, error) {
-						return "", errors.New("boom")
-					},
-				})
-				return starlark.None, nil
-			}),
-		},
-		{
-			ID:   "second",
-			Name: "second",
-			Run: starlark.NewBuiltin("second", func(thread *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, _ []starlark.Tuple) (starlark.Value, error) {
-				AddAction(thread, Action{
-					Summary: "must not run",
-					Apply: func(context.Context, bool) (Result, error) {
-						ranSecond = true
-						return ResultSkip, nil
-					},
-				})
-				return starlark.None, nil
-			}),
-		},
-	}}
-
-	var out bytes.Buffer
-	err := engine.Run(t.Context(), &out, Selection{}, RunOptions{FailFast: true, Concurrency: 1})
-	if err == nil {
-		t.Fatal("Run succeeded, want failure")
-	}
-	if ranSecond {
-		t.Fatal("second task action ran after fail-fast failure")
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			var ranSecond bool
+			first := testTask("first", Action{
+				Summary: "fail",
+				Apply: func(context.Context, bool) (Result, error) {
+					return "", errors.New("boom")
+				},
+			})
+			second := testTask("second", Action{
+				Summary: "must not run",
+				Apply: func(context.Context, bool) (Result, error) {
+					ranSecond = true
+					return ResultSkip, nil
+				},
+			})
+			tc.opts.FailFast = true
+			var out bytes.Buffer
+			err := (&Engine{Tasks: []*Task{first, second}}).Run(t.Context(), &out, Selection{}, tc.opts)
+			if err == nil {
+				t.Fatal("Run succeeded, want failure")
+			}
+			if ranSecond {
+				t.Fatal("second task action ran after action failure")
+			}
+		})
 	}
 }
 
 func TestApplySkipsDependentTaskAfterDependencyFailure(t *testing.T) {
 	var ranDependent bool
-	engine := &Engine{Tasks: []*Task{
-		{
-			ID:   "setup",
-			Name: "setup",
-			Run: starlark.NewBuiltin("setup", func(thread *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, _ []starlark.Tuple) (starlark.Value, error) {
-				AddAction(thread, Action{
-					Summary: "fail",
-					Apply: func(context.Context, bool) (Result, error) {
-						return "", errors.New("boom")
-					},
-				})
-				return starlark.None, nil
-			}),
-		},
-		{
-			ID:        "apps",
-			Name:      "apps",
-			DependsOn: []string{"setup"},
-			Run: starlark.NewBuiltin("apps", func(thread *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, _ []starlark.Tuple) (starlark.Value, error) {
-				AddAction(thread, Action{
-					Summary: "must not run",
-					Apply: func(context.Context, bool) (Result, error) {
-						ranDependent = true
-						return ResultSkip, nil
-					},
-				})
-				return starlark.None, nil
-			}),
-		},
-	}}
+	setup := testTask("setup", Action{Summary: "fail", Apply: func(context.Context, bool) (Result, error) {
+		return "", errors.New("boom")
+	}})
+	apps := testTask("apps", Action{Summary: "must not run", Apply: func(context.Context, bool) (Result, error) {
+		ranDependent = true
+		return ResultSkip, nil
+	}})
+	apps.DependsOn = []string{"setup"}
 
 	var out bytes.Buffer
-	err := engine.Run(t.Context(), &out, Selection{}, RunOptions{Concurrency: 2})
+	err := (&Engine{Tasks: []*Task{setup, apps}}).Run(t.Context(), &out, Selection{}, RunOptions{Concurrency: 2})
 	if err == nil {
 		t.Fatal("Run succeeded, want failure")
 	}
@@ -312,39 +201,17 @@ func TestApplySkipsDependentTaskAfterDependencyFailure(t *testing.T) {
 
 func TestApplyFailFastPreservesContinueOnError(t *testing.T) {
 	var ranSecond bool
-	engine := &Engine{Tasks: []*Task{
-		{
-			ID:              "first",
-			Name:            "first",
-			ContinueOnError: true,
-			Run: starlark.NewBuiltin("first", func(thread *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, _ []starlark.Tuple) (starlark.Value, error) {
-				AddAction(thread, Action{
-					Summary: "fail",
-					Apply: func(context.Context, bool) (Result, error) {
-						return "", errors.New("boom")
-					},
-				})
-				return starlark.None, nil
-			}),
-		},
-		{
-			ID:   "second",
-			Name: "second",
-			Run: starlark.NewBuiltin("second", func(thread *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, _ []starlark.Tuple) (starlark.Value, error) {
-				ranSecond = true
-				AddAction(thread, Action{
-					Summary: "ok",
-					Apply: func(context.Context, bool) (Result, error) {
-						return ResultSkip, nil
-					},
-				})
-				return starlark.None, nil
-			}),
-		},
-	}}
+	first := testTask("first", Action{Summary: "fail", Apply: func(context.Context, bool) (Result, error) {
+		return "", errors.New("boom")
+	}})
+	first.ContinueOnError = true
+	second := testTask("second", Action{Summary: "ok", Apply: func(context.Context, bool) (Result, error) {
+		ranSecond = true
+		return ResultSkip, nil
+	}})
 
 	var out bytes.Buffer
-	err := engine.Run(t.Context(), &out, Selection{}, RunOptions{FailFast: true, Concurrency: 1})
+	err := (&Engine{Tasks: []*Task{first, second}}).Run(t.Context(), &out, Selection{}, RunOptions{FailFast: true, Concurrency: 1})
 	if err == nil {
 		t.Fatal("Run succeeded, want failure report")
 	}
@@ -358,28 +225,13 @@ func TestApplyFailFastPreservesContinueOnError(t *testing.T) {
 
 func TestApplyStopsCurrentTaskOnResultStop(t *testing.T) {
 	var ranSecondAction bool
-	engine := &Engine{Tasks: []*Task{
-		{
-			ID:   "first",
-			Name: "first",
-			Run: starlark.NewBuiltin("first", func(thread *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, _ []starlark.Tuple) (starlark.Value, error) {
-				AddAction(thread, Action{
-					Summary: "stop",
-					Apply: func(context.Context, bool) (Result, error) {
-						return ResultStop, nil
-					},
-				})
-				AddAction(thread, Action{
-					Summary: "must not run",
-					Apply: func(context.Context, bool) (Result, error) {
-						ranSecondAction = true
-						return ResultChange, nil
-					},
-				})
-				return starlark.None, nil
-			}),
-		},
-	}}
+	engine := &Engine{Tasks: []*Task{testTask("first",
+		Action{Summary: "stop", Apply: func(context.Context, bool) (Result, error) { return ResultStop, nil }},
+		Action{Summary: "must not run", Apply: func(context.Context, bool) (Result, error) {
+			ranSecondAction = true
+			return ResultChange, nil
+		}},
+	)}}
 
 	var out bytes.Buffer
 	err := engine.Run(t.Context(), &out, Selection{}, RunOptions{Concurrency: 1})
@@ -393,28 +245,13 @@ func TestApplyStopsCurrentTaskOnResultStop(t *testing.T) {
 
 func TestPlanDoesNotStopOnResultStop(t *testing.T) {
 	var ranSecondAction bool
-	engine := &Engine{Tasks: []*Task{
-		{
-			ID:   "first",
-			Name: "first",
-			Run: starlark.NewBuiltin("first", func(thread *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, _ []starlark.Tuple) (starlark.Value, error) {
-				AddAction(thread, Action{
-					Summary: "stop",
-					Apply: func(context.Context, bool) (Result, error) {
-						return ResultStop, nil
-					},
-				})
-				AddAction(thread, Action{
-					Summary: "still plan",
-					Apply: func(context.Context, bool) (Result, error) {
-						ranSecondAction = true
-						return ResultSkip, nil
-					},
-				})
-				return starlark.None, nil
-			}),
-		},
-	}}
+	engine := &Engine{Tasks: []*Task{testTask("first",
+		Action{Summary: "stop", Apply: func(context.Context, bool) (Result, error) { return ResultStop, nil }},
+		Action{Summary: "still plan", Apply: func(context.Context, bool) (Result, error) {
+			ranSecondAction = true
+			return ResultSkip, nil
+		}},
+	)}}
 
 	var out bytes.Buffer
 	err := engine.Run(t.Context(), &out, Selection{}, RunOptions{DryRun: true})
@@ -460,12 +297,8 @@ func TestPrepareSudo(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("sudo is not needed when running as root")
 	}
-	bin := t.TempDir()
 	marker := filepath.Join(t.TempDir(), "sudo-ran")
-	if err := os.WriteFile(filepath.Join(bin, "sudo"), []byte("#!/bin/sh\ntouch "+marker+"\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	writeFakeSudo(t, "#!/bin/sh\ntouch "+marker+"\n")
 
 	engine := &Engine{Runtime: &Runtime{Getenv: func(string) string { return "" }}}
 	var out bytes.Buffer
@@ -573,11 +406,7 @@ func TestRunPlanPromptsForSudoOnceBeforeTasks(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("sudo is not needed when running as root")
 	}
-	bin := t.TempDir()
-	if err := os.WriteFile(filepath.Join(bin, "sudo"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	writeFakeSudo(t, "#!/bin/sh\nexit 0\n")
 
 	engine := &Engine{
 		Runtime: &Runtime{Getenv: func(string) string { return "" }},
