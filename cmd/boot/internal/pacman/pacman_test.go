@@ -5,7 +5,6 @@
 package pacman
 
 import (
-	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,46 +12,39 @@ import (
 
 	boot "go.astrophena.name/tools/cmd/boot/internal"
 	"go.astrophena.name/tools/cmd/boot/internal/testutil"
-	"go.starlark.net/starlark"
 )
 
 func TestCheckOrphansSkipsWhenNone(t *testing.T) {
-	bin := t.TempDir()
-	testutil.WriteCommand(t, bin, "pacman", `#!/bin/sh
+	testutil.Commands(t, map[string]string{"pacman": `#!/bin/sh
 case "$*" in
 "-Qtdq") exit 1 ;;
 *) exit 2 ;;
 esac
-`)
-	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+`})
 
-	var out bytes.Buffer
-	result := runOrphansAction(t, &out)
+	result, warnings := runOrphansAction(t)
 	if result != boot.ResultSkip {
 		t.Fatalf("result = %s, want %s", result, boot.ResultSkip)
 	}
-	if out.Len() != 0 {
-		t.Fatalf("output = %q, want none", out.String())
+	if len(warnings) != 0 {
+		t.Fatalf("warnings = %q, want none", warnings)
 	}
 }
 
 func TestCheckOrphansWarnsWhenPresent(t *testing.T) {
-	bin := t.TempDir()
-	testutil.WriteCommand(t, bin, "pacman", `#!/bin/sh
+	testutil.Commands(t, map[string]string{"pacman": `#!/bin/sh
 case "$*" in
 "-Qtdq") printf 'oldlib\nunused\n'; exit 0 ;;
 *) exit 2 ;;
 esac
-`)
-	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+`})
 
-	var out bytes.Buffer
-	result := runOrphansAction(t, &out)
-	if result != boot.ResultWarn {
-		t.Fatalf("result = %s, want %s", result, boot.ResultWarn)
+	result, warnings := runOrphansAction(t)
+	if result != boot.ResultSkip {
+		t.Fatalf("result = %s, want %s", result, boot.ResultSkip)
 	}
-	if !strings.Contains(out.String(), "orphaned packages found") || !strings.Contains(out.String(), "oldlib") {
-		t.Fatalf("output missing orphan details:\n%s", out.String())
+	if len(warnings) != 1 || !strings.Contains(warnings[0], "orphaned packages found") || !strings.Contains(warnings[0], "oldlib") {
+		t.Fatalf("warning missing orphan details: %q", warnings)
 	}
 }
 
@@ -75,20 +67,14 @@ func TestPacnewFilesSorted(t *testing.T) {
 	}
 }
 
-func runOrphansAction(t *testing.T, out *bytes.Buffer) boot.Result {
+func runOrphansAction(t *testing.T) (boot.Result, []string) {
 	t.Helper()
-	task, thread := testutil.TaskThread("test")
-	m := &impl{rt: &boot.Runtime{Stdout: out}}
-	_, err := m.checkOrphans(thread, starlark.NewBuiltin("pacman.check_orphans", m.checkOrphans), nil, nil)
+	h := testutil.NewTask(t, "test")
+	m := &impl{rt: &boot.Runtime{}}
+	action := h.EmitOne("pacman.check_orphans", m.checkOrphans, nil, nil)
+	result, warnings, err := testutil.RunAction(t.Context(), action, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(task.Actions) != 1 {
-		t.Fatalf("got %d actions, want 1", len(task.Actions))
-	}
-	result, err := task.Actions[0].Apply(t.Context(), false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return result
+	return result, warnings
 }

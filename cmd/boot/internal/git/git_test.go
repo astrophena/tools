@@ -6,6 +6,7 @@ package git
 
 import (
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -24,34 +25,19 @@ func TestGitClone(t *testing.T) {
 		t.Skip("git not found in PATH")
 	}
 
-	root := t.TempDir()
-
-	// Initialize a local git repository to serve as the "remote".
-	remote := filepath.Join(root, "remote")
-	if err := os.Mkdir(remote, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	testutil.RunGit(t, remote, "init", "--bare")
+	root, remote, _ := newGitRemote(t)
 
 	rt := &boot.Runtime{Root: root}
-	task, thread := testutil.TaskThread("test")
-
+	h := testutil.NewTask(t, "test")
 	m := &impl{rt: rt}
 
 	// 1. Initial clone should result in Change.
 	dest := filepath.Join(root, "local")
-	_, err := m.clone(thread, starlark.NewBuiltin("git.clone", m.clone), starlark.Tuple{
+	action := h.EmitOne("git.clone", m.clone, starlark.Tuple{
 		starlark.String(remote),
 		starlark.String(dest),
 	}, nil)
-	if err != nil {
-		t.Fatalf("clone failed: %v", err)
-	}
-
-	if len(task.Actions) != 1 {
-		t.Fatalf("got %d actions, want 1", len(task.Actions))
-	}
-	res, err := task.Actions[0].Apply(t.Context(), false)
+	res, err := action.Apply(t.Context(), false)
 	if err != nil {
 		t.Fatalf("apply failed: %v", err)
 	}
@@ -63,19 +49,11 @@ func TestGitClone(t *testing.T) {
 	}
 
 	// 2. Second clone (idempotency check) should result in Skip.
-	task.Actions = nil
-	_, err = m.clone(thread, starlark.NewBuiltin("git.clone", m.clone), starlark.Tuple{
+	action = h.EmitOne("git.clone", m.clone, starlark.Tuple{
 		starlark.String(remote),
 		starlark.String(dest),
 	}, nil)
-	if err != nil {
-		t.Fatalf("clone failed: %v", err)
-	}
-
-	if len(task.Actions) != 1 {
-		t.Fatalf("got %d actions, want 1", len(task.Actions))
-	}
-	res, err = task.Actions[0].Apply(t.Context(), false)
+	res, err = action.Apply(t.Context(), false)
 	if err != nil {
 		t.Fatalf("apply failed: %v", err)
 	}
@@ -89,43 +67,18 @@ func TestGitSync(t *testing.T) {
 		t.Skip("git not found in PATH")
 	}
 
-	root := t.TempDir()
-	remote := filepath.Join(root, "remote")
-	if err := os.Mkdir(remote, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	testutil.RunGit(t, remote, "init", "--bare")
-
-	work := filepath.Join(root, "work")
-	if err := os.Mkdir(work, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	testutil.RunGit(t, work, "init")
-	testutil.RunGit(t, work, "config", "user.email", "test@example.com")
-	testutil.RunGit(t, work, "config", "user.name", "Test User")
-	if err := os.WriteFile(filepath.Join(work, "README.md"), []byte("hello\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	testutil.RunGit(t, work, "add", "README.md")
-	testutil.RunGit(t, work, "commit", "-m", "initial")
-	testutil.RunGit(t, work, "branch", "-M", "main")
-	testutil.RunGit(t, work, "remote", "add", "origin", remote)
-	testutil.RunGit(t, work, "push", "-u", "origin", "main")
-	testutil.RunGit(t, remote, "symbolic-ref", "HEAD", "refs/heads/main")
+	root, remote, _ := newGitRemote(t, "hello\n")
 
 	rt := &boot.Runtime{Root: root}
-	task, thread := testutil.TaskThread("test")
+	h := testutil.NewTask(t, "test")
 	m := &impl{rt: rt}
 
 	dest := filepath.Join(root, "local")
-	_, err := m.sync(thread, starlark.NewBuiltin("git.sync", m.sync), nil, []starlark.Tuple{
+	action := h.EmitOne("git.sync", m.sync, nil, []starlark.Tuple{
 		{starlark.String("url"), starlark.String(remote)},
 		{starlark.String("dest"), starlark.String(dest)},
 	})
-	if err != nil {
-		t.Fatalf("sync failed: %v", err)
-	}
-	res, err := task.Actions[0].Apply(t.Context(), false)
+	res, err := action.Apply(t.Context(), false)
 	if err != nil {
 		t.Fatalf("apply failed: %v", err)
 	}
@@ -136,7 +89,7 @@ func TestGitSync(t *testing.T) {
 		t.Fatalf("destination .git: %v", err)
 	}
 
-	res, err = task.Actions[0].Apply(t.Context(), false)
+	res, err = action.Apply(t.Context(), false)
 	if err != nil {
 		t.Fatalf("apply failed: %v", err)
 	}
@@ -150,45 +103,17 @@ func TestGitPullAlreadyCurrent(t *testing.T) {
 		t.Skip("git not found in PATH")
 	}
 
-	root := t.TempDir()
-	remote := filepath.Join(root, "remote")
-	if err := os.Mkdir(remote, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	testutil.RunGit(t, remote, "init", "--bare")
-
-	work := filepath.Join(root, "work")
-	if err := os.Mkdir(work, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	testutil.RunGit(t, work, "init")
-	testutil.RunGit(t, work, "config", "user.email", "test@example.com")
-	testutil.RunGit(t, work, "config", "user.name", "Test User")
-	if err := os.WriteFile(filepath.Join(work, "README.md"), []byte("hello\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	testutil.RunGit(t, work, "add", "README.md")
-	testutil.RunGit(t, work, "commit", "-m", "initial")
-	testutil.RunGit(t, work, "branch", "-M", "main")
-	testutil.RunGit(t, work, "remote", "add", "origin", remote)
-	testutil.RunGit(t, work, "push", "-u", "origin", "main")
-	testutil.RunGit(t, remote, "symbolic-ref", "HEAD", "refs/heads/main")
+	root, remote, _ := newGitRemote(t, "hello\n")
 
 	dest := filepath.Join(root, "local")
 	testutil.RunGit(t, root, "clone", remote, dest)
 
 	rt := &boot.Runtime{Root: root}
-	task, thread := testutil.TaskThread("test")
+	h := testutil.NewTask(t, "test")
 	m := &impl{rt: rt}
 
-	_, err := m.pull(thread, starlark.NewBuiltin("git.pull", m.pull), starlark.Tuple{starlark.String(dest)}, nil)
-	if err != nil {
-		t.Fatalf("pull failed: %v", err)
-	}
-	if len(task.Actions) != 1 {
-		t.Fatalf("got %d actions, want 1", len(task.Actions))
-	}
-	res, err := task.Actions[0].Apply(t.Context(), false)
+	action := h.EmitOne("git.pull", m.pull, starlark.Tuple{starlark.String(dest)}, nil)
+	res, err := action.Apply(t.Context(), false)
 	if err != nil {
 		t.Fatalf("apply failed: %v", err)
 	}
@@ -202,48 +127,19 @@ func TestGitSyncRevision(t *testing.T) {
 		t.Skip("git not found in PATH")
 	}
 
-	root := t.TempDir()
-	remote := filepath.Join(root, "remote")
-	if err := os.Mkdir(remote, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	testutil.RunGit(t, remote, "init", "--bare")
-
-	work := filepath.Join(root, "work")
-	if err := os.Mkdir(work, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	testutil.RunGit(t, work, "init")
-	testutil.RunGit(t, work, "config", "user.email", "test@example.com")
-	testutil.RunGit(t, work, "config", "user.name", "Test User")
-	if err := os.WriteFile(filepath.Join(work, "README.md"), []byte("one\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	testutil.RunGit(t, work, "add", "README.md")
-	testutil.RunGit(t, work, "commit", "-m", "one")
-	first := strings.TrimSpace(testutil.RunGitOutput(t, work, "rev-parse", "HEAD"))
-	if err := os.WriteFile(filepath.Join(work, "README.md"), []byte("two\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	testutil.RunGit(t, work, "commit", "-am", "two")
-	testutil.RunGit(t, work, "branch", "-M", "main")
-	testutil.RunGit(t, work, "remote", "add", "origin", remote)
-	testutil.RunGit(t, work, "push", "-u", "origin", "main")
-	testutil.RunGit(t, remote, "symbolic-ref", "HEAD", "refs/heads/main")
+	root, remote, revisions := newGitRemote(t, "one\n", "two\n")
+	first := revisions[0]
 
 	rt := &boot.Runtime{Root: root}
-	task, thread := testutil.TaskThread("test")
+	h := testutil.NewTask(t, "test")
 	m := &impl{rt: rt}
 	dest := filepath.Join(root, "local")
-	_, err := m.sync(thread, starlark.NewBuiltin("git.sync", m.sync), nil, []starlark.Tuple{
+	action := h.EmitOne("git.sync", m.sync, nil, []starlark.Tuple{
 		{starlark.String("url"), starlark.String(remote)},
 		{starlark.String("dest"), starlark.String(dest)},
 		{starlark.String("revision"), starlark.String(first)},
 	})
-	if err != nil {
-		t.Fatalf("sync failed: %v", err)
-	}
-	res, err := task.Actions[0].Apply(t.Context(), false)
+	res, err := action.Apply(t.Context(), false)
 	if err != nil {
 		t.Fatalf("apply failed: %v", err)
 	}
@@ -258,11 +154,45 @@ func TestGitSyncRevision(t *testing.T) {
 	if branch != "" {
 		t.Fatalf("branch = %q, want detached HEAD", branch)
 	}
-	res, err = task.Actions[0].Apply(t.Context(), true)
+	res, err = action.Apply(t.Context(), true)
 	if err != nil {
 		t.Fatalf("dry-run apply failed: %v", err)
 	}
 	if res != boot.ResultSkip {
 		t.Errorf("got dry-run result %v, want %v", res, boot.ResultSkip)
 	}
+}
+
+func newGitRemote(t *testing.T, contents ...string) (root, remote string, revisions []string) {
+	t.Helper()
+	root = t.TempDir()
+	remote = filepath.Join(root, "remote")
+	if err := os.Mkdir(remote, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	testutil.RunGit(t, remote, "init", "--bare")
+	if len(contents) == 0 {
+		return root, remote, nil
+	}
+
+	work := filepath.Join(root, "work")
+	if err := os.Mkdir(work, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	testutil.RunGit(t, work, "init")
+	testutil.RunGit(t, work, "config", "user.email", "test@example.com")
+	testutil.RunGit(t, work, "config", "user.name", "Test User")
+	for i, content := range contents {
+		if err := os.WriteFile(filepath.Join(work, "README.md"), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, work, "add", "README.md")
+		testutil.RunGit(t, work, "commit", "-m", fmt.Sprintf("commit %d", i+1))
+		revisions = append(revisions, strings.TrimSpace(testutil.RunGitOutput(t, work, "rev-parse", "HEAD")))
+	}
+	testutil.RunGit(t, work, "branch", "-M", "main")
+	testutil.RunGit(t, work, "remote", "add", "origin", remote)
+	testutil.RunGit(t, work, "push", "-u", "origin", "main")
+	testutil.RunGit(t, remote, "symbolic-ref", "HEAD", "refs/heads/main")
+	return root, remote, revisions
 }

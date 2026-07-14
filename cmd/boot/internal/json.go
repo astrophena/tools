@@ -5,10 +5,7 @@
 package internal
 
 import (
-	"context"
 	"encoding/json"
-	"errors"
-	"fmt"
 	"io"
 )
 
@@ -18,9 +15,10 @@ import (
 // keeps stdout valid JSON even when an action fails midway and makes it safe
 // for other programs to parse boot output without watching event boundaries.
 type jsonRun struct {
-	DryRun  bool         `json:"dry_run"`
-	Summary Summary      `json:"summary"`
-	Actions []jsonAction `json:"actions"`
+	DryRun   bool         `json:"dry_run"`
+	Summary  Summary      `json:"summary"`
+	Actions  []jsonAction `json:"actions"`
+	Warnings []warning    `json:"warnings,omitempty"`
 }
 
 type jsonAction struct {
@@ -31,92 +29,24 @@ type jsonAction struct {
 	Error    string `json:"error,omitempty"`
 }
 
-// runJSON executes tasks in deterministic order and suppresses module chatter.
-//
-// Human modes allow check modules to print details through Runtime.Stdout. JSON
-// mode redirects that writer to io.Discard while actions run so stdout contains
-// only the final JSON object. If a caller needs verbose diagnostics, it should
-// run without -json.
-func (e *Engine) runJSON(ctx context.Context, w io.Writer, selection Selection, opts RunOptions) error {
-	if e.Runtime != nil {
-		oldStdout := e.Runtime.Stdout
-		e.Runtime.Stdout = io.Discard
-		defer func() { e.Runtime.Stdout = oldStdout }()
-	}
-	tasks, err := e.Selected(selection)
-	if err != nil {
-		return err
-	}
-	planned, summary, failures, stopOnError := e.prepare(ctx, tasks, opts)
-	status := initialTaskStatus(tasks, planned, failures)
-	if err := newSudoPrompter(e).prepare(ctx, io.Discard, tasks); err != nil {
-		return err
-	}
-	report := jsonRun{DryRun: opts.DryRun, Summary: summary}
-	for _, f := range failures {
-		report.Actions = append(report.Actions, jsonAction{TaskID: f.TaskID, TaskName: f.TaskName, Error: f.Err.Error()})
-	}
-
-	if stopOnError && opts.FailFast {
-		if err := json.NewEncoder(w).Encode(report); err != nil {
-			return err
-		}
-		return errors.New("one or more tasks failed")
-	}
-
-	for _, task := range tasks {
-		if !planned[task.ID] {
-			continue
-		}
-		if dep, failed := failedDependency(status, task); failed {
-			err := fmt.Errorf("dependency %s failed", dep)
-			report.Summary.Failed++
-			report.Actions = append(report.Actions, jsonAction{TaskID: task.ID, TaskName: task.Name, Error: err.Error()})
-			status[task.ID] = taskFailed
-			if opts.FailFast && !task.ContinueOnError {
-				break
-			}
-			continue
-		}
-		status[task.ID] = taskSucceeded
-		stop := false
-		for _, action := range task.Actions {
-			report.Summary.Actions++
-			result, err := action.Apply(ctx, opts.DryRun)
-			item := jsonAction{TaskID: task.ID, TaskName: task.Name, Summary: action.Summary, Result: result}
-			if err != nil {
-				status[task.ID] = taskFailed
-				report.Summary.Failed++
-				item.Error = err.Error()
-				report.Actions = append(report.Actions, item)
-				if opts.FailFast && !task.ContinueOnError {
-					stop = true
-					break
-				}
-				continue
-			}
-			switch result {
-			case ResultChange:
-				report.Summary.Changed++
-			case ResultSkip, ResultStop:
-				report.Summary.Skipped++
-			case ResultWarn:
-				report.Summary.Warnings++
-			}
-			report.Actions = append(report.Actions, item)
-			if result == ResultStop && !opts.DryRun {
-				break
-			}
-		}
-		if stop {
-			break
+func (e *Engine) printJSON(w io.Writer, run execution, warnings []warning, dryRun bool) error {
+	report := jsonRun{DryRun: dryRun, Summary: run.summary, Warnings: warnings}
+	for _, failure := range run.failures {
+		if failure.Action == "" {
+			report.Actions = append(report.Actions, jsonAction{
+				TaskID: failure.TaskID, TaskName: failure.TaskName, Error: failure.Err.Error(),
+			})
 		}
 	}
-	if err := json.NewEncoder(w).Encode(report); err != nil {
-		return err
+	for _, action := range run.orderedActions() {
+		item := jsonAction{
+			TaskID: action.task.ID, TaskName: action.task.Name,
+			Summary: action.action.description(), Result: action.result,
+		}
+		if action.err != nil {
+			item.Error = action.err.Error()
+		}
+		report.Actions = append(report.Actions, item)
 	}
-	if report.Summary.Failed > 0 {
-		return errors.New("one or more tasks failed")
-	}
-	return nil
+	return json.NewEncoder(w).Encode(report)
 }

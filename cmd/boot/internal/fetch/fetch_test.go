@@ -21,9 +21,9 @@ import (
 
 func TestFetchFileRejectsInvalidChecksum(t *testing.T) {
 	rt := &boot.Runtime{Root: t.TempDir()}
-	_, thread := testutil.TaskThread("test")
+	h := testutil.NewTask(t, "test")
 	m := &impl{rt: rt}
-	_, err := m.file(thread, starlark.NewBuiltin("fetch.file", m.file), nil, []starlark.Tuple{
+	_, err := m.file(h.Thread, starlark.NewBuiltin("fetch.file", m.file), nil, []starlark.Tuple{
 		{starlark.String("url"), starlark.String("https://example.invalid/file")},
 		{starlark.String("path"), starlark.String("file")},
 		{starlark.String("checksum"), starlark.String("sha256:not-hex")},
@@ -46,17 +46,14 @@ func TestFetchFileUpdatesModeWithoutChecksum(t *testing.T) {
 		t.Fatal(err)
 	}
 	rt := &boot.Runtime{Root: root}
-	task, thread := testutil.TaskThread("test")
+	h := testutil.NewTask(t, "test")
 	m := &impl{rt: rt}
-	_, err := m.file(thread, starlark.NewBuiltin("fetch.file", m.file), nil, []starlark.Tuple{
+	action := h.EmitOne("fetch.file", m.file, nil, []starlark.Tuple{
 		{starlark.String("url"), starlark.String(server.URL)},
 		{starlark.String("path"), starlark.String(path)},
 		{starlark.String("mode"), starlark.MakeInt(0o600)},
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	res, err := task.Actions[0].Apply(t.Context(), false)
+	res, err := action.Apply(t.Context(), false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,24 +78,17 @@ func TestFetchFile(t *testing.T) {
 
 	root := t.TempDir()
 	rt := &boot.Runtime{Root: root}
-	task, thread := testutil.TaskThread("test")
-
+	h := testutil.NewTask(t, "test")
 	m := &impl{rt: rt}
 	path := filepath.Join(root, "dir", "file.txt")
 	checksum := fmt.Sprintf("%x", sha256.Sum256(content))
-	_, err := m.file(thread, starlark.NewBuiltin("fetch.file", m.file), nil, []starlark.Tuple{
+	action := h.EmitOne("fetch.file", m.file, nil, []starlark.Tuple{
 		{starlark.String("url"), starlark.String(server.URL)},
 		{starlark.String("path"), starlark.String(path)},
 		{starlark.String("mode"), starlark.MakeInt(0o600)},
 		{starlark.String("checksum"), starlark.String(checksum)},
 	})
-	if err != nil {
-		t.Fatalf("fetch.file failed: %v", err)
-	}
-	if len(task.Actions) != 1 {
-		t.Fatalf("got %d actions, want 1", len(task.Actions))
-	}
-	res, err := task.Actions[0].Apply(t.Context(), false)
+	res, err := action.Apply(t.Context(), false)
 	if err != nil {
 		t.Fatalf("apply failed: %v", err)
 	}
@@ -120,7 +110,7 @@ func TestFetchFile(t *testing.T) {
 		t.Errorf("got mode %o, want 0600", info.Mode().Perm())
 	}
 
-	res, err = task.Actions[0].Apply(t.Context(), false)
+	res, err = action.Apply(t.Context(), false)
 	if err != nil {
 		t.Fatalf("apply failed: %v", err)
 	}

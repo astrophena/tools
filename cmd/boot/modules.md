@@ -122,7 +122,9 @@ the package manager, so no-op runs are fast.
 Update the package manager's database and upgrade installed packages. With
 `pacman`, boot first checks for pending updates using a separate database under
 `$XDG_CACHE_HOME/boot/pacman` (or `~/.cache/boot/pacman`) and skips when the
-system is already current.
+system is already current. If a pending package owns files under
+`/usr/lib/modules`, planning warns that the update will require a reboot and a
+successful apply warns that the machine needs rebooting.
 
 ### `pkg.check_explicit_packages(packages)`
 

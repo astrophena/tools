@@ -39,11 +39,13 @@ Action results are:
 
 - `ResultSkip`: the host already matched the requested state;
 - `ResultChange`: the action changed the host or would change it in dry-run;
-- `ResultWarn`: the action found a non-fatal issue;
 - `ResultStop`: stop the remaining actions in this task without failing.
 
 Use `ResultStop` only for gating actions such as `consent.require`; normal
 idempotency should use skip/change.
+
+Warnings are independent of action results. Call `boot.Warn(ctx, message)` from
+`Apply` to add a non-fatal diagnostic to the run's final warning report.
 
 ## Writing Modules
 
@@ -71,7 +73,7 @@ Module function checklist:
 - In dry-run, perform enough checks to decide skip/change but do not write.
 - Include command output in returned errors; prefer `boot.RunCommand`,
   `boot.RunCmd`, `boot.CommandOutput`, or `boot.CommandError`.
-- Use `boot.Output` and `boot.BulletList` for user-visible check details.
+- Use `boot.Warn` and `boot.BulletList` for user-visible check details.
 - Validate Starlark file modes with `boot.FileMode`.
 - Keep successful JSON or textual output minimal; noisy reporting belongs in
   explicit check modules.
@@ -94,8 +96,8 @@ apply` when you need per-action skip/change output. For task filtering
 bugs, `boot list`, `-only`, `-skip`, and `-tag` exercise the selection path
 without running actions.
 
-Use `--json` when another program needs stable output. JSON runs use a simpler
-sequential execution path so action results are ordered and easy to consume.
+Use `--json` when another program needs stable output. JSON runs use the same
+scheduler as human-readable runs and sort action results before encoding them.
 
 Task selection is strict: if `-only`, `-skip`, or `-tag` leaves a selected task
 without one of its declared dependencies, selection fails instead of silently
