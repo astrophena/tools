@@ -4,7 +4,6 @@ import {
   CategoryScale,
   Chart,
   ChartConfiguration,
-  Filler,
   Legend,
   LinearScale,
   LineController,
@@ -18,7 +17,6 @@ Chart.register(
   BarController,
   BarElement,
   CategoryScale,
-  Filler,
   Legend,
   LinearScale,
   LineController,
@@ -50,7 +48,10 @@ let registered = false;
 
 function fail(container: HTMLElement, error?: unknown): void {
   if (error) console.error("Chart rendering failed", error);
-  container.replaceChildren(document.createTextNode(fallback));
+  const message = document.createElement("p");
+  message.className = "chart-empty-hint";
+  message.textContent = fallback;
+  container.replaceChildren(message);
 }
 
 function render(container: HTMLElement): void {
@@ -93,18 +94,11 @@ function render(container: HTMLElement): void {
       ticks: { color: "#9db1be" },
       grid: { color: "rgba(157, 177, 190, 0.14)" },
     };
-    if (spec.preset === "health") {
-      options.scales ??= {};
-      const y = options.scales.y ??= {};
-      y.max = 100;
-      y.ticks ??= {};
-      y.ticks.callback = (value) => `${value}%`;
-    }
-    if (spec.preset === "bytes") {
+    if (spec.preset === "seconds") {
       options.scales ??= {};
       const y = options.scales.y ??= {};
       y.ticks ??= {};
-      y.ticks.callback = (value) => formatBytes(Number(value));
+      y.ticks.callback = (value) => formatSeconds(Number(value));
     }
     if (spec.select_urls?.length) {
       options.onClick = (_event, elements) => {
@@ -193,15 +187,9 @@ export function registerCharts(root: ParentNode = document): void {
     );}
 }
 
-function formatBytes(bytes: number): string {
-  // Match humanfmt.Bytes used by the server-rendered memory indicator.
-  const units = ["B", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB"];
-  let value = bytes;
-  let unit = 0;
-  while (value >= 1024 && unit < units.length - 1) {
-    value /= 1024;
-    unit++;
-  }
-  const formatted = value.toFixed(unit === 0 ? 0 : 1).replace(/\.0$/, "");
-  return `${formatted} ${units[unit]}`;
+function formatSeconds(seconds: number): string {
+  if (seconds < 1) return `${Math.round(seconds * 1000)} ms`;
+  if (seconds < 60) return `${seconds.toFixed(1).replace(/\.0$/, "")} s`;
+  const minutes = Math.floor(seconds / 60);
+  return `${minutes}m ${Math.round(seconds % 60)}s`;
 }

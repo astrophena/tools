@@ -37,12 +37,6 @@ func (u *ui) handleStats(w http.ResponseWriter, r *http.Request) {
 	u.render(w, r, p, components.FragmentDashboardContent, components.FragmentStatsContent)
 }
 
-func (u *ui) handleStatsNothingToSave(w http.ResponseWriter, r *http.Request) {
-	p := u.statsPage(r)
-	p.Banner = "Nothing to save"
-	u.render(w, r, p, components.FragmentDashboardContent)
-}
-
 func (u *ui) statsPage(r *http.Request) components.PageProps {
 	p := u.page("Stats", components.RouteStats)
 	query, err := parseStatsQuery(r)

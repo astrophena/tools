@@ -40,7 +40,6 @@ type chartDataset struct {
 	BackgroundColor chartColors `json:"backgroundColor"`
 	BorderColor     string      `json:"borderColor,omitempty"`
 	Tension         float64     `json:"tension,omitempty"`
-	Fill            bool        `json:"fill,omitempty"`
 }
 
 type chartOptions struct {
@@ -69,13 +68,11 @@ func (c chartColors) MarshalJSON() ([]byte, error) {
 }
 
 type detailCharts struct {
-	FeedHealth  string
-	Composition string
-	Delivery    string
-	HTTPStatus  string
-	Latency     string
-	Errors      string
-	Memory      string
+	RequestPhases string
+	Items         string
+	Delivery      string
+	SendLatency   string
+	HTTPStatus    string
 }
 
 func chartJSON(spec chartSpec) string {
@@ -89,23 +86,38 @@ func chartJSON(spec chartSpec) string {
 	return string(b)
 }
 
-func timelineChart(p StatsProps) string {
+func detailsCharts(run *stats.Run) detailCharts {
+	if run == nil {
+		return detailCharts{}
+	}
+	return detailCharts{
+		RequestPhases: requestPhaseChart(run),
+		Items:         itemDispositionChart(run),
+		Delivery:      deliveryFailureChart(run),
+		SendLatency:   deliveryLatencyChart(run),
+		HTTPStatus:    httpStatusChart(run),
+	}
+}
+
+func latencyTrendChart(p StatsProps) string {
 	runs := recentRuns(p.Runs)
 	labels := make([]string, 0, len(runs))
-	values := make([]float64, 0, len(runs))
+	p50 := make([]float64, 0, len(runs))
+	p90 := make([]float64, 0, len(runs))
+	p99 := make([]float64, 0, len(runs))
 	times := make([]time.Time, 0, len(runs))
 	urls := make([]string, 0, len(runs))
-	// The store returns newest first, while charts read naturally from oldest
-	// to newest along the horizontal axis.
 	for i := len(runs) - 1; i >= 0; i-- {
-		run := runs[i]
-		labels = append(labels, run.StartTime.UTC().Format("02.01 15:04"))
-		values = append(values, percent(healthyFeeds(run), run.TotalFeeds))
-		times = append(times, run.StartTime)
-		urls = append(urls, statsURL(run.StartedAtUnix, p.AutoRefresh, p.DetailsOpen))
+		summary := runs[i]
+		labels = append(labels, summary.StartTime.UTC().Format("02.01 15:04"))
+		p50 = append(p50, float64(summary.FetchLatencyMS.P50)/1000)
+		p90 = append(p90, float64(summary.FetchLatencyMS.P90)/1000)
+		p99 = append(p99, float64(summary.FetchLatencyMS.P99)/1000)
+		times = append(times, summary.StartTime)
+		urls = append(urls, statsURL(summary.StartedAtUnix, p.AutoRefresh, p.DetailsOpen))
 	}
 	return chartJSON(chartSpec{
-		Preset:    "health",
+		Preset:    "seconds",
 		Times:     times,
 		SelectURL: urls,
 		Config: chartConfig{
@@ -113,66 +125,85 @@ func timelineChart(p StatsProps) string {
 			Data: chartData{
 				Labels: labels,
 				Datasets: []chartDataset{
-					{
-						Label:           "Healthy feeds (%)",
-						Data:            values,
-						BorderColor:     "#6fe1b7",
-						BackgroundColor: color("rgba(111, 225, 183, 0.2)"),
-						Tension:         0.32,
-						Fill:            true,
-					},
+					lineDataset("Fetch p50", p50, "#6fe1b7"),
+					lineDataset("Fetch p90", p90, "#72d7f6"),
+					lineDataset("Fetch p99", p99, "#ff8e95"),
 				},
 			},
-			Options: chartOptions{
-				Interaction: &chartInteraction{
-					Mode: "index",
-				},
-			},
+			Options: chartOptions{Interaction: &chartInteraction{Mode: "index"}},
 		},
 	})
 }
 
-func detailsCharts(p StatsProps) detailCharts {
-	run := p.Active
-	if run == nil {
-		return detailCharts{}
+func requestPhaseChart(run *stats.Run) string {
+	phases := []stats.DurationStats{
+		run.RequestTiming.DNS,
+		run.RequestTiming.TCPConnect,
+		run.RequestTiming.TLSHandshake,
+		run.RequestTiming.RequestWrite,
+		run.RequestTiming.ResponseWait,
+		run.RequestTiming.ResponseBodyRead,
 	}
-	runs := recentRuns(p.Runs)
-	labels := make([]string, 0, len(runs))
-	healthy := make([]float64, 0, len(runs))
-	failed := make([]float64, 0, len(runs))
-	memory := make([]float64, 0, len(runs))
-	for i := len(runs) - 1; i >= 0; i-- {
-		summary := runs[i]
-		labels = append(labels, summary.StartTime.UTC().Format("02.01 15:04"))
-		healthy = append(healthy, float64(healthyFeeds(summary)))
-		failed = append(failed, float64(summary.FailedFeeds))
-		memory = append(memory, float64(summary.MemoryUsage))
+	values := make([]float64, len(phases))
+	hasData := false
+	for i, phase := range phases {
+		values[i] = float64(phase.PercentileMS.P90) / 1000
+		hasData = hasData || phase.Count > 0
 	}
-	pending := max(run.MessagesAttempted-run.MessagesSent-run.MessagesFailed, 0)
+	if !hasData {
+		return ""
+	}
+	return barChartPreset(
+		[]string{"DNS", "TCP", "TLS", "Request write", "Response wait", "Body read"},
+		"seconds",
+		dataset("P90", values, color("rgba(111, 225, 183, 0.72)")),
+	)
+}
 
-	feedHealth := barChart(
-		labels,
-		dataset("Healthy", healthy, color("rgba(122, 223, 172, 0.8)")),
-		dataset("Failed", failed, color("rgba(255, 127, 136, 0.85)")),
-	)
-	composition := barChart(
-		[]string{"Success", "Not changed", "Failed"},
+func itemDispositionChart(run *stats.Run) string {
+	if run.ItemsEnqueuedTotal+run.ItemsDedupedTotal+run.ItemsSkippedOldTotal+run.ItemsFilteredTotal == 0 {
+		return ""
+	}
+	return barChart(
+		[]string{"Enqueued", "Deduplicated", "Skipped old", "Filtered"},
 		dataset(
-			"Feeds",
-			numbers(run.SuccessFeeds, run.NotModifiedFeeds, run.FailedFeeds),
-			colors("#6de2b7", "#72d7f6", "#ff8e95"),
+			"Items",
+			numbers(run.ItemsEnqueuedTotal, run.ItemsDedupedTotal, run.ItemsSkippedOldTotal, run.ItemsFilteredTotal),
+			colors("#6de2b7", "#72d7f6", "#f0be6e", "#8d9aa3"),
 		),
 	)
-	delivery := barChart(
-		[]string{"Sent", "Failed", "Pending"},
+}
+
+func deliveryFailureChart(run *stats.Run) string {
+	if run.MessagesSent+run.MessagesFailed+run.MessagesFormattingFailed == 0 {
+		return ""
+	}
+	return barChart(
+		[]string{"Sent", "Send failed", "Formatting failed"},
 		dataset(
-			"Delivery",
-			numbers(run.MessagesSent, run.MessagesFailed, pending),
-			colors("#6de2b7", "#ff8e95", "#6b93f7"),
+			"Messages",
+			numbers(run.MessagesSent, run.MessagesFailed, run.MessagesFormattingFailed),
+			colors("#6de2b7", "#ff8e95", "#f0be6e"),
 		),
 	)
-	httpStatus := barChart(
+}
+
+func deliveryLatencyChart(run *stats.Run) string {
+	if run.MessagesAttempted == 0 {
+		return ""
+	}
+	return barChartPreset(
+		[]string{"P50", "P90", "P99", "Max"},
+		"seconds",
+		dataset("Telegram delivery", percentileSeconds(run.SendLatencyMS), color("rgba(126, 167, 255, 0.72)")),
+	)
+}
+
+func httpStatusChart(run *stats.Run) string {
+	if run.HTTP4xxCount+run.HTTP5xxCount == 0 {
+		return ""
+	}
+	return barChart(
 		[]string{"2xx", "3xx", "4xx", "5xx"},
 		dataset(
 			"HTTP",
@@ -180,48 +211,6 @@ func detailsCharts(p StatsProps) detailCharts {
 			colors("#6de2b7", "#72d7f6", "#f0be6e", "#ff8e95"),
 		),
 	)
-	latency := barChart(
-		[]string{"P50", "P90", "P99", "Max"},
-		dataset(
-			"Fetch latency (s)",
-			seconds(run.FetchLatencyMS),
-			color("rgba(111, 225, 183, 0.72)"),
-		),
-		dataset(
-			"Send latency (s)",
-			seconds(run.SendLatencyMS),
-			color("rgba(126, 167, 255, 0.7)"),
-		),
-	)
-	errorSources := barChart(
-		[]string{"Timeout", "Network", "Parse", "Retries", "Rate limit retries"},
-		dataset(
-			"Counts",
-			numbers(
-				run.TimeoutCount,
-				run.NetworkErrorCount,
-				run.ParseErrorCount,
-				run.FetchRetriesTotal,
-				run.SpecialRateLimitRetries,
-			),
-			color("rgba(255, 142, 149, 0.72)"),
-		),
-	)
-	memoryChart := barChartPreset(
-		labels,
-		"bytes",
-		dataset("Memory usage", memory, color("rgba(180, 150, 255, 0.72)")),
-	)
-
-	return detailCharts{
-		FeedHealth:  feedHealth,
-		Composition: composition,
-		Delivery:    delivery,
-		HTTPStatus:  httpStatus,
-		Latency:     latency,
-		Errors:      errorSources,
-		Memory:      memoryChart,
-	}
 }
 
 func recentRuns(runs []stats.RunSummary) []stats.RunSummary {
@@ -238,6 +227,16 @@ func dataset(label string, data []float64, background chartColors) chartDataset 
 	}
 }
 
+func lineDataset(label string, data []float64, color string) chartDataset {
+	return chartDataset{
+		Label:           label,
+		Data:            data,
+		BackgroundColor: chartColors{color},
+		BorderColor:     color,
+		Tension:         0.32,
+	}
+}
+
 func numbers(values ...int) []float64 {
 	result := make([]float64, len(values))
 	for i, value := range values {
@@ -246,12 +245,12 @@ func numbers(values ...int) []float64 {
 	return result
 }
 
-func seconds(p stats.PercentileStats) []float64 {
+func percentileSeconds(values stats.PercentileStats) []float64 {
 	return []float64{
-		float64(p.P50) / 1000,
-		float64(p.P90) / 1000,
-		float64(p.P99) / 1000,
-		float64(p.Max) / 1000,
+		float64(values.P50) / 1000,
+		float64(values.P90) / 1000,
+		float64(values.P99) / 1000,
+		float64(values.Max) / 1000,
 	}
 }
 

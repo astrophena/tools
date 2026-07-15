@@ -40,3 +40,16 @@
 .runs-table tbody tr.selected {
   background: rgba(88, 211, 167, 0.15);
 }
+
+.runs-table a,
+.runs-table a:visited {
+  color: inherit;
+  text-decoration: none;
+}
+
+.runs-table a:hover,
+.runs-table a:focus-visible {
+  color: var(--brand-soft);
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+}

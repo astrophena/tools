@@ -25,7 +25,23 @@ func formatRelativeTime(t, now time.Time) string {
 	}
 	// The render timestamp is supplied by the page model to keep server output
 	// deterministic within one response and straightforward to test.
-	return humanfmt.RelativeTime(t, now)
+	difference := now.Sub(t)
+	if difference < 0 {
+		return "just now"
+	}
+	seconds := int(difference / time.Second)
+	if seconds < 60 {
+		return fmt.Sprintf("%ds ago", seconds)
+	}
+	minutes := seconds / 60
+	if minutes < 60 {
+		return fmt.Sprintf("%dm ago", minutes)
+	}
+	hours := minutes / 60
+	if hours < 24 {
+		return fmt.Sprintf("%dh ago", hours)
+	}
+	return fmt.Sprintf("%dd ago", hours/24)
 }
 
 func formatDuration(d time.Duration) string {
@@ -39,6 +55,13 @@ func formatDuration(d time.Duration) string {
 		return fmt.Sprintf("%.1f s", d.Seconds())
 	}
 	return fmt.Sprintf("%dm %.0fs", int(d.Minutes()), math.Mod(d.Seconds(), 60))
+}
+
+func formatMilliseconds(value int64) string {
+	if value < 0 {
+		return "n/a"
+	}
+	return formatDuration(time.Duration(value) * time.Millisecond)
 }
 
 func formatPercent(v float64, valid bool) string {

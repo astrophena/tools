@@ -542,6 +542,7 @@ func TestDecideFeedItem(t *testing.T) {
 			testutil.AssertEqual(t, len(tc.state.SeenItems), beforeSeenCount)
 		})
 	}
+
 }
 
 func TestFeedItemPassesRules(t *testing.T) {
@@ -614,6 +615,30 @@ func TestFeedItemPassesRules(t *testing.T) {
 			testutil.AssertEqual(t, got, tc.want)
 		})
 	}
+
+	t.Run("filtered items are counted", func(t *testing.T) {
+		now := time.Now()
+		f := newTestFetcher(t, newTestEnv(t, nil, nil))
+		f.stats = syncx.Protect(&tgstats.Run{})
+		fd := &feed{
+			url:       "https://example.com/feed.xml",
+			blockRule: makeRule(t, "def rule(item):\n  return True\n", "rule"),
+		}
+		f.enqueueFeedItems(
+			fd,
+			state.NewFeed(now.Add(-time.Hour)),
+			true,
+			[]*gofeed.Item{{
+				GUID:            "blocked-item",
+				Link:            "https://example.com/blocked-item",
+				PublishedParsed: &now,
+			}},
+			make(chan *update, 1),
+		)
+		f.stats.ReadAccess(func(s *tgstats.Run) {
+			testutil.AssertEqual(t, s.ItemsFilteredTotal, 1)
+		})
+	})
 }
 
 func TestHandleFeedStatus(t *testing.T) {

@@ -13,8 +13,15 @@ import {
   indentOnInput,
   syntaxHighlighting,
 } from "@codemirror/language";
-import { EditorState } from "@codemirror/state";
 import {
+  EditorState,
+  RangeSetBuilder,
+  StateEffect,
+  StateField,
+} from "@codemirror/state";
+import {
+  Decoration,
+  DecorationSet,
   drawSelection,
   dropCursor,
   EditorView,
@@ -23,6 +30,7 @@ import {
   highlightSpecialChars,
   keymap,
   lineNumbers,
+  WidgetType,
 } from "@codemirror/view";
 import { oneDark } from "@codemirror/theme-one-dark";
 import htmx, { HtmxExtension } from "htmx.org";
@@ -33,6 +41,69 @@ const hx = htmx as unknown as {
 
 const editors = new WeakMap<HTMLTextAreaElement, EditorView>();
 let registered = false;
+
+class ErrorWidget extends WidgetType {
+  constructor(readonly message: string) {
+    super();
+  }
+
+  override eq(other: ErrorWidget): boolean {
+    return other.message === this.message;
+  }
+
+  override toDOM(): HTMLElement {
+    const element = document.createElement("div");
+    element.className = "cm-error-widget";
+    element.textContent = this.message;
+    return element;
+  }
+}
+
+type InlineError = { line: number; message: string } | null;
+
+const setInlineError = StateEffect.define<InlineError>();
+
+const inlineErrorField = StateField.define<DecorationSet>({
+  create: () => Decoration.none,
+  update(decorations, transaction) {
+    decorations = transaction.docChanged
+      ? Decoration.none
+      : decorations.map(transaction.changes);
+    for (const effect of transaction.effects) {
+      if (!effect.is(setInlineError)) continue;
+      const error = effect.value;
+      if (
+        !error || error.line <= 0 || error.line > transaction.state.doc.lines
+      ) {
+        decorations = Decoration.none;
+        continue;
+      }
+      const line = transaction.state.doc.line(error.line);
+      const builder = new RangeSetBuilder<Decoration>();
+      builder.add(
+        line.from,
+        line.from,
+        Decoration.widget({
+          widget: new ErrorWidget(error.message),
+          side: -1,
+          block: true,
+        }),
+      );
+      if (line.to > line.from) {
+        builder.add(
+          line.from,
+          line.to,
+          Decoration.mark({
+            class: "cm-error-line",
+          }),
+        );
+      }
+      decorations = builder.finish();
+    }
+    return decorations;
+  },
+  provide: (field) => EditorView.decorations.from(field),
+});
 
 function completions(context: CompletionContext) {
   const word = context.matchBefore(/\w*/);
@@ -58,14 +129,54 @@ function completions(context: CompletionContext) {
   };
 }
 
+function updateDirtyState(
+  textarea: HTMLTextAreaElement,
+  panel: HTMLElement | null,
+  status: HTMLElement | null,
+  save: HTMLButtonElement | null,
+  baseline: string,
+): void {
+  const dirty = textarea.value !== baseline;
+  textarea.dataset.dirty = String(dirty);
+  if (panel) panel.dataset.dirty = String(dirty);
+  if (status) {
+    status.textContent = dirty ? "Unsaved" : "Synced";
+    status.classList.toggle("pill-warning", dirty);
+  }
+  if (save) save.disabled = !dirty;
+}
+
+function showInlineError(view: EditorView, value: string | undefined): void {
+  const match = value?.match(/:(\d+):(\d+): (.*)/);
+  if (!match) return;
+  const lineNumber = Number.parseInt(match[1], 10);
+  const column = Number.parseInt(match[2], 10);
+  if (lineNumber <= 0 || lineNumber > view.state.doc.lines) return;
+  const line = view.state.doc.line(lineNumber);
+  const position = column > 0 && column <= line.length + 1
+    ? line.from + column - 1
+    : line.from;
+  view.dispatch({
+    selection: { anchor: position },
+    effects: [
+      setInlineError.of({ line: lineNumber, message: match[3] }),
+      EditorView.scrollIntoView(position, { y: "center" }),
+    ],
+  });
+  view.focus();
+}
+
 function initialize(textarea: HTMLTextAreaElement): void {
   if (editors.has(textarea)) return;
   const panel = textarea.closest<HTMLElement>("[data-editor-panel]");
-  const status = panel?.querySelector<HTMLElement>("[data-editor-status]");
-  const save = panel?.querySelector<HTMLButtonElement>("[data-editor-save]");
+  const status = panel?.querySelector<HTMLElement>("[data-editor-status]") ??
+    null;
+  const save = panel?.querySelector<HTMLButtonElement>("[data-editor-save]") ??
+    null;
   // The textarea remains the form control and source of truth. CodeMirror is
   // only a visual enhancement, so native submission still works without it.
   const baseline = textarea.dataset.baseline ?? textarea.value;
+  updateDirtyState(textarea, panel, status, save, baseline);
   const parent = document.createElement("div");
   textarea.insertAdjacentElement("afterend", parent);
   textarea.hidden = true;
@@ -90,6 +201,7 @@ function initialize(textarea: HTMLTextAreaElement): void {
         EditorState.tabSize.of(4),
         autocompletion({ override: [completions] }),
         highlightActiveLine(),
+        inlineErrorField,
         keymap.of([
           ...closeBracketsKeymap,
           ...defaultKeymap,
@@ -103,17 +215,13 @@ function initialize(textarea: HTMLTextAreaElement): void {
         EditorView.updateListener.of((update) => {
           if (!update.docChanged) return;
           textarea.value = update.state.doc.toString();
-          const dirty = textarea.value !== baseline;
-          if (status) {
-            status.textContent = dirty ? "Unsaved" : "Synced";
-            status.classList.toggle("pill-warning", dirty);
-          }
-          if (save) save.disabled = !dirty;
+          updateDirtyState(textarea, panel, status, save, baseline);
         }),
       ],
     }),
   });
   editors.set(textarea, view);
+  showInlineError(view, textarea.dataset.error);
 }
 
 function process(root: HTMLElement): void {
