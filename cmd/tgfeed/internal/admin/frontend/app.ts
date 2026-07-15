@@ -31,13 +31,13 @@ function refreshPageMetadata(root: ParentNode = document): void {
     const refresh = document.getElementById("refresh-all");
     refresh?.setAttribute("hx-get", route === "stats" ? "/stats" : "/config");
     refresh?.setAttribute("href", route === "stats" ? "/stats" : "/config");
-    const save = document.getElementById("save-all");
-    save?.setAttribute("hx-post", route === "stats" ? "/stats" : "/config");
-    if (route === "configuration") {
-      save?.setAttribute("hx-include", "#configuration-form");
-    } else {
-      save?.removeAttribute("hx-include");
+    if (refresh) {
+      refresh.textContent = route === "stats" ? "Refresh stats" : "Reload all";
     }
+    const save = document.getElementById("save-all") as
+      | HTMLButtonElement
+      | null;
+    if (save) save.hidden = route !== "configuration";
   }
   root.querySelectorAll<HTMLElement>("time[data-local-time]").forEach(
     (element) => {
@@ -55,6 +55,70 @@ function refreshPageMetadata(root: ParentNode = document): void {
     },
   );
 }
+
+function hasUnsavedChanges(root: ParentNode = document): boolean {
+  return Array.from(
+    root.querySelectorAll<HTMLTextAreaElement>(
+      "textarea[data-code-editor]",
+    ),
+  ).some((textarea) =>
+    textarea.value !== (textarea.dataset.baseline ?? textarea.defaultValue)
+  );
+}
+
+function discardedEditorScope(element: HTMLElement): ParentNode | null {
+  if (
+    element.matches("#refresh-all") ||
+    element.matches(".tab-nav .tab-button")
+  ) return document;
+  if (element.matches(".panel-actions .button-ghost")) {
+    return element.closest("[data-editor-panel]");
+  }
+  return null;
+}
+
+type HtmxConfirmDetail = {
+  elt: HTMLElement;
+  issueRequest: (skipConfirmation?: boolean) => void;
+};
+
+document.addEventListener("htmx:confirm", (event) => {
+  const detail = (event as CustomEvent<HtmxConfirmDetail>).detail;
+  if (!detail?.elt) return;
+  const scope = discardedEditorScope(detail.elt);
+  if (!scope || !hasUnsavedChanges(scope)) return;
+  event.preventDefault();
+  if (globalThis.confirm("Discard unsaved changes?")) {
+    detail.issueRequest(true);
+  }
+});
+
+globalThis.addEventListener("beforeunload", (event) => {
+  if (!hasUnsavedChanges()) return;
+  event.preventDefault();
+  event.returnValue = "";
+});
+
+let currentHistoryURL = location.href;
+let currentHistoryState = history.state;
+
+function rememberHistoryEntry(): void {
+  currentHistoryURL = location.href;
+  currentHistoryState = history.state;
+}
+
+document.addEventListener("htmx:pushedIntoHistory", rememberHistoryEntry);
+document.addEventListener("htmx:replacedInHistory", rememberHistoryEntry);
+globalThis.addEventListener("popstate", (event) => {
+  if (
+    !hasUnsavedChanges() || globalThis.confirm("Discard unsaved changes?")
+  ) {
+    rememberHistoryEntry();
+    return;
+  }
+  event.stopImmediatePropagation();
+  history.pushState(currentHistoryState, "", currentHistoryURL);
+}, { capture: true });
 
 async function loadEnhancements(root: ParentNode = document): Promise<void> {
   // Charts and CodeMirror dominate the JavaScript payload. Load each feature
@@ -81,14 +145,24 @@ function preloadEditorForConfiguration(event: Event): void {
   void import("./editor.ts");
 }
 
+function liveSwapRoot(event: Event): ParentNode {
+  const target = (event as CustomEvent).detail?.target;
+  if (!(target instanceof HTMLElement)) return document;
+  if (target.isConnected) return target;
+  // An outerHTML swap can report the element that was removed. Resolve its ID
+  // back to the replacement before scanning for lazy enhancements.
+  return document.getElementById(target.id) ?? document;
+}
+
 document.addEventListener("htmx:afterSwap", (event) => {
-  const target = (event as CustomEvent).detail?.target as
-    | ParentNode
-    | undefined;
+  const target = liveSwapRoot(event);
   refreshPageMetadata(target);
   void loadEnhancements(target);
 });
-document.addEventListener("htmx:historyRestore", () => refreshPageMetadata());
+document.addEventListener("htmx:historyRestore", () => {
+  refreshPageMetadata();
+  void loadEnhancements();
+});
 document.addEventListener("pointerover", preloadEditorForConfiguration);
 document.addEventListener("pointerdown", preloadEditorForConfiguration);
 document.addEventListener("focusin", preloadEditorForConfiguration);

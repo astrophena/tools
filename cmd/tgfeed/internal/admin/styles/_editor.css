@@ -34,3 +34,20 @@ textarea.editor[hidden] {
   font-family: "IBM Plex Mono", "Cascadia Mono", "Consolas", monospace;
   line-height: 1.5;
 }
+
+.cm-error-widget {
+  margin: 0 0 4px;
+  border-left: 2px solid #ef4444;
+  border-radius: 4px;
+  padding: 4px 8px;
+  color: #fca5a5;
+  background: rgba(239, 68, 68, 0.2);
+  font-family: "IBM Plex Mono", "Cascadia Mono", "Consolas", monospace;
+  font-size: 0.85em;
+  white-space: pre-wrap;
+}
+
+.cm-error-line {
+  background: rgba(239, 68, 68, 0.1);
+  text-decoration: underline wavy #ef4444;
+}

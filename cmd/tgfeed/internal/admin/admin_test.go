@@ -215,7 +215,40 @@ func TestAdmin(t *testing.T) {
 	t.Run("stats page", func(t *testing.T) {
 		cfg := setup(t, initialFS)
 		req := httptest.NewRequest(http.MethodGet, "/stats", nil)
-		runTest(t, cfg, req, http.StatusOK, "This chart can't be rendered.")
+		h, err := Handler(cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, req)
+		testutil.AssertEqual(t, w.Code, http.StatusOK)
+		body := w.Body.String()
+		for _, want := range []string{"This chart can't be rendered.", "Refresh stats", "Fetch retries", "Across 0 feeds"} {
+			if !strings.Contains(body, want) {
+				t.Errorf("response body does not contain %q", want)
+			}
+		}
+		if strings.Contains(body, "Track latest") {
+			t.Error("latest-run view contains Track latest control")
+		}
+		saveStart := strings.Index(body, `id="save-all"`)
+		if saveStart < 0 {
+			t.Fatal("response body does not contain save-all control")
+		}
+		saveEnd := strings.Index(body[saveStart:], ">")
+		if saveEnd < 0 || !strings.Contains(body[saveStart:saveStart+saveEnd], " hidden") {
+			t.Fatal("save-all control is not hidden on stats page")
+		}
+	})
+	t.Run("selected stats run can track latest", func(t *testing.T) {
+		cfg := setup(t, initialFS)
+		req := httptest.NewRequest(http.MethodGet, "/stats?started_at_unix=1672574400", nil)
+		runTest(t, cfg, req, http.StatusOK, "Track latest")
+	})
+	t.Run("stats page rejects save", func(t *testing.T) {
+		cfg := setup(t, initialFS)
+		req := httptest.NewRequest(http.MethodPost, "/stats", nil)
+		runTest(t, cfg, req, http.StatusMethodNotAllowed, "")
 	})
 	t.Run("stats fragment", func(t *testing.T) {
 		cfg := setup(t, initialFS)
@@ -255,7 +288,19 @@ func TestAdmin(t *testing.T) {
 	t.Run("configuration page", func(t *testing.T) {
 		cfg := setup(t, initialFS)
 		req := httptest.NewRequest(http.MethodGet, "/config", nil)
-		runTest(t, cfg, req, http.StatusOK, `data-code-editor`)
+		h, err := Handler(cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, req)
+		testutil.AssertEqual(t, w.Code, http.StatusOK)
+		body := w.Body.String()
+		for _, want := range []string{`data-code-editor`, "Reload all", "Save all"} {
+			if !strings.Contains(body, want) {
+				t.Errorf("response body does not contain %q", want)
+			}
+		}
 	})
 	t.Run("configuration page has native controls", func(t *testing.T) {
 		cfg := setup(t, initialFS)

@@ -20,19 +20,85 @@ func TestChartJSON(t *testing.T) {
 		TotalFeeds:       4,
 		SuccessFeeds:     3,
 		NotModifiedFeeds: 1,
+		FetchLatencyMS: stats.PercentileStats{
+			P50: 1000,
+			P90: 2000,
+			P99: 3000,
+		},
+	}
+	activeRun := &stats.Run{
+		RequestTiming: stats.RequestTimingStats{
+			DNS: stats.DurationStats{
+				Count:        1,
+				PercentileMS: stats.PercentileStats{P90: 125},
+			},
+		},
+		ItemsEnqueuedTotal:       3,
+		ItemsDedupedTotal:        4,
+		ItemsSkippedOldTotal:     5,
+		ItemsFilteredTotal:       6,
+		MessagesSent:             7,
+		MessagesAttempted:        8,
+		MessagesFailed:           1,
+		MessagesFormattingFailed: 2,
+		SendLatencyMS: stats.PercentileStats{
+			P50: 100,
+			P90: 200,
+			P99: 300,
+			Max: 400,
+		},
+		HTTP2xxCount: 8,
+		HTTP4xxCount: 1,
 	}
 	cases := map[string]struct {
 		chart string
 		want  []string
 	}{
-		"timeline": {
-			chart: timelineChart(StatsProps{
+		"latency trend": {
+			chart: latencyTrendChart(StatsProps{
 				Runs: []stats.RunSummary{timelineRun},
 			}),
 			want: []string{
-				`"type":"line"`,
-				`"data":[100]`,
+				`"preset":"seconds"`,
+				`"label":"Fetch p50","data":[1]`,
+				`"label":"Fetch p99","data":[3]`,
 				`"select_urls":["/stats?started_at_unix=42"]`,
+			},
+		},
+		"request phases": {
+			chart: requestPhaseChart(activeRun),
+			want: []string{
+				`"labels":["DNS","TCP","TLS","Request write","Response wait","Body read"]`,
+				`"data":[0.125,0,0,0,0,0]`,
+			},
+		},
+		"item disposition": {
+			chart: itemDispositionChart(activeRun),
+			want: []string{
+				`"labels":["Enqueued","Deduplicated","Skipped old","Filtered"]`,
+				`"data":[3,4,5,6]`,
+			},
+		},
+		"delivery breakdown": {
+			chart: deliveryFailureChart(activeRun),
+			want: []string{
+				`"labels":["Sent","Send failed","Formatting failed"]`,
+				`"data":[7,1,2]`,
+			},
+		},
+		"delivery latency": {
+			chart: deliveryLatencyChart(activeRun),
+			want: []string{
+				`"preset":"seconds"`,
+				`"labels":["P50","P90","P99","Max"]`,
+				`"data":[0.1,0.2,0.3,0.4]`,
+			},
+		},
+		"http status": {
+			chart: httpStatusChart(activeRun),
+			want: []string{
+				`"labels":["2xx","3xx","4xx","5xx"]`,
+				`"data":[8,0,1,0]`,
 			},
 		},
 		"palette": {
@@ -65,6 +131,28 @@ func TestChartJSON(t *testing.T) {
 				if !strings.Contains(tc.chart, want) {
 					t.Errorf("chart JSON %s does not contain %s", tc.chart, want)
 				}
+			}
+		})
+	}
+}
+
+func TestConditionalCharts(t *testing.T) {
+	t.Parallel()
+
+	cases := map[string]struct {
+		chart string
+	}{
+		"request phases":   {chart: requestPhaseChart(&stats.Run{})},
+		"item disposition": {chart: itemDispositionChart(&stats.Run{})},
+		"delivery":         {chart: deliveryFailureChart(&stats.Run{})},
+		"delivery latency": {chart: deliveryLatencyChart(&stats.Run{})},
+		"http status":      {chart: httpStatusChart(&stats.Run{})},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			if tc.chart != "" {
+				t.Errorf("chart = %q, want empty", tc.chart)
 			}
 		})
 	}

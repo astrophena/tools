@@ -9,7 +9,9 @@ import (
 	"math"
 	"net/url"
 	"strconv"
+	"time"
 
+	"go.astrophena.name/base/humanfmt"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/stats"
 )
 
@@ -129,6 +131,40 @@ func delta(latest, previous float64, hasPrevious bool, betterHigher bool, precis
 		tone = "good"
 	}
 	return fmt.Sprintf("%+.*f%s vs prev run", precision, difference, unit), tone
+}
+
+func memoryDelta(latest, previous uint64, hasPrevious bool) (string, string) {
+	if !hasPrevious {
+		return "vs prev run: n/a", "neutral"
+	}
+	if latest == previous {
+		return "no change vs prev run", "neutral"
+	}
+	if latest > previous {
+		difference := latest - previous
+		if difference < 1024 {
+			return "no change vs prev run", "neutral"
+		}
+		return "+" + humanfmt.Bytes(difference) + " vs prev run", "bad"
+	}
+	difference := previous - latest
+	if difference < 1024 {
+		return "no change vs prev run", "neutral"
+	}
+	return "-" + humanfmt.Bytes(difference) + " vs prev run", "good"
+}
+
+func durationDelta(latest, previous time.Duration, hasPrevious bool) (string, string) {
+	if !hasPrevious {
+		return "vs prev run: n/a", "neutral"
+	}
+	if latest == previous {
+		return "no change vs prev run", "neutral"
+	}
+	if latest > previous {
+		return "+" + formatDuration(latest-previous) + " vs prev run", "bad"
+	}
+	return "-" + formatDuration(previous-latest) + " vs prev run", "good"
 }
 
 func statsURL(startedAt int64, autoRefresh, details bool) string {

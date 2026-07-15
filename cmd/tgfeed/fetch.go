@@ -474,6 +474,9 @@ func (f *fetcher) enqueueFeedItems(fd *feed, state *state.Feed, exists bool, ite
 			continue
 		}
 		if !passes {
+			f.stats.WriteAccess(func(s *stats.Run) {
+				s.ItemsFilteredTotal += 1
+			})
 			acknowledge := f.specialFeedAcknowledger(fd.url)
 			if acknowledge != nil {
 				updates <- &update{

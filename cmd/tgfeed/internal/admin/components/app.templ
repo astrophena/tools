@@ -16,18 +16,23 @@ templ AppShell(p PageProps) {
 				<p class="subtitle">Inspect run metrics and edit tgfeed configuration from one place.</p>
 			</div>
 			<div class="hero-actions">
-				<a id="refresh-all" class="button button-ghost" href={ routeURL(p.Route) } hx-get={ routeURL(p.Route) } hx-target={ "#" + FragmentDashboardContent } hx-swap="outerHTML">Refresh all</a>
+				<a id="refresh-all" class="button button-ghost" href={ routeURL(p.Route) } hx-get={ routeURL(p.Route) } hx-target={ "#" + FragmentDashboardContent } hx-swap="outerHTML">
+					if p.Route == RouteStats {
+						Refresh stats
+					} else {
+						Reload all
+					}
+				</a>
 				<button
 					id="save-all"
 					class="button button-solid"
 					type="submit"
 					form="configuration-form"
-					hx-post={ routeURL(p.Route) }
-					if p.Route == RouteConfiguration {
-						hx-include="#configuration-form"
-					}
+					hx-post="/config"
+					hx-include="#configuration-form"
 					hx-target={ "#" + FragmentDashboardContent }
 					hx-swap="outerHTML"
+					hidden?={ p.Route != RouteConfiguration }
 				>Save all</button>
 			</div>
 		</header>

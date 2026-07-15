@@ -79,7 +79,6 @@ func Handler(cfg Config) (*http.ServeMux, error) {
 
 	mux.HandleFunc("GET /{$}", ui.handleStats)
 	mux.HandleFunc("GET /stats", ui.handleStats)
-	mux.HandleFunc("POST /stats", ui.handleStatsNothingToSave)
 	mux.HandleFunc("GET /config", ui.handleConfiguration)
 	mux.HandleFunc("POST /config", ui.handleSaveAll)
 	mux.HandleFunc("POST /config/config", ui.handleSaveConfig)

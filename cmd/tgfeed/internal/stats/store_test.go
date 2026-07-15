@@ -27,15 +27,17 @@ func TestStoreSaveRunAndListRuns(t *testing.T) {
 	}
 
 	want := Run{
-		TotalFeeds:       1,
-		SuccessFeeds:     2,
-		FailedFeeds:      3,
-		NotModifiedFeeds: 4,
-		StartTime:        time.Date(2023, time.December, 8, 0, 0, 0, 0, time.UTC),
-		Duration:         5 * time.Second,
-		TotalItemsParsed: 6,
-		TotalFetchTime:   7 * time.Second,
-		AvgFetchTime:     8 * time.Second,
+		TotalFeeds:        1,
+		SuccessFeeds:      2,
+		FailedFeeds:       3,
+		NotModifiedFeeds:  4,
+		StartTime:         time.Date(2023, time.December, 8, 0, 0, 0, 0, time.UTC),
+		Duration:          5 * time.Second,
+		TotalItemsParsed:  6,
+		TotalFetchTime:    7 * time.Second,
+		AvgFetchTime:      8 * time.Second,
+		FetchRetriesTotal: 10,
+		FeedsRetriedCount: 4,
 		RequestTiming: RequestTimingStats{
 			Total: DurationStats{
 				Count:   2,
@@ -70,6 +72,16 @@ func TestStoreSaveRunAndListRuns(t *testing.T) {
 	}
 
 	testutil.AssertEqual(t, got, want)
+
+	summaries, err := store.ListRunSummaries(t.Context(), 10, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(summaries) != 1 {
+		t.Fatalf("expected 1 run summary, got %d", len(summaries))
+	}
+	testutil.AssertEqual(t, summaries[0].FetchRetriesTotal, want.FetchRetriesTotal)
+	testutil.AssertEqual(t, summaries[0].FeedsRetriedCount, want.FeedsRetriedCount)
 
 	db, err := store.open(t.Context())
 	if err != nil {

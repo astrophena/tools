@@ -189,6 +189,10 @@
     grid-template-columns: 1fr;
   }
 
+  .retry-pressure {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .chart-canvas,
   .chart-canvas-lg {
     height: 220px;
@@ -279,6 +283,7 @@
 }
 
 @media (max-width: 420px) {
+  .retry-pressure,
   .hero-actions {
     grid-template-columns: 1fr;
   }

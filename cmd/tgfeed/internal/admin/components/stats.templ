@@ -79,17 +79,19 @@ templ Indicators(p StatsProps) {
 	{{ failedDelta, failedTone := delta(float64(latest.FailedFeeds), float64(previous.FailedFeeds), hasPrevious, false, 0, "") }}
 	{{ delivery := percent(latest.MessagesSent, latest.MessagesAttempted) }}
 	{{ deliveryDelta, deliveryTone := delta(delivery, percent(previous.MessagesSent, previous.MessagesAttempted), hasPrevious, true, 1, " pp") }}
-	{{ p99Delta, p99Tone := delta(float64(latest.FetchLatencyMS.P99), float64(previous.FetchLatencyMS.P99), hasPrevious, false, 0, " ms") }}
-	{{ durationDelta, durationTone := delta(latest.Duration.Seconds(), previous.Duration.Seconds(), hasPrevious, false, 1, " s") }}
-	{{ memoryDelta, memoryTone := delta(float64(latest.MemoryUsage), float64(previous.MemoryUsage), hasPrevious, false, 0, " B") }}
+	{{ retriesDelta, retriesTone := delta(float64(latest.FetchRetriesTotal), float64(previous.FetchRetriesTotal), hasPrevious, false, 0, "") }}
+	{{ p99Delta, p99Tone := durationDelta(time.Duration(latest.FetchLatencyMS.P99)*time.Millisecond, time.Duration(previous.FetchLatencyMS.P99)*time.Millisecond, hasPrevious) }}
+	{{ durationChange, durationTone := durationDelta(latest.Duration, previous.Duration, hasPrevious) }}
+	{{ memoryChange, memoryTone := memoryDelta(latest.MemoryUsage, previous.MemoryUsage, hasPrevious) }}
 	<div class="indicator-grid">
 		@Indicator("Last run", formatRelativeTime(latest.StartTime, p.RefreshedAt), formatDateTime(latest.StartTime), "Context: latest run", "neutral", "indicator-primary")
 		@Indicator("Healthy feeds", fmt.Sprintf("%d/%d", healthy, latest.TotalFeeds), "Rate: "+formatPercent(healthyRate, latest.TotalFeeds > 0), healthDelta, healthTone, "")
 		@Indicator("Failed feeds", strconv.Itoa(latest.FailedFeeds), "From total: "+strconv.Itoa(latest.TotalFeeds), failedDelta, failedTone, "indicator-danger")
 		@Indicator("Delivery success", formatPercent(delivery, latest.MessagesAttempted > 0), fmt.Sprintf("Sent %d/%d", latest.MessagesSent, latest.MessagesAttempted), deliveryDelta, deliveryTone, "")
-		@Indicator("Fetch latency p99", fmt.Sprintf("%d ms", latest.FetchLatencyMS.P99), "Lower is better", p99Delta, p99Tone, "")
-		@Indicator("Run duration", formatDuration(latest.Duration), "Lower is better", durationDelta, durationTone, "")
-		@Indicator("Memory usage", humanfmt.Bytes(latest.MemoryUsage), "Lower is better", memoryDelta, memoryTone, "")
+		@Indicator("Fetch latency p99", formatMilliseconds(latest.FetchLatencyMS.P99), "Lower is better", p99Delta, p99Tone, "")
+		@Indicator("Fetch retries", strconv.Itoa(latest.FetchRetriesTotal), fmt.Sprintf("Across %d feeds", latest.FeedsRetriedCount), retriesDelta, retriesTone, "")
+		@Indicator("Run duration", formatDuration(latest.Duration), "Lower is better", durationChange, durationTone, "")
+		@Indicator("Memory usage", humanfmt.Bytes(latest.MemoryUsage), "Lower is better", memoryChange, memoryTone, "")
 	</div>
 }
 
@@ -105,9 +107,11 @@ templ RunExplorer(p StatsProps) {
 		if p.Active != nil {
 			<div class="run-context-row">
 				<div class="run-context-copy"><p>{ runContextLabel(p) }</p><h3><time datetime={ p.Active.StartTime.Format(time.RFC3339) } data-local-time>{ formatDateTime(p.Active.StartTime) }</time></h3><span>{ formatRelativeTime(p.Active.StartTime, p.RefreshedAt) }</span></div>
-				<div class="run-context-actions">
-					<a href={ statsURL(0, p.AutoRefresh, p.DetailsOpen) } class={ "tab-button", templ.KV("active", p.SelectedAt == 0) } hx-get={ statsURL(0, p.AutoRefresh, p.DetailsOpen) } hx-target={ "#" + FragmentStatsContent } hx-swap="outerHTML" hx-push-url="true">Track latest</a>
-				</div>
+				if p.SelectedAt != 0 {
+					<div class="run-context-actions">
+						<a href={ statsURL(0, p.AutoRefresh, p.DetailsOpen) } class="tab-button" hx-get={ statsURL(0, p.AutoRefresh, p.DetailsOpen) } hx-target={ "#" + FragmentStatsContent } hx-swap="outerHTML" hx-push-url="true">Track latest</a>
+					</div>
+				}
 			</div>
 		}
 		if len(p.Runs) == 0 {
@@ -115,7 +119,7 @@ templ RunExplorer(p StatsProps) {
 		}
 		if len(p.Runs) > 0 {
 			<div class="chart-stack">
-				@ChartCard("Health Trend", "Healthy feed rate across recent runs. Not changed feeds count as healthy.", "chart-canvas chart-canvas-lg", timelineChart(p))
+				@ChartCard("Fetch latency trend", "Fetch p50, p90, and p99 across recent runs. Select a point to inspect that run.", "chart-canvas chart-canvas-lg", latencyTrendChart(p))
 				<div class="runs-table-wrap">
 					<table class="runs-table">
 						<thead><tr><th>Run</th><th>Duration</th><th>Healthy feeds</th><th>Sent</th></tr></thead>
@@ -131,15 +135,26 @@ templ RunExplorer(p StatsProps) {
 				<details class="detail-toggle" open?={ p.DetailsOpen } data-stats-details>
 					<summary>Show detailed analytics for this run</summary>
 					if p.Active != nil {
-						{{ charts := detailsCharts(p) }}
-						<div class="chart-matrix">
-							@ChartCard("Feed health by run", "Healthy feeds include successful and not changed feeds.", "chart-canvas", charts.FeedHealth)
-							@ChartCard("Healthy feed composition", "Active run split into success, not changed, and failed feeds.", "chart-canvas", charts.Composition)
-							@ChartCard("Delivery outcome", "Counts for sent, failed, and pending messages.", "chart-canvas chart-canvas-compact", charts.Delivery)
-							@ChartCard("HTTP status classes", "Response class distribution for the active run.", "chart-canvas chart-canvas-compact", charts.HTTPStatus)
-							@ChartCard("Latency percentiles", "Fetch and send latency percentiles in seconds.", "chart-canvas", charts.Latency)
-							@ChartCard("Error and retry sources", "Timeout, network and parse errors, plus retry pressure indicators.", "chart-canvas", charts.Errors)
-							@ChartCard("Memory usage by run", "Total allocated memory usage at the end of the run.", "chart-canvas", charts.Memory)
+						{{ charts := detailsCharts(p.Active) }}
+						<div class="detail-analytics">
+							@RetryPressure(p.Active)
+							<div class="chart-matrix">
+								if charts.RequestPhases != "" {
+									@ChartCard("HTTP request phases", "P90 latency for non-overlapping request phases in the active run.", "chart-canvas", charts.RequestPhases)
+								}
+								if charts.Items != "" {
+									@ChartCard("Item disposition", "How feed items were handled during the active run.", "chart-canvas chart-canvas-compact", charts.Items)
+								}
+								if charts.Delivery != "" {
+									@ChartCard("Delivery breakdown", "Successful sends, Telegram failures, and message formatting failures.", "chart-canvas chart-canvas-compact", charts.Delivery)
+								}
+								if charts.SendLatency != "" {
+									@ChartCard("Telegram delivery latency", "Send latency percentiles for the active run.", "chart-canvas chart-canvas-compact", charts.SendLatency)
+								}
+								if charts.HTTPStatus != "" {
+									@WideChartCard("HTTP status classes", "Shown because the active run contains 4xx or 5xx responses.", "chart-canvas chart-canvas-compact", charts.HTTPStatus)
+								}
+							</div>
 						</div>
 					}
 				</details>
@@ -148,9 +163,24 @@ templ RunExplorer(p StatsProps) {
 	</section>
 }
 
+// RetryPressure renders retry counts and backoff time without mixing units in a chart.
+templ RetryPressure(run *stats.Run) {
+	<div class="retry-pressure" aria-label="Retry pressure">
+		<div><span>Fetch retries</span><strong>{ strconv.Itoa(run.FetchRetriesTotal) }</strong></div>
+		<div><span>Feeds retried</span><strong>{ strconv.Itoa(run.FeedsRetriedCount) }</strong></div>
+		<div><span>Rate-limit retries</span><strong>{ strconv.Itoa(run.SpecialRateLimitRetries) }</strong></div>
+		<div><span>Backoff time</span><strong>{ formatDuration(run.BackoffSleepTotal) }</strong></div>
+	</div>
+}
+
 // ChartCard renders a titled container enhanced by Chart.js.
 templ ChartCard(title, note, class, spec string) {
 	<article class="chart-card"><h3>{ title }</h3><p class="chart-note">{ note }</p><div class={ class } data-chart-spec={ spec }><p class="chart-empty-hint">This chart can't be rendered.</p></div></article>
+}
+
+// WideChartCard renders a chart spanning the complete detail grid.
+templ WideChartCard(title, note, class, spec string) {
+	<article class="chart-card chart-card-wide"><h3>{ title }</h3><p class="chart-note">{ note }</p><div class={ class } data-chart-spec={ spec }><p class="chart-empty-hint">This chart can't be rendered.</p></div></article>
 }
 
 // FeedInsights renders top feed contributors for the active run.

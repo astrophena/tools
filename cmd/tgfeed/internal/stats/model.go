@@ -46,6 +46,7 @@ type Run struct {
 	ItemsKeptTotal       int `json:"items_kept_total"`
 	ItemsDedupedTotal    int `json:"items_deduped_total"`
 	ItemsSkippedOldTotal int `json:"items_skipped_old_total"`
+	ItemsFilteredTotal   int `json:"items_filtered_total"`
 	ItemsEnqueuedTotal   int `json:"items_enqueued_total"`
 
 	MessagesAttempted        int `json:"messages_attempted"`
@@ -141,6 +142,8 @@ type RunSummary struct {
 	MessagesAttempted int `json:"messages_attempted"`
 	MessagesSent      int `json:"messages_sent"`
 	MessagesFailed    int `json:"messages_failed"`
+	FetchRetriesTotal int `json:"fetch_retries_total"`
+	FeedsRetriedCount int `json:"feeds_retried_count"`
 
 	FetchLatencyMS PercentileStats `json:"fetch_latency_ms"`
 	MemoryUsage    uint64          `json:"memory_usage"`
