@@ -105,6 +105,7 @@ func (m *impl) sync(thread *starlark.Thread, b *starlark.Builtin, args starlark.
 			if dirty, err := isDirty(ctx, dst); err != nil {
 				return "", err
 			} else if dirty {
+				boot.Warn(ctx, fmt.Sprintf("repository %s is dirty", dst))
 				return boot.ResultSkip, nil
 			}
 
@@ -166,6 +167,7 @@ func (m *impl) pull(thread *starlark.Thread, b *starlark.Builtin, args starlark.
 				return "", err
 			}
 			if dirty {
+				boot.Warn(ctx, fmt.Sprintf("repository %s is dirty", dst))
 				return boot.ResultSkip, nil
 			}
 
@@ -234,6 +236,7 @@ func (m *impl) clone(thread *starlark.Thread, b *starlark.Builtin, args starlark
 				if dirty, err := isDirty(ctx, dst); err != nil {
 					return "", err
 				} else if dirty {
+					boot.Warn(ctx, fmt.Sprintf("repository %s is dirty", dst))
 					return boot.ResultSkip, nil
 				}
 				return syncRevision(ctx, dst, revision, dryRun)
