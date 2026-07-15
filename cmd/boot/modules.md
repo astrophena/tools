@@ -150,6 +150,20 @@ Warn when explicitly installed native packages are not listed in `packages`.
 Warn when `.pacnew` files exist under `/etc`, grouping files managed by
 `managed_etc` separately from unmanaged files and showing short diffs.
 
+## `program`
+
+### `program.update(argv)`
+
+Update a program through Boot's check protocol. `argv` is the command that
+applies the update and is executed directly without a shell. To check whether
+an update is needed, Boot appends `-check`; the program must print only `true`
+or `false` to standard output. When the result is `true`, planning reports a
+change and applying runs the original command.
+
+The `-check` invocation must be read-only. Diagnostics may be written to
+standard error; a failed check, failed update, or any other standard output is
+reported as an action failure.
+
 ## `rescue`
 
 ### `rescue.update(source, esp_dir = "/efi/EFI/Linux", keep = 3)`
