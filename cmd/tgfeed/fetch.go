@@ -16,8 +16,12 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptrace"
+	"os"
+	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"go.astrophena.name/base/version"
@@ -178,6 +182,28 @@ func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *update) (re
 
 // Request construction and response handling.
 
+var ua = sync.OnceValue(func() string {
+	return fmt.Sprintf(
+		"%s, %s/%s, %s, %s)",
+		strings.TrimSuffix(version.UserAgent(), ")"),
+		runtime.GOOS,
+		runtime.GOARCH,
+		runtime.Version(),
+		executablePath(),
+	)
+})
+
+func executablePath() string {
+	exe, err := os.Executable()
+	if err != nil {
+		return "unknown"
+	}
+	if resolved, err := filepath.EvalSymlinks(exe); err == nil {
+		exe = resolved
+	}
+	return exe
+}
+
 func (f *fetcher) newFeedRequest(ctx context.Context, fd *feed, etag string, lastModified string, t *timings) (*http.Request, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fd.url, nil)
 	if err != nil {
@@ -187,7 +213,7 @@ func (f *fetcher) newFeedRequest(ctx context.Context, fd *feed, etag string, las
 	trace := newTrace(t)
 	req = req.WithContext(httptrace.WithClientTrace(req.Context(), trace))
 
-	req.Header.Set("User-Agent", version.UserAgent())
+	req.Header.Set("User-Agent", ua())
 	if etag != "" {
 		req.Header.Set("If-None-Match", etag)
 	}
