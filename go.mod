@@ -5,7 +5,7 @@ go 1.26.5
 require (
 	crawshaw.dev/jsonfile v0.0.0-20240206193014-699d1dad804e
 	github.com/a-h/templ v0.3.1020
-	github.com/arl/statsviz v0.8.0
+	github.com/arl/statsviz v0.8.1
 	github.com/dhowden/tag v0.0.0-20240417053706-3d75831295e8
 	github.com/landlock-lsm/go-landlock v0.9.0
 	github.com/microcosm-cc/bluemonday v1.0.27
