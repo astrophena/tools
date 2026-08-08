@@ -58,12 +58,12 @@ func (e *Engine) printWarnings(w io.Writer, warnings []warning) {
 	if len(warnings) == 0 {
 		return
 	}
-	fmt.Fprintf(w, "%s\n", e.color("warnings:", colorYellow))
+	fmt.Fprintf(w, "%s\n", e.color("Warnings:", colorYellow))
 	for _, warning := range warnings {
-		fmt.Fprintf(w, "%s\n", e.color(fmt.Sprintf("  task: %s (%s)", warning.TaskID, warning.TaskName), colorYellow))
-		fmt.Fprintf(w, "%s\n", e.color("    action: "+warning.Action, colorYellow))
+		fmt.Fprintf(w, "%s\n", e.color(fmt.Sprintf("  Task: %s (%s)", warning.TaskID, warning.TaskName), colorYellow))
+		fmt.Fprintf(w, "%s\n", e.color("    Action: "+warning.Action, colorYellow))
 		lines := strings.Split(warning.Message, "\n")
-		fmt.Fprintf(w, "%s\n", e.color("    warning: "+lines[0], colorYellow))
+		fmt.Fprintf(w, "%s\n", e.color("    Warning: "+lines[0], colorYellow))
 		for _, line := range lines[1:] {
 			fmt.Fprintf(w, "%s\n", e.color("      "+line, colorYellow))
 		}
