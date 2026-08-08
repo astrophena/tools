@@ -532,12 +532,12 @@ func TestApplyReportsWarningsAfterProgress(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := out.String()
-	assertContains(t, got, "\x1b[33mwarnings:\x1b[0m", "colored warning report")
+	assertContains(t, got, "\x1b[33mWarnings:\x1b[0m", "colored warning report")
 	assertContains(t, got, "It reported \x1b[33m2 warnings\x1b[0m.", "warning count")
 	assertContains(t, got, "orphaned packages found:", "warning report")
 	assertContains(t, got, "  - oldlib", "warning report")
 	assertContains(t, got, "reboot required", "warning report")
-	if strings.Index(got, "Report:") > strings.Index(got, "warnings:") {
+	if strings.Index(got, "Report:") > strings.Index(got, "Warnings:") {
 		t.Fatalf("warnings were printed before the report:\n%s", got)
 	}
 }
