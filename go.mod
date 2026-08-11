@@ -11,7 +11,7 @@ require (
 	github.com/microcosm-cc/bluemonday v1.0.27
 	github.com/mmcdole/gofeed v1.4.0
 	github.com/tailscale/sqlite v0.0.0-20260306200437-15a02b90c606
-	github.com/tobischo/gokeepasslib/v3 v3.6.2
+	github.com/tobischo/gokeepasslib/v3 v3.7.0
 	go.astrophena.name/base v0.23.2-0.20260711190559-47229d27c5d7
 	go.starlark.net v0.0.0-20260326113308-fadfc96def35
 	golang.org/x/mod v0.38.0
@@ -39,11 +39,11 @@ require (
 	github.com/natefinch/atomic v1.0.1 // indirect
 	github.com/restic/chunker v0.4.0 // indirect
 	github.com/tobischo/argon2 v0.1.0 // indirect
-	golang.org/x/crypto v0.53.0 // indirect
+	golang.org/x/crypto v0.54.0 // indirect
 	golang.org/x/exp/typeparams v0.0.0-20260218203240-3dfff04db8fa // indirect
 	golang.org/x/net v0.56.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
-	golang.org/x/text v0.38.0 // indirect
+	golang.org/x/text v0.40.0 // indirect
 	golang.org/x/tools v0.47.0 // indirect
 	honnef.co/go/tools v0.7.0 // indirect
 	kernel.org/pub/linux/libs/security/libcap/psx v1.2.77 // indirect
