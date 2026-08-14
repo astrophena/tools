@@ -1,6 +1,6 @@
 module go.astrophena.name/tools
 
-go 1.26.5
+go 1.26.6
 
 require (
 	crawshaw.dev/jsonfile v0.0.0-20240206193014-699d1dad804e
@@ -12,7 +12,7 @@ require (
 	github.com/mmcdole/gofeed v1.4.0
 	github.com/tailscale/sqlite v0.0.0-20260306200437-15a02b90c606
 	github.com/tobischo/gokeepasslib/v3 v3.7.0
-	go.astrophena.name/base v0.23.2-0.20260711190559-47229d27c5d7
+	go.astrophena.name/base v0.23.2
 	go.starlark.net v0.0.0-20260326113308-fadfc96def35
 	golang.org/x/mod v0.38.0
 	golang.org/x/sync v0.22.0
@@ -37,7 +37,7 @@ require (
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mmcdole/goxpp/v2 v2.0.0 // indirect
 	github.com/natefinch/atomic v1.0.1 // indirect
-	github.com/restic/chunker v0.4.0 // indirect
+	github.com/restic/chunker v0.5.0 // indirect
 	github.com/tobischo/argon2 v0.1.0 // indirect
 	golang.org/x/crypto v0.54.0 // indirect
 	golang.org/x/exp/typeparams v0.0.0-20260218203240-3dfff04db8fa // indirect
