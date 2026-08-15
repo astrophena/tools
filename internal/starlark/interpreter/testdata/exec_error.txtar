@@ -1,0 +1,8 @@
+-- main.star --
+def run():
+    exec("//module.star")
+run()
+-- module.star --
+def fail():
+    None()
+fail()

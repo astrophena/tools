@@ -72,6 +72,55 @@ func TestSplitMessageNewlineRich(t *testing.T) {
 	testutil.AssertEqual(t, joined, strings.TrimSpace(in))
 }
 
+func TestSplitMessageExhaustive(t *testing.T) {
+	t.Parallel()
+
+	alphabet := []rune{'a', 'b', ' ', '\n', '🙂'}
+	for length := range 6 {
+		count := 1
+		for range length {
+			count *= len(alphabet)
+		}
+		for encoded := range count {
+			value := encoded
+			runes := make([]rune, length)
+			for i := range length {
+				runes[i] = alphabet[value%len(alphabet)]
+				value /= len(alphabet)
+			}
+			input := string(runes)
+			for firstCap := 1; firstCap <= 5; firstCap++ {
+				chunks := splitMessageCap(input, firstCap)
+				if strings.TrimSpace(input) == "" {
+					if chunks != nil {
+						t.Fatalf("splitMessageCap(%q, %d) = %q, want nil", input, firstCap, chunks)
+					}
+					continue
+				}
+				if len(chunks) == 0 {
+					t.Fatalf("splitMessageCap(%q, %d) returned no chunks", input, firstCap)
+				}
+				for i, chunk := range chunks {
+					limit := 4096
+					if i == 0 {
+						limit = firstCap
+					}
+					if strings.TrimSpace(chunk) == "" || utf8.RuneCountInString(chunk) > limit {
+						t.Fatalf("splitMessageCap(%q, %d) chunk %d = %q", input, firstCap, i, chunk)
+					}
+				}
+				if got, want := withoutWhitespace(strings.Join(chunks, "")), withoutWhitespace(input); got != want {
+					t.Fatalf("splitMessageCap(%q, %d) fields = %q, want %q", input, firstCap, got, want)
+				}
+			}
+		}
+	}
+}
+
+func withoutWhitespace(s string) string {
+	return strings.Join(strings.Fields(s), "")
+}
+
 func TestSendRateLimitRetry(t *testing.T) {
 	t.Parallel()
 

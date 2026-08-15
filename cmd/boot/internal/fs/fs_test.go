@@ -156,6 +156,9 @@ func TestFSChmod(t *testing.T) {
 	if err := os.WriteFile(filePath, []byte("hello"), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.Chmod(filePath, 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	action := h.EmitOne("fs.chmod", m.chmod, nil, []starlark.Tuple{
 		{starlark.String("path"), starlark.String(filePath)},

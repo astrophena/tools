@@ -1,0 +1,21 @@
+keys:
+logs:
+hooks:
+  pre //main.star
+  pre //one.star
+  pre //two.star
+  post //two.star
+  post //one.star
+  post //main.star
+visited:
+  //main.star
+  //one.star
+  //two.star
+error:
+Traceback (most recent call last):
+  //main.star:1:5: in <toplevel>
+Error in exec: exec //one.star failed: Traceback (most recent call last):
+  //one.star:1:5: in <toplevel>
+Error in exec: exec //two.star failed: Traceback (most recent call last):
+  //two.star:1:5: in <toplevel>
+Error in exec: cannot exec //one.star: the module has already been executed, 'exec'-ing same code twice is forbidden

@@ -1,0 +1,6 @@
+-- main.star --
+load("//module.star", "value")
+-- module.star --
+def fail():
+    None()
+fail()

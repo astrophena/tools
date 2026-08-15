@@ -1,0 +1,5 @@
+-- main.star --
+exec("//module.star")
+load("//module.star", "value")
+-- module.star --
+value = 1

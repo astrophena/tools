@@ -1,0 +1,6 @@
+-- main.star --
+load("//one.star", "value")
+-- one.star --
+load("//two.star", "value")
+-- two.star --
+load("//one.star", "value")

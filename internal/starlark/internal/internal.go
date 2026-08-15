@@ -32,7 +32,8 @@ func ParseDocComment(src []byte) string {
 			if strings.HasPrefix(line, "Package") {
 				continue
 			}
-			doc.WriteString(line + "\n")
+			doc.WriteString(line)
+			doc.WriteByte('\n')
 		}
 	}
 	if err := s.Err(); err != nil {
