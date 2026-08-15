@@ -1,0 +1,7 @@
+-- main.star --
+load("//module.star", "value")
+-- module.star --
+exec("//other.star")
+value = 1
+-- other.star --
+pass

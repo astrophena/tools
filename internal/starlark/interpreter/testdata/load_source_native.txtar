@@ -1,0 +1,4 @@
+custom: native
+
+-- main.star --
+load_src("@custom//data.txt")

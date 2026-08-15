@@ -1,0 +1,6 @@
+-- main.star --
+exec("//one.star")
+-- one.star --
+exec("//two.star")
+-- two.star --
+exec("//one.star")

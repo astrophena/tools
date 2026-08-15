@@ -1,8 +1,11 @@
 -- copyright/exclusions.json --
 [
   "cmd/tgfeed/internal/diff/diff.go",
+  "internal/starlark/interpreter/helpers_test.go",
   "internal/starlark/interpreter/interpreter.go",
+  "internal/starlark/interpreter/interpreter_test.go",
   "internal/starlark/interpreter/loaders.go",
+  "internal/starlark/interpreter/loaders_test.go",
   "cmd/tgfeed/internal/admin/components/*_templ.go"
 ]
 -- copyright/template.go --
@@ -39,7 +42,7 @@
     "skip_in_ci": true
   },
   {
-    "run": ["go", "test", "-race", "./..."],
+    "run": ["go", "test", "-race", "-cover", "-pgo=off", "./..."],
     "only_in_ci": true
   },
   {

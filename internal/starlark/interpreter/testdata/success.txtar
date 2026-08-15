@@ -1,0 +1,38 @@
+-- stdlib/builtins.star --
+load("//loaded.star", "builtin_value")
+reimported_value = builtin_value
+-- stdlib/loaded.star --
+builtin_value = "from builtins"
+-- stdlib/lib.star --
+stdlib_value = "from stdlib"
+-- stdlib/sub/exec.star --
+print("stdlib exec", load_src("data.txt"))
+-- stdlib/sub/data.txt --
+stdlib data
+-- custom/one.star --
+load("//nested/two.star", _custom_value="custom_value")
+custom_value = _custom_value
+-- custom/nested/two.star --
+print("custom loaded")
+custom_value = "from custom"
+-- main.star --
+load("//lib.star", "a")
+load("//lib.star", "b")
+load("@stdlib//lib.star", "stdlib_value")
+load("@custom//one.star", "custom_value")
+print(imported_sym, context_value(), reimported_value)
+print(a, b, stdlib_value, custom_value)
+print(load_src("data.txt"))
+exec("//sub/one.star")
+exec("@stdlib//sub/exec.star")
+exported = True
+-- lib.star --
+print("main library loaded once")
+a = 1
+b = 2
+-- data.txt --
+main data
+-- sub/one.star --
+exec("./two.star")
+-- sub/two.star --
+print("relative exec")

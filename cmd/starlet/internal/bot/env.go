@@ -73,7 +73,8 @@ func (d Environment) render(b *strings.Builder, level int, prefix string) {
 	for _, m := range d {
 		b.WriteString(strings.Repeat("#", level))
 		b.WriteString(" `")
-		b.WriteString(prefix + m.Name)
+		b.WriteString(prefix)
+		b.WriteString(m.Name)
 
 		if _, ok := m.Value.(*starlark.Builtin); ok {
 			if len(m.Args) > 0 {

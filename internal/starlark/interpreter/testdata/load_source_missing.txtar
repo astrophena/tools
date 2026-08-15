@@ -1,0 +1,2 @@
+-- main.star --
+load_src("missing.txt")

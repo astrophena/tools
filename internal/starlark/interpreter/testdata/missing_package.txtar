@@ -1,0 +1,2 @@
+-- main.star --
+load("@missing//module.star", "value")

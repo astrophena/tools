@@ -1,0 +1,34 @@
+keys:
+  exported
+logs:
+  [//lib.star:1] main library loaded once
+  [@custom//nested/two.star:1] custom loaded
+  [//main.star:5] 123 context value from builtins
+  [//main.star:6] 1 2 from stdlib from custom
+  [//main.star:7] main data
+
+  [//sub/two.star:1] relative exec
+  [@stdlib//sub/exec.star:1] stdlib exec stdlib data
+
+hooks:
+  pre //main.star
+  pre //sub/one.star
+  pre //sub/two.star
+  post //sub/two.star
+  post //sub/one.star
+  pre @stdlib//sub/exec.star
+  post @stdlib//sub/exec.star
+  post //main.star
+visited:
+  @stdlib//builtins.star
+  @stdlib//loaded.star
+  //main.star
+  //lib.star
+  @stdlib//lib.star
+  @custom//one.star
+  @custom//nested/two.star
+  //sub/one.star
+  //sub/two.star
+  @stdlib//sub/exec.star
+error:
+  <nil>

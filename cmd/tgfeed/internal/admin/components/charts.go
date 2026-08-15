@@ -7,6 +7,7 @@ package components
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"time"
 
 	"go.astrophena.name/tools/cmd/tgfeed/internal/stats"
@@ -26,7 +27,7 @@ type chartSpec struct {
 type chartConfig struct {
 	Type    string       `json:"type"`
 	Data    chartData    `json:"data"`
-	Options chartOptions `json:"options,omitempty"`
+	Options chartOptions `json:"options"`
 }
 
 type chartData struct {
@@ -107,8 +108,7 @@ func latencyTrendChart(p StatsProps) string {
 	p99 := make([]float64, 0, len(runs))
 	times := make([]time.Time, 0, len(runs))
 	urls := make([]string, 0, len(runs))
-	for i := len(runs) - 1; i >= 0; i-- {
-		summary := runs[i]
+	for _, summary := range slices.Backward(runs) {
 		labels = append(labels, summary.StartTime.UTC().Format("02.01 15:04"))
 		p50 = append(p50, float64(summary.FetchLatencyMS.P50)/1000)
 		p90 = append(p90, float64(summary.FetchLatencyMS.P90)/1000)

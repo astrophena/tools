@@ -213,8 +213,8 @@ func (b *Bot) HandleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 		b.reportError(r.Context(), chatID, w, err)
 		return
 	}
-	f, ok := mod["handle"]
-	if !ok {
+	f, found := mod["handle"]
+	if !found {
 		b.reportError(r.Context(), chatID, w, errNoHandleFunc)
 		return
 	}

@@ -1,0 +1,11 @@
+keys:
+logs:
+hooks:
+  pre //main.star
+  post //main.star
+visited:
+  //main.star
+error:
+Traceback (most recent call last):
+  //main.star:1:1: in <toplevel>
+Error: cannot load @@: a module path should be either '//<path>', '<path>' or '@<package>//<path>'

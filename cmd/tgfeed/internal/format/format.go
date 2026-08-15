@@ -280,9 +280,9 @@ func parseInlineKeyboardButton(button *starlark.Dict) (sender.Action, bool) {
 func DefaultUpdateMessage(u Update, defaultTitle string, messageTemplate string) Rendered {
 	if u.Feed.Digest {
 		var msg strings.Builder
-		msg.WriteString(fmt.Sprintf("<b>%s</b>\n\n", defaultTitle))
+		fmt.Fprintf(&msg, "<b>%s</b>\n\n", defaultTitle)
 		for _, item := range u.Items {
-			msg.WriteString(fmt.Sprintf("• <a href=%q>%s</a>\n", item.Link, cmp.Or(item.Title, item.Link)))
+			fmt.Fprintf(&msg, "• <a href=%q>%s</a>\n", item.Link, cmp.Or(item.Title, item.Link))
 		}
 		return Rendered{Body: msg.String(), DisablePreview: true}
 	}

@@ -1,0 +1,18 @@
+keys:
+logs:
+hooks:
+  pre //main.star
+  pre //module.star
+  post //module.star
+  post //main.star
+visited:
+  //main.star
+  //module.star
+error:
+Traceback (most recent call last):
+  //main.star:3:4: in <toplevel>
+  //main.star:2:9: in run
+Error in exec: exec //module.star failed: Traceback (most recent call last):
+  //module.star:3:5: in <toplevel>
+  //module.star:2:9: in fail
+Error: invalid call of non-function (NoneType)
