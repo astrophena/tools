@@ -1,6 +1,6 @@
 module go.astrophena.name/tools
 
-go 1.26.6
+go 1.27.0
 
 require (
 	crawshaw.dev/jsonfile v0.0.0-20240206193014-699d1dad804e
@@ -45,7 +45,7 @@ require (
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/text v0.40.0 // indirect
 	golang.org/x/tools v0.47.0 // indirect
-	honnef.co/go/tools v0.7.0 // indirect
+	honnef.co/go/tools v0.8.0 // indirect
 	kernel.org/pub/linux/libs/security/libcap/psx v1.2.77 // indirect
 )
 
