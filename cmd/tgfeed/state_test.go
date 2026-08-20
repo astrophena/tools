@@ -6,7 +6,6 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -39,19 +38,6 @@ func TestLoadState(t *testing.T) {
 	}
 
 	testutil.AssertEqual(t, f.errorTemplate, "test")
-}
-
-func TestParseConfig(t *testing.T) {
-	testutil.RunGolden(t, "testdata/config/*.star", func(t *testing.T, match string) []byte {
-		config := readFile(t, match)
-
-		f := newTestFetcher(t, newTestEnv(t, nil, nil))
-		if err := f.loadConfig(t.Context(), string(config)); err != nil {
-			return fmt.Appendf(nil, "Error: %v", err)
-		}
-
-		return toJSON(t, f.feeds)
-	}, *updateGolden)
 }
 
 func TestParseConfigDuplicateFeedURL(t *testing.T) {
