@@ -10,12 +10,12 @@ import (
 	"runtime/debug"
 	"strings"
 
+	"go.astrophena.name/base/tgmarkup"
 	"go.astrophena.name/base/version"
 	"go.astrophena.name/tools/internal/starlark/go2star"
 	"go.astrophena.name/tools/internal/starlark/kvcache"
 	"go.astrophena.name/tools/internal/starlark/llm"
 	"go.astrophena.name/tools/internal/starlark/telegram"
-	"go.astrophena.name/tools/internal/tgmarkup"
 
 	starlarktime "go.starlark.net/lib/time"
 	"go.starlark.net/starlark"
