@@ -30,7 +30,6 @@ import (
 	bootpacman "go.astrophena.name/tools/cmd/boot/internal/pacman"
 	bootprogram "go.astrophena.name/tools/cmd/boot/internal/program"
 	bootrescue "go.astrophena.name/tools/cmd/boot/internal/rescue"
-	bootshell "go.astrophena.name/tools/cmd/boot/internal/shell"
 	bootssh "go.astrophena.name/tools/cmd/boot/internal/ssh"
 	bootsystemd "go.astrophena.name/tools/cmd/boot/internal/systemd"
 
@@ -61,10 +60,10 @@ func (a *app) Flags(fs *flag.FlagSet) {
 	a.verbose = newBoolFlagValue(false)
 	a.json = newBoolFlagValue(false)
 	a.concurrency = newFlagValue(1, parsePositiveInt)
+
 	fs.Var(&a.root, "C", "Run as if boot was started in `dir`.")
 	fs.Var(&a.entry, "f", "Recipe entrypoint `file`.")
 	fs.Var(&a.failFast, "fail-fast", "Stop on the first failed task.")
-	fs.BoolVar(&a.dryRun, "dry-run", false, "Alias for plan: print actions without applying changes.")
 	fs.Var(&a.verbose, "verbose", "Print detailed action output when applying changes.")
 	fs.Var(&a.json, "json", "Print machine-readable JSON output.")
 	fs.Var(&a.only, "only", "Run only the specified task ID. May be repeated.")
@@ -186,6 +185,7 @@ func (a *app) engine(env *cli.Env) (*boot.Engine, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	home := env.Getenv("HOME")
 	if home == "" {
 		home, err = os.UserHomeDir()
@@ -193,6 +193,7 @@ func (a *app) engine(env *cli.Env) (*boot.Engine, error) {
 			return nil, err
 		}
 	}
+
 	rt := &boot.Runtime{
 		Root:   root,
 		Home:   home,
@@ -200,6 +201,7 @@ func (a *app) engine(env *cli.Env) (*boot.Engine, error) {
 		Stdin:  env.Stdin,
 		Stdout: env.Stdout,
 	}
+
 	return &boot.Engine{
 		Runtime: rt,
 		Entry:   a.entry.value,
@@ -212,7 +214,6 @@ func (a *app) engine(env *cli.Env) (*boot.Engine, error) {
 			bootpkg.Module(),
 			bootpacman.Module(),
 			bootprogram.Module(),
-			bootshell.Module(),
 			bootgit.Module(),
 			bootgo.Module(),
 			bootrescue.Module(),

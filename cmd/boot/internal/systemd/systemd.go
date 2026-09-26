@@ -2,6 +2,7 @@
 // Use of this source code is governed by the ISC
 // license that can be found in the LICENSE.md file.
 
+// Package systemd provides boot Starlark primitives for systemd services.
 package systemd
 
 import (
@@ -126,7 +127,7 @@ func (m *impl) unit(thread *starlark.Thread, b *starlark.Builtin, user bool, arg
 }
 
 func unitNeedsReload(ctx context.Context, rt *boot.Runtime, user bool, name string) (bool, error) {
-	cmd := systemctlCommand(ctx, rt, user, "show", name, "--property=NeedDaemonReload", "--value")
+	cmd := systemctlCommand(ctx, rt, user, false, "show", name, "--property=NeedDaemonReload", "--value")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return false, boot.CommandError(cmd.Args, out, err)
@@ -142,7 +143,7 @@ func unitNeedsReload(ctx context.Context, rt *boot.Runtime, user bool, name stri
 }
 
 func systemctlQuiet(ctx context.Context, rt *boot.Runtime, user bool, args ...string) (bool, error) {
-	cmd := systemctlCommand(ctx, rt, user, args...)
+	cmd := systemctlCommand(ctx, rt, user, false, args...)
 	out, err := cmd.CombinedOutput()
 	if err == nil {
 		return true, nil
@@ -166,7 +167,7 @@ func isSystemctlInactiveStatus(out []byte) bool {
 }
 
 func runSystemctl(ctx context.Context, rt *boot.Runtime, user bool, args ...string) error {
-	cmd := systemctlCommand(ctx, rt, user, args...)
+	cmd := systemctlCommand(ctx, rt, user, true, args...)
 	out, err := cmd.CombinedOutput()
 	if err == nil {
 		return nil
@@ -174,11 +175,11 @@ func runSystemctl(ctx context.Context, rt *boot.Runtime, user bool, args ...stri
 	return boot.CommandError(cmd.Args, out, err)
 }
 
-func systemctlCommand(ctx context.Context, rt *boot.Runtime, user bool, args ...string) *exec.Cmd {
+func systemctlCommand(ctx context.Context, rt *boot.Runtime, user, write bool, args ...string) *exec.Cmd {
 	argv := []string{"systemctl"}
 	if user {
 		argv = append(argv, "--user")
-	} else if rt.NeedsSudo() {
+	} else if write && rt.NeedsSudo() {
 		argv = []string{"sudo", "systemctl"}
 	}
 	argv = append(argv, args...)

@@ -2,6 +2,7 @@
 // Use of this source code is governed by the ISC
 // license that can be found in the LICENSE.md file.
 
+// Package packages provides boot Starlark primitives for package managers.
 package packages
 
 import (
@@ -151,7 +152,7 @@ func (m *impl) addUpdateActions(thread *starlark.Thread, pm packageManager) {
 			m.mod.pkgMu.Lock()
 			defer m.mod.pkgMu.Unlock()
 
-			updates, err := pm.updates(ctx)
+			updates, err := pm.updates(ctx, dryRun)
 			if err != nil {
 				return "", err
 			}
@@ -197,8 +198,6 @@ func (m *impl) checkExplicitPackages(thread *starlark.Thread, b *starlark.Builti
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", b.Name(), err)
 	}
-	slices.Sort(defined)
-	defined = slices.Compact(defined)
 	pm, err := m.resolveManager()
 	if err != nil {
 		return nil, err
@@ -264,7 +263,7 @@ type packageManager struct {
 	missing        func(context.Context, []string) ([]string, error)
 	explicit       func(context.Context) ([]string, error)
 	installArgv    func([]string) []string
-	updates        func(context.Context) ([]string, error)
+	updates        func(context.Context, bool) ([]string, error)
 	rebootRequired func(context.Context, []string) ([]string, error)
 	update         func(context.Context) error
 }
@@ -281,7 +280,11 @@ func sudoArgs(rt *boot.Runtime, args ...string) []string {
 	return args
 }
 
-func pacmanUpdates(ctx context.Context, rt *boot.Runtime) ([]string, error) {
+func pacmanUpdates(ctx context.Context, rt *boot.Runtime, dryRun bool) ([]string, error) {
+	if dryRun {
+		return pacmanPendingUpdates(ctx, "")
+	}
+
 	// Follow checkupdates' safe-update pattern: synchronize a separate pacman
 	// database, then compare the installed local database against that copy. This
 	// avoids running pacman -Sy against the system database without immediately
@@ -314,9 +317,16 @@ func pacmanUpdates(ctx context.Context, rt *boot.Runtime) ([]string, error) {
 		return nil, boot.CommandError(cmd.Args, out, err)
 	}
 
-	// Query pending upgrades against the cached sync database. pacman exits 1
-	// when no upgrades are available, which is a successful no-op for boot.
-	cmd = exec.CommandContext(ctx, "pacman", "-Qu", "--dbpath", dbpath)
+	return pacmanPendingUpdates(ctx, dbpath)
+}
+
+func pacmanPendingUpdates(ctx context.Context, dbpath string) ([]string, error) {
+	args := []string{"-Qu"}
+	if dbpath != "" {
+		args = append(args, "--dbpath", dbpath)
+	}
+	// pacman exits 1 when no upgrades are available.
+	cmd := exec.CommandContext(ctx, "pacman", args...)
 	out, err := cmd.Output()
 	if err != nil {
 		var exitErr *exec.ExitError
@@ -452,7 +462,7 @@ func packageManagerByName(rt *boot.Runtime, name string) (packageManager, error)
 			installArgv: func(packages []string) []string {
 				return sudoArgs(rt, append([]string{"apt", "install", "-y"}, packages...)...)
 			},
-			updates: func(context.Context) ([]string, error) {
+			updates: func(context.Context, bool) ([]string, error) {
 				return []string{"system"}, nil
 			},
 			update: func(ctx context.Context) error {
@@ -496,8 +506,8 @@ func packageManagerByName(rt *boot.Runtime, name string) (packageManager, error)
 			installArgv: func(packages []string) []string {
 				return sudoArgs(rt, append([]string{"pacman", "-S", "--noconfirm", "--needed"}, packages...)...)
 			},
-			updates: func(ctx context.Context) ([]string, error) {
-				return pacmanUpdates(ctx, rt)
+			updates: func(ctx context.Context, dryRun bool) ([]string, error) {
+				return pacmanUpdates(ctx, rt, dryRun)
 			},
 			rebootRequired: pacmanRebootRequired,
 			update: func(ctx context.Context) error {

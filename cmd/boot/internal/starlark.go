@@ -11,8 +11,6 @@ import (
 	"go.starlark.net/starlark"
 )
 
-// Common Starlark utilities.
-
 // RequireTask reports an error when a builtin that emits actions is called outside a task.
 func RequireTask(thread *starlark.Thread, b *starlark.Builtin) error {
 	if !InTask(thread) {
@@ -37,19 +35,19 @@ func NonEmpty(name, value string) error {
 	return nil
 }
 
-// StringList converts [starlark.List] to []string.
+// StringList converts a Starlark list to strings, omitting empty values.
 func StringList(name string, list *starlark.List) ([]string, error) {
 	if list == nil {
 		return nil, fmt.Errorf("%s list is required", name)
 	}
 	names := make([]string, 0, list.Len())
 	for i := range list.Len() {
-		name, ok := starlark.AsString(list.Index(i))
+		item, ok := starlark.AsString(list.Index(i))
 		if !ok {
 			return nil, fmt.Errorf("%s[%d] is not a string", name, i)
 		}
-		if name != "" {
-			names = append(names, name)
+		if item != "" {
+			names = append(names, item)
 		}
 	}
 	return names, nil

@@ -2,6 +2,7 @@
 // Use of this source code is governed by the ISC
 // license that can be found in the LICENSE.md file.
 
+// Package fs provides boot Starlark primitives for idempotent filesystem changes.
 package fs
 
 import (
@@ -165,6 +166,9 @@ func (m *impl) syncTree(thread *starlark.Thread, b *starlark.Builtin, args starl
 			} else if err != nil {
 				return "", err
 			}
+			if dryRun && sudo && m.rt.NeedsSudo() {
+				return boot.ResultChange, nil
+			}
 
 			args := syncTreeArgs(owner, group)
 			changed, err := syncTreeChanged(ctx, m.rt, sudo, args, src, dst)
@@ -242,18 +246,23 @@ func (m *impl) file(thread *starlark.Thread, b *starlark.Builtin, args starlark.
 	); err != nil {
 		return nil, err
 	}
-	abs := m.rt.ResolveTarget(path)
-	targetMode, err := boot.FileMode("mode", mode)
+	fileMode, err := boot.FileMode("mode", mode)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", b.Name(), err)
 	}
+	m.addFile(thread, path, content, fileMode)
+	return starlark.None, nil
+}
+
+func (m *impl) addFile(thread *starlark.Thread, path, content string, mode os.FileMode) {
+	abs := m.rt.ResolveTarget(path)
 	boot.AddAction(thread, boot.Action{
 		Summary: "file " + abs,
 		Apply: func(_ context.Context, dryRun bool) (boot.Result, error) {
 			info, err := os.Stat(abs)
 			if err == nil {
 				got, err2 := os.ReadFile(abs)
-				if err2 == nil && string(got) == content && info.Mode().Perm() == targetMode.Perm() {
+				if err2 == nil && string(got) == content && info.Mode().Perm() == mode.Perm() {
 					return boot.ResultSkip, nil
 				}
 			}
@@ -264,16 +273,15 @@ func (m *impl) file(thread *starlark.Thread, b *starlark.Builtin, args starlark.
 			if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
 				return "", err
 			}
-			if err := os.WriteFile(abs, []byte(content), targetMode); err != nil {
+			if err := os.WriteFile(abs, []byte(content), mode); err != nil {
 				return "", err
 			}
-			if err := os.Chmod(abs, targetMode); err != nil {
+			if err := os.Chmod(abs, mode); err != nil {
 				return "", err
 			}
 			return boot.ResultChange, nil
 		},
 	})
-	return starlark.None, nil
 }
 
 func (m *impl) template(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
@@ -296,18 +304,16 @@ func (m *impl) template(thread *starlark.Thread, b *starlark.Builtin, args starl
 	); err != nil {
 		return nil, err
 	}
-	if _, err := boot.FileMode("mode", mode); err != nil {
+	fileMode, err := boot.FileMode("mode", mode)
+	if err != nil {
 		return nil, fmt.Errorf("%s: %w", b.Name(), err)
 	}
 	content, err := renderTemplate(text, values)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", b.Name(), err)
 	}
-	return m.file(thread, starlark.NewBuiltin("fs.file", m.file), nil, []starlark.Tuple{
-		{starlark.String("path"), starlark.String(path)},
-		{starlark.String("content"), starlark.String(content)},
-		{starlark.String("mode"), starlark.MakeInt(mode)},
-	})
+	m.addFile(thread, path, content, fileMode)
+	return starlark.None, nil
 }
 
 func renderTemplate(text string, values *starlark.Dict) (string, error) {

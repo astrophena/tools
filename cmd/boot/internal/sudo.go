@@ -14,15 +14,10 @@ import (
 	"strings"
 )
 
-// sudoPrompter performs one upfront sudo validation per run.
-//
-// Modules mark Actions with RequiresSudo while task bodies are being prepared.
-// Prompting after preparation lets boot tell the user exactly which tasks/actions
-// need privilege, and avoids interleaving sudo password prompts with progress bar
-// output or concurrent action execution.
+// sudoPrompter authenticates before actions run, keeping password prompts out
+// of concurrent output.
 type sudoPrompter struct {
-	engine   *Engine
-	prepared bool
+	engine *Engine
 }
 
 func newSudoPrompter(engine *Engine) *sudoPrompter {
@@ -30,7 +25,7 @@ func newSudoPrompter(engine *Engine) *sudoPrompter {
 }
 
 func (p *sudoPrompter) prepare(ctx context.Context, w io.Writer, tasks []*Task) error {
-	if p.prepared || p.engine.Runtime == nil || !p.engine.Runtime.NeedsSudo() {
+	if p.engine.Runtime == nil || !p.engine.Runtime.NeedsSudo() {
 		return nil
 	}
 	reasons := sudoReasons(tasks)
@@ -47,7 +42,6 @@ func (p *sudoPrompter) prepare(ctx context.Context, w io.Writer, tasks []*Task) 
 	if err := p.authenticate(ctx, w); err != nil {
 		return err
 	}
-	p.prepared = true
 	return nil
 }
 

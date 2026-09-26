@@ -1,134 +1,43 @@
 # Hacking on Boot
 
-Boot is a small Starlark runtime for host setup recipes. The public binary lives
-in `cmd/boot`; this package contains the task engine, runtime state, and module
-contracts used by the built-in modules.
+`cmd/boot` handles flags and commands. This package loads recipes, runs tasks,
+and provides the shared API for built-in modules.
 
-## Runtime Model
+## Runtime
 
-`main.go` builds an `internal.Engine` with:
+`cmd/boot/main.go` creates an `Engine` with a `Runtime`, a recipe entrypoint
+(usually `BOOT.star`), and the available modules. `Engine.Load` evaluates the
+recipe with `task`, `fail`, `host`, and the modules as Starlark globals.
+Top-level code should register tasks; task functions create actions through
+modules.
 
-- a `Runtime`, which stores recipe root, home directory, environment access,
-  runtime environment overrides, stdio, color preference, and whether the
-  current run is interactive;
-- an entrypoint, normally `BOOT.star`;
-- a list of modules, each exposed as a Starlark module.
+When a task runs, the engine stores it on the Starlark thread. Module functions
+call `RequireTask` before `AddAction` to attach an action to that task. Each
+action has a `Summary` and an `Apply(ctx, dryRun)` function. The function checks
+the host in dry-run mode and makes the change during apply. It returns:
 
-`Engine.Load` executes the entrypoint with predeclared globals:
+- `ResultSkip` if the host already matches;
+- `ResultChange` if it changed the host or would change it;
+- `ResultStop` to stop later actions during apply, as `consent.require` does.
 
-- `task(...)` registers a task;
-- `fail(message)` stops recipe evaluation;
-- `host()` returns host/runtime metadata for top-level branching;
-- each Go module appears under its module name, such as `fs` or `pkg`.
+Use `Warn` to add a non-fatal message to the run's final report.
 
-Top-level Starlark should only register tasks and choose machine profiles. Host
-mutation belongs in task functions through module actions.
+## Modules
 
-## Tasks and Actions
+A module implements `Name() string` and `Members(*Runtime) starlark.StringDict`.
+Keep its Starlark functions focused on recipe operations. Functions that emit
+actions should:
 
-A task is a named Starlark callable. When the engine runs a task, it attaches
-the task to the Starlark thread with `SetTask`. Module functions call
-`RequireTask(thread, b)` and then `AddAction(thread, Action{...})`.
+- Call `RequireTask` and parse arguments with `starlark.UnpackArgs`.
+- Use `Runtime` path and environment helpers for recipe inputs and host targets.
+- Add actions without changing the host during recipe evaluation.
+- Make dry-run checks read-only and report command failures with useful output.
 
-An `Action` has:
-
-- `Summary`, printed in plans, verbose applies, and failures;
-- `Apply(ctx, dryRun)`, which checks or applies one idempotent operation.
-
-Action results are:
-
-- `ResultSkip`: the host already matched the requested state;
-- `ResultChange`: the action changed the host or would change it in dry-run;
-- `ResultStop`: stop the remaining actions in this task without failing.
-
-Use `ResultStop` only for gating actions such as `consent.require`; normal
-idempotency should use skip/change.
-
-Warnings are independent of action results. Call `boot.Warn(ctx, message)` from
-`Apply` to add a non-fatal diagnostic to the run's final warning report.
-
-## Writing Modules
-
-Modules implement:
-
-```go
-type Module interface {
-    Name() string
-    Members(*Runtime) starlark.StringDict
-}
-```
-
-Keep module APIs narrow and recipe-oriented. Prefer one clear Starlark function
-that emits one idempotent action over a general-purpose command wrapper.
-
-Module function checklist:
-
-- Require task context for functions that emit actions with `boot.RequireTask`.
-- Parse arguments with `starlark.UnpackArgs`.
-- Resolve recipe inputs with `Runtime.ResolveSource`.
-- Resolve host targets with `Runtime.ResolveTarget`.
-- Use `Runtime.ExpandHome`, `Runtime.Hostname`, `Runtime.EnvValue`, and
-  `Runtime.SetEnv` rather than duplicating that logic.
-- Do not mutate the host while registering actions.
-- In dry-run, perform enough checks to decide skip/change but do not write.
-- Include command output in returned errors; prefer `boot.RunCommand`,
-  `boot.RunCmd`, `boot.CommandOutput`, or `boot.CommandError`.
-- Use `boot.Warn` and `boot.BulletList` for user-visible check details.
-- Validate Starlark file modes with `boot.FileMode`.
-- Keep successful JSON or textual output minimal; noisy reporting belongs in
-  explicit check modules.
-
-Avoid external dependencies for modules unless the standard library would make
-the code fragile or much larger.
-
-## Debugging Modules
-
-Start with a focused recipe and task selection:
-
-```sh
-$ go run ./cmd/boot -only setup_packages plan
-$ go run ./cmd/boot -only setup_packages -verbose apply
-```
-
-Use `plan` to verify the action list and idempotency checks. Use
-`-verbose
-apply` when you need per-action skip/change output. For task filtering
-bugs, `boot list`, `-only`, `-skip`, and `-tag` exercise the selection path
-without running actions.
-
-Use `--json` when another program needs stable output. JSON runs use the same
-scheduler as human-readable runs and sort action results before encoding them.
-
-Task selection is strict: if `-only`, `-skip`, or `-tag` leaves a selected task
-without one of its declared dependencies, selection fails instead of silently
-ignoring the missing dependency.
-
-When debugging command execution, prefer fake commands in a temporary `PATH`
-inside tests. See the `packages`, `systemd`, and `rescue` tests for examples.
+The shared helpers in this package cover command execution, warnings, file
+modes, and output formatting. See existing modules for examples.
 
 ## Testing
 
-Put module tests next to the module. Use `testutil.TaskThread` to create a task
-and Starlark thread, call the module function, then run the emitted action.
-
-Typical shape:
-
-```go
-task, thread := testutil.TaskThread("test")
-m := &impl{rt: &boot.Runtime{Root: root, Home: home, Getenv: os.Getenv}}
-_, err := m.someFunction(thread, starlark.NewBuiltin("module.func", m.someFunction), nil, kwargs)
-if err != nil {
-    t.Fatal(err)
-}
-got, err := task.Actions[0].Apply(context.Background(), true)
-```
-
-Tests should cover both dry-run and apply behavior when a function can write.
-For command-based modules, create small executable shell scripts with
-`testutil.WriteCommand` and prepend their directory to `PATH`.
-
-Before submitting changes, run from the repository root:
-
-```sh
-$ go tool pre-commit
-```
+Put tests next to each module. Use `testutil.NewTask` and `EmitOne` to call a
+Starlark function and inspect its action. Test dry-run and apply when the action
+can write. `testutil.Commands` installs fake commands in a temporary `PATH`.

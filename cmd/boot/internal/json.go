@@ -34,14 +34,18 @@ func (e *Engine) printJSON(w io.Writer, run execution, warnings []warning, dryRu
 	for _, failure := range run.failures {
 		if failure.Action == "" {
 			report.Actions = append(report.Actions, jsonAction{
-				TaskID: failure.TaskID, TaskName: failure.TaskName, Error: failure.Err.Error(),
+				TaskID:   failure.TaskID,
+				TaskName: failure.TaskName,
+				Error:    failure.Err.Error(),
 			})
 		}
 	}
 	for _, action := range run.orderedActions() {
 		item := jsonAction{
-			TaskID: action.task.ID, TaskName: action.task.Name,
-			Summary: action.action.description(), Result: action.result,
+			TaskID:   action.task.ID,
+			TaskName: action.task.Name,
+			Summary:  action.action.description(),
+			Result:   action.result,
 		}
 		if action.err != nil {
 			item.Error = action.err.Error()

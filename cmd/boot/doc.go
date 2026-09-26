@@ -3,144 +3,41 @@
 // license that can be found in the LICENSE.md file.
 
 /*
-Boot applies a Starlark recipe to bring a development environment into the
-state described by that recipe. It is intended for personal workstation and
-shell-environment bootstrap tasks: package installation, dotfile links, Git
-checkouts, generated keys, timers, and other small host maintenance actions.
-
-Boot recipes register named tasks. When a task runs, it emits idempotent
-actions through built-in modules such as fs, git, pkg, go, systemd, shell, and
-ssh. Boot then checks each action and either skips it, reports that it would
-change the host, or applies it.
-
-Boot is deliberately smaller than Ansible. Recipes are ordinary Starlark files,
-module APIs are narrow Go wrappers, and the plan/apply split is the main safety
-mechanism.
+Boot runs Starlark recipes to set up a host. Recipes register tasks that use
+built-in modules to check or change files, packages, repositories, and services.
+Actions skip work when the host already matches the recipe.
 
 # Usage
 
-	$ boot [flags...] <command>
+	$ boot [flags] <list|plan|check|apply>
 
-Where <command> is one of the following commands:
-
-	list
-		List selected tasks without running them.
-
-	plan
-		Evaluate selected tasks and print the actions they would take without
-		changing the host.
-
-	check
-		Alias for plan intended for validation scripts.
-
-	apply
-		Evaluate selected tasks and apply their actions.
-
-# Flags
-
-	-C dir
-		Run as if boot was started in dir. Defaults to the current directory.
-
-	-f file
-		Starlark recipe entrypoint. Defaults to BOOT.star.
-
-	-dry-run
-		Alias for plan.
-
-	-json
-		Print machine-readable JSON output.
-
-	-fail-fast
-		Stop on the first failed task.
-
-	-only task
-		Run only the specified task ID. May be repeated.
-
-	-skip task
-		Skip the specified task ID. May be repeated.
-
-	-tag tag
-		Run tasks with the specified tag. May be repeated.
-
-	-j concurrency
-		Number of tasks to run in parallel. Defaults to 1.
+List shows tasks. Plan checks actions and reports proposed changes without
+applying them; check is an alias for plan. Apply makes the changes. Flag
+descriptions are available through -help.
 
 # Recipes
 
-Recipes are Starlark files loaded from the directory selected by -C. The default
-entrypoint is BOOT.star. Top-level code should detect the current machine and
-register tasks; task functions should emit actions and avoid doing direct host
-mutation themselves:
-
-	# vim: ft=starlark shiftwidth=4
+Boot loads BOOT.star from the current directory by default. Use -C to select a
+directory or -f to select another entrypoint. Register tasks at the top level;
+use module functions inside tasks to create actions:
 
 	def dotfiles():
-	    fs.dir("~/local/data/bash")
 	    fs.symlink("bash/rc", "~/.bashrc")
 
-	def supported():
-	    if env.get("HOME") == "":
-	        fail("HOME is required")
+	task(id="dotfiles", name="Link dotfiles", run=dotfiles)
 
-	task(
-	    id="dotfiles",
-	    name="Link dotfiles",
-	    tags=["filesystem"],
-	    run=dotfiles,
-	)
+Tasks can declare dependencies and tags. Use -only, -skip, and -tag to select
+tasks. See cmd/boot/modules.md for built-in functions and modules.
 
-Tasks may declare tags, dependencies, whether failures should be continuable,
-and whether sudo should be prepared before apply. Select tasks with -only,
--skip, and -tag.
-
-For built-in module documentation, see cmd/boot/modules.md.
-
-# Safety
-
-The plan command runs action checks but does not apply changes. Actions should
-therefore make dry-run checks cheap and side-effect free. Use consent.require
-inside a task when an apply needs an explicit user acknowledgement before later
-actions in that task proceed.
-
-For system tasks, set requires_sudo=True on the task so Boot can authenticate
-once before apply. Individual modules still decide when sudo is necessary.
-
-The apply command holds a per-recipe advisory lock so two Boot runs cannot race
-the same package manager or filesystem actions.
+Use consent.require in a task to ask before applying later actions. Apply holds
+a lock so two runs of the same recipe cannot overlap.
 
 # Configuration
 
-Boot optionally reads a Starlark configuration file from
-$XDG_CONFIG_HOME/boot/config.star, or ~/.config/boot/config.star when
-XDG_CONFIG_HOME is unset. The file may call boot.configure to set default CLI
-options. Explicit command-line flags always override configuration values:
-
-	boot.configure(
-	    workspace="~/code/prefs",
-	    entry="BOOT.star",
-	    concurrency=4,
-	    fail_fast=False,
-	    verbose=False,
-	    json=False,
-	)
-
-The workspace option is the configuration equivalent of -C.
-
-# Environment Variables
-
-Boot reads the following environment variables:
-
-	HOME
-		Used when expanding paths that begin with ~/.
-
-	BOOT_PACKAGE_MANAGER
-		Default package manager for pkg.install when pkg.configure is not used.
-
-	NO_COLOR
-		Disable colored output.
-
-	CI
-		Disable interactive prompts when set to true.
+Boot reads $XDG_CONFIG_HOME/boot/config.star, or ~/.config/boot/config.star if
+XDG_CONFIG_HOME is unset. The file may call boot.configure to set workspace,
+entry, concurrency, fail_fast, verbose, and json defaults. Flags override these
+defaults.
 */
 package main
 

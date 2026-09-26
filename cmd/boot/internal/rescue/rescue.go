@@ -2,6 +2,7 @@
 // Use of this source code is governed by the ISC
 // license that can be found in the LICENSE.md file.
 
+// Package rescue provides boot Starlark primitives for rescue system management.
 package rescue
 
 import (
@@ -10,7 +11,6 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -275,9 +275,5 @@ func run(ctx context.Context, sudo bool, dir, name string, args ...string) error
 	if sudo {
 		argv = append([]string{"sudo"}, argv...)
 	}
-	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
-	if dir != "" {
-		cmd.Dir = dir
-	}
-	return boot.RunCmd(cmd)
+	return boot.RunCommand(ctx, dir, argv...)
 }

@@ -95,7 +95,7 @@ func TestRunPlanPrintsDynamicActionDescription(t *testing.T) {
 		}),
 	}}}
 	var out bytes.Buffer
-	if err := engine.RunPlan(t.Context(), &out, Selection{}, RunOptions{DryRun: true}); err != nil {
+	if err := engine.Run(t.Context(), &out, Selection{}, RunOptions{DryRun: true}); err != nil {
 		t.Fatal(err)
 	}
 	assertContains(t, out.String(), "packages: check packages: would update linux, git", "plan output")
@@ -402,11 +402,12 @@ func TestSudoReasonsPreferActionDetails(t *testing.T) {
 	}
 }
 
-func TestRunPlanPromptsForSudoOnceBeforeTasks(t *testing.T) {
+func TestRunPlanDoesNotPromptForSudo(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("sudo is not needed when running as root")
 	}
-	writeFakeSudo(t, "#!/bin/sh\nexit 0\n")
+	marker := filepath.Join(t.TempDir(), "sudo-ran")
+	writeFakeSudo(t, "#!/bin/sh\ntouch "+marker+"\n")
 
 	engine := &Engine{
 		Runtime: &Runtime{Getenv: func(string) string { return "" }},
@@ -430,14 +431,12 @@ func TestRunPlanPromptsForSudoOnceBeforeTasks(t *testing.T) {
 	}
 	got := out.String()
 	prompt := "Boot requests administrator permissions to run the following tasks and actions:"
-	if strings.Count(got, prompt) != 1 {
-		t.Fatalf("sudo prompt count = %d, want 1:\n%s", strings.Count(got, prompt), got)
+	if strings.Contains(got, prompt) {
+		t.Fatalf("plan prompted for sudo:\n%s", got)
 	}
-	if strings.Index(got, prompt) > strings.Index(got, "[1/2] Planning task first") {
-		t.Fatalf("sudo prompt was not printed before planning tasks:\n%s", got)
+	if _, err := os.Stat(marker); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("sudo ran during plan: %v", err)
 	}
-	assertContains(t, got, "  - first: first action", "sudo prompt")
-	assertContains(t, got, "  - second: second action", "sudo prompt")
 }
 
 func writeFakeSudo(t *testing.T, script string) {

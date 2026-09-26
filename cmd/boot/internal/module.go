@@ -14,7 +14,7 @@ import (
 	"go.starlark.net/starlark"
 )
 
-// Module contributes a Starlark module to a boot runtime.
+// Module provides a Starlark global and its members.
 type Module interface {
 	// Name is the Starlark global name for this module.
 	Name() string
@@ -22,12 +22,8 @@ type Module interface {
 	Members(*Runtime) starlark.StringDict
 }
 
-// Runtime is shared state used by Starlark modules.
-//
-// Root is the recipe root, not necessarily /. Relative targets resolve through
-// Root so tests and dry local recipes can run in temporary directories. Home is
-// kept separate from process HOME because boot often manages another filesystem
-// tree while still inheriting the caller's environment for child commands.
+// Runtime holds paths, environment, and I/O shared by Starlark modules. Root
+// anchors relative paths; Home may differ from the process home directory.
 type Runtime struct {
 	Root        string
 	Home        string
@@ -41,49 +37,35 @@ type Runtime struct {
 
 const taskKey = "boot:task"
 
-// Starlark has per-thread local storage. Boot uses it to make module calls such
-// as fs.file(...) know which task they should append actions to without exposing
-// the Task object to recipes.
-
 // SetTask associates a task with a Starlark thread.
 func SetTask(thread *starlark.Thread, task *Task) {
 	thread.SetLocal(taskKey, task)
 }
 
-// AddAction appends an idempotent action to the task associated with the thread.
+// AddAction appends an action to the thread's current task.
 func AddAction(thread *starlark.Thread, action Action) {
 	task := thread.Local(taskKey).(*Task)
 	task.Actions = append(task.Actions, action)
 }
 
-// InTask reports whether a Starlark builtin is currently running inside a task.
+// InTask reports whether the thread has a current task.
 func InTask(thread *starlark.Thread) bool {
 	return thread.Local(taskKey) != nil
 }
 
-// ResolveSource resolves a recipe source path.
-//
-// Sources are usually files from the recipe checkout, so relative paths are
-// rooted at Runtime.Root. A leading // is accepted as an explicit recipe-root
-// marker for readability in Starlark recipes.
+// ResolveSource resolves a path from the recipe. Relative paths and paths
+// beginning with // are rooted at Runtime.Root.
 func (r *Runtime) ResolveSource(path string) string {
 	path = os.ExpandEnv(path)
-	path = strings.TrimPrefix(path, "//")
-	if strings.HasPrefix(path, "~/") {
-		return r.ExpandHome(path)
-	}
-	if filepath.IsAbs(path) {
-		return filepath.Clean(path)
-	}
-	return filepath.Join(r.Root, filepath.FromSlash(path))
+	return r.resolvePath(strings.TrimPrefix(path, "//"))
 }
 
-// ResolveTarget resolves a target path on the host.
-//
-// Absolute paths are kept absolute. Relative paths are rooted at Runtime.Root,
-// which is why tests can exercise host-mutating modules safely under t.TempDir.
+// ResolveTarget resolves a host path. Relative paths are rooted at Runtime.Root.
 func (r *Runtime) ResolveTarget(path string) string {
-	path = os.ExpandEnv(path)
+	return r.resolvePath(os.ExpandEnv(path))
+}
+
+func (r *Runtime) resolvePath(path string) string {
 	if strings.HasPrefix(path, "~/") {
 		return r.ExpandHome(path)
 	}
@@ -98,11 +80,8 @@ func (r *Runtime) ExpandHome(path string) string {
 	return filepath.Join(r.Home, filepath.FromSlash(strings.TrimPrefix(path, "~/")))
 }
 
-// EnvValue returns an environment value from runtime overrides, the runtime lookup function, or the process environment.
-//
-// Runtime.Env is checked first so env.load_dir can affect later module calls in
-// the same recipe evaluation even when Runtime.Getenv comes from an immutable CLI
-// environment object.
+// EnvValue looks up key in Runtime.Env, Runtime.Getenv, then the process
+// environment.
 func (r *Runtime) EnvValue(key string) string {
 	if r != nil {
 		if val := r.Env[key]; val != "" {
@@ -117,7 +96,7 @@ func (r *Runtime) EnvValue(key string) string {
 	return os.Getenv(key)
 }
 
-// SetEnv stores an environment override and updates the process environment inherited by child commands.
+// SetEnv stores an override and updates the environment inherited by commands.
 func (r *Runtime) SetEnv(key, value string) error {
 	if err := os.Setenv(key, value); err != nil {
 		return err
@@ -140,7 +119,7 @@ func BulletList(items []string) string {
 	return strings.TrimRight(buf.String(), "\n")
 }
 
-// NeedsSudo reports whether elevated privileges are required and available.
+// NeedsSudo reports whether the process needs sudo outside Termux.
 func (r *Runtime) NeedsSudo() bool {
 	if os.Geteuid() == 0 {
 		return false

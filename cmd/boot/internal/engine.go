@@ -2,6 +2,7 @@
 // Use of this source code is governed by the ISC
 // license that can be found in the LICENSE.md file.
 
+// Package internal runs boot Starlark recipes.
 package internal
 
 import (
@@ -21,20 +22,7 @@ import (
 	"go.starlark.net/starlarkstruct"
 )
 
-// Engine owns one loaded recipe run.
-//
-// The engine has two distinct phases:
-//
-//  1. Load executes the Starlark entrypoint. Top-level Starlark is expected to
-//     be declarative: it calls task(...) to register task metadata and does not
-//     mutate the host.
-//  2. Run evaluates selected task bodies. Task bodies are where modules append
-//     Actions to the current task. The engine then plans or applies those
-//     actions according to RunOptions.
-//
-// Keeping task registration separate from action creation lets selection happen
-// before any task body is evaluated, and lets plan/apply share the same task
-// body evaluation code.
+// Engine loads recipes and runs selected tasks.
 type Engine struct {
 	Runtime *Runtime
 	Entry   string
@@ -43,13 +31,7 @@ type Engine struct {
 	Tasks []*Task
 }
 
-// Task is a recipe-defined unit of work.
-//
-// Run is a Starlark callable registered by task(...). It should not do host
-// mutation directly; instead it calls module functions such as fs.file or
-// pkg.install, and those functions append actions to task.Actions via AddAction.
-// Actions is reset every time the task is prepared so repeated
-// plan/apply calls do not reuse stale closures or stale host checks.
+// Task is a recipe-defined unit of work. Its actions are rebuilt for each run.
 type Task struct {
 	ID              string
 	Name            string
@@ -61,27 +43,20 @@ type Task struct {
 	Actions         []Action
 }
 
-// Action is an idempotent operation emitted by a task.
-//
-// Apply must implement both check and apply behavior. When dryRun is true it may
-// perform read-only probes to decide skip/change, but it must not mutate the
-// host. When dryRun is false it should bring the host to the requested state and
-// return ResultChange only when it actually changed something.
+// Action brings the host toward a task's requested state. Apply may probe the
+// host but must not change it when dryRun is true. It returns ResultChange only
+// when it changed the host or would do so in dry-run mode.
 type Action struct {
 	// Summary describes the action in plan, apply, and failure output.
 	Summary string
-	// Describe returns the current action summary. Actions that discover useful
-	// details while probing may use it to refine Summary before the engine prints
-	// the result.
+	// Describe can refine Summary after probing the host.
 	Describe func() string
 	Apply    func(context.Context, bool) (Result, error)
-	// IsConsent marks an action that must be evaluated during prepare in
-	// interactive apply runs. Consent can remove the remaining actions from a task
-	// before sudo prompting and before concurrent execution starts.
+	// IsConsent runs the action during preparation in interactive apply mode.
 	IsConsent bool
-	// RequiresSudo marks an action as needing sudo even in dry-run mode.
+	// RequiresSudo marks an action as needing sudo during apply.
 	RequiresSudo bool
-	// Concurrent marks an action as eligible to run in parallel with adjacent concurrent actions.
+	// Concurrent permits parallel execution with adjacent concurrent actions.
 	Concurrent bool
 }
 
@@ -102,7 +77,7 @@ const (
 	ResultSkip Result = "skip"
 	// ResultChange means the action changed the host or would change it in dry-run mode.
 	ResultChange Result = "change"
-	// ResultStop means no further actions in the current task should run.
+	// ResultStop stops the remaining actions in the task.
 	ResultStop Result = "stop"
 )
 
@@ -134,11 +109,8 @@ type Summary struct {
 	Failed   int `json:"failed"`
 }
 
-// Load executes the entrypoint and registers tasks.
-//
-// Starlark modules are installed as predeclared globals instead of using Python
-// import syntax. The interpreter still gets a filesystem loader so recipe files
-// can load sibling Starlark files through the repository's interpreter package.
+// Load executes the entrypoint and registers tasks. Modules are predeclared
+// globals, and recipe files can load sibling Starlark files.
 func (e *Engine) Load(ctx context.Context) error {
 	predeclared := starlark.StringDict{
 		"fail":   starlark.NewBuiltin("fail", fail),
@@ -277,12 +249,6 @@ func (e *Engine) prepare(ctx context.Context, tasks []*Task, opts RunOptions, wa
 	return planned, summary, failures, stopOnError
 }
 
-// RunPlan plans selected tasks without applying changes.
-func (e *Engine) RunPlan(ctx context.Context, w io.Writer, selection Selection, opts RunOptions) error {
-	opts.DryRun = true
-	return e.Run(ctx, w, selection, opts)
-}
-
 func (e *Engine) run(ctx context.Context, w io.Writer, selection Selection, opts RunOptions) error {
 	if opts.JSON && e.Runtime != nil {
 		oldStdout := e.Runtime.Stdout
@@ -299,8 +265,10 @@ func (e *Engine) run(ctx context.Context, w io.Writer, selection Selection, opts
 	if opts.JSON {
 		promptOutput = io.Discard
 	}
-	if err := newSudoPrompter(e).prepare(ctx, promptOutput, tasks); err != nil {
-		return err
+	if !opts.DryRun {
+		if err := newSudoPrompter(e).prepare(ctx, promptOutput, tasks); err != nil {
+			return err
+		}
 	}
 	run := execution{planned: planned, summary: summary, failures: failures}
 	taskDone := func(*Task) {}
@@ -330,7 +298,7 @@ func (e *Engine) run(ctx context.Context, w io.Writer, selection Selection, opts
 		if opts.Verbose {
 			e.printVerbose(w, tasks, run)
 		}
-		e.printReport(w, run.summary, false)
+		e.printReport(w, run.summary)
 		e.printWarnings(w, collectedWarnings)
 		err = e.printFailures(w, run.failures)
 	}

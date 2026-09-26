@@ -13,13 +13,8 @@ import (
 	"go.starlark.net/starlark"
 )
 
-// Selected returns tasks matching selection, topologically sorted.
-//
-// Selection is deliberately strict. If a user selects a task but filters out one
-// of its declared dependencies, boot returns an error instead of treating that
-// dependency as already satisfied. This makes partial runs explicit and avoids a
-// common infrastructure-footgun: applying a dependent task against a host whose
-// prerequisite task was never checked in this run.
+// Selected returns matching tasks in dependency order. It rejects selections
+// that omit a selected task's dependencies.
 func (e *Engine) Selected(selection Selection) ([]*Task, error) {
 	tasks := slices.Clone(e.Tasks)
 	taskIDs := make(map[string]bool)
@@ -90,13 +85,8 @@ func validateSelectedDependencies(tasks []*Task) error {
 	return fmt.Errorf("selected task dependencies are incomplete: %s", strings.Join(parts, "; "))
 }
 
-// SortTasks topologically sorts tasks based on their DependsOn field.
-//
-// The sort is stable enough for human output: root tasks enter the queue in the
-// recipe registration order, and dependents are appended as their last selected
-// dependency is satisfied. Missing dependencies are ignored here because
-// Selected validates them before sorting; tests call SortTasks directly, so this
-// function remains focused on cycle detection and ordering.
+// SortTasks orders tasks after their dependencies, retaining recipe order among
+// tasks with no dependencies.
 func SortTasks(tasks []*Task) ([]*Task, error) {
 	inDegree := make(map[string]int)
 	graph := make(map[string][]*Task)

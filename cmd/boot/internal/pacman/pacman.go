@@ -2,6 +2,7 @@
 // Use of this source code is governed by the ISC
 // license that can be found in the LICENSE.md file.
 
+// Package pacman provides boot Starlark primitives for the Pacman package manager.
 package pacman
 
 import (
@@ -86,9 +87,6 @@ func (m *impl) checkExplicitPackages(thread *starlark.Thread, b *starlark.Builti
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", b.Name(), err)
 	}
-	slices.Sort(defined)
-	defined = slices.Compact(defined)
-
 	boot.AddAction(thread, boot.Action{
 		Summary: "check pacman explicit package list",
 		Apply: func(ctx context.Context, dryRun bool) (boot.Result, error) {

@@ -2,6 +2,7 @@
 // Use of this source code is governed by the ISC
 // license that can be found in the LICENSE.md file.
 
+// Package program implements the Starlark module for protocol-driven program updates.
 package program
 
 import (
@@ -24,16 +25,13 @@ type module struct{}
 
 func (module) Name() string { return "program" }
 
-func (module) Members(*boot.Runtime) starlark.StringDict {
-	m := new(impl)
+func (m module) Members(*boot.Runtime) starlark.StringDict {
 	return starlark.StringDict{
 		"update": starlark.NewBuiltin("program.update", m.update),
 	}
 }
 
-type impl struct{}
-
-func (m *impl) update(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+func (module) update(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	if err := boot.RequireTask(thread, b); err != nil {
 		return nil, err
 	}

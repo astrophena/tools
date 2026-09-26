@@ -53,13 +53,16 @@ func TestRequire(t *testing.T) {
 				Stdout:      new(strings.Builder),
 				Interactive: tc.interactive,
 			}
+
 			h := testutil.NewTask(t, "test")
 			m := &impl{rt: rt}
+
 			kwargs := []starlark.Tuple{{starlark.String("message"), starlark.String("Proceed?")}}
 			if tc.defaultYes {
 				kwargs = append(kwargs, starlark.Tuple{starlark.String("default"), starlark.True})
 			}
 			action := h.EmitOne("consent.require", m.require, nil, kwargs)
+
 			got, err := action.Apply(t.Context(), tc.dryRun)
 			if err != nil {
 				t.Fatal(err)
