@@ -65,8 +65,8 @@ github.com/tobischo/gokeepasslib/v3 v3.7.0 h1:MZKx72JkkQdElHr4gOQlnLF92B6i+Bv4Kw
 github.com/tobischo/gokeepasslib/v3 v3.7.0/go.mod h1:Lvv7/e6Eys07pEjQfpx52W9ptuDRiM4Osiz3m897tQg=
 github.com/yuin/goldmark v1.6.0 h1:boZcn2GTjpsynOsC0iJHnBWa4Bi0qzfJjthwauItG68=
 github.com/yuin/goldmark v1.6.0/go.mod h1:6yULJ656Px+3vBD8DxQVa3kxgyrAnzto9xy5taEt/CY=
-go.astrophena.name/base v0.23.5-0.20260926104345-0800727394ee h1:aH94YM6sDyz2veueyDgsQpHm+dOfmCIuGDa63wtLYT4=
-go.astrophena.name/base v0.23.5-0.20260926104345-0800727394ee/go.mod h1:FMXDSVAeX4w+4mHs3mflWsUlu60PBsI1slqg06IFjIM=
+go.astrophena.name/base v0.24.0 h1:BGjn464Vy9ereOnzXAa6kq1EbWkoTxp/mIRssLQ8DBA=
+go.astrophena.name/base v0.24.0/go.mod h1:FMXDSVAeX4w+4mHs3mflWsUlu60PBsI1slqg06IFjIM=
 go.starlark.net v0.0.0-20260708150628-5395d018f003 h1:cAxcqHgW8fnmT0cEBU3TzvVYHIFt8IIGDMWUF6rImk4=
 go.starlark.net v0.0.0-20260708150628-5395d018f003/go.mod h1:Iue6g6iirlfLoVi/DYCi5/x0h/bAOuWF3dULTKpt2Vo=
 golang.org/x/crypto v0.55.0 h1:+KWHjbgOaAQ66dh/YlkZKHlz9ZUlq61AFirAR9ntP8M=
