@@ -2,6 +2,7 @@
 // Use of this source code is governed by the ISC
 // license that can be found in the LICENSE.md file.
 
+// Package git provides boot Starlark primitives for Git repositories.
 package git
 
 import (
@@ -102,37 +103,7 @@ func (m *impl) sync(thread *starlark.Thread, b *starlark.Builtin, args starlark.
 				return "", err
 			}
 
-			if dirty, err := isDirty(ctx, dst); err != nil {
-				return "", err
-			} else if dirty {
-				boot.Warn(ctx, fmt.Sprintf("repository %s is dirty", dst))
-				return boot.ResultSkip, nil
-			}
-
-			if revision != "" {
-				return syncRevision(ctx, dst, revision, dryRun)
-			}
-
-			if !hasUpstream(ctx, dst) {
-				return boot.ResultSkip, nil
-			}
-
-			if dryRun {
-				current, upstream, err := gitRevisions(ctx, dst)
-				if err != nil {
-					return "", err
-				}
-				if current == upstream {
-					return boot.ResultSkip, nil
-				}
-				return boot.ResultChange, nil
-			}
-
-			result, err := fastForward(ctx, dst)
-			if err != nil {
-				return "", err
-			}
-			return result, nil
+			return updateRepository(ctx, dst, revision, dryRun)
 		},
 	})
 
@@ -162,35 +133,7 @@ func (m *impl) pull(thread *starlark.Thread, b *starlark.Builtin, args starlark.
 				return "", fmt.Errorf("not a git repository: %s", dst)
 			}
 
-			dirty, err := isDirty(ctx, dst)
-			if err != nil {
-				return "", err
-			}
-			if dirty {
-				boot.Warn(ctx, fmt.Sprintf("repository %s is dirty", dst))
-				return boot.ResultSkip, nil
-			}
-
-			if !hasUpstream(ctx, dst) {
-				return boot.ResultSkip, nil
-			}
-
-			if dryRun {
-				current, upstream, err := gitRevisions(ctx, dst)
-				if err != nil {
-					return "", err
-				}
-				if current == upstream {
-					return boot.ResultSkip, nil
-				}
-				return boot.ResultChange, nil
-			}
-
-			result, err := fastForward(ctx, dst)
-			if err != nil {
-				return "", err
-			}
-			return result, nil
+			return updateRepository(ctx, dst, "", dryRun)
 		},
 	})
 
@@ -233,13 +176,7 @@ func (m *impl) clone(thread *starlark.Thread, b *starlark.Builtin, args starlark
 				if revision == "" {
 					return boot.ResultSkip, nil
 				}
-				if dirty, err := isDirty(ctx, dst); err != nil {
-					return "", err
-				} else if dirty {
-					boot.Warn(ctx, fmt.Sprintf("repository %s is dirty", dst))
-					return boot.ResultSkip, nil
-				}
-				return syncRevision(ctx, dst, revision, dryRun)
+				return updateRepository(ctx, dst, revision, dryRun)
 			} else if !errors.Is(err, fs.ErrNotExist) {
 				return "", err
 			}
@@ -259,8 +196,32 @@ func (m *impl) clone(thread *starlark.Thread, b *starlark.Builtin, args starlark
 	return starlark.None, nil
 }
 
-func run(cmd *exec.Cmd) error {
-	return boot.RunCmd(cmd)
+func updateRepository(ctx context.Context, dst, revision string, dryRun bool) (boot.Result, error) {
+	dirty, err := isDirty(ctx, dst)
+	if err != nil {
+		return "", err
+	}
+	if dirty {
+		boot.Warn(ctx, fmt.Sprintf("repository %s is dirty", dst))
+		return boot.ResultSkip, nil
+	}
+	if revision != "" {
+		return syncRevision(ctx, dst, revision, dryRun)
+	}
+	if !hasUpstream(ctx, dst) {
+		return boot.ResultSkip, nil
+	}
+	if dryRun {
+		current, upstream, err := gitRevisions(ctx, dst)
+		if err != nil {
+			return "", err
+		}
+		if current == upstream {
+			return boot.ResultSkip, nil
+		}
+		return boot.ResultChange, nil
+	}
+	return fastForward(ctx, dst)
 }
 
 func hasUpstream(ctx context.Context, dst string) bool {
@@ -270,7 +231,7 @@ func hasUpstream(ctx context.Context, dst string) bool {
 
 func fastForward(ctx context.Context, dst string) (boot.Result, error) {
 	cmd := exec.CommandContext(ctx, "git", "-C", dst, "fetch", "--prune", "origin")
-	if err := run(cmd); err != nil {
+	if err := boot.RunCmd(cmd); err != nil {
 		return "", err
 	}
 
@@ -283,7 +244,7 @@ func fastForward(ctx context.Context, dst string) (boot.Result, error) {
 	}
 
 	cmd = exec.CommandContext(ctx, "git", "-C", dst, "pull", "--ff-only")
-	if err := run(cmd); err != nil {
+	if err := boot.RunCmd(cmd); err != nil {
 		return "", err
 	}
 
@@ -315,7 +276,7 @@ func cloneRepository(ctx context.Context, url, dst, revision string) error {
 		return err
 	}
 	cmd := exec.CommandContext(ctx, "git", "clone", url, dst)
-	if err := run(cmd); err != nil {
+	if err := boot.RunCmd(cmd); err != nil {
 		return err
 	}
 	if revision == "" {
@@ -362,12 +323,12 @@ func syncRevision(ctx context.Context, dst, revision string, dryRun bool) (boot.
 
 func fetchRepository(ctx context.Context, dst string) error {
 	cmd := exec.CommandContext(ctx, "git", "-C", dst, "fetch", "--tags", "--prune", "origin")
-	return run(cmd)
+	return boot.RunCmd(cmd)
 }
 
 func checkoutRevision(ctx context.Context, dst, revision string) error {
 	cmd := exec.CommandContext(ctx, "git", "-C", dst, "checkout", "--detach", revision)
-	return run(cmd)
+	return boot.RunCmd(cmd)
 }
 
 func resolveRevision(ctx context.Context, dst, revision string) (string, error) {

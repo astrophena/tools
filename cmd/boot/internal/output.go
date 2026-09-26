@@ -27,11 +27,7 @@ func taskFailure(failures []failure, task *Task) (failure, bool) {
 	return failure{}, false
 }
 
-func (e *Engine) printReport(w io.Writer, summary Summary, dryRun bool) {
-	changeText := "changed"
-	if dryRun {
-		changeText = "would change"
-	}
+func (e *Engine) printReport(w io.Writer, summary Summary) {
 	fmt.Fprintf(w, "%s\n", e.color("Report:", colorBold))
 	fmt.Fprintf(w, "  Boot ran %d %s and checked %d %s.\n",
 		summary.Tasks,
@@ -40,7 +36,7 @@ func (e *Engine) printReport(w io.Writer, summary Summary, dryRun bool) {
 		plural(summary.Actions, "action", "actions"),
 	)
 	fmt.Fprintf(w, "  It %s %s and skipped %s.\n",
-		changeText,
+		"changed",
 		e.color(fmt.Sprintf("%d %s", summary.Changed, plural(summary.Changed, "action", "actions")), colorGreen),
 		fmt.Sprintf("%d %s", summary.Skipped, plural(summary.Skipped, "action", "actions")),
 	)

@@ -58,13 +58,18 @@ func TestConfig(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			root := t.TempDir()
-			other := t.TempDir()
-			home := t.TempDir()
+
+			var (
+				root  = t.TempDir()
+				other = t.TempDir()
+				home  = t.TempDir()
+			)
+
 			writeRecipe(t, root)
 			if tc.setup != nil {
 				tc.setup(t, root, other)
 			}
+
 			config := strings.ReplaceAll(tc.config, "{root}", filepath.ToSlash(root))
 			config = strings.ReplaceAll(config, "{other}", filepath.ToSlash(other))
 			configDir := filepath.Join(home, ".config", "boot")
@@ -74,6 +79,7 @@ func TestConfig(t *testing.T) {
 			if err := os.WriteFile(filepath.Join(configDir, "config.star"), []byte(config), 0o644); err != nil {
 				t.Fatal(err)
 			}
+
 			args := make([]string, len(tc.args))
 			for i, arg := range tc.args {
 				arg = strings.ReplaceAll(arg, "{root}", root)
@@ -96,6 +102,7 @@ func TestConfig(t *testing.T) {
 					return ""
 				},
 			}
+
 			err := cli.Run(cli.WithEnv(t.Context(), env), new(app))
 			if !errors.Is(err, tc.wantErr) {
 				t.Fatalf("got error %v, want %v\nstdout:\n%s\nstderr:\n%s", err, tc.wantErr, stdout.String(), stderr.String())

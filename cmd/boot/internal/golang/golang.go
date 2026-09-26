@@ -2,6 +2,7 @@
 // Use of this source code is governed by the ISC
 // license that can be found in the LICENSE.md file.
 
+// Package golang provides boot Starlark primitives for Go tool installation.
 package golang
 
 import (
@@ -13,9 +14,9 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"strings"
-	"sync"
 
 	boot "go.astrophena.name/tools/cmd/boot/internal"
 
@@ -23,7 +24,6 @@ import (
 	"go.astrophena.name/base/version"
 	"go.starlark.net/starlark"
 	modulepkg "golang.org/x/mod/module"
-	"golang.org/x/sync/errgroup"
 )
 
 var goProxyURL = "https://proxy.golang.org"
@@ -74,9 +74,8 @@ func (m *impl) install(thread *starlark.Thread, b *starlark.Builtin, args starla
 	if len(names) == 0 {
 		return starlark.None, nil
 	}
-	latest := newLatestCache(latestModules(names))
 	for _, name := range names {
-		addInstallAction(thread, m.rt, name, cwd, ldflags, trimpath, "", latest)
+		addInstallAction(thread, m.rt, name, cwd, ldflags, trimpath, "", false)
 	}
 	return starlark.None, nil
 }
@@ -103,14 +102,14 @@ func (m *impl) installLocal(thread *starlark.Thread, b *starlark.Builtin, args s
 	); err != nil {
 		return nil, err
 	}
-	addInstallAction(thread, m.rt, pkg, cwd, ldflags, trimpath, cwd, nil)
+	addInstallAction(thread, m.rt, pkg, cwd, ldflags, trimpath, cwd, true)
 	if fallbackLatest {
-		addInstallAction(thread, m.rt, pkg+"@latest", "", ldflags, trimpath, "!"+cwd, newLatestCache([]string{packagePath(pkg)}))
+		addInstallAction(thread, m.rt, pkg+"@latest", "", ldflags, trimpath, cwd, false)
 	}
 	return starlark.None, nil
 }
 
-func addInstallAction(thread *starlark.Thread, rt *boot.Runtime, pkg, cwd, ldflags string, trimpath bool, condition string, latest *latestCache) {
+func addInstallAction(thread *starlark.Thread, rt *boot.Runtime, pkg, cwd, ldflags string, trimpath bool, conditionDir string, requireDir bool) {
 	args := []string{"install"}
 	if ldflags != "" {
 		args = append(args, "-ldflags="+ldflags)
@@ -128,22 +127,17 @@ func addInstallAction(thread *starlark.Thread, rt *boot.Runtime, pkg, cwd, ldfla
 	boot.AddAction(thread, boot.Action{
 		Summary: summary,
 		Apply: func(ctx context.Context, dryRun bool) (boot.Result, error) {
-			if condition != "" {
-				negated := strings.HasPrefix(condition, "!")
-				path := condition
-				if negated {
-					path = strings.TrimPrefix(path, "!")
-				}
-				_, err := os.Stat(rt.ResolveTarget(path))
+			if conditionDir != "" {
+				_, err := os.Stat(rt.ResolveTarget(conditionDir))
 				exists := err == nil
 				if err != nil && !errors.Is(err, fs.ErrNotExist) {
 					return "", err
 				}
-				if negated == exists {
+				if exists != requireDir {
 					return boot.ResultSkip, nil
 				}
 			}
-			upToDate, err := installUpToDate(ctx, rt, pkg, cwd, latest)
+			upToDate, err := installUpToDate(ctx, rt, pkg, cwd)
 			if err != nil {
 				return "", err
 			}
@@ -165,7 +159,7 @@ func addInstallAction(thread *starlark.Thread, rt *boot.Runtime, pkg, cwd, ldfla
 	})
 }
 
-func installUpToDate(ctx context.Context, rt *boot.Runtime, pkg, cwd string, latest *latestCache) (bool, error) {
+func installUpToDate(ctx context.Context, rt *boot.Runtime, pkg, cwd string) (bool, error) {
 	bin, err := binaryPath(ctx, pkg)
 	if err != nil {
 		return false, err
@@ -183,11 +177,11 @@ func installUpToDate(ctx context.Context, rt *boot.Runtime, pkg, cwd string, lat
 	if cwd != "" {
 		return localUpToDate(ctx, rt.ResolveTarget(cwd), info)
 	}
-	return proxyUpToDate(ctx, pkg, info, latest)
+	return proxyUpToDate(ctx, pkg, info)
 }
 
 func binaryPath(ctx context.Context, pkg string) (string, error) {
-	name := pathBase(packagePath(pkg))
+	name := path.Base(packagePath(pkg))
 	out, err := exec.CommandContext(ctx, "go", "env", "GOBIN", "GOPATH", "GOEXE").Output()
 	if err != nil {
 		return "", err
@@ -209,15 +203,6 @@ func binaryPath(ctx context.Context, pkg string) (string, error) {
 func packagePath(pkg string) string {
 	path, _, _ := strings.Cut(pkg, "@")
 	return path
-}
-
-func pathBase(path string) string {
-	path = strings.TrimRight(path, "/")
-	i := strings.LastIndex(path, "/")
-	if i < 0 {
-		return path
-	}
-	return path[i+1:]
 }
 
 type goBuildInfo struct {
@@ -259,7 +244,7 @@ func localUpToDate(ctx context.Context, cwd string, info goBuildInfo) (bool, err
 	return info.Settings["vcs.revision"] == head && info.Settings["vcs.modified"] == "false" && dirty == "", nil
 }
 
-func proxyUpToDate(ctx context.Context, pkg string, info goBuildInfo, latest *latestCache) (bool, error) {
+func proxyUpToDate(ctx context.Context, pkg string, info goBuildInfo) (bool, error) {
 	if info.Module == "" || info.Version == "" {
 		return false, nil
 	}
@@ -267,15 +252,7 @@ func proxyUpToDate(ctx context.Context, pkg string, info goBuildInfo, latest *la
 	if hasVersion && version != "latest" {
 		return info.Version == version, nil
 	}
-	var (
-		latestInfo moduleInfo
-		err        error
-	)
-	if latest != nil {
-		latestInfo, err = latest.Get(ctx, info.Module)
-	} else {
-		latestInfo, err = latestModule(ctx, info.Module)
-	}
+	latestInfo, err := latestModule(ctx, info.Module)
 	if err != nil {
 		return false, err
 	}
@@ -302,85 +279,9 @@ func latestModule(ctx context.Context, module string) (moduleInfo, error) {
 		return moduleInfo{}, err
 	}
 	if info.Version == "" {
-		return moduleInfo{}, fmt.Errorf("go list returned no latest version for %s", module)
+		return moduleInfo{}, fmt.Errorf("proxy returned no latest version for %s", module)
 	}
 	return info, nil
-}
-
-type latestCache struct {
-	modules []string
-	once    sync.Once
-	mu      sync.Mutex
-	infos   map[string]moduleInfo
-	errs    map[string]error
-}
-
-func newLatestCache(modules []string) *latestCache {
-	return &latestCache{modules: modules}
-}
-
-// Get returns the latest module info for the given module, using cached values if available.
-func (c *latestCache) Get(ctx context.Context, module string) (moduleInfo, error) {
-	c.once.Do(func() {
-		c.fetch(ctx)
-	})
-
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if err := c.errs[module]; err != nil {
-		return moduleInfo{}, err
-	}
-	info, ok := c.infos[module]
-	if !ok {
-		var err error
-		info, err = latestModule(ctx, module)
-		if err != nil {
-			return moduleInfo{}, err
-		}
-		c.infos[module] = info
-	}
-	return info, nil
-}
-
-func (c *latestCache) fetch(ctx context.Context) {
-	c.mu.Lock()
-	c.infos = make(map[string]moduleInfo)
-	c.errs = make(map[string]error)
-	c.mu.Unlock()
-
-	g, ctx := errgroup.WithContext(ctx)
-	for _, module := range c.modules {
-		g.Go(func() error {
-			info, err := latestModule(ctx, module)
-			c.mu.Lock()
-			defer c.mu.Unlock()
-			if err != nil {
-				c.errs[module] = err
-				return nil
-			}
-			c.infos[module] = info
-			return nil
-		})
-	}
-
-	g.Wait()
-}
-
-func latestModules(packages []string) []string {
-	seen := make(map[string]bool)
-	var modules []string
-	for _, pkg := range packages {
-		_, version, ok := strings.Cut(pkg, "@")
-		if !ok || version != "latest" {
-			continue
-		}
-		module := packagePath(pkg)
-		if !seen[module] {
-			seen[module] = true
-			modules = append(modules, module)
-		}
-	}
-	return modules
 }
 
 func output(ctx context.Context, dir string, name string, args ...string) (string, error) {

@@ -122,7 +122,7 @@ esac
 `,
 	})
 
-	updates, err := pacmanUpdates(t.Context(), rt)
+	updates, err := pacmanUpdates(t.Context(), rt, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,7 +144,7 @@ esac
 `,
 	})
 
-	updates, err := pacmanUpdates(t.Context(), rt)
+	updates, err := pacmanUpdates(t.Context(), rt, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -206,7 +206,7 @@ func TestPacmanRebootRequired(t *testing.T) {
 }
 
 func TestUpdateDescribesPacmanUpdatesInPlan(t *testing.T) {
-	rt, _ := newPacmanRuntime(t, map[string]string{
+	rt, cache := newPacmanRuntime(t, map[string]string{
 		"pacman": `#!/bin/sh
 case "$1" in
 -Qu)
@@ -236,6 +236,9 @@ esac
 	}
 	if got, want := warnings, []string{"reboot will be required after updating linux"}; !slices.Equal(got, want) {
 		t.Fatalf("warnings = %q, want %q", got, want)
+	}
+	if _, err := os.Stat(filepath.Join(cache, "boot")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("plan wrote package cache: %v", err)
 	}
 }
 
@@ -287,7 +290,7 @@ func TestUpdateReportsRebootAfterSuccessfulApply(t *testing.T) {
 			m := &impl{rt: &boot.Runtime{}, mod: &module{}}
 			m.addUpdateActions(h.Thread, packageManager{
 				name: "pacman",
-				updates: func(context.Context) ([]string, error) {
+				updates: func(context.Context, bool) ([]string, error) {
 					return tc.updates, nil
 				},
 				rebootRequired: func(context.Context, []string) ([]string, error) {

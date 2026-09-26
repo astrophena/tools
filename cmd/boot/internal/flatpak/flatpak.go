@@ -2,6 +2,7 @@
 // Use of this source code is governed by the ISC
 // license that can be found in the LICENSE.md file.
 
+// Package flatpak provides boot Starlark primitives for Flatpak packages.
 package flatpak
 
 import (
@@ -21,18 +22,13 @@ type module struct{}
 
 func (module) Name() string { return "flatpak" }
 
-func (module) Members(rt *boot.Runtime) starlark.StringDict {
-	m := &impl{rt: rt}
+func (m module) Members(*boot.Runtime) starlark.StringDict {
 	return starlark.StringDict{
 		"update": starlark.NewBuiltin("flatpak.update", m.update),
 	}
 }
 
-type impl struct {
-	rt *boot.Runtime
-}
-
-func (m *impl) update(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+func (module) update(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	if err := boot.RequireTask(thread, b); err != nil {
 		return nil, err
 	}

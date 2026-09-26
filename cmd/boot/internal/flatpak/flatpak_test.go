@@ -48,7 +48,7 @@ esac
 			})
 
 			h := testutil.NewTask(t, "test")
-			m := &impl{}
+			m := module{}
 			action := h.EmitOne("flatpak.update", m.update, nil, nil)
 			got, err := action.Apply(t.Context(), tc.dryRun)
 			if err != nil {

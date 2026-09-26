@@ -30,6 +30,30 @@ func TestSystemUnitRequiresSudo(t *testing.T) {
 	}
 }
 
+func TestSystemUnitPlanChecksWithoutSudo(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("sudo is not needed when running as root")
+	}
+	marker := filepath.Join(t.TempDir(), "sudo-ran")
+	testutil.Commands(t, map[string]string{
+		"sudo":      "#!/bin/sh\ntouch " + marker + "\n",
+		"systemctl": "#!/bin/sh\necho enabled\n",
+	})
+	h := testutil.NewTask(t, "test")
+	m := &impl{rt: &boot.Runtime{Getenv: func(string) string { return "" }}}
+	action := h.EmitOne("systemd.system_unit", m.systemUnit, nil, []starlark.Tuple{
+		{starlark.String("name"), starlark.String("sshd.service")},
+		{starlark.String("enabled"), starlark.True},
+	})
+	result, err := action.Apply(t.Context(), true)
+	if err != nil || result != boot.ResultSkip {
+		t.Fatalf("plan = %s, %v; want skip", result, err)
+	}
+	if _, err := os.Stat(marker); !os.IsNotExist(err) {
+		t.Fatalf("sudo was invoked: %v", err)
+	}
+}
+
 func TestSystemctlQuietReturnsUnexpectedExitErrors(t *testing.T) {
 	testutil.Commands(t, map[string]string{
 		"systemctl": "#!/bin/sh\necho 'Failed to connect to bus' >&2\nexit 1\n",

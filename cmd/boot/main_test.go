@@ -180,6 +180,7 @@ func TestRun(t *testing.T) {
 
 func writeRecipe(t *testing.T, root string) {
 	t.Helper()
+
 	if err := os.MkdirAll(filepath.Join(root, "bash"), 0o755); err != nil {
 		t.Fatal(err)
 	}

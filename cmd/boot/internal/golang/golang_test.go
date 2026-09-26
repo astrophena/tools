@@ -12,10 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"sync"
-	"sync/atomic"
 	"testing"
-	"time"
 
 	boot "go.astrophena.name/tools/cmd/boot/internal"
 	"go.astrophena.name/tools/cmd/boot/internal/testutil"
@@ -93,7 +90,7 @@ func TestProxyUpToDateFixedVersion(t *testing.T) {
 		Module:  "example.com/tool",
 		Version: "v1.2.3",
 	}
-	upToDate, err := proxyUpToDate(t.Context(), "example.com/tool@v1.2.3", info, nil)
+	upToDate, err := proxyUpToDate(t.Context(), "example.com/tool@v1.2.3", info)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,55 +120,6 @@ func TestLatestModuleUsesProxy(t *testing.T) {
 	}
 	if info.Version != "v1.2.3" {
 		t.Fatalf("Version = %q, want v1.2.3", info.Version)
-	}
-}
-
-func TestLatestCacheFetchesConcurrently(t *testing.T) {
-	oldProxy := goProxyURL
-	defer func() {
-		goProxyURL = oldProxy
-	}()
-
-	var inFlight atomic.Int32
-	var maxInFlight atomic.Int32
-	var mu sync.Mutex
-	seen := make(map[string]bool)
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		current := inFlight.Add(1)
-		defer inFlight.Add(-1)
-		for {
-			maximum := maxInFlight.Load()
-			if current <= maximum || maxInFlight.CompareAndSwap(maximum, current) {
-				break
-			}
-		}
-		time.Sleep(50 * time.Millisecond)
-
-		mu.Lock()
-		seen[r.URL.Path] = true
-		mu.Unlock()
-		fmt.Fprint(w, `{"Version":"v1.2.3"}`)
-	}))
-	defer server.Close()
-	goProxyURL = server.URL
-
-	cache := newLatestCache([]string{"example.com/one", "example.com/two"})
-	if _, err := cache.Get(t.Context(), "example.com/one"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := cache.Get(t.Context(), "example.com/two"); err != nil {
-		t.Fatal(err)
-	}
-	if maxInFlight.Load() < 2 {
-		t.Fatalf("proxy requests did not overlap; max in flight = %d", maxInFlight.Load())
-	}
-
-	mu.Lock()
-	defer mu.Unlock()
-	for _, path := range []string{"/example.com/one/@latest", "/example.com/two/@latest"} {
-		if !seen[path] {
-			t.Fatalf("missing proxy request for %s; got %#v", path, seen)
-		}
 	}
 }
 

@@ -311,3 +311,32 @@ func TestFSSyncTreeChangeCheck(t *testing.T) {
 		t.Fatalf("dry-run after source change = %v, want %v", res, boot.ResultChange)
 	}
 }
+
+func TestFSSyncTreePlanWithoutSudo(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("sudo is not needed when running as root")
+	}
+	root := t.TempDir()
+	source := filepath.Join(root, "source")
+	if err := os.Mkdir(source, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	marker := filepath.Join(root, "sudo-ran")
+	testutil.Commands(t, map[string]string{
+		"sudo": "#!/bin/sh\ntouch " + marker + "\n",
+	})
+	h := testutil.NewTask(t, "test")
+	m := &impl{rt: &boot.Runtime{Root: root}}
+	action := h.EmitOne("fs.sync_tree", m.syncTree, nil, []starlark.Tuple{
+		{starlark.String("source"), starlark.String(source)},
+		{starlark.String("target"), starlark.String(filepath.Join(root, "target"))},
+		{starlark.String("sudo"), starlark.True},
+	})
+	result, err := action.Apply(t.Context(), true)
+	if err != nil || result != boot.ResultChange {
+		t.Fatalf("plan = %s, %v; want change", result, err)
+	}
+	if _, err := os.Stat(marker); !os.IsNotExist(err) {
+		t.Fatalf("sudo was invoked: %v", err)
+	}
+}
