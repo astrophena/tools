@@ -259,7 +259,7 @@ func newTestEnv(t *testing.T, baseState fs.FS, overrides map[string]http.Handler
 		defer env.mu.Unlock()
 		sentMessage := read(t, r.Body)
 		env.sentMessages = append(env.sentMessages, testutil.UnmarshalJSON[map[string]any](t, sentMessage))
-		w.Write([]byte("{}"))
+		w.Write([]byte(`{"ok":true,"result":{"message_id":42}}`))
 	}))
 	for pat, h := range overrides {
 		if slices.Contains([]string{sendTelegram}, pat) {

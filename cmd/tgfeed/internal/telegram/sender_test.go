@@ -5,207 +5,84 @@
 package telegram
 
 import (
-	"context"
-	"errors"
-	"fmt"
-	"log/slog"
-	"strings"
+	"encoding/json"
+	"net/http"
 	"testing"
-	"time"
-	"unicode/utf8"
 
-	"go.astrophena.name/base/request"
 	"go.astrophena.name/base/testutil"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/sender"
 )
 
-func TestSplitMessage(t *testing.T) {
+func TestSend(t *testing.T) {
 	t.Parallel()
 
-	cases := map[string]struct {
-		in   string
-		want []string
-	}{
-		"short":             {in: "hello", want: []string{"hello"}},
-		"exact":             {in: strings.Repeat("a", 4096), want: []string{strings.Repeat("a", 4096)}},
-		"long (no newline)": {in: strings.Repeat("a", 4100), want: []string{strings.Repeat("a", 4096), "aaaa"}},
-		"long (single line with spaces)": {
-			in:   strings.Repeat("a", 3000) + " " + strings.Repeat("b", 1500),
-			want: []string{strings.Repeat("a", 3000), strings.Repeat("b", 1500)},
-		},
-		"long (newline split)": {
-			in:   strings.Repeat("a", 4000) + "\n" + strings.Repeat("b", 100),
-			want: []string{strings.Repeat("a", 4000), strings.Repeat("b", 100)},
-		},
-		"multi-byte unicode": {
-			in:   strings.Repeat("🙂", 4095) + "\n" + "🙂",
-			want: []string{strings.Repeat("🙂", 4095), "🙂"},
-		},
+	var got struct {
+		ChatID   string `json:"chat_id"`
+		ThreadID int64  `json:"message_thread_id"`
+		Text     string `json:"text"`
+		Keyboard struct {
+			Rows [][]struct {
+				Text string `json:"text"`
+				URL  string `json:"url"`
+			} `json:"inline_keyboard"`
+		} `json:"reply_markup"`
 	}
-
-	for name, tc := range cases {
-		t.Run(name, func(t *testing.T) {
-			got := splitMessage(tc.in)
-			testutil.AssertEqual(t, got, tc.want)
-		})
-	}
-}
-
-func TestSplitMessageNewlineRich(t *testing.T) {
-	t.Parallel()
-
-	in := strings.Repeat("line\n", 900)
-	got := splitMessage(in)
-	if len(got) < 2 {
-		t.Fatalf("want at least 2 chunks, got %d", len(got))
-	}
-	for i, chunk := range got {
-		if strings.TrimSpace(chunk) == "" {
-			t.Fatalf("chunk %d is empty or whitespace only", i)
+	httpc := testutil.MockHTTPClient(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/botsecret/sendMessage" {
+			t.Errorf("request path = %q", r.URL.Path)
 		}
-		if utf8.RuneCountInString(chunk) > 4096 {
-			t.Fatalf("chunk %d exceeds rune cap: %d", i, utf8.RuneCountInString(chunk))
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Fatal(err)
 		}
-	}
+		_, _ = w.Write([]byte(`{"ok":true,"result":{"message_id":42}}`))
+	}))
+	s := New(Config{
+		Token:      "secret",
+		ChatID:     "default",
+		HTTPClient: httpc,
+	})
 
-	joined := strings.Join(got, "\n")
-	testutil.AssertEqual(t, joined, strings.TrimSpace(in))
-}
-
-func TestSplitMessageExhaustive(t *testing.T) {
-	t.Parallel()
-
-	alphabet := []rune{'a', 'b', ' ', '\n', '🙂'}
-	for length := range 6 {
-		count := 1
-		for range length {
-			count *= len(alphabet)
-		}
-		for encoded := range count {
-			value := encoded
-			runes := make([]rune, length)
-			for i := range length {
-				runes[i] = alphabet[value%len(alphabet)]
-				value /= len(alphabet)
-			}
-			input := string(runes)
-			for firstCap := 1; firstCap <= 5; firstCap++ {
-				chunks := splitMessageCap(input, firstCap)
-				if strings.TrimSpace(input) == "" {
-					if chunks != nil {
-						t.Fatalf("splitMessageCap(%q, %d) = %q, want nil", input, firstCap, chunks)
-					}
-					continue
-				}
-				if len(chunks) == 0 {
-					t.Fatalf("splitMessageCap(%q, %d) returned no chunks", input, firstCap)
-				}
-				for i, chunk := range chunks {
-					limit := 4096
-					if i == 0 {
-						limit = firstCap
-					}
-					if strings.TrimSpace(chunk) == "" || utf8.RuneCountInString(chunk) > limit {
-						t.Fatalf("splitMessageCap(%q, %d) chunk %d = %q", input, firstCap, i, chunk)
-					}
-				}
-				if got, want := withoutWhitespace(strings.Join(chunks, "")), withoutWhitespace(input); got != want {
-					t.Fatalf("splitMessageCap(%q, %d) fields = %q, want %q", input, firstCap, got, want)
-				}
-			}
-		}
-	}
-}
-
-func withoutWhitespace(s string) string {
-	return strings.Join(strings.Fields(s), "")
-}
-
-func TestSendRateLimitRetry(t *testing.T) {
-	t.Parallel()
-
-	logger := slog.New(slog.DiscardHandler)
-
-	s := New(Config{ChatID: "chat", Token: "token", Logger: logger})
-	var calls int
-	s.makeRequest = func(context.Context, string, any) error {
-		calls++
-		if calls == 1 {
-			return &request.StatusError{StatusCode: 429, Body: []byte(`{"parameters":{"retry_after":1}}`)}
-		}
-		return nil
-	}
-	waits := make([]time.Duration, 0, 1)
-	s.sleep = func(_ context.Context, d time.Duration) bool {
-		waits = append(waits, d)
-		return true
-	}
-
-	err := s.Send(t.Context(), sender.Message{Body: "hello"})
-	testutil.AssertEqual(t, err, nil)
-	testutil.AssertEqual(t, calls, 2)
-	testutil.AssertEqual(t, waits, []time.Duration{time.Second})
-}
-
-func TestSendNonRetryableError(t *testing.T) {
-	t.Parallel()
-
-	s := New(Config{ChatID: "chat", Token: "token"})
-	wantErr := errors.New("boom")
-	s.makeRequest = func(context.Context, string, any) error { return wantErr }
-	s.sleep = func(context.Context, time.Duration) bool {
-		t.Fatal("sleep should not be called for non-retryable errors")
-		return false
-	}
-
-	err := s.Send(t.Context(), sender.Message{Body: "hello"})
-	if !errors.Is(err, wantErr) {
-		t.Fatalf("Send() error = %v, want %v", err, wantErr)
-	}
-}
-
-func TestIsRateLimited(t *testing.T) {
-	t.Parallel()
-
-	cases := map[string]struct {
-		err      error
-		retry    bool
-		waitTime time.Duration
-	}{
-		"rate-limited": {
-			err:      &request.StatusError{StatusCode: 429, Body: []byte(`{"parameters":{"retry_after":3}}`)},
-			retry:    true,
-			waitTime: 3 * time.Second,
+	err := s.Send(t.Context(), sender.Message{
+		Body: "**Hello**",
+		Target: sender.Target{
+			Channel: "override",
+			Thread:  "7",
 		},
-		"bad body": {
-			err:   &request.StatusError{StatusCode: 429, Body: []byte(`oops`)},
-			retry: false,
-		},
-		"other status": {
-			err:   &request.StatusError{StatusCode: 500, Body: []byte(`{}`)},
-			retry: false,
-		},
-		"other error": {
-			err:   fmt.Errorf("network"),
-			retry: false,
-		},
+		Actions: []sender.ActionRow{{
+			{
+				Label: "Open",
+				URL:   "https://example.com",
+			},
+			{
+				Label: "invalid",
+			},
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
-
-	for name, tc := range cases {
-		t.Run(name, func(t *testing.T) {
-			retry, wait := isRateLimited(tc.err)
-			testutil.AssertEqual(t, retry, tc.retry)
-			testutil.AssertEqual(t, wait, tc.waitTime)
-		})
+	if got.ChatID != "override" || got.ThreadID != 7 || got.Text != "Hello\n\n" {
+		t.Errorf("request = %+v", got)
+	}
+	if len(got.Keyboard.Rows) != 1 || len(got.Keyboard.Rows[0]) != 1 {
+		t.Errorf("keyboard = %+v", got.Keyboard)
 	}
 }
 
 func TestSendInvalidThread(t *testing.T) {
 	t.Parallel()
 
-	s := New(Config{ChatID: "chat", Token: "token"})
-	err := s.Send(t.Context(), sender.Message{Body: "hello", Target: sender.Target{Thread: "not-a-number"}})
+	s := New(Config{
+		ChatID: "chat",
+		Token:  "token",
+	})
+	err := s.Send(t.Context(), sender.Message{
+		Body: "hello",
+		Target: sender.Target{
+			Thread: "not-a-number",
+		},
+	})
 	if err == nil {
-		t.Fatal("Send() error = nil, want non-nil")
+		t.Fatal("Send returned nil error")
 	}
 }

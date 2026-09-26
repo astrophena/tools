@@ -881,7 +881,7 @@ func TestRunReturnsDeliveryFailureWithoutCommittingSeenItems(t *testing.T) {
 				http.Error(w, "telegram unavailable", http.StatusServiceUnavailable)
 				return
 			}
-			w.Write([]byte("{}"))
+			w.Write([]byte(`{"ok":true,"result":{"message_id":42}}`))
 		},
 	})
 	f := newTestFetcher(t, env)
