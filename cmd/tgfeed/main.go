@@ -80,7 +80,6 @@ type fetcher struct {
 	fp        *gofeed.Parser
 	httpc     *http.Client
 	logf      func(string, ...any)
-	scrubber  *strings.Replacer
 	slog      *slog.Logger
 	slogLevel *slog.LevelVar
 
@@ -619,10 +618,6 @@ func (f *fetcher) doInit(ctx context.Context) {
 	}
 	f.fp = gofeed.NewParser()
 
-	if f.tgToken != "" {
-		f.scrubber = strings.NewReplacer(f.tgToken, "[EXPUNGED]")
-	}
-
 	l := logger.Get(ctx)
 	f.slogLevel = l.Level
 	f.slog = l.Logger
@@ -632,7 +627,6 @@ func (f *fetcher) doInit(ctx context.Context) {
 			ChatID:     f.chatID,
 			Token:      f.tgToken,
 			HTTPClient: f.httpc,
-			Scrubber:   f.scrubber,
 			Logger:     f.slog,
 		})
 	}
