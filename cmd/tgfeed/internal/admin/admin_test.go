@@ -19,10 +19,10 @@ import (
 	"testing/fstest"
 	"time"
 
+	"go.astrophena.name/base/filelock"
 	"go.astrophena.name/base/testutil"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/state"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/stats"
-	"go.astrophena.name/tools/internal/filelock"
 )
 
 const testDefaultErrorTemplate = "Default error template."
@@ -129,12 +129,12 @@ func TestAdmin(t *testing.T) {
 	})
 	t.Run("put config (locked)", func(t *testing.T) {
 		cfg := setup(t, initialFS)
-		lockFile, err := filelock.Acquire(filepath.Join(cfg.StateDir, ".run.lock"), "")
+		lockFile, err := filelock.Acquire(filepath.Join(cfg.StateDir, ".run.lock"))
 		if err != nil {
 			t.Fatal(err)
 		}
 		t.Cleanup(func() {
-			if err := lockFile.Release(); err != nil {
+			if err := lockFile.Close(); err != nil {
 				t.Fatal(err)
 			}
 		})
@@ -364,12 +364,12 @@ func TestAdmin(t *testing.T) {
 	})
 	t.Run("save locked config form", func(t *testing.T) {
 		cfg := setup(t, initialFS)
-		lockFile, err := filelock.Acquire(filepath.Join(cfg.StateDir, ".run.lock"), "")
+		lockFile, err := filelock.Acquire(filepath.Join(cfg.StateDir, ".run.lock"))
 		if err != nil {
 			t.Fatal(err)
 		}
 		t.Cleanup(func() {
-			if err := lockFile.Release(); err != nil {
+			if err := lockFile.Close(); err != nil {
 				t.Error(err)
 			}
 		})

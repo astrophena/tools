@@ -6,16 +6,15 @@ package main
 
 import (
 	"errors"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"testing/fstest"
 	"time"
 
+	"go.astrophena.name/base/filelock"
 	"go.astrophena.name/base/testutil"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/state"
-	"go.astrophena.name/tools/internal/filelock"
 )
 
 func TestLoadState(t *testing.T) {
@@ -291,19 +290,19 @@ func TestRunLockerAcquireConflict(t *testing.T) {
 	t.Parallel()
 
 	lockPath := filepath.Join(t.TempDir(), ".run.lock")
-	firstLock, err := filelock.Acquire(lockPath, "")
+	firstLock, err := filelock.Acquire(lockPath)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		if err := firstLock.Release(); err != nil {
+		if err := firstLock.Close(); err != nil {
 			t.Fatal(err)
 		}
 	})
 
-	_, err = filelock.Acquire(lockPath, "")
-	if !errors.Is(err, filelock.ErrAlreadyLocked) {
-		t.Fatalf("want %v, got %v", filelock.ErrAlreadyLocked, err)
+	_, err = filelock.Acquire(lockPath)
+	if !errors.Is(err, filelock.ErrLocked) {
+		t.Fatalf("want %v, got %v", filelock.ErrLocked, err)
 	}
 }
 
@@ -322,15 +321,6 @@ func TestRunLockLifecycle(t *testing.T) {
 	}
 	if !f.isRunLocked() {
 		t.Fatal("expected run lock to be held")
-	}
-
-	lockPath := filepath.Join(dir, ".run.lock")
-	payload, err := os.ReadFile(lockPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(payload) == 0 {
-		t.Fatal("expected lock payload to be present")
 	}
 
 	if err := f.releaseRunLock(); err != nil {

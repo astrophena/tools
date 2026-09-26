@@ -38,7 +38,6 @@ import (
 	"go.astrophena.name/tools/cmd/tgfeed/internal/state"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/stats"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/telegram"
-	"go.astrophena.name/tools/internal/filelock"
 
 	"github.com/mmcdole/gofeed"
 )
@@ -95,7 +94,7 @@ type fetcher struct {
 	sender     sender.Sender
 	store      *state.Store
 
-	runLock filelock.Lock
+	runLock *os.File
 }
 
 // Bootstrap and commands.
