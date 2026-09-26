@@ -18,10 +18,10 @@ import (
 	"unicode"
 
 	"go.astrophena.name/base/request"
+	"go.astrophena.name/base/tgmarkup"
 	"go.astrophena.name/base/version"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/ctxsleep"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/sender"
-	"go.astrophena.name/tools/internal/tgmarkup"
 )
 
 const (

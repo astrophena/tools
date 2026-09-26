@@ -20,12 +20,12 @@ import (
 	"sync/atomic"
 
 	"go.astrophena.name/base/request"
+	"go.astrophena.name/base/tgmarkup"
 	"go.astrophena.name/base/version"
 	"go.astrophena.name/base/web"
 	"go.astrophena.name/tools/internal/api/llm"
 	"go.astrophena.name/tools/internal/starlark/go2star"
 	"go.astrophena.name/tools/internal/starlark/interpreter"
-	"go.astrophena.name/tools/internal/tgmarkup"
 
 	"go.starlark.net/starlark"
 	"go.starlark.net/starlarkstruct"
