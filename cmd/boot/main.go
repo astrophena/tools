@@ -17,6 +17,7 @@ import (
 	"strings"
 
 	"go.astrophena.name/base/cli"
+	"go.astrophena.name/base/filelock"
 	boot "go.astrophena.name/tools/cmd/boot/internal"
 	bootconsent "go.astrophena.name/tools/cmd/boot/internal/consent"
 	bootenv "go.astrophena.name/tools/cmd/boot/internal/env"
@@ -32,7 +33,6 @@ import (
 	bootshell "go.astrophena.name/tools/cmd/boot/internal/shell"
 	bootssh "go.astrophena.name/tools/cmd/boot/internal/ssh"
 	bootsystemd "go.astrophena.name/tools/cmd/boot/internal/systemd"
-	"go.astrophena.name/tools/internal/filelock"
 
 	"golang.org/x/term"
 )
@@ -121,7 +121,7 @@ func (a *app) Run(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		defer lock.Release()
+		defer lock.Close()
 		return engine.Run(ctx, env.Stdout, selection, boot.RunOptions{
 			FailFast:    a.failFast.value,
 			Interactive: interactive(env),
@@ -140,12 +140,12 @@ func rootLockPath(root string) string {
 	return filepath.Join(os.TempDir(), "boot-"+hex.EncodeToString(sum[:8])+".lock")
 }
 
-func acquireLock(path string) (filelock.Lock, error) {
-	lock, err := filelock.Acquire(path, fmt.Sprintf("pid=%d\n", os.Getpid()))
+func acquireLock(path string) (*os.File, error) {
+	lock, err := filelock.Acquire(path)
 	if err == nil {
 		return lock, nil
 	}
-	if errors.Is(err, filelock.ErrAlreadyLocked) {
+	if errors.Is(err, filelock.ErrLocked) {
 		return nil, fmt.Errorf("another boot apply is already running for this recipe")
 	}
 	return nil, err

@@ -9,13 +9,12 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
-	"os"
 	"path/filepath"
 	"time"
 
+	"go.astrophena.name/base/filelock"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/format"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/state"
-	"go.astrophena.name/tools/internal/filelock"
 	"go.astrophena.name/tools/internal/starlark/interpreter"
 
 	"github.com/mmcdole/gofeed"
@@ -254,9 +253,9 @@ func (f *fetcher) pruneFeedState(keep map[string]struct{}) {
 
 func (f *fetcher) acquireRunLock() error {
 	lockPath := filepath.Join(f.stateDir, ".run.lock")
-	lock, err := filelock.Acquire(lockPath, fmt.Sprintf("pid=%d\n", os.Getpid()))
+	lock, err := filelock.Acquire(lockPath)
 	if err != nil {
-		if errors.Is(err, filelock.ErrAlreadyLocked) {
+		if errors.Is(err, filelock.ErrLocked) {
 			err = errAlreadyRunning
 		}
 		return fmt.Errorf("%w: lock file exists at %s", err, lockPath)
@@ -266,7 +265,7 @@ func (f *fetcher) acquireRunLock() error {
 }
 
 func (f *fetcher) releaseRunLock() error {
-	err := f.runLock.Release()
+	err := f.runLock.Close()
 	f.runLock = nil
 	return err
 }
