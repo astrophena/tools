@@ -1,0 +1,4 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/static/css/app.css"><script type="module" src="/static/js/app.js"></script><title>A small document</title></head><body><main><h1>A small document</h1>
+<h2 id="only-section">Only section</h2>
+<p>Some text.</p>
+</main><dialog id="image-dialog" aria-label="Enlarged image"><form method="dialog"><button aria-label="Close image"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 6l12 12M6 18L18 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path></svg></button></form><img alt=""></dialog></body></html>

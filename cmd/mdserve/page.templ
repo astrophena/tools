@@ -1,0 +1,49 @@
+// © 2026 Ilya Mateyko. All rights reserved.
+// Use of this source code is governed by the ISC
+// license that can be found in the LICENSE.md file.
+
+package main
+
+import "net/url"
+
+templ page(p pageData) {
+	<!DOCTYPE html>
+	<html lang="en">
+		<head>
+			<meta charset="utf-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<link rel="stylesheet" href={ "/" + p.css }/>
+			<script type="module" src={ "/" + p.js }></script>
+			<title>{ p.title }</title>
+		</head>
+		<body>
+			<main>
+				// Markdown may contain raw HTML; escape only the surrounding UI.
+				@templ.Raw(p.intro)
+				if len(p.sections) > 1 {
+					<nav aria-label="Table of contents">
+						<details>
+							<summary>Table of contents</summary>
+							<ul>
+								for _, s := range p.sections {
+									<li><a href={ "#" + url.PathEscape(s.id) }>{ s.text }</a></li>
+								}
+							</ul>
+						</details>
+					</nav>
+				}
+				@templ.Raw(p.content)
+			</main>
+			<dialog id="image-dialog" aria-label="Enlarged image">
+				<form method="dialog">
+					<button aria-label="Close image">
+						<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+							<path d="M6 6l12 12M6 18L18 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
+						</svg>
+					</button>
+				</form>
+				<img alt=""/>
+			</dialog>
+		</body>
+	</html>
+}

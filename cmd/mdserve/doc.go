@@ -3,7 +3,8 @@
 // license that can be found in the LICENSE.md file.
 
 /*
-Mdserve serves Markdown files from a directory.
+Mdserve previews Markdown files in a browser, with a table of contents and
+click-to-enlarge images. Other files are served unchanged.
 
 # Usage
 

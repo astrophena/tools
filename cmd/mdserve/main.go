@@ -2,6 +2,9 @@
 // Use of this source code is governed by the ISC
 // license that can be found in the LICENSE.md file.
 
+//go:generate go tool templ fmt .
+//go:generate go tool templ generate -include-version=false
+
 package main
 
 import (
@@ -13,7 +16,6 @@ import (
 	"flag"
 	"fmt"
 	"html"
-	"html/template"
 	"io/fs"
 	"log/slog"
 	"net"
@@ -24,6 +26,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"unicode"
 
 	"go.astrophena.name/base/cli"
 	"go.astrophena.name/base/logger"
@@ -34,13 +37,8 @@ import (
 	"rsc.io/markdown"
 )
 
-var (
-	//go:embed template.html
-	tmplStr string
-	tmpl    = template.Must(template.New("").Parse(tmplStr))
-	//go:embed static
-	staticFS embed.FS
-)
+//go:embed static
+var staticFS embed.FS
 
 func main() { cli.Main(new(engine)) }
 
@@ -193,25 +191,93 @@ func (e *engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	doc := e.md.Parse(string(b))
 	doc.Blocks = walk(doc.Blocks, transformImageBlock)
-	title := parseTitle(b)
+	sections := tableOfContents(doc.Blocks)
+	intro, content := splitDocument(doc)
+	data := pageData{
+		title:    parseTitle(b),
+		intro:    intro,
+		content:  content,
+		sections: sections,
+		css:      e.srv.StaticHashName("static/css/app.css"),
+		js:       e.srv.StaticHashName("static/js/app.js"),
+	}
 
 	var buf bytes.Buffer
-	data := struct {
-		Title   string
-		Content template.HTML
-		AppCSS  string
-		AppJS   string
-	}{
-		Title:   title,
-		Content: template.HTML(markdown.ToHTML(doc)),
-		AppCSS:  e.srv.StaticHashName("static/css/app.css"),
-		AppJS:   e.srv.StaticHashName("static/js/app.js"),
-	}
-	if err := tmpl.Execute(&buf, data); err != nil {
+	if err := page(data).Render(r.Context(), &buf); err != nil {
 		web.RespondError(w, r, err)
 		return
 	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	buf.WriteTo(w)
+}
+
+type pageData struct {
+	title, intro, content, css, js string
+	sections                       []section
+}
+
+// splitDocument separates the opening through the first heading so navigation
+// can follow it without parsing the rendered HTML.
+func splitDocument(doc *markdown.Document) (intro, content string) {
+	for i, b := range doc.Blocks {
+		if _, ok := b.(*markdown.Heading); ok {
+			return markdown.ToHTML(&markdown.Document{Blocks: doc.Blocks[:i+1]}),
+				markdown.ToHTML(&markdown.Document{Blocks: doc.Blocks[i+1:]})
+		}
+	}
+	return "", markdown.ToHTML(doc)
+}
+
+type section struct {
+	id, text string
+}
+
+// tableOfContents assigns missing IDs without replacing explicit anchors.
+func tableOfContents(blocks []markdown.Block) []section {
+	var headings []*markdown.Heading
+	used := make(map[string]bool)
+	walk(blocks, func(b markdown.Block) markdown.Block {
+		if h, ok := b.(*markdown.Heading); ok {
+			used[h.ID] = true
+			if h.Level == 2 {
+				headings = append(headings, h)
+			}
+		}
+		return b
+	})
+
+	sections := make([]section, 0, len(headings))
+	for i, h := range headings {
+		text := getInnerText(h.Text.Inline)
+		if h.ID == "" {
+			id := headingID(text)
+			if id == "" {
+				id = fmt.Sprintf("section-%d", i+1)
+			}
+			h.ID = id
+			for n := 2; used[h.ID]; n++ {
+				h.ID = fmt.Sprintf("%s-%d", id, n)
+			}
+			used[h.ID] = true
+		}
+		sections = append(sections, section{id: h.ID, text: text})
+	}
+	return sections
+}
+
+func headingID(text string) string {
+	text = strings.Map(func(r rune) rune {
+		if unicode.IsSpace(r) {
+			return '-'
+		}
+		if unicode.IsLetter(r) || unicode.IsDigit(r) || r == '-' || r == '_' {
+			return unicode.ToLower(r)
+		}
+		return -1
+	}, text)
+	return strings.Join(strings.FieldsFunc(text, func(r rune) bool {
+		return r == '-'
+	}), "-")
 }
 
 func (e *engine) findIndexFile() string {
