@@ -1,0 +1,11 @@
+Keep introductory text before the first heading, even when it is not an h1.
+-- index.md --
+An introduction before the headings.
+
+## First section
+
+First section text.
+
+## Second section
+
+Second section text.

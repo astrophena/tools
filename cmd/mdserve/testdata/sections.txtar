@@ -1,0 +1,32 @@
+Navigation works without JavaScript. IDs are unique and explicit anchors survive.
+Title and navigation text are escaped, while Markdown HTML is rendered as HTML.
+-- index.md --
+# <A guide> & friends
+
+## Getting *started* & `code`
+
+![A *small* & beautiful landscape](sample.jpg "A title")
+
+## Getting *started* & `code`
+
+## Reserved
+
+### Not in the TOC {#reserved}
+
+## Custom anchor {#keep-me}
+
+## 日本語
+
+## !!!
+
+## URL anchor {#odd"&<>#?}
+
+> ## Inside a quote
+>
+> Some text.
+
+- ## Inside a list
+
+## Last section
+
+<div class="example">Raw HTML still works.</div>

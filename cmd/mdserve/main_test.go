@@ -20,7 +20,11 @@ import (
 	"go.astrophena.name/base/cli"
 	"go.astrophena.name/base/cli/clitest"
 	"go.astrophena.name/base/logger"
+	"go.astrophena.name/base/testutil"
+	"go.astrophena.name/base/txtar"
 )
+
+var update = flag.Bool("update", false, "update golden files in testdata")
 
 func TestEngineMain(t *testing.T) {
 	t.Parallel()
@@ -180,6 +184,62 @@ This is bla bla bla.
 					t.Errorf("expected ERROR log, but got: %s", logBuf.String())
 				}
 			}
+		})
+	}
+}
+
+func TestPage(t *testing.T) {
+	testutil.RunGolden(t, "testdata/*.txtar", func(t *testing.T, match string) []byte {
+		ar, err := txtar.ParseFile(match)
+		if err != nil {
+			t.Fatal(err)
+		}
+		files := make(fstest.MapFS)
+		for _, f := range ar.Files {
+			files[f.Name] = &fstest.MapFile{Data: f.Data}
+		}
+		e := &engine{fs: files}
+		ctx, _ := setupTestContext(t)
+		r := httptest.NewRequestWithContext(ctx, http.MethodGet, "/", nil)
+		w := httptest.NewRecorder()
+		e.ServeHTTP(w, r)
+		testutil.AssertEqual(t, w.Code, http.StatusOK)
+		testutil.AssertEqual(t, w.Header().Get("Content-Type"), "text/html; charset=utf-8")
+
+		// Asset hashes depend on CSS and JS, not on the page being tested.
+		body := w.Body.String()
+		for _, name := range []string{"static/css/app.css", "static/js/app.js"} {
+			body = strings.ReplaceAll(body, e.srv.StaticHashName(name), name)
+		}
+		return []byte(body)
+	}, *update)
+}
+
+func TestStaticAssets(t *testing.T) {
+	cases := map[string]string{
+		"stylesheet": "static/css/app.css",
+		"script":     "static/js/app.js",
+	}
+	for name, file := range cases {
+		t.Run(name, func(t *testing.T) {
+			e := &engine{fs: filesToFS(map[string]string{"index.md": "# Hello"})}
+			e.init.Do(e.doInit)
+			ctx, _ := setupTestContext(t)
+			asset := e.srv.StaticHashName(file)
+			w := httptest.NewRecorder()
+			e.srv.ServeHTTP(w, httptest.NewRequestWithContext(ctx, http.MethodGet, "/", nil))
+			if !strings.Contains(w.Body.String(), `"/`+asset+`"`) {
+				t.Fatalf("page does not reference hashed asset %q", asset)
+			}
+
+			w = httptest.NewRecorder()
+			e.srv.ServeHTTP(w, httptest.NewRequestWithContext(ctx, http.MethodGet, "/"+asset, nil))
+			testutil.AssertEqual(t, w.Code, http.StatusOK)
+			want, err := staticFS.ReadFile(file)
+			if err != nil {
+				t.Fatal(err)
+			}
+			testutil.AssertEqual(t, w.Body.Bytes(), want)
 		})
 	}
 }
