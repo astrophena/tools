@@ -1,0 +1,32 @@
+// © 2026 Ilya Mateyko. All rights reserved.
+// Use of this source code is governed by the ISC
+// license that can be found in the LICENSE.md file.
+
+package main
+
+templ environmentPage(css, documentation string) {
+	<!DOCTYPE html>
+	<html lang="en">
+		<head>
+			<meta charset="utf-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+			<title>Starlet environment documentation</title>
+			<link rel="stylesheet" href={ "/" + css }/>
+		</head>
+		<body>
+			<main>
+				// Documentation is HTML rendered from the bot's Markdown.
+				@templ.Raw(documentation)
+			</main>
+		</body>
+	</html>
+}
+
+templ documentationLink(sprite string) {
+	<a href={ documentationURL }>
+		<svg class="icon" aria-hidden="true">
+			<use href={ "/" + sprite + "#icon-docs" }></use>
+		</svg>
+		Documentation
+	</a>
+}

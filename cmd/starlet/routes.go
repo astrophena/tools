@@ -2,49 +2,31 @@
 // Use of this source code is governed by the ISC
 // license that can be found in the LICENSE.md file.
 
+//go:generate go tool templ fmt .
+//go:generate go tool templ generate -include-version=false
+
 package main
 
 import (
 	"bytes"
 	"embed"
 	"fmt"
-	"html"
-	"html/template"
+	"log/slog"
 	"net/http"
-	"strings"
 	"sync"
 
-	"go.astrophena.name/base/syncx"
+	"go.astrophena.name/base/humanfmt"
+	"go.astrophena.name/base/logger"
 	"go.astrophena.name/base/web"
 	"go.astrophena.name/tools/internal/store"
 
-	"github.com/arl/statsviz"
 	"rsc.io/markdown"
 )
 
-var (
-	//go:embed static/templates/*.tmpl
-	templatesFS embed.FS
-	//go:embed static/icons/*
-	staticFS embed.FS
+//go:embed static/icons/*
+var staticFS embed.FS
 
-	templates = sync.OnceValue(func() *template.Template {
-		return template.Must(template.New("").ParseFS(templatesFS, "static/templates/*.tmpl"))
-	})
-)
-
-var statsvizCSP = web.CSP{
-	DefaultSrc:     []string{web.CSPSelf},
-	ScriptSrc:      []string{web.CSPSelf},
-	StyleSrc:       []string{web.CSPSelf, web.CSPUnsafeInline},
-	ConnectSrc:     []string{web.CSPSelf},
-	ImgSrc:         []string{web.CSPSelf, "data:"},
-	FontSrc:        []string{web.CSPSelf},
-	ObjectSrc:      []string{web.CSPNone},
-	FrameAncestors: []string{web.CSPNone},
-}
-
-var botDocs syncx.Lazy[template.HTML]
+const documentationURL = "https://go.astrophena.name/tools/cmd/starlet"
 
 func (e *engine) initRoutes() {
 	e.mux = http.NewServeMux()
@@ -53,35 +35,27 @@ func (e *engine) initRoutes() {
 	e.mux.HandleFunc("/", e.handlePublicRoot)
 	e.mux.HandleFunc("POST /telegram", e.bot.HandleTelegramWebhook)
 
-	// Starlark environment documentation.
-	e.mux.HandleFunc("GET /env", func(w http.ResponseWriter, r *http.Request) {
-		var buf bytes.Buffer
-
-		docs := botDocs.Get(func() template.HTML {
-			parser := &markdown.Parser{
-				Strikethrough:      true,
-				AutoLinkText:       true,
-				AutoLinkAssumeHTTP: true,
-				Table:              true,
-				SmartDot:           true,
-				SmartDash:          true,
-				SmartQuote:         true,
-			}
-			doc := parser.Parse(e.bot.Documentation())
-			return template.HTML(markdown.ToHTML(doc))
-		})
-
-		data := struct {
-			MainCSS       string
-			Documentation template.HTML
-		}{
-			MainCSS:       web.StaticHashName(r.Context(), "static/css/main.css"),
-			Documentation: docs,
+	// Starlark environment documentation, cached for this engine.
+	docs := sync.OnceValue(func() string {
+		parser := &markdown.Parser{
+			Strikethrough:      true,
+			AutoLinkText:       true,
+			AutoLinkAssumeHTTP: true,
+			Table:              true,
+			SmartDot:           true,
+			SmartDash:          true,
+			SmartQuote:         true,
 		}
-		if err := templates().ExecuteTemplate(&buf, "env.tmpl", data); err != nil {
+		return markdown.ToHTML(parser.Parse(e.bot.Documentation()))
+	})
+	e.mux.HandleFunc("GET /env", func(w http.ResponseWriter, r *http.Request) {
+		css := web.StaticHashName(r.Context(), "static/css/main.css")
+		var buf bytes.Buffer
+		if err := environmentPage(css, docs()).Render(r.Context(), &buf); err != nil {
 			web.RespondError(w, r, err)
 			return
 		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		buf.WriteTo(w)
 	})
 
@@ -105,25 +79,20 @@ func (e *engine) initRoutes() {
 				stats.Gets,
 				stats.Sets,
 				stats.Rewrites,
-				humanBytes(stats.RewriteBytes),
+				humanfmt.Bytes(stats.RewriteBytes),
 				stats.RewriteBytes,
 				stats.TotalGets,
 				stats.TotalSets,
 				stats.TotalRewrites,
-				humanBytes(stats.TotalRewriteBytes),
+				humanfmt.Bytes(stats.TotalRewriteBytes),
 				stats.TotalRewriteBytes,
-				humanBytes(uint64(stats.FileSizeBytes)),
+				humanfmt.Bytes(uint64(stats.FileSizeBytes)),
 				stats.FileSizeBytes,
 				stats.TotalExpired,
 				stats.TotalCleanupDeletes,
 			)
 		})
 	}
-	// Runtime metrics.
-	statsviz.Register(e.adminMux)
-	e.cspMux.Handle("/debug/statsviz/", statsvizCSP)
-	dbg.Link("/debug/statsviz", "Metrics")
-
 	dbg.HandleFunc("reload", "Reload", func(w http.ResponseWriter, r *http.Request) {
 		if err := e.loadFromGist(r.Context()); err != nil {
 			web.RespondError(w, r, err)
@@ -138,7 +107,6 @@ func (e *engine) handlePublicRoot(w http.ResponseWriter, r *http.Request) {
 		web.RespondError(w, r, web.ErrNotFound)
 		return
 	}
-	const documentationURL = "https://go.astrophena.name/tools/cmd/starlet"
 	http.Redirect(w, r, documentationURL, http.StatusFound)
 }
 
@@ -151,50 +119,12 @@ func (e *engine) handleAdminRoot(w http.ResponseWriter, r *http.Request) {
 }
 
 func (e *engine) debugMenu(r *http.Request) []web.MenuItem {
-	item := func(name, icon, target string) headerItem {
-		return headerItem{
-			name:       name,
-			icon:       icon,
-			target:     target,
-			spritePath: web.StaticHashName(r.Context(), "static/icons/sprite.svg"),
-		}
+	sprite := web.StaticHashName(r.Context(), "static/icons/sprite.svg")
+	var buf bytes.Buffer
+	if err := documentationLink(sprite).Render(r.Context(), &buf); err != nil {
+		logger.Error(r.Context(), "rendering debug menu", slog.Any("err", err))
+		return []web.MenuItem{web.LinkItem{Name: "Documentation", Target: documentationURL}}
 	}
-
-	return []web.MenuItem{
-		item("Documentation", "docs", "https://go.astrophena.name/tools/cmd/starlet"),
-	}
-}
-
-type headerItem struct {
-	name       string
-	icon       string
-	spritePath string
-	target     string
-}
-
-func (hi headerItem) ToHTML() template.HTML {
-	var sb strings.Builder
-	sb.WriteString("<a href=")
-	fmt.Fprintf(&sb, "%q", hi.target)
-	sb.WriteString(">")
-	fmt.Fprintf(&sb, `
-<svg class="icon" aria-hidden="true">
-  <use xlink:href="/%s#icon-%s"/>
-</svg>`, hi.spritePath, hi.icon)
-	sb.WriteString(html.EscapeString(hi.name))
-	sb.WriteString("</a>")
-	return template.HTML(sb.String())
-}
-
-func humanBytes(n uint64) string {
-	const unit = 1024
-	if n < unit {
-		return fmt.Sprintf("%d B", n)
-	}
-	div, exp := uint64(unit), 0
-	for q := n / unit; q >= unit; q /= unit {
-		div *= unit
-		exp++
-	}
-	return fmt.Sprintf("%.1f %ciB", float64(n)/float64(div), "KMGTPE"[exp])
+	// The debugger accepts trusted HTML rather than templ components.
+	return []web.MenuItem{web.HTMLItem(buf.String())}
 }

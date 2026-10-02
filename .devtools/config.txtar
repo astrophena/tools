@@ -7,7 +7,8 @@
   "internal/starlark/interpreter/loaders.go",
   "internal/starlark/interpreter/loaders_test.go",
   "cmd/tgfeed/internal/admin/components/*_templ.go",
-  "cmd/mdserve/*_templ.go"
+  "cmd/mdserve/*_templ.go",
+  "cmd/starlet/*_templ.go"
 ]
 -- copyright/template.go --
 // © %d Ilya Mateyko. All rights reserved.

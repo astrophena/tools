@@ -95,11 +95,12 @@ func TestEngineEndpoints(t *testing.T) {
 
 	publicClient := startTestServer(t, ctx, public)
 	assertResponse(t, ctx, publicClient, http.MethodGet, "/", "", http.StatusFound, "https://go.astrophena.name/tools/cmd/starlet")
-	assertResponse(t, ctx, publicClient, http.MethodGet, "/env", "", http.StatusOK, "Starlark Environment")
+	assertResponse(t, ctx, publicClient, http.MethodGet, "/env", "", http.StatusOK, "<h1>Starlark Environment</h1>")
 	assertResponse(t, ctx, publicClient, http.MethodPost, "/telegram", tgSecret, http.StatusOK, `"status": "ok"`)
 
 	adminClient := startTestServer(t, ctx, admin)
 	assertResponse(t, ctx, adminClient, http.MethodGet, "/", "", http.StatusFound, "/debug/")
+	assertResponse(t, ctx, adminClient, http.MethodGet, "/debug/", "", http.StatusOK, "#icon-docs")
 }
 
 func startTestServer(t *testing.T, ctx context.Context, endpoint *service.EndpointConfig) *http.Client {

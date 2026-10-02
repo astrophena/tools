@@ -19,7 +19,6 @@ import (
 	"go.astrophena.name/base/request"
 	"go.astrophena.name/base/syncx"
 	"go.astrophena.name/base/version"
-	"go.astrophena.name/base/web"
 	"go.astrophena.name/base/web/service"
 	"go.astrophena.name/tools/cmd/starlet/internal/bot"
 	"go.astrophena.name/tools/internal/api/gist"
@@ -37,7 +36,6 @@ type engine struct {
 
 	// initialized by doInit
 	bot      *bot.Bot
-	cspMux   *web.CSPMux
 	gistc    *gist.Client
 	logger   *slog.Logger
 	mux      *http.ServeMux
@@ -76,7 +74,6 @@ func (e *engine) endpointConfig(ctx context.Context, admin bool) (*service.Endpo
 	ec := &service.EndpointConfig{
 		Mux:      e.mux,
 		StaticFS: staticFS,
-		CSP:      e.cspMux,
 	}
 	if admin {
 		ec.Mux = e.adminMux
@@ -184,7 +181,6 @@ func (e *engine) doInit(ctx context.Context) error {
 		return err
 	}
 
-	e.cspMux = web.NewCSPMux()
 	e.initRoutes()
 
 	return nil

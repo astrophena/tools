@@ -5,7 +5,6 @@ go 1.27
 require (
 	crawshaw.dev/jsonfile v0.0.0-20240206193014-699d1dad804e
 	github.com/a-h/templ v0.3.1020
-	github.com/arl/statsviz v0.8.2
 	github.com/dhowden/tag v0.0.0-20240417053706-3d75831295e8
 	github.com/landlock-lsm/go-landlock v0.10.1
 	github.com/microcosm-cc/bluemonday v1.0.27
@@ -30,7 +29,6 @@ require (
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/go4org/hashtriemap v0.0.0-20260925222741-44e5305f85d9 // indirect
 	github.com/gorilla/css v1.0.1 // indirect
-	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/lmittmann/tint v1.2.0 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
