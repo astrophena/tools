@@ -21,12 +21,15 @@ import (
 )
 
 func TestInstallRequiresSudo(t *testing.T) {
+	t.Setenv("TERMUX_VERSION", "")
+	t.Setenv("PREFIX", "")
+
 	if os.Geteuid() == 0 {
 		t.Skip("sudo is not needed when running as root")
 	}
 	h := testutil.NewTask(t, "test")
 	mod := &module{manager: "apt"}
-	m := &impl{rt: &boot.Runtime{Getenv: func(string) string { return "" }}, mod: mod}
+	m := &impl{rt: &boot.Runtime{}, mod: mod}
 	packages := starlark.NewList([]starlark.Value{starlark.String("curl")})
 	action := h.EmitOne("pkg.install", m.install, nil, []starlark.Tuple{
 		{starlark.String("packages"), packages},

@@ -294,13 +294,16 @@ func TestFailBuiltin(t *testing.T) {
 }
 
 func TestPrepareSudo(t *testing.T) {
+	t.Setenv("TERMUX_VERSION", "")
+	t.Setenv("PREFIX", "")
+
 	if os.Geteuid() == 0 {
 		t.Skip("sudo is not needed when running as root")
 	}
 	marker := filepath.Join(t.TempDir(), "sudo-ran")
 	writeFakeSudo(t, "#!/bin/sh\ntouch "+marker+"\n")
 
-	engine := &Engine{Runtime: &Runtime{Getenv: func(string) string { return "" }}}
+	engine := &Engine{Runtime: &Runtime{}}
 	var out bytes.Buffer
 	err := newSudoPrompter(engine).prepare(t.Context(), &out, []*Task{{ID: "root_task", Name: "Root task", RequiresSudo: true}})
 	if err != nil {
@@ -403,6 +406,9 @@ func TestSudoReasonsPreferActionDetails(t *testing.T) {
 }
 
 func TestRunPlanDoesNotPromptForSudo(t *testing.T) {
+	t.Setenv("TERMUX_VERSION", "")
+	t.Setenv("PREFIX", "")
+
 	if os.Geteuid() == 0 {
 		t.Skip("sudo is not needed when running as root")
 	}
@@ -410,7 +416,7 @@ func TestRunPlanDoesNotPromptForSudo(t *testing.T) {
 	writeFakeSudo(t, "#!/bin/sh\ntouch "+marker+"\n")
 
 	engine := &Engine{
-		Runtime: &Runtime{Getenv: func(string) string { return "" }},
+		Runtime: &Runtime{},
 		Tasks: []*Task{
 			{
 				ID:   "first",
