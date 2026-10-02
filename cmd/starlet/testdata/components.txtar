@@ -1,0 +1,8 @@
+Documentation is rendered as HTML; asset attributes are escaped.
+-- documentation.html --
+<h1>Starlark Environment</h1>
+<p>Use <code>files.read(name)</code> &amp; <strong>modules</strong>.</p>
+-- stylesheet --
+static/css/main."&.css
+-- sprite --
+static/icons/sprite."&.svg

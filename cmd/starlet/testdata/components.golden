@@ -1,0 +1,6 @@
+-- environment.html --
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Starlet environment documentation</title><link rel="stylesheet" href="/static/css/main.&#34;&amp;.css"></head><body><main><h1>Starlark Environment</h1>
+<p>Use <code>files.read(name)</code> &amp; <strong>modules</strong>.</p>
+</main></body></html>
+-- menu.html --
+<a href="https://go.astrophena.name/tools/cmd/starlet"><svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.&#34;&amp;.svg#icon-docs"></use></svg> Documentation</a>
