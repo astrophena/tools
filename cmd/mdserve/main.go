@@ -23,7 +23,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 	"unicode"
@@ -85,21 +84,15 @@ func (e *engine) Run(ctx context.Context) error {
 		rules = append(rules, landlock.RODirs(dir))
 	}
 
-	_, port, err := net.SplitHostPort(e.addr)
+	// Resolve before sandboxing so the system resolver can use its files and
+	// services. The server only needs a numeric address after this point.
+	addr, err := net.ResolveTCPAddr("tcp", e.addr)
 	if err != nil {
 		return err
 	}
-	uport, err := strconv.ParseUint(port, 10, 16)
-	if err != nil {
-		return err
-	}
+	e.addr = addr.String()
 
-	rules = append(rules,
-		landlock.BindTCP(uint16(uport)),
-		// for DNS
-		landlock.ConnectTCP(53),
-		landlock.ROFiles("/etc/resolv.conf"),
-	)
+	rules = append(rules, landlock.BindTCP(uint16(addr.Port)))
 	restrict.DoUnlessTesting(ctx, rules...)
 
 	e.init.Do(e.doInit)
