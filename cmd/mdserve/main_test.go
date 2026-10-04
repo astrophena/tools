@@ -13,6 +13,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -44,6 +45,34 @@ func TestEngineMain(t *testing.T) {
 		},
 		"serves in current dir when passed no args": {
 			Args: []string{},
+			CheckFunc: func(t *testing.T, e *engine) {
+				addr, err := netip.ParseAddrPort(e.srv.Addr)
+				if err != nil {
+					t.Fatalf("listening address must be numeric: %v", err)
+				}
+				if !addr.Addr().IsLoopback() {
+					t.Errorf("listening address must be loopback, got %v", addr)
+				}
+				testutil.AssertEqual(t, addr.Port(), uint16(3000))
+			},
+		},
+		"serves on IPv4 address": {
+			Args: []string{"-addr", "127.0.0.1:3001"},
+			CheckFunc: func(t *testing.T, e *engine) {
+				testutil.AssertEqual(t, e.srv.Addr, "127.0.0.1:3001")
+			},
+		},
+		"serves on IPv6 address": {
+			Args: []string{"-addr", "[::1]:3001"},
+			CheckFunc: func(t *testing.T, e *engine) {
+				testutil.AssertEqual(t, e.srv.Addr, "[::1]:3001")
+			},
+		},
+		"serves on wildcard address": {
+			Args: []string{"-addr", ":3001"},
+			CheckFunc: func(t *testing.T, e *engine) {
+				testutil.AssertEqual(t, e.srv.Addr, ":3001")
+			},
 		},
 	})
 }
