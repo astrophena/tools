@@ -34,9 +34,17 @@ func TestComponents(t *testing.T) {
 		if err := documentationLink(strings.TrimSpace(files["sprite"])).Render(t.Context(), &menu); err != nil {
 			t.Fatal(err)
 		}
-		return txtar.Format(&txtar.Archive{Files: []txtar.File{
-			{Name: "environment.html", Data: page.Bytes()},
-			{Name: "menu.html", Data: menu.Bytes()},
-		}})
+		return txtar.Format(&txtar.Archive{
+			Files: []txtar.File{
+				{
+					Name: "environment.html",
+					Data: page.Bytes(),
+				},
+				{
+					Name: "menu.html",
+					Data: menu.Bytes(),
+				},
+			},
+		})
 	}, *update)
 }

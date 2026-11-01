@@ -373,8 +373,10 @@ func (f *fetcher) deliverUpdates(ctx context.Context, updates []*update) error {
 }
 
 func (f *fetcher) runFeedFetch(ctx context.Context, fd *feed, updates chan *update) {
-	var retries int
-	var feedRetried bool
+	var (
+		retries     int
+		feedRetried bool
+	)
 
 	for {
 		retry, retryIn := f.fetch(ctx, fd, updates)

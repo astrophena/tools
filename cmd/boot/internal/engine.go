@@ -190,14 +190,20 @@ func (e *Engine) prepare(ctx context.Context, tasks []*Task, opts RunOptions, wa
 
 	for _, task := range tasks {
 		task.Actions = nil
-		thread := &starlark.Thread{Name: "boot:" + task.ID}
+		thread := &starlark.Thread{
+			Name: "boot:" + task.ID,
+		}
 		SetTask(thread, task)
 		if _, err := starlark.Call(thread, task.Run, nil, nil); err != nil {
 			if !task.ContinueOnError {
 				stopOnError = true
 			}
 			summary.Failed++
-			failures = append(failures, failure{TaskID: task.ID, TaskName: task.Name, Err: err})
+			failures = append(failures, failure{
+				TaskID:   task.ID,
+				TaskName: task.Name,
+				Err:      err,
+			})
 			if opts.FailFast && !task.ContinueOnError {
 				break
 			}
@@ -215,7 +221,12 @@ func (e *Engine) prepare(ctx context.Context, tasks []*Task, opts RunOptions, wa
 							stopOnError = true
 						}
 						summary.Failed++
-						failures = append(failures, failure{TaskID: task.ID, TaskName: task.Name, Action: action.description(), Err: err})
+						failures = append(failures, failure{
+							TaskID:   task.ID,
+							TaskName: task.Name,
+							Action:   action.description(),
+							Err:      err,
+						})
 						if opts.FailFast && !task.ContinueOnError {
 							stop = true
 							break
@@ -270,7 +281,11 @@ func (e *Engine) run(ctx context.Context, w io.Writer, selection Selection, opts
 			return err
 		}
 	}
-	run := execution{planned: planned, summary: summary, failures: failures}
+	run := execution{
+		planned:  planned,
+		summary:  summary,
+		failures: failures,
+	}
 	taskDone := func(*Task) {}
 	var pb *progressbar.Bar
 	if !opts.DryRun && !opts.Verbose && !opts.JSON && !(stopOnError && opts.FailFast) {

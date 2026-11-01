@@ -123,7 +123,12 @@ func (e *engine) debugMenu(r *http.Request) []web.MenuItem {
 	var buf bytes.Buffer
 	if err := documentationLink(sprite).Render(r.Context(), &buf); err != nil {
 		logger.Error(r.Context(), "rendering debug menu", slog.Any("err", err))
-		return []web.MenuItem{web.LinkItem{Name: "Documentation", Target: documentationURL}}
+		return []web.MenuItem{
+			web.LinkItem{
+				Name:   "Documentation",
+				Target: documentationURL,
+			},
+		}
 	}
 	// The debugger accepts trusted HTML rather than templ components.
 	return []web.MenuItem{web.HTMLItem(buf.String())}

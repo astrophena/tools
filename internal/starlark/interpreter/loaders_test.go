@@ -39,13 +39,45 @@ func TestLoaders(t *testing.T) {
 		want    string
 		wantErr error
 	}{
-		"filesystem":         {loader: FileSystemLoader(dir), path: "a/module.star", want: "value = 1\n"},
-		"filesystem missing": {loader: FileSystemLoader(dir), path: "missing.star", wantErr: ErrNoModule},
-		"filesystem outside": {loader: FileSystemLoader(dir), path: "../module.star", wantErr: errors.New("outside the package root")},
-		"fs":                 {loader: FSLoader(fstest.MapFS{"module.star": {Data: []byte("value = 2\n")}}), path: "module.star", want: "value = 2\n"},
-		"fs missing":         {loader: FSLoader(fstest.MapFS{}), path: "missing.star", wantErr: ErrNoModule},
-		"memory":             {loader: MemoryLoader(map[string]string{"module.star": "value = 3\n"}), path: "module.star", want: "value = 3\n"},
-		"memory missing":     {loader: MemoryLoader(nil), path: "missing.star", wantErr: ErrNoModule},
+		"filesystem": {
+			loader: FileSystemLoader(dir),
+			path:   "a/module.star",
+			want:   "value = 1\n",
+		},
+		"filesystem missing": {
+			loader:  FileSystemLoader(dir),
+			path:    "missing.star",
+			wantErr: ErrNoModule,
+		},
+		"filesystem outside": {
+			loader:  FileSystemLoader(dir),
+			path:    "../module.star",
+			wantErr: errors.New("outside the package root"),
+		},
+		"fs": {
+			loader: FSLoader(fstest.MapFS{
+				"module.star": {
+					Data: []byte("value = 2\n"),
+				},
+			}),
+			path: "module.star",
+			want: "value = 2\n",
+		},
+		"fs missing": {
+			loader:  FSLoader(fstest.MapFS{}),
+			path:    "missing.star",
+			wantErr: ErrNoModule,
+		},
+		"memory": {
+			loader: MemoryLoader(map[string]string{"module.star": "value = 3\n"}),
+			path:   "module.star",
+			want:   "value = 3\n",
+		},
+		"memory missing": {
+			loader:  MemoryLoader(nil),
+			path:    "missing.star",
+			wantErr: ErrNoModule,
+		},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -72,12 +104,16 @@ func TestLoaders(t *testing.T) {
 func TestFSLoaderPropagatesErrors(t *testing.T) {
 	t.Parallel()
 	want := errors.New("read failed")
-	loader := FSLoader(errorFS{err: want})
+	loader := FSLoader(errorFS{
+		err: want,
+	})
 	if _, _, err := loader("module.star"); !errors.Is(err, want) {
 		t.Fatalf("FSLoader error = %v, want %v", err, want)
 	}
 }
 
-type errorFS struct{ err error }
+type errorFS struct {
+	err error
+}
 
 func (e errorFS) Open(string) (fs.File, error) { return nil, e.err }

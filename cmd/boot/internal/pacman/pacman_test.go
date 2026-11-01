@@ -15,12 +15,14 @@ import (
 )
 
 func TestCheckOrphansSkipsWhenNone(t *testing.T) {
-	testutil.Commands(t, map[string]string{"pacman": `#!/bin/sh
+	testutil.Commands(t, map[string]string{
+		"pacman": `#!/bin/sh
 case "$*" in
 "-Qtdq") exit 1 ;;
 *) exit 2 ;;
 esac
-`})
+`,
+	})
 
 	result, warnings := runOrphansAction(t)
 	if result != boot.ResultSkip {
@@ -32,12 +34,14 @@ esac
 }
 
 func TestCheckOrphansWarnsWhenPresent(t *testing.T) {
-	testutil.Commands(t, map[string]string{"pacman": `#!/bin/sh
+	testutil.Commands(t, map[string]string{
+		"pacman": `#!/bin/sh
 case "$*" in
 "-Qtdq") printf 'oldlib\nunused\n'; exit 0 ;;
 *) exit 2 ;;
 esac
-`})
+`,
+	})
 
 	result, warnings := runOrphansAction(t)
 	if result != boot.ResultSkip {
@@ -70,7 +74,9 @@ func TestPacnewFilesSorted(t *testing.T) {
 func runOrphansAction(t *testing.T) (boot.Result, []string) {
 	t.Helper()
 	h := testutil.NewTask(t, "test")
-	m := &impl{rt: &boot.Runtime{}}
+	m := &impl{
+		rt: &boot.Runtime{},
+	}
 	action := h.EmitOne("pacman.check_orphans", m.checkOrphans, nil, nil)
 	result, warnings, err := testutil.RunAction(t.Context(), action, false)
 	if err != nil {

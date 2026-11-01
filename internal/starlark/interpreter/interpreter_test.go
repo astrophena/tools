@@ -22,6 +22,7 @@ import (
 
 	"go.astrophena.name/base/testutil"
 	"go.astrophena.name/base/txtar"
+
 	"go.starlark.net/starlark"
 )
 
@@ -53,24 +54,88 @@ e
 func TestMakeModuleKey(t *testing.T) {
 	t.Parallel()
 	thread := new(starlark.Thread)
-	thread.SetLocal(threadModKey, ModuleKey{Package: "cur_pkg", Path: "dir/cur.star"})
+	thread.SetLocal(threadModKey, ModuleKey{
+		Package: "cur_pkg",
+		Path:    "dir/cur.star",
+	})
 	cases := map[string]struct {
 		thread *starlark.Thread
 		ref    string
 		want   ModuleKey
 		err    string
 	}{
-		"absolute":          {thread: thread, ref: "//some/mod", want: ModuleKey{Package: "cur_pkg", Path: "some/mod"}},
-		"clean absolute":    {thread: thread, ref: "//some/mod/../blah", want: ModuleKey{Package: "cur_pkg", Path: "some/blah"}},
-		"relative":          {thread: thread, ref: "some/mod", want: ModuleKey{Package: "cur_pkg", Path: "dir/some/mod"}},
-		"dot relative":      {thread: thread, ref: "./mod", want: ModuleKey{Package: "cur_pkg", Path: "dir/mod"}},
-		"parent relative":   {thread: thread, ref: "../mod", want: ModuleKey{Package: "cur_pkg", Path: "mod"}},
-		"package absolute":  {ref: "@pkg//some/mod", want: ModuleKey{Package: "pkg", Path: "some/mod"}},
-		"empty package":     {thread: thread, ref: "@//mod", err: "package alias can't be empty"},
-		"malformed package": {thread: thread, ref: "@mod", err: "module path should be"},
-		"outside absolute":  {thread: thread, ref: "//..", err: "outside the package root"},
-		"outside relative":  {thread: thread, ref: "../../mod", err: "outside the package root"},
-		"missing local":     {thread: new(starlark.Thread), ref: "//some/mod", err: "no current package name"},
+		"absolute": {
+			thread: thread,
+			ref:    "//some/mod",
+			want: ModuleKey{
+				Package: "cur_pkg",
+				Path:    "some/mod",
+			},
+		},
+		"clean absolute": {
+			thread: thread,
+			ref:    "//some/mod/../blah",
+			want: ModuleKey{
+				Package: "cur_pkg",
+				Path:    "some/blah",
+			},
+		},
+		"relative": {
+			thread: thread,
+			ref:    "some/mod",
+			want: ModuleKey{
+				Package: "cur_pkg",
+				Path:    "dir/some/mod",
+			},
+		},
+		"dot relative": {
+			thread: thread,
+			ref:    "./mod",
+			want: ModuleKey{
+				Package: "cur_pkg",
+				Path:    "dir/mod",
+			},
+		},
+		"parent relative": {
+			thread: thread,
+			ref:    "../mod",
+			want: ModuleKey{
+				Package: "cur_pkg",
+				Path:    "mod",
+			},
+		},
+		"package absolute": {
+			ref: "@pkg//some/mod",
+			want: ModuleKey{
+				Package: "pkg",
+				Path:    "some/mod",
+			},
+		},
+		"empty package": {
+			thread: thread,
+			ref:    "@//mod",
+			err:    "package alias can't be empty",
+		},
+		"malformed package": {
+			thread: thread,
+			ref:    "@mod",
+			err:    "module path should be",
+		},
+		"outside absolute": {
+			thread: thread,
+			ref:    "//..",
+			err:    "outside the package root",
+		},
+		"outside relative": {
+			thread: thread,
+			ref:    "../../mod",
+			err:    "outside the package root",
+		},
+		"missing local": {
+			thread: new(starlark.Thread),
+			ref:    "//some/mod",
+			err:    "no current package name",
+		},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {

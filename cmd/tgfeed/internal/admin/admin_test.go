@@ -103,9 +103,15 @@ func TestAdmin(t *testing.T) {
 	}
 
 	initialFS := fstest.MapFS{
-		"config.star": {Data: []byte(`feed(url="https://example.com")`)},
-		"state.json":  {Data: []byte(`{}`)},
-		"error.tmpl":  {Data: []byte(`Custom error: %v`)},
+		"config.star": {
+			Data: []byte(`feed(url="https://example.com")`),
+		},
+		"state.json": {
+			Data: []byte(`{}`),
+		},
+		"error.tmpl": {
+			Data: []byte(`Custom error: %v`),
+		},
 	}
 
 	t.Run("get config", func(t *testing.T) {

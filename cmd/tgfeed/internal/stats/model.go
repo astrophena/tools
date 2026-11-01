@@ -184,7 +184,9 @@ func (r *Run) FeedStats(url string) *FeedStats {
 		r.FeedStatsByURL = make(map[string]*FeedStats)
 	}
 	if _, ok := r.FeedStatsByURL[url]; !ok {
-		r.FeedStatsByURL[url] = &FeedStats{URL: url}
+		r.FeedStatsByURL[url] = &FeedStats{
+			URL: url,
+		}
 	}
 	return r.FeedStatsByURL[url]
 }

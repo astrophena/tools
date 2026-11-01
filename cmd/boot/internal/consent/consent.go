@@ -26,7 +26,9 @@ type module struct{}
 func (module) Name() string { return "consent" }
 
 func (module) Members(rt *boot.Runtime) starlark.StringDict {
-	m := &impl{rt: rt}
+	m := &impl{
+		rt: rt,
+	}
 	return starlark.StringDict{
 		"require": starlark.NewBuiltin("consent.require", m.require),
 	}

@@ -16,6 +16,7 @@ import (
 
 	boot "go.astrophena.name/tools/cmd/boot/internal"
 	"go.astrophena.name/tools/cmd/boot/internal/testutil"
+
 	"go.starlark.net/starlark"
 )
 
@@ -27,9 +28,13 @@ func TestGitClone(t *testing.T) {
 
 	root, remote, _ := newGitRemote(t)
 
-	rt := &boot.Runtime{Root: root}
+	rt := &boot.Runtime{
+		Root: root,
+	}
 	h := testutil.NewTask(t, "test")
-	m := &impl{rt: rt}
+	m := &impl{
+		rt: rt,
+	}
 
 	// 1. Initial clone should result in Change.
 	dest := filepath.Join(root, "local")
@@ -69,9 +74,13 @@ func TestGitSync(t *testing.T) {
 
 	root, remote, _ := newGitRemote(t, "hello\n")
 
-	rt := &boot.Runtime{Root: root}
+	rt := &boot.Runtime{
+		Root: root,
+	}
 	h := testutil.NewTask(t, "test")
-	m := &impl{rt: rt}
+	m := &impl{
+		rt: rt,
+	}
 
 	dest := filepath.Join(root, "local")
 	action := h.EmitOne("git.sync", m.sync, nil, []starlark.Tuple{
@@ -108,9 +117,13 @@ func TestGitPullAlreadyCurrent(t *testing.T) {
 	dest := filepath.Join(root, "local")
 	testutil.RunGit(t, root, "clone", remote, dest)
 
-	rt := &boot.Runtime{Root: root}
+	rt := &boot.Runtime{
+		Root: root,
+	}
 	h := testutil.NewTask(t, "test")
-	m := &impl{rt: rt}
+	m := &impl{
+		rt: rt,
+	}
 
 	action := h.EmitOne("git.pull", m.pull, starlark.Tuple{starlark.String(dest)}, nil)
 	res, err := action.Apply(t.Context(), false)
@@ -130,9 +143,13 @@ func TestGitSyncRevision(t *testing.T) {
 	root, remote, revisions := newGitRemote(t, "one\n", "two\n")
 	first := revisions[0]
 
-	rt := &boot.Runtime{Root: root}
+	rt := &boot.Runtime{
+		Root: root,
+	}
 	h := testutil.NewTask(t, "test")
-	m := &impl{rt: rt}
+	m := &impl{
+		rt: rt,
+	}
 	dest := filepath.Join(root, "local")
 	action := h.EmitOne("git.sync", m.sync, nil, []starlark.Tuple{
 		{starlark.String("url"), starlark.String(remote)},

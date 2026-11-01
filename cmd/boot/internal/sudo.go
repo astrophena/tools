@@ -21,7 +21,9 @@ type sudoPrompter struct {
 }
 
 func newSudoPrompter(engine *Engine) *sudoPrompter {
-	return &sudoPrompter{engine: engine}
+	return &sudoPrompter{
+		engine: engine,
+	}
 }
 
 func (p *sudoPrompter) prepare(ctx context.Context, w io.Writer, tasks []*Task) error {
@@ -79,7 +81,9 @@ func (p *sudoPrompter) runInteractiveSudo(ctx context.Context, w io.Writer) ([]b
 	if rt != nil && rt.Stdin != nil {
 		in = rt.Stdin
 	}
-	out := &sudoOutput{w: w}
+	out := &sudoOutput{
+		w: w,
+	}
 	cmd := exec.CommandContext(ctx, "sudo", "-v")
 	cmd.Stdin = in
 	cmd.Stdout = out

@@ -20,13 +20,14 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/mmcdole/gofeed"
 	"go.astrophena.name/base/cli"
 	"go.astrophena.name/base/syncx"
 	"go.astrophena.name/base/testutil"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/sender"
 	"go.astrophena.name/tools/cmd/tgfeed/internal/state"
 	tgstats "go.astrophena.name/tools/cmd/tgfeed/internal/stats"
+
+	"github.com/mmcdole/gofeed"
 	"go.starlark.net/starlark"
 	"go.starlark.net/syntax"
 )
@@ -366,7 +367,9 @@ func TestDecideFeedItem(t *testing.T) {
 			fd: &feed{
 				alwaysSendNewItems: true,
 			},
-			state: &state.Feed{SeenItems: map[string]time.Time{}},
+			state: &state.Feed{
+				SeenItems: map[string]time.Time{},
+			},
 			item: &gofeed.Item{
 				GUID:            "old",
 				Link:            "https://example.com/old",
@@ -381,7 +384,9 @@ func TestDecideFeedItem(t *testing.T) {
 			fd: &feed{
 				alwaysSendNewItems: true,
 			},
-			state: &state.Feed{SeenItems: map[string]time.Time{}},
+			state: &state.Feed{
+				SeenItems: map[string]time.Time{},
+			},
 			item: &gofeed.Item{
 				GUID:            "published-old",
 				Link:            "https://example.com/published-old",
@@ -397,7 +402,9 @@ func TestDecideFeedItem(t *testing.T) {
 			fd: &feed{
 				alwaysSendNewItems: true,
 			},
-			state: &state.Feed{SeenItems: map[string]time.Time{}},
+			state: &state.Feed{
+				SeenItems: map[string]time.Time{},
+			},
 			item: &gofeed.Item{
 				GUID:          "updated-only",
 				Link:          "https://example.com/updated-only",
@@ -411,7 +418,9 @@ func TestDecideFeedItem(t *testing.T) {
 			fd: &feed{
 				alwaysSendNewItems: true,
 			},
-			state: &state.Feed{SeenItems: map[string]time.Time{}},
+			state: &state.Feed{
+				SeenItems: map[string]time.Time{},
+			},
 			item: &gofeed.Item{
 				GUID:            "new",
 				Link:            "https://example.com/new",
@@ -425,7 +434,9 @@ func TestDecideFeedItem(t *testing.T) {
 			fd: &feed{
 				alwaysSendNewItems: true,
 			},
-			state: &state.Feed{SeenItems: map[string]time.Time{}},
+			state: &state.Feed{
+				SeenItems: map[string]time.Time{},
+			},
 			item: &gofeed.Item{
 				GUID:            "first",
 				Link:            "https://example.com/first",
@@ -440,7 +451,9 @@ func TestDecideFeedItem(t *testing.T) {
 			fd: &feed{
 				alwaysSendNewItems: true,
 			},
-			state: &state.Feed{SeenItems: map[string]time.Time{}},
+			state: &state.Feed{
+				SeenItems: map[string]time.Time{},
+			},
 			item: &gofeed.Item{
 				GUID:            "migration",
 				Link:            "https://example.com/migration",
@@ -456,9 +469,11 @@ func TestDecideFeedItem(t *testing.T) {
 			fd: &feed{
 				alwaysSendNewItems: true,
 			},
-			state: &state.Feed{SeenItems: map[string]time.Time{
-				"seen": now,
-			}},
+			state: &state.Feed{
+				SeenItems: map[string]time.Time{
+					"seen": now,
+				},
+			},
 			item: &gofeed.Item{
 				GUID:            "seen",
 				Link:            "https://example.com/seen",
@@ -513,8 +528,10 @@ func TestDecideFeedItem(t *testing.T) {
 			wantMarkSeen: "regular-nil",
 		},
 		"missing item identity is skipped": {
-			fd:    &feed{},
-			state: &state.Feed{SeenItems: map[string]time.Time{}},
+			fd: &feed{},
+			state: &state.Feed{
+				SeenItems: map[string]time.Time{},
+			},
 			item: &gofeed.Item{
 				Title:           "no stable identity",
 				PublishedParsed: &recent,
@@ -550,7 +567,9 @@ func TestFeedItemPassesRules(t *testing.T) {
 
 	makeRule := func(t *testing.T, src string, name string) *starlark.Function {
 		t.Helper()
-		globals, err := starlark.ExecFileOptions(&syntax.FileOptions{}, &starlark.Thread{Name: "test"}, "rule.star", src, nil)
+		globals, err := starlark.ExecFileOptions(&syntax.FileOptions{}, &starlark.Thread{
+			Name: "test",
+		}, "rule.star", src, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -571,8 +590,12 @@ func TestFeedItemPassesRules(t *testing.T) {
 		want bool
 	}{
 		"passes without rules": {
-			fd:   &feed{digest: false},
-			item: &gofeed.Item{Link: "https://example.com/a"},
+			fd: &feed{
+				digest: false,
+			},
+			item: &gofeed.Item{
+				Link: "https://example.com/a",
+			},
 			want: true,
 		},
 		"skip when blocked": {
@@ -580,7 +603,9 @@ func TestFeedItemPassesRules(t *testing.T) {
 				digest:    false,
 				blockRule: makeRule(t, "def rule(item):\n  return True\n", "rule"),
 			},
-			item: &gofeed.Item{Link: "https://example.com/a"},
+			item: &gofeed.Item{
+				Link: "https://example.com/a",
+			},
 			want: false,
 		},
 		"skip when keep rule rejects": {
@@ -588,14 +613,18 @@ func TestFeedItemPassesRules(t *testing.T) {
 				digest:   true,
 				keepRule: makeRule(t, "def rule(item):\n  return False\n", "rule"),
 			},
-			item: &gofeed.Item{Link: "https://example.com/a"},
+			item: &gofeed.Item{
+				Link: "https://example.com/a",
+			},
 			want: false,
 		},
 		"return rule error": {
 			fd: &feed{
 				blockRule: makeRule(t, "def rule(item):\n  return 1 / 0\n", "rule"),
 			},
-			item: &gofeed.Item{Link: "https://example.com/a"},
+			item: &gofeed.Item{
+				Link: "https://example.com/a",
+			},
 		},
 	}
 
@@ -628,11 +657,13 @@ func TestFeedItemPassesRules(t *testing.T) {
 			fd,
 			state.NewFeed(now.Add(-time.Hour)),
 			true,
-			[]*gofeed.Item{{
-				GUID:            "blocked-item",
-				Link:            "https://example.com/blocked-item",
-				PublishedParsed: &now,
-			}},
+			[]*gofeed.Item{
+				{
+					GUID:            "blocked-item",
+					Link:            "https://example.com/blocked-item",
+					PublishedParsed: &now,
+				},
+			},
 			make(chan *update, 1),
 		)
 		f.stats.ReadAccess(func(s *tgstats.Run) {
@@ -692,7 +723,9 @@ func TestHandleFeedStatus(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			f := newTestFetcher(t, newTestEnv(t, nil, nil))
 			f.stats = syncx.Protect(&tgstats.Run{})
-			fd := &feed{url: "https://example.com/feed.xml"}
+			fd := &feed{
+				url: "https://example.com/feed.xml",
+			}
 			st := tc.initialState
 			f.state = map[string]*state.Feed{
 				fd.url: &st,
@@ -758,7 +791,9 @@ func TestRunCommandPreservesDeliveryError(t *testing.T) {
 	})
 	f := newTestFetcher(t, env)
 	wantErr := errors.New("delivery failed")
-	f.sender = &captureSender{err: wantErr}
+	f.sender = &captureSender{
+		err: wantErr,
+	}
 
 	err := f.Run(cli.WithEnv(t.Context(), &cli.Env{
 		Args:   []string{"run"},
@@ -775,14 +810,24 @@ func TestRunCommandPreservesDeliveryError(t *testing.T) {
 func TestSendUpdateUsesInjectedSender(t *testing.T) {
 	t.Parallel()
 
-	f := &fetcher{slog: slog.Default()}
+	f := &fetcher{
+		slog: slog.Default(),
+	}
 	f.stats = syncx.Protect(&tgstats.Run{})
 	mock := &captureSender{}
 	f.sender = mock
 
 	u := &update{
-		feed:  &feed{url: "https://example.com/feed.xml", messageThreadID: 7},
-		items: []*gofeed.Item{{Title: "hello", Link: "https://example.com/a"}},
+		feed: &feed{
+			url:             "https://example.com/feed.xml",
+			messageThreadID: 7,
+		},
+		items: []*gofeed.Item{
+			{
+				Title: "hello",
+				Link:  "https://example.com/a",
+			},
+		},
 	}
 
 	if err := f.sendUpdate(t.Context(), u); err != nil {
@@ -834,7 +879,9 @@ func TestDeliverUpdatesCommitsOnlyAfterSuccess(t *testing.T) {
 				state: map[string]*state.Feed{feedURL: state.NewFeed(time.Now())},
 			}
 			f.stats = syncx.Protect(&tgstats.Run{})
-			mock := &captureSender{err: tc.sendErr}
+			mock := &captureSender{
+				err: tc.sendErr,
+			}
 			f.sender = mock
 			ackCalls := 0
 
@@ -844,15 +891,24 @@ func TestDeliverUpdatesCommitsOnlyAfterSuccess(t *testing.T) {
 				ctx, cancel = context.WithCancel(ctx)
 				cancel()
 			}
-			err := f.deliverUpdates(ctx, []*update{{
-				feed:       &feed{url: feedURL},
-				items:      []*gofeed.Item{{Title: "hello", Link: "https://example.com/a"}},
-				dedupeKeys: []string{"item-1"},
-				acknowledge: func(context.Context, []string) error {
-					ackCalls++
-					return tc.ackErr
+			err := f.deliverUpdates(ctx, []*update{
+				{
+					feed: &feed{
+						url: feedURL,
+					},
+					items: []*gofeed.Item{
+						{
+							Title: "hello",
+							Link:  "https://example.com/a",
+						},
+					},
+					dedupeKeys: []string{"item-1"},
+					acknowledge: func(context.Context, []string) error {
+						ackCalls++
+						return tc.ackErr
+					},
 				},
-			}})
+			})
 			testutil.AssertEqual(t, err != nil, tc.wantErr)
 			testutil.AssertEqual(t, ackCalls > 0, tc.wantAck)
 			_, seen := f.state[feedURL].SeenItems["item-1"]
@@ -870,7 +926,9 @@ func TestRunReturnsDeliveryFailureWithoutCommittingSeenItems(t *testing.T) {
 	var failDelivery atomic.Bool
 	failDelivery.Store(true)
 	stateMap := map[string]*state.Feed{
-		atomFeedURL: {LastUpdated: time.Time{}},
+		atomFeedURL: {
+			LastUpdated: time.Time{},
+		},
 	}
 	env := newTestEnv(t, stateArchive(t, []byte(`feed(url="https://example.com/feed.xml")`), stateMap), map[string]http.HandlerFunc{
 		atomFeedRoute: func(w http.ResponseWriter, _ *http.Request) {
@@ -914,7 +972,9 @@ func TestRunReturnsDeliveryFailureWithoutCommittingSeenItems(t *testing.T) {
 func TestFormatterFailureDoesNotCommitSeenItem(t *testing.T) {
 	t.Parallel()
 
-	globals, err := starlark.ExecFileOptions(&syntax.FileOptions{}, &starlark.Thread{Name: "test"}, "format.star", "def format(item):\n  return 1 / 0\n", nil)
+	globals, err := starlark.ExecFileOptions(&syntax.FileOptions{}, &starlark.Thread{
+		Name: "test",
+	}, "format.star", "def format(item):\n  return 1 / 0\n", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -928,8 +988,16 @@ func TestFormatterFailureDoesNotCommitSeenItem(t *testing.T) {
 	}
 	f.stats = syncx.Protect(&tgstats.Run{})
 	err = f.sendUpdate(t.Context(), &update{
-		feed:       &feed{url: feedURL, format: formatFn},
-		items:      []*gofeed.Item{{Title: "hello", Link: "https://example.com/a"}},
+		feed: &feed{
+			url:    feedURL,
+			format: formatFn,
+		},
+		items: []*gofeed.Item{
+			{
+				Title: "hello",
+				Link:  "https://example.com/a",
+			},
+		},
 		dedupeKeys: []string{"item-1"},
 	})
 	if err == nil || !strings.Contains(err.Error(), "formatting update") {

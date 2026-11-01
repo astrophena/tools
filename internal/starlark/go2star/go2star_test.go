@@ -24,37 +24,106 @@ func TestToValue(t *testing.T) {
 		want starlark.Value
 	}{
 		// Basic types.
-		"nil":    {nil, starlark.None},
-		"true":   {true, starlark.True},
-		"false":  {false, starlark.False},
-		"string": {"hello", starlark.String("hello")},
-		"int":    {123, starlark.MakeInt(123)},
-		"int8":   {int8(42), starlark.MakeInt(42)},
-		"int16":  {int16(-1000), starlark.MakeInt(-1000)},
-		"uint":   {uint(123), starlark.MakeUint(123)},
-		"uint8":  {uint8(255), starlark.MakeUint(255)},
-		"uint16": {uint16(65535), starlark.MakeUint(65535)},
-		"int32":  {int32(math.MaxInt32), starlark.MakeInt(math.MaxInt32)},
-		"float":  {3.1415, starlark.Float(3.1415)},
+		"nil": {
+			nil,
+			starlark.None,
+		},
+		"true": {
+			true,
+			starlark.True,
+		},
+		"false": {
+			false,
+			starlark.False,
+		},
+		"string": {
+			"hello",
+			starlark.String("hello"),
+		},
+		"int": {
+			123,
+			starlark.MakeInt(123),
+		},
+		"int8": {
+			int8(42),
+			starlark.MakeInt(42),
+		},
+		"int16": {
+			int16(-1000),
+			starlark.MakeInt(-1000),
+		},
+		"uint": {
+			uint(123),
+			starlark.MakeUint(123),
+		},
+		"uint8": {
+			uint8(255),
+			starlark.MakeUint(255),
+		},
+		"uint16": {
+			uint16(65535),
+			starlark.MakeUint(65535),
+		},
+		"int32": {
+			int32(math.MaxInt32),
+			starlark.MakeInt(math.MaxInt32),
+		},
+		"float": {
+			3.1415,
+			starlark.Float(3.1415),
+		},
 
 		// Floats that can be represented as ints.
-		"float10.0":   {10.0, starlark.MakeInt(10)},
-		"float32-5.0": {float32(-5.0), starlark.MakeInt(-5)},
+		"float10.0": {
+			10.0,
+			starlark.MakeInt(10),
+		},
+		"float32-5.0": {
+			float32(-5.0),
+			starlark.MakeInt(-5),
+		},
 
 		// Boundary float values.
-		"math.MaxInt64 as float":  {float64(math.MaxInt64), starlark.Float(float64(math.MaxInt64))},
-		"math.MinInt64 as float":  {float64(math.MinInt64), starlark.MakeInt64(math.MinInt64)},
-		"-math.MinInt64 as float": {-float64(math.MinInt64), starlark.Float(-float64(math.MinInt64))},
-		"math.NaN":                {math.NaN(), starlark.Float(math.NaN())},
-		"math.Inf(1)":             {math.Inf(1), starlark.Float(math.Inf(1))},
-		"math.Inf(-1)":            {math.Inf(-1), starlark.Float(math.Inf(-1))},
+		"math.MaxInt64 as float": {
+			float64(math.MaxInt64),
+			starlark.Float(float64(math.MaxInt64)),
+		},
+		"math.MinInt64 as float": {
+			float64(math.MinInt64),
+			starlark.MakeInt64(math.MinInt64),
+		},
+		"-math.MinInt64 as float": {
+			-float64(math.MinInt64),
+			starlark.Float(-float64(math.MinInt64)),
+		},
+		"math.NaN": {
+			math.NaN(),
+			starlark.Float(math.NaN()),
+		},
+		"math.Inf(1)": {
+			math.Inf(1),
+			starlark.Float(math.Inf(1)),
+		},
+		"math.Inf(-1)": {
+			math.Inf(-1),
+			starlark.Float(math.Inf(-1)),
+		},
 
 		// Time.
-		"time.Time": {time.Date(2023, 8, 15, 14, 30, 0, 0, time.UTC), starlarktime.Time(time.Date(2023, 8, 15, 14, 30, 0, 0, time.UTC))},
+		"time.Time": {
+			time.Date(2023, 8, 15, 14, 30, 0, 0, time.UTC),
+			starlarktime.Time(time.Date(2023, 8, 15, 14, 30, 0, 0, time.UTC)),
+		},
 
 		// Slices.
-		"slice_int":    {[]int{1, 2, 3}, starlark.NewList([]starlark.Value{starlark.MakeInt(1), starlark.MakeInt(2), starlark.MakeInt(3)})},
-		"slice_string": {[]string{"a", "b"}, starlark.NewList([]starlark.Value{starlark.String("a"), starlark.String("b")})},
+		"slice_int": {
+			[]int{1, 2, 3},
+			starlark.NewList([]starlark.Value{starlark.MakeInt(1), starlark.MakeInt(2), starlark.MakeInt(3)}),
+		},
+		"slice_string": {
+			[]string{"a", "b"},
+			starlark.NewList([]starlark.Value{starlark.String("a"), starlark.String("b")}),
+		},
 
 		// Maps.
 		"map": {
@@ -71,7 +140,10 @@ func TestToValue(t *testing.T) {
 			struct {
 				Name string
 				Age  int
-			}{"Bob", 30},
+			}{
+				"Bob",
+				30,
+			},
 			func() starlark.Value {
 				dict := starlark.NewDict(2)
 				dict.SetKey(starlark.String("Name"), starlark.String("Bob"))
@@ -88,7 +160,12 @@ func TestToValue(t *testing.T) {
 				// We used only one member of the map because Go has randomized map order,
 				// so it leads to flaky tests. We can sort map keys during conversion, but
 				// I don't give a fuck.
-			}{"Alice", 25, []string{"a", "b"}, map[string]bool{"x": true}},
+			}{
+				"Alice",
+				25,
+				[]string{"a", "b"},
+				map[string]bool{"x": true},
+			},
 			func() starlark.Value {
 				dict := starlark.NewDict(4)
 				dict.SetKey(starlark.String("Name"), starlark.String("Alice"))
@@ -108,7 +185,14 @@ func TestToValue(t *testing.T) {
 					Name string
 				}
 				City string
-			}{struct{ Name string }{Name: "Eve"}, "London"},
+			}{
+				struct {
+					Name string
+				}{
+					Name: "Eve",
+				},
+				"London",
+			},
 			func() starlark.Value {
 				dict := starlark.NewDict(2)
 				innerDict := starlark.NewDict(1)
@@ -124,7 +208,10 @@ func TestToValue(t *testing.T) {
 			struct {
 				Name string `starlark:"name"`
 				Age  int    `starlark:"age"`
-			}{"Bob", 30},
+			}{
+				"Bob",
+				30,
+			},
 			func() starlark.Value {
 				dict := starlark.NewDict(2)
 				dict.SetKey(starlark.String("name"), starlark.String("Bob"))
@@ -136,7 +223,10 @@ func TestToValue(t *testing.T) {
 			struct {
 				A string `starlark:"a" json:"aa"`
 				B int    `starlark:"b" json:"bb"`
-			}{"foo", 1},
+			}{
+				"foo",
+				1,
+			},
 			func() starlark.Value {
 				dict := starlark.NewDict(2)
 				dict.SetKey(starlark.String("a"), starlark.String("foo"))
@@ -148,7 +238,10 @@ func TestToValue(t *testing.T) {
 			struct {
 				A string `json:"a"`
 				B int    `json:"b"`
-			}{"foo", 1},
+			}{
+				"foo",
+				1,
+			},
 			func() starlark.Value {
 				dict := starlark.NewDict(2)
 				dict.SetKey(starlark.String("a"), starlark.String("foo"))
@@ -170,7 +263,10 @@ func TestToValue(t *testing.T) {
 			struct {
 				Type   customString `starlark:"type"`
 				Active customBool   `starlark:"active"`
-			}{Type: customString("foo"), Active: customBool(false)},
+			}{
+				Type:   customString("foo"),
+				Active: customBool(false),
+			},
 			func() starlark.Value {
 				dict := starlark.NewDict(2)
 				dict.SetKey(starlark.String("type"), starlark.String("foo"))

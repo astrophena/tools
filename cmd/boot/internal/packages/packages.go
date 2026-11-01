@@ -17,6 +17,7 @@ import (
 	"sync"
 
 	boot "go.astrophena.name/tools/cmd/boot/internal"
+
 	"go.starlark.net/starlark"
 )
 
@@ -32,7 +33,10 @@ type module struct {
 func (*module) Name() string { return "pkg" }
 
 func (m *module) Members(rt *boot.Runtime) starlark.StringDict {
-	impl := &impl{rt: rt, mod: m}
+	impl := &impl{
+		rt:  rt,
+		mod: m,
+	}
 	return starlark.StringDict{
 		"check_explicit_packages": starlark.NewBuiltin("pkg.check_explicit_packages", impl.checkExplicitPackages),
 		"configure":               starlark.NewBuiltin("pkg.configure", impl.configure),

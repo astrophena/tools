@@ -20,9 +20,13 @@ import (
 )
 
 func TestFetchFileRejectsInvalidChecksum(t *testing.T) {
-	rt := &boot.Runtime{Root: t.TempDir()}
+	rt := &boot.Runtime{
+		Root: t.TempDir(),
+	}
 	h := testutil.NewTask(t, "test")
-	m := &impl{rt: rt}
+	m := &impl{
+		rt: rt,
+	}
 	_, err := m.file(h.Thread, starlark.NewBuiltin("fetch.file", m.file), nil, []starlark.Tuple{
 		{starlark.String("url"), starlark.String("https://example.invalid/file")},
 		{starlark.String("path"), starlark.String("file")},
@@ -48,9 +52,13 @@ func TestFetchFileUpdatesModeWithoutChecksum(t *testing.T) {
 	if err := os.Chmod(path, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	rt := &boot.Runtime{Root: root}
+	rt := &boot.Runtime{
+		Root: root,
+	}
 	h := testutil.NewTask(t, "test")
-	m := &impl{rt: rt}
+	m := &impl{
+		rt: rt,
+	}
 	action := h.EmitOne("fetch.file", m.file, nil, []starlark.Tuple{
 		{starlark.String("url"), starlark.String(server.URL)},
 		{starlark.String("path"), starlark.String(path)},
@@ -80,9 +88,13 @@ func TestFetchFile(t *testing.T) {
 	defer server.Close()
 
 	root := t.TempDir()
-	rt := &boot.Runtime{Root: root}
+	rt := &boot.Runtime{
+		Root: root,
+	}
 	h := testutil.NewTask(t, "test")
-	m := &impl{rt: rt}
+	m := &impl{
+		rt: rt,
+	}
 	path := filepath.Join(root, "dir", "file.txt")
 	checksum := fmt.Sprintf("%x", sha256.Sum256(content))
 	action := h.EmitOne("fetch.file", m.file, nil, []starlark.Tuple{

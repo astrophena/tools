@@ -8,8 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mmcdole/gofeed"
 	"go.astrophena.name/base/testutil"
+
+	"github.com/mmcdole/gofeed"
 	"go.starlark.net/starlark"
 )
 
@@ -117,15 +118,28 @@ func TestBuildFormatInput(t *testing.T) {
 	}{
 		"single item uses fallback title": {
 			update: Update{
-				Feed:  Feed{},
-				Items: []*gofeed.Item{{Title: "", Link: "https://example.com/a"}},
+				Feed: Feed{},
+				Items: []*gofeed.Item{
+					{
+						Title: "",
+						Link:  "https://example.com/a",
+					},
+				},
 			},
 			wantTitle: "https://example.com/a",
 		},
 		"digest uses feed URL when title is empty": {
 			update: Update{
-				Feed:  Feed{Digest: true, URL: "https://example.com/feed.xml"},
-				Items: []*gofeed.Item{{Title: "Item", Link: "https://example.com/a"}},
+				Feed: Feed{
+					Digest: true,
+					URL:    "https://example.com/feed.xml",
+				},
+				Items: []*gofeed.Item{
+					{
+						Title: "Item",
+						Link:  "https://example.com/a",
+					},
+				},
 			},
 			wantTitle: "Updates from https://example.com/feed.xml",
 		},
@@ -142,11 +156,16 @@ func TestBuildFormatInput(t *testing.T) {
 func TestDefaultUpdateMessage(t *testing.T) {
 	t.Parallel()
 
-	rendered := DefaultUpdateMessage(Update{Feed: Feed{}, Items: []*gofeed.Item{{
-		Title: "Title",
-		Link:  "https://example.com/post",
-		GUID:  "https://news.ycombinator.com/item?id=1",
-	}}}, "Title", "%s\n%s")
+	rendered := DefaultUpdateMessage(Update{
+		Feed: Feed{},
+		Items: []*gofeed.Item{
+			{
+				Title: "Title",
+				Link:  "https://example.com/post",
+				GUID:  "https://news.ycombinator.com/item?id=1",
+			},
+		},
+	}, "Title", "%s\n%s")
 
 	testutil.AssertEqual(t, rendered.Actions[0][0].Label, "↪ Hacker News")
 	testutil.AssertEqual(t, rendered.Actions[0][0].URL, "https://news.ycombinator.com/item?id=1")
@@ -155,7 +174,10 @@ func TestDefaultUpdateMessage(t *testing.T) {
 func TestValidationErrorError(t *testing.T) {
 	t.Parallel()
 
-	err := (&ValidationError{Reason: "invalid_tuple_length", TupleLen: 3}).Error()
+	err := (&ValidationError{
+		Reason:   "invalid_tuple_length",
+		TupleLen: 3,
+	}).Error()
 	if !strings.Contains(err, "3") {
 		t.Fatalf("unexpected error string: %q", err)
 	}

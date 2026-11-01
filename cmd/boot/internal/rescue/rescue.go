@@ -31,7 +31,9 @@ type module struct{}
 func (module) Name() string { return "rescue" }
 
 func (module) Members(rt *boot.Runtime) starlark.StringDict {
-	m := &impl{rt: rt}
+	m := &impl{
+		rt: rt,
+	}
 	return starlark.StringDict{
 		"update": starlark.NewBuiltin("rescue.update", m.update),
 	}
@@ -147,7 +149,10 @@ func rescueImages(dir string) ([]image, error) {
 		if err != nil {
 			return nil, err
 		}
-		images = append(images, image{path: filepath.Join(dir, entry.Name()), modTime: info.ModTime()})
+		images = append(images, image{
+			path:    filepath.Join(dir, entry.Name()),
+			modTime: info.ModTime(),
+		})
 	}
 	slices.SortFunc(images, func(a, b image) int { return b.modTime.Compare(a.modTime) })
 	return images, nil
@@ -243,7 +248,10 @@ func rescueOutputBuilds(dir string) ([]outputBuild, error) {
 	out := make([]outputBuild, 0, len(builds))
 	for stamp, paths := range builds {
 		slices.Sort(paths)
-		out = append(out, outputBuild{stamp: stamp, paths: paths})
+		out = append(out, outputBuild{
+			stamp: stamp,
+			paths: paths,
+		})
 	}
 	slices.SortFunc(out, func(a, b outputBuild) int { return strings.Compare(b.stamp, a.stamp) })
 	return out, nil

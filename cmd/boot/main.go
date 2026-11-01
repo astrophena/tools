@@ -242,11 +242,18 @@ type flagValue[T any] struct {
 }
 
 func newFlagValue[T any](value T, parse func(string) (T, error)) flagValue[T] {
-	return flagValue[T]{value: value, parse: parse}
+	return flagValue[T]{
+		value: value,
+		parse: parse,
+	}
 }
 
 func newBoolFlagValue(value bool) flagValue[bool] {
-	return flagValue[bool]{value: value, isBool: true, parse: strconv.ParseBool}
+	return flagValue[bool]{
+		value:  value,
+		isBool: true,
+		parse:  strconv.ParseBool,
+	}
 }
 
 func (f *flagValue[T]) String() string {

@@ -214,8 +214,12 @@ type pageData struct {
 func splitDocument(doc *markdown.Document) (intro, content string) {
 	for i, b := range doc.Blocks {
 		if _, ok := b.(*markdown.Heading); ok {
-			return markdown.ToHTML(&markdown.Document{Blocks: doc.Blocks[:i+1]}),
-				markdown.ToHTML(&markdown.Document{Blocks: doc.Blocks[i+1:]})
+			return markdown.ToHTML(&markdown.Document{
+					Blocks: doc.Blocks[:i+1],
+				}),
+				markdown.ToHTML(&markdown.Document{
+					Blocks: doc.Blocks[i+1:],
+				})
 		}
 	}
 	return "", markdown.ToHTML(doc)
@@ -253,7 +257,10 @@ func tableOfContents(blocks []markdown.Block) []section {
 			}
 			used[h.ID] = true
 		}
-		sections = append(sections, section{id: h.ID, text: text})
+		sections = append(sections, section{
+			id:   h.ID,
+			text: text,
+		})
 	}
 	return sections
 }

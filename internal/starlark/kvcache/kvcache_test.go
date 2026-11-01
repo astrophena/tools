@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"go.astrophena.name/tools/internal/store"
+
 	"go.starlark.net/starlark"
 	"go.starlark.net/starlarkstruct"
 )
@@ -17,7 +18,9 @@ import (
 func TestSetGet(t *testing.T) {
 	s := store.NewMemStore(t.Context(), time.Minute)
 	mod := Module(t.Context(), s)
-	thread := &starlark.Thread{Name: t.Name()}
+	thread := &starlark.Thread{
+		Name: t.Name(),
+	}
 
 	key1 := starlark.String("mykey")
 	value1 := starlark.String("myvalue")
@@ -81,7 +84,9 @@ func TestTTL(t *testing.T) {
 		ttl := 50 * time.Millisecond
 		s := store.NewMemStore(t.Context(), ttl)
 		mod := Module(t.Context(), s)
-		thread := &starlark.Thread{Name: t.Name()}
+		thread := &starlark.Thread{
+			Name: t.Name(),
+		}
 
 		key := starlark.String("expiring_key")
 		value := starlark.String("expiring_value")
@@ -120,7 +125,9 @@ func TestTTL_ResetOnGet(t *testing.T) {
 		ttl := 100 * time.Millisecond
 		s := store.NewMemStore(t.Context(), ttl)
 		mod := Module(t.Context(), s)
-		thread := &starlark.Thread{Name: "TestKVCache_TTL_ResetOnGet"}
+		thread := &starlark.Thread{
+			Name: "TestKVCache_TTL_ResetOnGet",
+		}
 
 		key := starlark.String("reset_key")
 		value := starlark.String("reset_value")

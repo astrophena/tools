@@ -18,10 +18,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	boot "go.astrophena.name/tools/cmd/boot/internal"
-
 	"go.astrophena.name/base/request"
 	"go.astrophena.name/base/version"
+	boot "go.astrophena.name/tools/cmd/boot/internal"
+
 	"go.starlark.net/starlark"
 	modulepkg "golang.org/x/mod/module"
 )
@@ -36,7 +36,9 @@ type module struct{}
 func (module) Name() string { return "go" }
 
 func (module) Members(rt *boot.Runtime) starlark.StringDict {
-	m := &impl{rt: rt}
+	m := &impl{
+		rt: rt,
+	}
 	return starlark.StringDict{
 		"install":       starlark.NewBuiltin("go.install", m.install),
 		"install_local": starlark.NewBuiltin("go.install_local", m.installLocal),

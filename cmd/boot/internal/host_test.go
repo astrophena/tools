@@ -17,17 +17,19 @@ func TestHostBuiltin(t *testing.T) {
 	if err := writeTermuxHostname(home, "recipe-host\n"); err != nil {
 		t.Fatal(err)
 	}
-	engine := &Engine{Runtime: &Runtime{
-		Root:        "/recipe",
-		Home:        home,
-		Interactive: true,
-		Getenv: func(key string) string {
-			if key == "TERMUX_VERSION" {
-				return "0.118.0"
-			}
-			return ""
+	engine := &Engine{
+		Runtime: &Runtime{
+			Root:        "/recipe",
+			Home:        home,
+			Interactive: true,
+			Getenv: func(key string) string {
+				if key == "TERMUX_VERSION" {
+					return "0.118.0"
+				}
+				return ""
+			},
 		},
-	}}
+	}
 
 	got, err := engine.host(nil, starlark.NewBuiltin("host", engine.host), nil, nil)
 	if err != nil {
@@ -41,11 +43,26 @@ func TestHostBuiltin(t *testing.T) {
 		name string
 		want starlark.Value
 	}{
-		{name: "home", want: starlark.String(home)},
-		{name: "hostname", want: starlark.String("recipe-host")},
-		{name: "interactive", want: starlark.True},
-		{name: "needs_sudo", want: starlark.False},
-		{name: "root", want: starlark.String("/recipe")},
+		{
+			name: "home",
+			want: starlark.String(home),
+		},
+		{
+			name: "hostname",
+			want: starlark.String("recipe-host"),
+		},
+		{
+			name: "interactive",
+			want: starlark.True,
+		},
+		{
+			name: "needs_sudo",
+			want: starlark.False,
+		},
+		{
+			name: "root",
+			want: starlark.String("/recipe"),
+		},
 	} {
 		attr, err := attrs.Attr(field.name)
 		if err != nil {
@@ -58,7 +75,9 @@ func TestHostBuiltin(t *testing.T) {
 }
 
 func TestHostBuiltinRejectsArguments(t *testing.T) {
-	engine := &Engine{Runtime: &Runtime{}}
+	engine := &Engine{
+		Runtime: &Runtime{},
+	}
 	_, err := engine.host(nil, starlark.NewBuiltin("host", engine.host), starlark.Tuple{starlark.String("unexpected")}, nil)
 	if err == nil || err.Error() != "host: got 1 arguments, want at most 0" {
 		t.Fatalf("error = %v, want unexpected arguments error", err)

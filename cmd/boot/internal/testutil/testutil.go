@@ -34,10 +34,18 @@ type TaskHarness struct {
 // NewTask returns a test task and its associated Starlark thread.
 func NewTask(t *testing.T, id string) *TaskHarness {
 	t.Helper()
-	task := &boot.Task{ID: id}
-	thread := &starlark.Thread{Name: id}
+	task := &boot.Task{
+		ID: id,
+	}
+	thread := &starlark.Thread{
+		Name: id,
+	}
 	boot.SetTask(thread, task)
-	return &TaskHarness{t: t, Task: task, Thread: thread}
+	return &TaskHarness{
+		t:      t,
+		Task:   task,
+		Thread: thread,
+	}
 }
 
 // EmitOne calls a module builtin and returns its single emitted action.
@@ -75,8 +83,10 @@ func Commands(t *testing.T, scripts map[string]string) string {
 
 // RunAction executes an action and captures warnings reported through its context.
 func RunAction(ctx context.Context, action boot.Action, dryRun bool) (boot.Result, []string, error) {
-	var mu sync.Mutex
-	var warnings []string
+	var (
+		mu       sync.Mutex
+		warnings []string
+	)
 	ctx = boot.WithWarningSink(ctx, func(message string) {
 		mu.Lock()
 		defer mu.Unlock()

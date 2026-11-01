@@ -22,10 +22,14 @@ import (
 
 func TestGoInstallCreatesOneActionPerPackage(t *testing.T) {
 	root := t.TempDir()
-	rt := &boot.Runtime{Root: root}
+	rt := &boot.Runtime{
+		Root: root,
+	}
 	h := testutil.NewTask(t, "test")
 
-	m := &impl{rt: rt}
+	m := &impl{
+		rt: rt,
+	}
 	_, err := m.install(h.Thread, starlark.NewBuiltin("go.install", m.install), starlark.Tuple{
 		starlark.NewList([]starlark.Value{
 			starlark.String("example.com/one@latest"),
@@ -53,10 +57,14 @@ func TestGoInstallLocalConditions(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rt := &boot.Runtime{Root: root}
+	rt := &boot.Runtime{
+		Root: root,
+	}
 	h := testutil.NewTask(t, "test")
 
-	m := &impl{rt: rt}
+	m := &impl{
+		rt: rt,
+	}
 	_, err := m.installLocal(h.Thread, starlark.NewBuiltin("go.install_local", m.installLocal), nil, []starlark.Tuple{
 		{starlark.String("package"), starlark.String("example.com/tool")},
 		{starlark.String("cwd"), starlark.String(localDir)},

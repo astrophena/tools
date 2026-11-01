@@ -124,10 +124,17 @@ func TestCreateResponse(t *testing.T) {
 
 	resp, err := c.CreateResponse(t.Context(), ResponseParams{
 		Model: model,
-		Input: []Message{{
-			Role:    "user",
-			Content: []ContentPart{{Type: "input_text", Text: "Reply with one short sentence."}},
-		}},
+		Input: []Message{
+			{
+				Role: "user",
+				Content: []ContentPart{
+					{
+						Type: "input_text",
+						Text: "Reply with one short sentence.",
+					},
+				},
+			},
+		},
 		Instructions: "Be concise.",
 	})
 	if err != nil {

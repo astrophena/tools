@@ -15,6 +15,7 @@ import (
 
 	boot "go.astrophena.name/tools/cmd/boot/internal"
 	"go.astrophena.name/tools/cmd/boot/internal/testutil"
+
 	"go.starlark.net/starlark"
 )
 
@@ -35,7 +36,13 @@ func TestUpdateDescribesPlannedRescueImageBuild(t *testing.T) {
 		t.Fatal(err)
 	}
 	h := testutil.NewTask(t, "test")
-	m := &impl{rt: &boot.Runtime{Root: root, Home: filepath.Join(root, "home"), Getenv: func(string) string { return "termux" }}}
+	m := &impl{
+		rt: &boot.Runtime{
+			Root:   root,
+			Home:   filepath.Join(root, "home"),
+			Getenv: func(string) string { return "termux" },
+		},
+	}
 
 	action := h.EmitOne("rescue.update", m.update, nil, []starlark.Tuple{
 		{starlark.String("source"), starlark.String("rescue")},
@@ -85,13 +92,15 @@ func TestRescueOutputBuildsGroupsTimestampedFiles(t *testing.T) {
 
 func TestPruneOutputKeepsNewestBuilds(t *testing.T) {
 	root := t.TempDir()
-	testutil.Commands(t, map[string]string{"rm": `#!/bin/sh
+	testutil.Commands(t, map[string]string{
+		"rm": `#!/bin/sh
 for arg in "$@"; do
 	if [ "$arg" != "-f" ]; then
 		/bin/rm -f "$arg"
 	fi
 done
-`})
+`,
+	})
 
 	files := []string{
 		"arch-linux-rescue_202605010102.efi",
@@ -104,7 +113,9 @@ done
 		writeFile(t, filepath.Join(root, name))
 	}
 
-	if err := pruneOutput(t.Context(), &boot.Runtime{Getenv: func(string) string { return "termux" }}, root, 2); err != nil {
+	if err := pruneOutput(t.Context(), &boot.Runtime{
+		Getenv: func(string) string { return "termux" },
+	}, root, 2); err != nil {
 		t.Fatal(err)
 	}
 
@@ -127,7 +138,9 @@ func TestPruneOutputAllowsKeepLargerThanBuildCount(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, filepath.Join(root, "arch-linux-rescue_202605010102.efi"))
 
-	if err := pruneOutput(t.Context(), &boot.Runtime{Getenv: func(string) string { return "termux" }}, root, 3); err != nil {
+	if err := pruneOutput(t.Context(), &boot.Runtime{
+		Getenv: func(string) string { return "termux" },
+	}, root, 3); err != nil {
 		t.Fatal(err)
 	}
 
@@ -140,7 +153,9 @@ func TestPruneAllowsKeepLargerThanImageCount(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, filepath.Join(root, "arch-linux-rescue_202605010102.efi"))
 
-	if err := prune(t.Context(), &boot.Runtime{Getenv: func(string) string { return "termux" }}, root, 3); err != nil {
+	if err := prune(t.Context(), &boot.Runtime{
+		Getenv: func(string) string { return "termux" },
+	}, root, 3); err != nil {
 		t.Fatal(err)
 	}
 

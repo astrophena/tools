@@ -24,7 +24,10 @@ func TestStoreLoadSnapshotLocalFallbackTemplate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	store := NewStore(Options{StateDir: dir, DefaultErrorTemplate: "default template"})
+	store := NewStore(Options{
+		StateDir:             dir,
+		DefaultErrorTemplate: "default template",
+	})
 	snapshot, err := store.LoadSnapshot(t.Context())
 	if err != nil {
 		t.Fatal(err)
@@ -35,7 +38,12 @@ func TestStoreLoadSnapshotLocalFallbackTemplate(t *testing.T) {
 
 func TestStateMapRoundtrip(t *testing.T) {
 	t.Parallel()
-	input := map[string]*Feed{"https://example.com": {LastUpdated: time.Date(2026, time.January, 1, 1, 2, 3, 0, time.UTC), ErrorCount: 2}}
+	input := map[string]*Feed{
+		"https://example.com": {
+			LastUpdated: time.Date(2026, time.January, 1, 1, 2, 3, 0, time.UTC),
+			ErrorCount:  2,
+		},
+	}
 	b, err := MarshalStateMap(input)
 	if err != nil {
 		t.Fatal(err)
@@ -60,7 +68,10 @@ func TestStoreRemoteErrorPropagation(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	store := NewStore(Options{RemoteURL: srv.URL, HTTPClient: srv.Client()})
+	store := NewStore(Options{
+		RemoteURL:  srv.URL,
+		HTTPClient: srv.Client(),
+	})
 	_, err := store.LoadSnapshot(t.Context())
 	if err == nil || !strings.Contains(err.Error(), "bad config") {
 		t.Fatalf("expected propagated remote error, got %v", err)

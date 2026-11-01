@@ -60,7 +60,9 @@ type Feed struct {
 
 // NewFeed initializes a feed state record with a non-zero LastUpdated value.
 func NewFeed(now time.Time) *Feed {
-	return &Feed{LastUpdated: now}
+	return &Feed{
+		LastUpdated: now,
+	}
 }
 
 // Snapshot is the full persisted state returned by [Store.LoadSnapshot].
@@ -90,11 +92,17 @@ type Options struct {
 }
 
 // Store reads and writes tgfeed persisted state.
-type Store struct{ opts Options }
+type Store struct {
+	opts Options
+}
 
 // NewStore constructs a store that persists state locally or remotely,
 // depending on opts.
-func NewStore(opts Options) *Store { return &Store{opts: opts} }
+func NewStore(opts Options) *Store {
+	return &Store{
+		opts: opts,
+	}
+}
 
 type errorResponse struct {
 	Error string `json:"error"`
@@ -113,7 +121,11 @@ func (s *Store) LoadSnapshot(ctx context.Context) (*Snapshot, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Snapshot{Config: config, State: stateMap, ErrorTemplate: errorTemplate}, nil
+	return &Snapshot{
+		Config:        config,
+		State:         stateMap,
+		ErrorTemplate: errorTemplate,
+	}, nil
 }
 
 func (s *Store) LoadConfig(ctx context.Context) (string, error) {
@@ -166,7 +178,12 @@ func (s *Store) LoadErrorTemplate(ctx context.Context) (string, error) {
 }
 
 func (s *Store) fetch(ctx context.Context, url string) ([]byte, error) {
-	b, err := request.Make[request.Bytes](ctx, request.Params{Method: http.MethodGet, Headers: map[string]string{"User-Agent": version.UserAgent()}, URL: s.apiURL(url), HTTPClient: s.httpClient()})
+	b, err := request.Make[request.Bytes](ctx, request.Params{
+		Method:     http.MethodGet,
+		Headers:    map[string]string{"User-Agent": version.UserAgent()},
+		URL:        s.apiURL(url),
+		HTTPClient: s.httpClient(),
+	})
 	if err != nil {
 		if statusErr, ok := errors.AsType[*request.StatusError](err); ok {
 			var errResp *errorResponse
@@ -191,7 +208,14 @@ func (s *Store) SaveStateJSON(ctx context.Context, content []byte) error {
 	if s.opts.RemoteURL == "" {
 		return safefile.WriteFile(filepath.Join(s.opts.StateDir, "state.json"), content, 0o644)
 	}
-	_, err := request.Make[request.IgnoreResponse](ctx, request.Params{Method: http.MethodPut, URL: s.apiURL("/api/state"), Body: content, Headers: map[string]string{"Content-Type": "application/json", "User-Agent": version.UserAgent()}, WantStatusCode: http.StatusNoContent, HTTPClient: s.httpClient()})
+	_, err := request.Make[request.IgnoreResponse](ctx, request.Params{
+		Method:         http.MethodPut,
+		URL:            s.apiURL("/api/state"),
+		Body:           content,
+		Headers:        map[string]string{"Content-Type": "application/json", "User-Agent": version.UserAgent()},
+		WantStatusCode: http.StatusNoContent,
+		HTTPClient:     s.httpClient(),
+	})
 	if err != nil {
 		return fmt.Errorf("failed to save state to remote: %w", err)
 	}
@@ -202,7 +226,14 @@ func (s *Store) SaveConfig(ctx context.Context, config string) error {
 	if s.opts.RemoteURL == "" {
 		return safefile.WriteFile(filepath.Join(s.opts.StateDir, "config.star"), []byte(config), 0o644)
 	}
-	_, err := request.Make[request.IgnoreResponse](ctx, request.Params{Method: http.MethodPut, URL: s.apiURL("/api/config"), Body: []byte(config), Headers: map[string]string{"Content-Type": "text/plain", "User-Agent": version.UserAgent()}, WantStatusCode: http.StatusNoContent, HTTPClient: s.httpClient()})
+	_, err := request.Make[request.IgnoreResponse](ctx, request.Params{
+		Method:         http.MethodPut,
+		URL:            s.apiURL("/api/config"),
+		Body:           []byte(config),
+		Headers:        map[string]string{"Content-Type": "text/plain", "User-Agent": version.UserAgent()},
+		WantStatusCode: http.StatusNoContent,
+		HTTPClient:     s.httpClient(),
+	})
 	if err != nil {
 		return fmt.Errorf("failed to save config to remote: %w", err)
 	}
@@ -213,7 +244,14 @@ func (s *Store) SaveErrorTemplate(ctx context.Context, content string) error {
 	if s.opts.RemoteURL == "" {
 		return safefile.WriteFile(filepath.Join(s.opts.StateDir, "error.tmpl"), []byte(content), 0o644)
 	}
-	_, err := request.Make[request.IgnoreResponse](ctx, request.Params{Method: http.MethodPut, URL: s.apiURL("/api/error-template"), Body: []byte(content), Headers: map[string]string{"Content-Type": "text/plain", "User-Agent": version.UserAgent()}, WantStatusCode: http.StatusNoContent, HTTPClient: s.httpClient()})
+	_, err := request.Make[request.IgnoreResponse](ctx, request.Params{
+		Method:         http.MethodPut,
+		URL:            s.apiURL("/api/error-template"),
+		Body:           []byte(content),
+		Headers:        map[string]string{"Content-Type": "text/plain", "User-Agent": version.UserAgent()},
+		WantStatusCode: http.StatusNoContent,
+		HTTPClient:     s.httpClient(),
+	})
 	if err != nil {
 		return fmt.Errorf("failed to save error template to remote: %w", err)
 	}
@@ -241,9 +279,13 @@ func UnmarshalStateMap(b []byte) (map[string]*Feed, error) {
 
 func (s *Store) httpClient() *http.Client {
 	if strings.HasPrefix(s.opts.RemoteURL, "/") {
-		return &http.Client{Transport: &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-			return (&net.Dialer{}).DialContext(ctx, "unix", s.opts.RemoteURL)
-		}}}
+		return &http.Client{
+			Transport: &http.Transport{
+				DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+					return (&net.Dialer{}).DialContext(ctx, "unix", s.opts.RemoteURL)
+				},
+			},
+		}
 	}
 	return s.opts.HTTPClient
 }

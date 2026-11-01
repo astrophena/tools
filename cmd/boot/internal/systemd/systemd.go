@@ -25,7 +25,9 @@ type module struct{}
 func (module) Name() string { return "systemd" }
 
 func (module) Members(rt *boot.Runtime) starlark.StringDict {
-	m := &impl{rt: rt}
+	m := &impl{
+		rt: rt,
+	}
 	return starlark.StringDict{
 		"system_unit": starlark.NewBuiltin("systemd.system_unit", m.systemUnit),
 		"user_unit":   starlark.NewBuiltin("systemd.user_unit", m.userUnit),

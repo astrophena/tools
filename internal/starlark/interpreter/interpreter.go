@@ -118,6 +118,7 @@ import (
 	"sync/atomic"
 
 	"go.astrophena.name/base/syncx"
+
 	"go.starlark.net/starlark"
 	"go.starlark.net/starlarkstruct"
 	"go.starlark.net/syntax"

@@ -46,16 +46,17 @@ func newUsageStore(path string) (*usageStore, error) {
 		}
 	}
 
-	err = f.Write(func(d *usageData) error {
+	if err := f.Write(func(d *usageData) error {
 		if d.ByKey == nil {
 			d.ByKey = make(map[string]usageKeyStats)
 		}
 		return nil
-	})
-	if err != nil {
+	}); err != nil {
 		return nil, err
 	}
-	return &usageStore{f: f}, nil
+	return &usageStore{
+		f: f,
+	}, nil
 }
 
 func isNotExist(err error) bool { return errors.Is(err, fs.ErrNotExist) }

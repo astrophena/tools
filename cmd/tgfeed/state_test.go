@@ -219,7 +219,12 @@ func TestFeedStatePrepareSeenItems(t *testing.T) {
 func TestFeedState(t *testing.T) {
 	t.Parallel()
 
-	f := &fetcher{store: state.NewStore(state.Options{StateDir: t.TempDir(), DefaultErrorTemplate: "x"})}
+	f := &fetcher{
+		store: state.NewStore(state.Options{
+			StateDir:             t.TempDir(),
+			DefaultErrorTemplate: "x",
+		}),
+	}
 	f.state = map[string]*state.Feed{}
 
 	const feedURL = "https://example.com/feed.xml"
@@ -310,7 +315,9 @@ func TestRunLockLifecycle(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	f := &fetcher{stateDir: dir}
+	f := &fetcher{
+		stateDir: dir,
+	}
 
 	if err := f.acquireRunLock(); err != nil {
 		t.Fatal(err)

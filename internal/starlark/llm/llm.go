@@ -23,7 +23,10 @@ func Module(client *llm.Client, usagePath string) *starlarkstruct.Module {
 	if err != nil {
 		usage = nil
 	}
-	m := &module{client: client, usage: usage}
+	m := &module{
+		client: client,
+		usage:  usage,
+	}
 	return &starlarkstruct.Module{
 		Name: "llm",
 		Members: starlark.StringDict{
@@ -81,15 +84,35 @@ func (m *module) generate(thread *starlark.Thread, b *starlark.Builtin, args sta
 		if !ok {
 			return nil, fmt.Errorf("%s: in contents[%d] content must be a string", b.Name(), i)
 		}
-		messages = append(messages, llm.Message{Role: string(role), Content: []llm.ContentPart{{Type: contentPartType(string(role)), Text: string(content)}}})
+		messages = append(messages, llm.Message{
+			Role: string(role),
+			Content: []llm.ContentPart{
+				{
+					Type: contentPartType(string(role)),
+					Text: string(content),
+				},
+			},
+		})
 	}
 	if image.Len() > 0 {
 		mime := http.DetectContentType([]byte(image))
 		imageURL := "data:" + mime + ";base64," + base64.StdEncoding.EncodeToString([]byte(image))
-		messages = append(messages, llm.Message{Role: "user", Content: []llm.ContentPart{{Type: "input_image", ImageURL: imageURL}}})
+		messages = append(messages, llm.Message{
+			Role: "user",
+			Content: []llm.ContentPart{
+				{
+					Type:     "input_image",
+					ImageURL: imageURL,
+				},
+			},
+		})
 	}
 
-	resp, err := m.client.CreateResponse(ctx, llm.ResponseParams{Model: model, Input: messages, Instructions: instructions})
+	resp, err := m.client.CreateResponse(ctx, llm.ResponseParams{
+		Model:        model,
+		Input:        messages,
+		Instructions: instructions,
+	})
 	if err != nil {
 		return starlark.None, fmt.Errorf("%s: failed to generate text: %w", b.Name(), err)
 	}

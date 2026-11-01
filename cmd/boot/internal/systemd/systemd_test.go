@@ -12,6 +12,7 @@ import (
 
 	boot "go.astrophena.name/tools/cmd/boot/internal"
 	"go.astrophena.name/tools/cmd/boot/internal/testutil"
+
 	"go.starlark.net/starlark"
 )
 
@@ -23,7 +24,9 @@ func TestSystemUnitRequiresSudo(t *testing.T) {
 		t.Skip("sudo is not needed when running as root")
 	}
 	h := testutil.NewTask(t, "test")
-	m := &impl{rt: &boot.Runtime{}}
+	m := &impl{
+		rt: &boot.Runtime{},
+	}
 	action := h.EmitOne("systemd.system_unit", m.systemUnit, nil, []starlark.Tuple{
 		{starlark.String("name"), starlark.String("sshd.service")},
 		{starlark.String("enabled"), starlark.True},
@@ -46,7 +49,9 @@ func TestSystemUnitPlanChecksWithoutSudo(t *testing.T) {
 		"systemctl": "#!/bin/sh\necho enabled\n",
 	})
 	h := testutil.NewTask(t, "test")
-	m := &impl{rt: &boot.Runtime{}}
+	m := &impl{
+		rt: &boot.Runtime{},
+	}
 	action := h.EmitOne("systemd.system_unit", m.systemUnit, nil, []starlark.Tuple{
 		{starlark.String("name"), starlark.String("sshd.service")},
 		{starlark.String("enabled"), starlark.True},

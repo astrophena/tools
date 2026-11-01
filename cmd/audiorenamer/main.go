@@ -17,12 +17,12 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/dhowden/tag"
-	"github.com/landlock-lsm/go-landlock/landlock"
-
 	"go.astrophena.name/base/cli"
 	"go.astrophena.name/base/logger"
 	"go.astrophena.name/tools/internal/restrict"
+
+	"github.com/dhowden/tag"
+	"github.com/landlock-lsm/go-landlock/landlock"
 )
 
 func main() { cli.Main(new(app)) }

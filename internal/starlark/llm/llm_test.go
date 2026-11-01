@@ -24,10 +24,22 @@ func TestContentPartType(t *testing.T) {
 		role string
 		want string
 	}{
-		"assistant":    {role: "assistant", want: "output_text"},
-		"legacy model": {role: "model", want: "output_text"},
-		"user":         {role: "user", want: "input_text"},
-		"system":       {role: "system", want: "input_text"},
+		"assistant": {
+			role: "assistant",
+			want: "output_text",
+		},
+		"legacy model": {
+			role: "model",
+			want: "output_text",
+		},
+		"user": {
+			role: "user",
+			want: "input_text",
+		},
+		"system": {
+			role: "system",
+			want: "input_text",
+		},
 	}
 
 	for name, tc := range cases {
@@ -111,9 +123,11 @@ func TestGenerateAndUsage(t *testing.T) {
 }
 
 func TestGenerateRejectsInvalidContents(t *testing.T) {
-	client := &llmapi.Client{HTTPClient: testutil.MockHTTPClient(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
-		t.Fatal("invalid contents reached the LLM API")
-	}))}
+	client := &llmapi.Client{
+		HTTPClient: testutil.MockHTTPClient(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+			t.Fatal("invalid contents reached the LLM API")
+		})),
+	}
 	cases := map[string]struct {
 		item starlark.Value
 		want string

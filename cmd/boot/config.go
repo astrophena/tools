@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"go.astrophena.name/base/cli"
+
 	"go.starlark.net/starlark"
 	"go.starlark.net/starlarkstruct"
 	"go.starlark.net/syntax"
@@ -50,7 +51,9 @@ func loadConfig(ctx context.Context, env *cli.Env) (configOptions, error) {
 	}
 
 	cfg := configOptions{}
-	thread := &starlark.Thread{Name: "boot:config"}
+	thread := &starlark.Thread{
+		Name: "boot:config",
+	}
 	predeclared := starlark.StringDict{
 		"boot": &starlarkstruct.Module{
 			Name: "boot",
