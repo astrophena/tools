@@ -30,7 +30,9 @@ type module struct{}
 func (module) Name() string { return "pacman" }
 
 func (module) Members(rt *boot.Runtime) starlark.StringDict {
-	m := &impl{rt: rt}
+	m := &impl{
+		rt: rt,
+	}
 	return starlark.StringDict{
 		"check_explicit_packages": starlark.NewBuiltin("pacman.check_explicit_packages", m.checkExplicitPackages),
 		"check_orphans":           starlark.NewBuiltin("pacman.check_orphans", m.checkOrphans),

@@ -17,6 +17,7 @@ import (
 
 	boot "go.astrophena.name/tools/cmd/boot/internal"
 	"go.astrophena.name/tools/cmd/boot/internal/testutil"
+
 	"go.starlark.net/starlark"
 )
 
@@ -28,8 +29,13 @@ func TestInstallRequiresSudo(t *testing.T) {
 		t.Skip("sudo is not needed when running as root")
 	}
 	h := testutil.NewTask(t, "test")
-	mod := &module{manager: "apt"}
-	m := &impl{rt: &boot.Runtime{}, mod: mod}
+	mod := &module{
+		manager: "apt",
+	}
+	m := &impl{
+		rt:  &boot.Runtime{},
+		mod: mod,
+	}
 	packages := starlark.NewList([]starlark.Value{starlark.String("curl")})
 	action := h.EmitOne("pkg.install", m.install, nil, []starlark.Tuple{
 		{starlark.String("packages"), packages},
@@ -40,16 +46,20 @@ func TestInstallRequiresSudo(t *testing.T) {
 }
 
 func TestPackageManagerAptMissing(t *testing.T) {
-	testutil.Commands(t, map[string]string{"dpkg-query": `#!/bin/sh
+	testutil.Commands(t, map[string]string{
+		"dpkg-query": `#!/bin/sh
 for arg in "$@"; do
     case "$arg" in
     installed) echo "installed install ok installed" ;;
     missing) ;;
     esac
 done
-`})
+`,
+	})
 
-	rt := &boot.Runtime{Getenv: os.Getenv}
+	rt := &boot.Runtime{
+		Getenv: os.Getenv,
+	}
 	pm, err := packageManagerByName(rt, "apt")
 	if err != nil {
 		t.Fatal(err)
@@ -64,16 +74,20 @@ done
 }
 
 func TestPackageManagerPacmanMissing(t *testing.T) {
-	testutil.Commands(t, map[string]string{"pacman": `#!/bin/sh
+	testutil.Commands(t, map[string]string{
+		"pacman": `#!/bin/sh
 for arg in "$@"; do
     case "$arg" in
     missing) echo "missing"; exit 127 ;;
     esac
 done
 exit 0
-`})
+`,
+	})
 
-	rt := &boot.Runtime{Getenv: os.Getenv}
+	rt := &boot.Runtime{
+		Getenv: os.Getenv,
+	}
 	pm, err := packageManagerByName(rt, "pacman")
 	if err != nil {
 		t.Fatal(err)
@@ -88,15 +102,19 @@ exit 0
 }
 
 func TestPackageManagerAptUpdate(t *testing.T) {
-	testutil.Commands(t, map[string]string{"sh": `#!/bin/sh
+	testutil.Commands(t, map[string]string{
+		"sh": `#!/bin/sh
 case "$2" in
 "apt update && apt upgrade -y") exit 0 ;;
 "sudo apt update && sudo apt upgrade -y") exit 0 ;;
 *) exit 1 ;;
 esac
-`})
+`,
+	})
 
-	rt := &boot.Runtime{Getenv: os.Getenv}
+	rt := &boot.Runtime{
+		Getenv: os.Getenv,
+	}
 	pm, err := packageManagerByName(rt, "apt")
 	if err != nil {
 		t.Fatal(err)
@@ -225,7 +243,12 @@ esac
 `,
 	})
 	h := testutil.NewTask(t, "test")
-	m := &impl{rt: rt, mod: &module{manager: "pacman"}}
+	m := &impl{
+		rt: rt,
+		mod: &module{
+			manager: "pacman",
+		},
+	}
 	action := h.EmitOne("pkg.update", m.update, nil, nil)
 	result, warnings, err := testutil.RunAction(t.Context(), action, true)
 	if err != nil {
@@ -258,12 +281,14 @@ func newPacmanRuntime(t *testing.T, scripts map[string]string) (*boot.Runtime, s
 	maps.Copy(commands, scripts)
 	testutil.Commands(t, commands)
 	cache := t.TempDir()
-	return &boot.Runtime{Getenv: func(key string) string {
-		if key == "XDG_CACHE_HOME" {
-			return cache
-		}
-		return os.Getenv(key)
-	}}, cache
+	return &boot.Runtime{
+		Getenv: func(key string) string {
+			if key == "XDG_CACHE_HOME" {
+				return cache
+			}
+			return os.Getenv(key)
+		},
+	}, cache
 }
 
 func TestUpdateReportsRebootAfterSuccessfulApply(t *testing.T) {
@@ -290,7 +315,10 @@ func TestUpdateReportsRebootAfterSuccessfulApply(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			h := testutil.NewTask(t, "test")
-			m := &impl{rt: &boot.Runtime{}, mod: &module{}}
+			m := &impl{
+				rt:  &boot.Runtime{},
+				mod: &module{},
+			}
 			m.addUpdateActions(h.Thread, packageManager{
 				name: "pacman",
 				updates: func(context.Context, bool) ([]string, error) {
@@ -336,7 +364,9 @@ exit 1
 `,
 	})
 
-	rt := &boot.Runtime{Getenv: os.Getenv}
+	rt := &boot.Runtime{
+		Getenv: os.Getenv,
+	}
 	pm, err := packageManagerByName(rt, "pacman")
 	if err != nil {
 		t.Fatal(err)

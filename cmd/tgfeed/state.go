@@ -118,20 +118,24 @@ func (f *fetcher) validateFeedFormat(fd *feed) error {
 			Title:  fd.title,
 			Digest: fd.digest,
 		},
-		Items: []*gofeed.Item{{
-			Title:       "Sample title",
-			Description: "Sample description",
-			Content:     "Sample content",
-			Categories:  []string{"Sample category"},
-			Enclosures: []*gofeed.Enclosure{{
-				URL:    "https://example.com/item.jpg",
-				Type:   "image/jpeg",
-				Length: "123",
-			}},
-			Link:      "https://example.com/item",
-			GUID:      "sample-guid",
-			Published: time.Now().Format(time.RFC3339),
-		}},
+		Items: []*gofeed.Item{
+			{
+				Title:       "Sample title",
+				Description: "Sample description",
+				Content:     "Sample content",
+				Categories:  []string{"Sample category"},
+				Enclosures: []*gofeed.Enclosure{
+					{
+						URL:    "https://example.com/item.jpg",
+						Type:   "image/jpeg",
+						Length: "123",
+					},
+				},
+				Link:      "https://example.com/item",
+				GUID:      "sample-guid",
+				Published: time.Now().Format(time.RFC3339),
+			},
+		},
 	}
 	items, _ := format.BuildFormatInput(update)
 

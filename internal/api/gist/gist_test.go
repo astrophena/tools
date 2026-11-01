@@ -82,7 +82,9 @@ func TestUpdate(t *testing.T) {
 	testutil.AssertEqual(t, name, "bar.txt")
 	testutil.AssertEqual(t, file.Content, "foo\n")
 
-	gist.Files["bar.txt"] = File{Content: "foo\n"}
+	gist.Files["bar.txt"] = File{
+		Content: "foo\n",
+	}
 	gist, err = c.Update(t.Context(), id, gist)
 	if err != nil {
 		t.Fatal(err)

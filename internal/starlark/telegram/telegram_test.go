@@ -11,10 +11,10 @@ import (
 	"strings"
 	"testing"
 
-	"go.starlark.net/starlark"
-
 	"go.astrophena.name/base/testutil"
 	"go.astrophena.name/tools/internal/starlark/interpreter"
+
+	"go.starlark.net/starlark"
 )
 
 func TestTelegramModule(t *testing.T) {

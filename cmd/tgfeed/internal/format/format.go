@@ -122,7 +122,9 @@ func BuildFormatInput(u Update) (starlark.Value, string) {
 // Parse the returned value with [ParseFormattedMessage].
 func CallStarlarkFormatter(formatFn *starlark.Function, items starlark.Value, print func(msg string)) (starlark.Value, error) {
 	return starlark.Call(
-		&starlark.Thread{Print: func(_ *starlark.Thread, msg string) { print(msg) }},
+		&starlark.Thread{
+			Print: func(_ *starlark.Thread, msg string) { print(msg) },
+		},
 		formatFn,
 		starlark.Tuple{items},
 		[]starlark.Tuple{},
@@ -136,21 +138,35 @@ func CallStarlarkFormatter(formatFn *starlark.Function, items starlark.Value, pr
 func ParseFormattedMessage(v starlark.Value) (Rendered, error) {
 	switch val := v.(type) {
 	case starlark.String:
-		return Rendered{Body: val.GoString()}, nil
+		return Rendered{
+			Body: val.GoString(),
+		}, nil
 	case starlark.Tuple:
 		if len(val) < 1 || len(val) > 3 {
-			return Rendered{}, &ValidationError{Reason: "invalid_tuple_length", TupleLen: len(val)}
+			return Rendered{}, &ValidationError{
+				Reason:   "invalid_tuple_length",
+				TupleLen: len(val),
+			}
 		}
 
 		s, ok := val[0].(starlark.String)
 		if !ok {
-			return Rendered{}, &ValidationError{Reason: "invalid_field_type", Field: "title", FieldType: val[0].Type()}
+			return Rendered{}, &ValidationError{
+				Reason:    "invalid_field_type",
+				Field:     "title",
+				FieldType: val[0].Type(),
+			}
 		}
 		if s.GoString() == "" {
-			return Rendered{}, &ValidationError{Reason: "empty_title", Field: "title"}
+			return Rendered{}, &ValidationError{
+				Reason: "empty_title",
+				Field:  "title",
+			}
 		}
 
-		r := Rendered{Body: s.GoString()}
+		r := Rendered{
+			Body: s.GoString(),
+		}
 		if len(val) >= 2 {
 			actions, err := parseInlineKeyboard(val[1])
 			if err != nil {
@@ -167,14 +183,21 @@ func ParseFormattedMessage(v starlark.Value) (Rendered, error) {
 		}
 		return r, nil
 	default:
-		return Rendered{}, &ValidationError{Reason: "invalid_type", ValueType: v.Type()}
+		return Rendered{}, &ValidationError{
+			Reason:    "invalid_type",
+			ValueType: v.Type(),
+		}
 	}
 }
 
 func parseMediaList(v starlark.Value) ([]sender.Media, error) {
 	list, ok := v.(*starlark.List)
 	if !ok {
-		return nil, &ValidationError{Reason: "invalid_field_type", Field: "media", FieldType: v.Type()}
+		return nil, &ValidationError{
+			Reason:    "invalid_field_type",
+			Field:     "media",
+			FieldType: v.Type(),
+		}
 	}
 
 	media := make([]sender.Media, 0, list.Len())
@@ -215,7 +238,11 @@ func parseMediaList(v starlark.Value) ([]sender.Media, error) {
 func parseInlineKeyboard(v starlark.Value) ([]sender.ActionRow, error) {
 	list, ok := v.(*starlark.List)
 	if !ok {
-		return nil, &ValidationError{Reason: "invalid_field_type", Field: "keyboard", FieldType: v.Type()}
+		return nil, &ValidationError{
+			Reason:    "invalid_field_type",
+			Field:     "keyboard",
+			FieldType: v.Type(),
+		}
 	}
 
 	rows := make([]sender.ActionRow, 0, list.Len())
@@ -284,7 +311,10 @@ func DefaultUpdateMessage(u Update, defaultTitle string, messageTemplate string)
 		for _, item := range u.Items {
 			fmt.Fprintf(&msg, "• <a href=%q>%s</a>\n", item.Link, cmp.Or(item.Title, item.Link))
 		}
-		return Rendered{Body: msg.String(), DisablePreview: true}
+		return Rendered{
+			Body:           msg.String(),
+			DisablePreview: true,
+		}
 	}
 
 	msg := fmt.Sprintf(messageTemplate, defaultTitle, u.Items[0].Link)
@@ -301,12 +331,21 @@ func DefaultUpdateMessage(u Update, defaultTitle string, messageTemplate string)
 
 	var actions []sender.ActionRow
 	if strings.HasPrefix(u.Items[0].GUID, "https://news.ycombinator.com/item?id=") {
-		actions = []sender.ActionRow{{
-			{Label: "↪ Hacker News", URL: u.Items[0].GUID},
-		}}
+		actions = []sender.ActionRow{
+			{
+				{
+					Label: "↪ Hacker News",
+					URL:   u.Items[0].GUID,
+				},
+			},
+		}
 	}
 
-	return Rendered{Body: msg, Actions: actions, DisablePreview: u.Feed.Digest}
+	return Rendered{
+		Body:           msg,
+		Actions:        actions,
+		DisablePreview: u.Feed.Digest,
+	}
 }
 
 // ItemToStarlark converts an RSS item into a Starlark struct used by feed

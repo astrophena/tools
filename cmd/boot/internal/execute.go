@@ -79,7 +79,11 @@ func (e *Engine) execute(ctx context.Context, tasks []*Task, run execution, opts
 				if dep != "" {
 					err := fmt.Errorf("dependency %s failed", dep)
 					run.summary.Failed++
-					run.failures = append(run.failures, failure{TaskID: task.ID, TaskName: task.Name, Err: err})
+					run.failures = append(run.failures, failure{
+						TaskID:   task.ID,
+						TaskName: task.Name,
+						Err:      err,
+					})
 					status[task.ID] = taskFailed
 					taskDone(task)
 					started = true
@@ -138,10 +142,17 @@ func (e *Engine) execute(ctx context.Context, tasks []*Task, run execution, opts
 }
 
 func (e *Engine) executeTask(ctx context.Context, task *Task, taskIndex int, opts RunOptions, warnings *warningCollector, limiter actionLimiter) taskResult {
-	run := taskResult{task: task}
+	run := taskResult{
+		task: task,
+	}
 	execute := func(actionIndex int) actionResult {
 		action := task.Actions[actionIndex]
-		result := actionResult{task: task, taskIndex: taskIndex, action: action, actionIndex: actionIndex}
+		result := actionResult{
+			task:        task,
+			taskIndex:   taskIndex,
+			action:      action,
+			actionIndex: actionIndex,
+		}
 		if err := limiter.acquire(ctx); err != nil {
 			result.err = err
 			return result
@@ -243,7 +254,9 @@ type actionLimiter struct {
 }
 
 func newActionLimiter(limit int) actionLimiter {
-	return actionLimiter{ch: make(chan struct{}, max(limit, 1))}
+	return actionLimiter{
+		ch: make(chan struct{}, max(limit, 1)),
+	}
 }
 
 func (l actionLimiter) acquire(ctx context.Context) error {

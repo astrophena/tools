@@ -30,7 +30,11 @@ type jsonAction struct {
 }
 
 func (e *Engine) printJSON(w io.Writer, run execution, warnings []warning, dryRun bool) error {
-	report := jsonRun{DryRun: dryRun, Summary: run.summary, Warnings: warnings}
+	report := jsonRun{
+		DryRun:   dryRun,
+		Summary:  run.summary,
+		Warnings: warnings,
+	}
 	for _, failure := range run.failures {
 		if failure.Action == "" {
 			report.Actions = append(report.Actions, jsonAction{

@@ -42,23 +42,24 @@ func TestSend(t *testing.T) {
 		HTTPClient: httpc,
 	})
 
-	err := s.Send(t.Context(), sender.Message{
+	if err := s.Send(t.Context(), sender.Message{
 		Body: "**Hello**",
 		Target: sender.Target{
 			Channel: "override",
 			Thread:  "7",
 		},
-		Actions: []sender.ActionRow{{
+		Actions: []sender.ActionRow{
 			{
-				Label: "Open",
-				URL:   "https://example.com",
+				{
+					Label: "Open",
+					URL:   "https://example.com",
+				},
+				{
+					Label: "invalid",
+				},
 			},
-			{
-				Label: "invalid",
-			},
-		}},
-	})
-	if err != nil {
+		},
+	}); err != nil {
 		t.Fatal(err)
 	}
 	if got.ChatID != "override" || got.ThreadID != 7 || got.Text != "Hello\n\n" {
@@ -76,13 +77,12 @@ func TestSendInvalidThread(t *testing.T) {
 		ChatID: "chat",
 		Token:  "token",
 	})
-	err := s.Send(t.Context(), sender.Message{
+	if err := s.Send(t.Context(), sender.Message{
 		Body: "hello",
 		Target: sender.Target{
 			Thread: "not-a-number",
 		},
-	})
-	if err == nil {
+	}); err == nil {
 		t.Fatal("Send returned nil error")
 	}
 }

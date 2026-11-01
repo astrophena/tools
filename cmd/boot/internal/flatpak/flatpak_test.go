@@ -31,7 +31,9 @@ func TestUpdate(t *testing.T) {
 			dryRun:  true,
 			want:    boot.ResultChange,
 		},
-		"skips without updates": {want: boot.ResultSkip},
+		"skips without updates": {
+			want: boot.ResultSkip,
+		},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {

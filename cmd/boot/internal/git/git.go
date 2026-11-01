@@ -32,7 +32,10 @@ type module struct {
 func (*module) Name() string { return "git" }
 
 func (mod *module) Members(rt *boot.Runtime) starlark.StringDict {
-	m := &impl{rt: rt, mod: mod}
+	m := &impl{
+		rt:  rt,
+		mod: mod,
+	}
 	return starlark.StringDict{
 		"clone": starlark.NewBuiltin("git.clone", m.clone),
 		"pull":  starlark.NewBuiltin("git.pull", m.pull),

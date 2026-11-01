@@ -169,11 +169,17 @@ func stateArchive(t *testing.T, config []byte, state map[string]*state.Feed) fs.
 
 	ar := &txtar.Archive{
 		Files: []txtar.File{
-			{Name: "config.star", Data: config},
+			{
+				Name: "config.star",
+				Data: config,
+			},
 		},
 	}
 	if state != nil {
-		ar.Files = append(ar.Files, txtar.File{Name: "state.json", Data: toJSON(t, state)})
+		ar.Files = append(ar.Files, txtar.File{
+			Name: "state.json",
+			Data: toJSON(t, state),
+		})
 	}
 	return txtarToFS(ar)
 }

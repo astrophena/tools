@@ -127,8 +127,7 @@ func TestStoreSaveRunUsesJSONB(t *testing.T) {
 	}
 
 	var payloadType string
-	err = db.QueryRowContext(t.Context(), `SELECT typeof(payload_json) FROM runs LIMIT 1;`).Scan(&payloadType)
-	if err != nil {
+	if err := db.QueryRowContext(t.Context(), `SELECT typeof(payload_json) FROM runs LIMIT 1;`).Scan(&payloadType); err != nil {
 		t.Fatal(err)
 	}
 	testutil.AssertEqual(t, payloadType, "blob")

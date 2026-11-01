@@ -27,7 +27,10 @@ func TestGitHubNotificationsFeed(t *testing.T) {
 	env := newTestEnv(t, txtarToFS(txtar.Parse(githubNotificationsTxtar)), nil)
 	f := newTestFetcher(t, env)
 	f.httpc = &http.Client{
-		Transport: &roundTripper{f.httpc.Transport, rec.Client().Transport},
+		Transport: &roundTripper{
+			f.httpc.Transport,
+			rec.Client().Transport,
+		},
 	}
 
 	if err := f.run(cli.WithEnv(t.Context(), &cli.Env{
@@ -43,7 +46,9 @@ func TestGitHubNotificationsFeed(t *testing.T) {
 	testutil.AssertEqual(t, len(env.sentMessages), 4)
 }
 
-type roundTripper struct{ main, notifications http.RoundTripper }
+type roundTripper struct {
+	main, notifications http.RoundTripper
+}
 
 func (rt *roundTripper) RoundTrip(r *http.Request) (*http.Response, error) {
 	if r.URL.Host == "api.github.com" {

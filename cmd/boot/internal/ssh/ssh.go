@@ -27,7 +27,9 @@ type module struct{}
 func (module) Name() string { return "ssh" }
 
 func (module) Members(rt *boot.Runtime) starlark.StringDict {
-	m := &impl{rt: rt}
+	m := &impl{
+		rt: rt,
+	}
 	return starlark.StringDict{
 		"key": starlark.NewBuiltin("ssh.key", m.key),
 	}

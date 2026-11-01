@@ -130,7 +130,11 @@ func latencyTrendChart(p StatsProps) string {
 					lineDataset("Fetch p99", p99, "#ff8e95"),
 				},
 			},
-			Options: chartOptions{Interaction: &chartInteraction{Mode: "index"}},
+			Options: chartOptions{
+				Interaction: &chartInteraction{
+					Mode: "index",
+				},
+			},
 		},
 	})
 }

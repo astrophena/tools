@@ -15,7 +15,9 @@ import (
 
 // A pair is a pair of values tracked for both the x and y side of a diff.
 // It is typically a pair of line indexes.
-type pair struct{ x, y int }
+type pair struct {
+	x, y int
+}
 
 // Diff returns an anchored diff of the two texts old and new
 // in the “unified diff” format. If old and new are identical,
@@ -124,7 +126,10 @@ func Diff(oldName string, old []byte, newName string, new []byte) []byte {
 				count.x++
 				count.y++
 			}
-			done = pair{start.x + n, start.y + n}
+			done = pair{
+				start.x + n,
+				start.y + n,
+			}
 
 			// Format and emit chunk.
 			// Convert line numbers to 1-indexed.
@@ -150,7 +155,10 @@ func Diff(oldName string, old []byte, newName string, new []byte) []byte {
 		}
 
 		// Otherwise start a new chunk.
-		chunk = pair{end.x - C, end.y - C}
+		chunk = pair{
+			end.x - C,
+			end.y - C,
+		}
 		for _, s := range x[chunk.x:end.x] {
 			ctext = append(ctext, " "+s)
 			count.x++
@@ -247,14 +255,23 @@ func tgs(x, y []string) []pair {
 		}
 	}
 	seq := make([]pair, 2+k)
-	seq[1+k] = pair{len(x), len(y)} // sentinel at end
+	seq[1+k] = pair{
+		len(x),
+		len(y),
+	} // sentinel at end
 	lastj := n
 	for i := n - 1; i >= 0; i-- {
 		if L[i] == k && J[i] < lastj {
-			seq[k] = pair{xi[i], yi[J[i]]}
+			seq[k] = pair{
+				xi[i],
+				yi[J[i]],
+			}
 			k--
 		}
 	}
-	seq[0] = pair{0, 0} // sentinel at start
+	seq[0] = pair{
+		0,
+		0,
+	} // sentinel at start
 	return seq
 }

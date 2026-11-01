@@ -25,9 +25,15 @@ import (
 // notifications.
 func Handler(token string, logger *slog.Logger, client *http.Client) http.Handler {
 	if logger == nil {
-		logger = slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
+		logger = slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{
+			Level: slog.LevelError,
+		}))
 	}
-	return &handler{token: token, logger: logger, client: client}
+	return &handler{
+		token:  token,
+		logger: logger,
+		client: client,
+	}
 }
 
 type handler struct {

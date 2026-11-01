@@ -81,7 +81,9 @@ func setupTestContext(t *testing.T) (context.Context, *bytes.Buffer) {
 	var buf bytes.Buffer
 	level := new(slog.LevelVar)
 	level.Set(slog.LevelDebug)
-	h := slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: level})
+	h := slog.NewJSONHandler(&buf, &slog.HandlerOptions{
+		Level: level,
+	})
 	l := &logger.Logger{
 		Logger: slog.New(h),
 		Level:  level,
@@ -225,9 +227,13 @@ func TestPage(t *testing.T) {
 		}
 		files := make(fstest.MapFS)
 		for _, f := range ar.Files {
-			files[f.Name] = &fstest.MapFile{Data: f.Data}
+			files[f.Name] = &fstest.MapFile{
+				Data: f.Data,
+			}
 		}
-		e := &engine{fs: files}
+		e := &engine{
+			fs: files,
+		}
 		ctx, _ := setupTestContext(t)
 		r := httptest.NewRequestWithContext(ctx, http.MethodGet, "/", nil)
 		w := httptest.NewRecorder()
@@ -251,7 +257,9 @@ func TestStaticAssets(t *testing.T) {
 	}
 	for name, file := range cases {
 		t.Run(name, func(t *testing.T) {
-			e := &engine{fs: filesToFS(map[string]string{"index.md": "# Hello"})}
+			e := &engine{
+				fs: filesToFS(map[string]string{"index.md": "# Hello"}),
+			}
 			e.init.Do(e.doInit)
 			ctx, _ := setupTestContext(t)
 			asset := e.srv.StaticHashName(file)

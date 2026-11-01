@@ -15,7 +15,9 @@ import (
 	"go.astrophena.name/tools/cmd/tgfeed/internal/stats"
 )
 
-type feedDisplay struct{ Name, Note, Value string }
+type feedDisplay struct {
+	Name, Note, Value string
+}
 
 func selectedIndex(p StatsProps) int {
 	for i, run := range p.Runs {

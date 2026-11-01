@@ -33,7 +33,9 @@ func TestNeedsSudo(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			rt := &Runtime{Env: tc.env}
+			rt := &Runtime{
+				Env: tc.env,
+			}
 			got := rt.NeedsSudo()
 			if got != tc.want {
 				t.Errorf("NeedsSudo() = %v, want %v", got, tc.want)

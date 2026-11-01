@@ -268,12 +268,11 @@ func (s *Store) GetRunByStartedAt(ctx context.Context, startedAtUnix int64) (jso
 	}
 
 	var payload string
-	err = db.QueryRowContext(
+	if err := db.QueryRowContext(
 		ctx,
 		`SELECT json(payload_json) FROM runs WHERE started_at_unix = ? LIMIT 1;`,
 		startedAtUnix,
-	).Scan(&payload)
-	if err != nil {
+	).Scan(&payload); err != nil {
 		return nil, err
 	}
 	return json.RawMessage(payload), nil

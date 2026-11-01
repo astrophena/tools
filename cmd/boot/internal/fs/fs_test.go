@@ -14,14 +14,19 @@ import (
 
 	boot "go.astrophena.name/tools/cmd/boot/internal"
 	"go.astrophena.name/tools/cmd/boot/internal/testutil"
+
 	"go.starlark.net/starlark"
 )
 
 func TestFSDir(t *testing.T) {
 	root := t.TempDir()
-	rt := &boot.Runtime{Root: root}
+	rt := &boot.Runtime{
+		Root: root,
+	}
 	h := testutil.NewTask(t, "test")
-	m := &impl{rt: rt}
+	m := &impl{
+		rt: rt,
+	}
 	dirPath := filepath.Join(root, "testdir")
 	action := h.EmitOne("fs.dir", m.dir, starlark.Tuple{starlark.String(dirPath)}, nil)
 	res, err := action.Apply(t.Context(), false)
@@ -52,9 +57,13 @@ func TestFSDir(t *testing.T) {
 
 func TestFSFile(t *testing.T) {
 	root := t.TempDir()
-	rt := &boot.Runtime{Root: root}
+	rt := &boot.Runtime{
+		Root: root,
+	}
 	h := testutil.NewTask(t, "test")
-	m := &impl{rt: rt}
+	m := &impl{
+		rt: rt,
+	}
 
 	filePath := filepath.Join(root, "testfile.txt")
 	content := "hello world"
@@ -122,9 +131,13 @@ func TestFSFile(t *testing.T) {
 
 func TestFSTemplate(t *testing.T) {
 	root := t.TempDir()
-	rt := &boot.Runtime{Root: root}
+	rt := &boot.Runtime{
+		Root: root,
+	}
 	h := testutil.NewTask(t, "test")
-	m := &impl{rt: rt}
+	m := &impl{
+		rt: rt,
+	}
 
 	values := starlark.NewDict(1)
 	if err := values.SetKey(starlark.String("name"), starlark.String("boot")); err != nil {
@@ -149,9 +162,13 @@ func TestFSTemplate(t *testing.T) {
 
 func TestFSChmod(t *testing.T) {
 	root := t.TempDir()
-	rt := &boot.Runtime{Root: root}
+	rt := &boot.Runtime{
+		Root: root,
+	}
 	h := testutil.NewTask(t, "test")
-	m := &impl{rt: rt}
+	m := &impl{
+		rt: rt,
+	}
 	filePath := filepath.Join(root, "testfile.txt")
 	if err := os.WriteFile(filePath, []byte("hello"), 0o644); err != nil {
 		t.Fatal(err)
@@ -190,9 +207,13 @@ func TestFSChmod(t *testing.T) {
 
 func TestFSRemoveDanglingSymlink(t *testing.T) {
 	root := t.TempDir()
-	rt := &boot.Runtime{Root: root}
+	rt := &boot.Runtime{
+		Root: root,
+	}
 	h := testutil.NewTask(t, "test")
-	m := &impl{rt: rt}
+	m := &impl{
+		rt: rt,
+	}
 	linkPath := filepath.Join(root, "dangling")
 	if err := os.Symlink(filepath.Join(root, "missing"), linkPath); err != nil {
 		t.Fatal(err)
@@ -213,9 +234,13 @@ func TestFSRemoveDanglingSymlink(t *testing.T) {
 
 func TestFSSymlink(t *testing.T) {
 	root := t.TempDir()
-	rt := &boot.Runtime{Root: root}
+	rt := &boot.Runtime{
+		Root: root,
+	}
 	h := testutil.NewTask(t, "test")
-	m := &impl{rt: rt}
+	m := &impl{
+		rt: rt,
+	}
 
 	sourcePath := filepath.Join(root, "source.txt")
 	targetPath := filepath.Join(root, "target.txt")
@@ -271,9 +296,13 @@ func TestFSSyncTreeChangeCheck(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rt := &boot.Runtime{Root: root}
+	rt := &boot.Runtime{
+		Root: root,
+	}
 	h := testutil.NewTask(t, "test")
-	m := &impl{rt: rt}
+	m := &impl{
+		rt: rt,
+	}
 	action := h.EmitOne("fs.sync_tree", m.syncTree, nil, []starlark.Tuple{
 		{starlark.String("source"), starlark.String(source)},
 		{starlark.String("target"), starlark.String(target)},
@@ -326,7 +355,11 @@ func TestFSSyncTreePlanWithoutSudo(t *testing.T) {
 		"sudo": "#!/bin/sh\ntouch " + marker + "\n",
 	})
 	h := testutil.NewTask(t, "test")
-	m := &impl{rt: &boot.Runtime{Root: root}}
+	m := &impl{
+		rt: &boot.Runtime{
+			Root: root,
+		},
+	}
 	action := h.EmitOne("fs.sync_tree", m.syncTree, nil, []starlark.Tuple{
 		{starlark.String("source"), starlark.String(source)},
 		{starlark.String("target"), starlark.String(filepath.Join(root, "target"))},

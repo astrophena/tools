@@ -62,7 +62,9 @@ func TestGet(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			thread := &starlark.Thread{Name: "test"}
+			thread := &starlark.Thread{
+				Name: "test",
+			}
 			got, err := get.CallInternal(thread, tc.args, tc.kwargs)
 			if tc.wantErr != "" {
 				if err == nil || err.Error() != tc.wantErr {
@@ -88,7 +90,9 @@ func TestHostname(t *testing.T) {
 		t.Fatal("env.hostname is not a builtin")
 	}
 
-	got, err := hostname.CallInternal(&starlark.Thread{Name: "test"}, nil, nil)
+	got, err := hostname.CallInternal(&starlark.Thread{
+		Name: "test",
+	}, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,11 +121,15 @@ func TestLoadDirOverridesRuntimeEnv(t *testing.T) {
 	}
 	members := Module().Members(rt)
 	loadDir := members["load_dir"].(*starlark.Builtin)
-	if _, err := loadDir.CallInternal(&starlark.Thread{Name: "test"}, starlark.Tuple{starlark.String("environment.d")}, nil); err != nil {
+	if _, err := loadDir.CallInternal(&starlark.Thread{
+		Name: "test",
+	}, starlark.Tuple{starlark.String("environment.d")}, nil); err != nil {
 		t.Fatal(err)
 	}
 	get := members["get"].(*starlark.Builtin)
-	got, err := get.CallInternal(&starlark.Thread{Name: "test"}, starlark.Tuple{starlark.String("BOOT_PACKAGE_MANAGER")}, nil)
+	got, err := get.CallInternal(&starlark.Thread{
+		Name: "test",
+	}, starlark.Tuple{starlark.String("BOOT_PACKAGE_MANAGER")}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -141,10 +149,14 @@ func TestLoadDir(t *testing.T) {
 	}
 	t.Setenv("HOME", "/home/test")
 
-	rt := &boot.Runtime{Root: root}
+	rt := &boot.Runtime{
+		Root: root,
+	}
 	members := Module().Members(rt)
 	loadDir := members["load_dir"].(*starlark.Builtin)
-	if _, err := loadDir.CallInternal(&starlark.Thread{Name: "test"}, starlark.Tuple{starlark.String("environment.d")}, nil); err != nil {
+	if _, err := loadDir.CallInternal(&starlark.Thread{
+		Name: "test",
+	}, starlark.Tuple{starlark.String("environment.d")}, nil); err != nil {
 		t.Fatal(err)
 	}
 	if got := os.Getenv("BASE"); got != "/home/test/base" {

@@ -29,8 +29,10 @@ func TestChartJSON(t *testing.T) {
 	activeRun := &stats.Run{
 		RequestTiming: stats.RequestTimingStats{
 			DNS: stats.DurationStats{
-				Count:        1,
-				PercentileMS: stats.PercentileStats{P90: 125},
+				Count: 1,
+				PercentileMS: stats.PercentileStats{
+					P90: 125,
+				},
 			},
 		},
 		ItemsEnqueuedTotal:       3,
@@ -142,11 +144,21 @@ func TestConditionalCharts(t *testing.T) {
 	cases := map[string]struct {
 		chart string
 	}{
-		"request phases":   {chart: requestPhaseChart(&stats.Run{})},
-		"item disposition": {chart: itemDispositionChart(&stats.Run{})},
-		"delivery":         {chart: deliveryFailureChart(&stats.Run{})},
-		"delivery latency": {chart: deliveryLatencyChart(&stats.Run{})},
-		"http status":      {chart: httpStatusChart(&stats.Run{})},
+		"request phases": {
+			chart: requestPhaseChart(&stats.Run{}),
+		},
+		"item disposition": {
+			chart: itemDispositionChart(&stats.Run{}),
+		},
+		"delivery": {
+			chart: deliveryFailureChart(&stats.Run{}),
+		},
+		"delivery latency": {
+			chart: deliveryLatencyChart(&stats.Run{}),
+		},
+		"http status": {
+			chart: httpStatusChart(&stats.Run{}),
+		},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {

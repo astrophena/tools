@@ -123,7 +123,9 @@ func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *update) (re
 		return false, 0
 	}
 
-	t := &timings{start: time.Now()}
+	t := &timings{
+		start: time.Now(),
+	}
 	req, err := f.newFeedRequest(ctx, fd, etag, lastModified, t)
 	if err != nil {
 		f.handleFetchFailure(ctx, fd.url, err)
@@ -139,7 +141,10 @@ func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *update) (re
 		f.handleFetchFailure(ctx, fd.url, err)
 		return false, 0
 	}
-	res.Body = &timingReadCloser{ReadCloser: res.Body, timings: t}
+	res.Body = &timingReadCloser{
+		ReadCloser: res.Body,
+		timings:    t,
+	}
 	defer func() {
 		res.Body.Close()
 		f.logFeedResponse(ctx, fd, res, t)
@@ -470,7 +475,10 @@ func (f *fetcher) enqueueFeedItems(fd *feed, state *state.Feed, exists bool, ite
 		starlarkVal := f.itemToStarlark(feedItem)
 		passes, err := f.feedItemPassesRules(fd, feedItem, starlarkVal)
 		if err != nil {
-			updates <- &update{feed: fd, preparation: err}
+			updates <- &update{
+				feed:        fd,
+				preparation: err,
+			}
 			continue
 		}
 		if !passes {
@@ -563,21 +571,32 @@ func feedItemActivityTime(feedItem *gofeed.Item) *time.Time {
 func decideFeedItem(now time.Time, itemCtx feedItemContext, feedItem *gofeed.Item) feedItemDecision {
 	guid := cmp.Or(feedItem.GUID, feedItem.Link)
 	if guid == "" {
-		return feedItemDecision{skipReason: stats.FeedItemSkipReasonUnknown}
+		return feedItemDecision{
+			skipReason: stats.FeedItemSkipReasonUnknown,
+		}
 	}
 	if itemCtx.state.IsSeen(guid) {
-		return feedItemDecision{skipReason: stats.FeedItemSkipReasonSeen}
+		return feedItemDecision{
+			skipReason: stats.FeedItemSkipReasonSeen,
+		}
 	}
 	if itemCtx.state.IsPending(guid) {
-		return feedItemDecision{process: true, markSeen: guid}
+		return feedItemDecision{
+			process:  true,
+			markSeen: guid,
+		}
 	}
 
 	if itemCtx.feed.alwaysSendNewItems {
 		itemDate := feedItemPublishedTime(feedItem)
 		if itemDate != nil && now.Sub(*itemDate) > lookbackPeriod {
-			return feedItemDecision{skipReason: stats.FeedItemSkipReasonOld}
+			return feedItemDecision{
+				skipReason: stats.FeedItemSkipReasonOld,
+			}
 		}
-		decision := feedItemDecision{markSeen: guid}
+		decision := feedItemDecision{
+			markSeen: guid,
+		}
 		if !itemCtx.exists || itemCtx.seenItemsInitialized {
 			return decision
 		}
@@ -587,14 +606,21 @@ func decideFeedItem(now time.Time, itemCtx feedItemContext, feedItem *gofeed.Ite
 
 	itemDate := feedItemActivityTime(feedItem)
 	if itemDate != nil && itemDate.Before(itemCtx.state.LastUpdated) {
-		return feedItemDecision{skipReason: stats.FeedItemSkipReasonOld}
+		return feedItemDecision{
+			skipReason: stats.FeedItemSkipReasonOld,
+		}
 	}
 
 	if itemDate == nil && !itemCtx.exists {
-		return feedItemDecision{markSeen: guid}
+		return feedItemDecision{
+			markSeen: guid,
+		}
 	}
 
-	return feedItemDecision{process: true, markSeen: guid}
+	return feedItemDecision{
+		process:  true,
+		markSeen: guid,
+	}
 }
 
 func (f *fetcher) applyRule(rule *starlark.Function, item *gofeed.Item, starlarkVal starlark.Value) (bool, error) {
@@ -735,7 +761,11 @@ func (f *fetcher) sendUpdate(ctx context.Context, u *update) error {
 
 func (f *fetcher) buildUpdateMessage(u *update) (format.Rendered, error) {
 	fmtUpdate := format.Update{
-		Feed:  format.Feed{URL: u.feed.url, Title: u.feed.title, Digest: u.feed.digest},
+		Feed: format.Feed{
+			URL:    u.feed.url,
+			Title:  u.feed.title,
+			Digest: u.feed.digest,
+		},
 		Items: u.items,
 	}
 

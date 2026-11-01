@@ -123,7 +123,9 @@ type call struct {
 const postTelegram = "POST api.telegram.org/{token}/{method}"
 
 func testMux(t *testing.T, overrides map[string]http.HandlerFunc) *mux {
-	m := &mux{mux: http.NewServeMux()}
+	m := &mux{
+		mux: http.NewServeMux(),
+	}
 	m.mux.HandleFunc(postTelegram, orHandler(overrides[postTelegram], func(w http.ResponseWriter, r *http.Request) {
 		testutil.AssertEqual(t, tgToken, strings.TrimPrefix(r.PathValue("token"), "bot"))
 		m.mu.Lock()

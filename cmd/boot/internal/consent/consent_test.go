@@ -10,6 +10,7 @@ import (
 
 	boot "go.astrophena.name/tools/cmd/boot/internal"
 	"go.astrophena.name/tools/cmd/boot/internal/testutil"
+
 	"go.starlark.net/starlark"
 )
 
@@ -55,7 +56,9 @@ func TestRequire(t *testing.T) {
 			}
 
 			h := testutil.NewTask(t, "test")
-			m := &impl{rt: rt}
+			m := &impl{
+				rt: rt,
+			}
 
 			kwargs := []starlark.Tuple{{starlark.String("message"), starlark.String("Proceed?")}}
 			if tc.defaultYes {

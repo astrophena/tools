@@ -33,7 +33,9 @@ type module struct{}
 func (module) Name() string { return "fs" }
 
 func (module) Members(rt *boot.Runtime) starlark.StringDict {
-	m := &impl{rt: rt}
+	m := &impl{
+		rt: rt,
+	}
 	return starlark.StringDict{
 		"chmod":     starlark.NewBuiltin("fs.chmod", m.chmod),
 		"dir":       starlark.NewBuiltin("fs.dir", m.dir),

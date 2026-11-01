@@ -25,7 +25,9 @@ type module struct{}
 func (module) Name() string { return "env" }
 
 func (module) Members(rt *boot.Runtime) starlark.StringDict {
-	m := &impl{rt: rt}
+	m := &impl{
+		rt: rt,
+	}
 	return starlark.StringDict{
 		"command_exists": starlark.NewBuiltin("env.command_exists", m.commandExists),
 		"get":            starlark.NewBuiltin("env.get", m.get),

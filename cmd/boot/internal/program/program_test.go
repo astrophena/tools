@@ -12,6 +12,7 @@ import (
 
 	boot "go.astrophena.name/tools/cmd/boot/internal"
 	"go.astrophena.name/tools/cmd/boot/internal/testutil"
+
 	"go.starlark.net/starlark"
 )
 
@@ -53,10 +54,12 @@ fi
 
 			h := testutil.NewTask(t, "test")
 			m := module{}
-			action := h.EmitOne("program.update", m.update, starlark.Tuple{starlark.NewList([]starlark.Value{
-				starlark.String("updater"),
-				starlark.String("update"),
-			})}, nil)
+			action := h.EmitOne("program.update", m.update, starlark.Tuple{
+				starlark.NewList([]starlark.Value{
+					starlark.String("updater"),
+					starlark.String("update"),
+				}),
+			}, nil)
 			got, err := action.Apply(t.Context(), tc.dryRun)
 			if err != nil {
 				t.Fatal(err)
@@ -81,9 +84,11 @@ func TestUpdateRejectsInvalidCheckResult(t *testing.T) {
 	})
 	h := testutil.NewTask(t, "test")
 	m := module{}
-	action := h.EmitOne("program.update", m.update, starlark.Tuple{starlark.NewList([]starlark.Value{
-		starlark.String("updater"),
-	})}, nil)
+	action := h.EmitOne("program.update", m.update, starlark.Tuple{
+		starlark.NewList([]starlark.Value{
+			starlark.String("updater"),
+		}),
+	}, nil)
 	_, err := action.Apply(t.Context(), true)
 	if err == nil || !strings.Contains(err.Error(), `invalid update check result "maybe"`) {
 		t.Fatalf("error = %v, want invalid check result", err)
@@ -116,9 +121,11 @@ exit 1
 			testutil.Commands(t, map[string]string{"updater": tc.script})
 			h := testutil.NewTask(t, "test")
 			m := module{}
-			action := h.EmitOne("program.update", m.update, starlark.Tuple{starlark.NewList([]starlark.Value{
-				starlark.String("updater"),
-			})}, nil)
+			action := h.EmitOne("program.update", m.update, starlark.Tuple{
+				starlark.NewList([]starlark.Value{
+					starlark.String("updater"),
+				}),
+			}, nil)
 			_, err := action.Apply(t.Context(), false)
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("error = %v, want mention %q", err, tc.want)
@@ -151,8 +158,12 @@ func TestUpdateRejectsInvalidArgv(t *testing.T) {
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			task := &boot.Task{ID: "test"}
-			thread := &starlark.Thread{Name: "test"}
+			task := &boot.Task{
+				ID: "test",
+			}
+			thread := &starlark.Thread{
+				Name: "test",
+			}
 			boot.SetTask(thread, task)
 			m := module{}
 			_, err := m.update(thread, starlark.NewBuiltin("program.update", m.update), starlark.Tuple{tc.argv}, nil)
