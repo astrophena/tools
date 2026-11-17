@@ -6,7 +6,7 @@
 //go:generate go tool templ fmt .
 //go:generate go tool templ generate -include-version=false
 
-// Package admin implements the administrative web UI and API for tgfeed.
+// Package admin serves the tgfeed dashboard and API.
 package admin
 
 import (
@@ -356,44 +356,23 @@ func (a *api) handleGetStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var response any
+	var count int
 	if includeDetails {
-		var response []json.RawMessage
-		if beforeStartedAt == nil {
-			response, err = a.statsStore.ListRuns(r.Context(), limit)
-		} else {
-			response, err = a.statsStore.ListRunsBefore(r.Context(), limit, *beforeStartedAt)
-		}
-		if err != nil {
-			if errors.Is(err, fs.ErrNotExist) {
-				http.Error(w, "No stats available.", http.StatusNotFound)
-				return
-			}
-			web.RespondJSONError(w, r, fmt.Errorf("reading stats from SQLite: %w", err))
-			return
-		}
-		if len(response) == 0 {
-			http.Error(w, "No stats available.", http.StatusNotFound)
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		if err := json.NewEncoder(w).Encode(response); err != nil {
-			web.RespondJSONError(w, r, fmt.Errorf("encoding stats response: %w", err))
-		}
-		return
+		var runs []json.RawMessage
+		runs, err = a.statsStore.ListRuns(r.Context(), limit, beforeStartedAt)
+		response, count = runs, len(runs)
+	} else {
+		var runs []stats.RunSummary
+		runs, err = a.statsStore.ListRunSummaries(r.Context(), limit, beforeStartedAt)
+		response, count = runs, len(runs)
 	}
-
-	response, err := a.statsStore.ListRunSummaries(r.Context(), limit, beforeStartedAt)
-	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			http.Error(w, "No stats available.", http.StatusNotFound)
-			return
-		}
-		web.RespondJSONError(w, r, fmt.Errorf("reading stats from SQLite: %w", err))
-		return
-	}
-	if len(response) == 0 {
+	if errors.Is(err, fs.ErrNotExist) || (err == nil && count == 0) {
 		http.Error(w, "No stats available.", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		web.RespondJSONError(w, r, fmt.Errorf("reading stats from SQLite: %w", err))
 		return
 	}
 

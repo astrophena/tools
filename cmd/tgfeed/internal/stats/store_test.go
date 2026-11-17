@@ -58,7 +58,7 @@ func TestStoreSaveRunAndListRuns(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	runs, err := store.ListRuns(t.Context(), 10)
+	runs, err := store.ListRuns(t.Context(), 10, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,7 +132,7 @@ func TestStoreSaveRunUsesJSONB(t *testing.T) {
 	}
 	testutil.AssertEqual(t, payloadType, "blob")
 
-	runs, err := store.ListRuns(t.Context(), 10)
+	runs, err := store.ListRuns(t.Context(), 10, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

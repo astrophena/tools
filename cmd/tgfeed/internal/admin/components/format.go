@@ -23,8 +23,6 @@ func formatRelativeTime(t, now time.Time) string {
 	if t.IsZero() {
 		return "n/a"
 	}
-	// The render timestamp is supplied by the page model to keep server output
-	// deterministic within one response and straightforward to test.
 	difference := now.Sub(t)
 	if difference < 0 {
 		return "just now"
