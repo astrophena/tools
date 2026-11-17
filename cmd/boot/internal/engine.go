@@ -215,19 +215,19 @@ func (e *Engine) Run(ctx context.Context, w io.Writer, selection Selection, opts
 	}
 	collectedWarnings := warnings.all()
 	summary.Warnings = len(collectedWarnings)
-	switch {
-	case opts.JSON:
+	if opts.JSON {
 		err = printJSON(w, runs, summary, collectedWarnings, opts.DryRun)
-	case opts.DryRun:
-		e.printPlan(w, runs, summary, opts.Verbose)
-		e.printWarnings(w, collectedWarnings)
-	default:
-		if opts.Verbose {
+	} else {
+		if opts.DryRun {
+			e.printPlan(w, runs, opts.Verbose)
+		} else if opts.Verbose {
 			e.printVerbose(w, runs)
 		}
-		e.printReport(w, summary)
+		e.printSummary(w, summary, opts.DryRun)
 		e.printWarnings(w, collectedWarnings)
-		err = e.printFailures(w, runs, summary.Failed)
+		if !opts.DryRun {
+			err = e.printFailures(w, runs, summary.Failed)
+		}
 	}
 	if err != nil {
 		return err

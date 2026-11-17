@@ -186,7 +186,6 @@ func (l actionLimiter) release() {
 type colorCode string
 
 const (
-	colorBold   colorCode = "\033[1m"
 	colorGreen  colorCode = "\033[32m"
 	colorYellow colorCode = "\033[33m"
 	colorRed    colorCode = "\033[31m"

@@ -270,6 +270,7 @@ func TestApplySkipsDependentTaskAfterDependencyFailure(t *testing.T) {
 	if ranDependent {
 		t.Fatal("dependent task ran after dependency failure")
 	}
+	assertContains(t, out.String(), " · \x1b[31m2 failures\x1b[0m\n", "failure count")
 	assertContains(t, out.String(), "dependency setup failed", "failure output")
 }
 
@@ -302,7 +303,7 @@ func TestApplyFailFastPreservesContinueOnError(t *testing.T) {
 	if !ranSecond {
 		t.Fatal("second task did not run after continuable failure")
 	}
-	if !strings.Contains(out.String(), "1 action failed") {
+	if !strings.Contains(out.String(), "1 failure") {
 		t.Fatalf("output does not report the continuable failure:\n%s", out.String())
 	}
 }
@@ -715,15 +716,14 @@ func TestApplyReportsWarningsAfterProgress(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	got := out.String()
-	assertContains(t, got, "\x1b[33mWarnings:\x1b[0m", "colored warning report")
-	assertContains(t, got, "It reported \x1b[33m2 warnings\x1b[0m.", "warning count")
-	assertContains(t, got, "orphaned packages found:", "warning report")
-	assertContains(t, got, "  - oldlib", "warning report")
-	assertContains(t, got, "reboot required", "warning report")
-	if strings.Index(got, "Report:") > strings.Index(got, "Warnings:") {
-		t.Fatalf("warnings were printed before the report:\n%s", got)
-	}
+	want := "\n1 task · \x1b[32m0 changed\x1b[0m · 1 skipped · \x1b[33m2 warnings\x1b[0m\n" +
+		"\x1b[33mWarnings\x1b[0m\n" +
+		`  packages · check packages
+    orphaned packages found:
+      - oldlib
+    reboot required
+`
+	assertContains(t, out.String(), want, "report")
 }
 
 func TestApplyProgressTitleReportsRunningAction(t *testing.T) {

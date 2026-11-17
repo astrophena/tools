@@ -69,7 +69,7 @@ func TestRun(t *testing.T) {
 				"[1/2] Planning task dotfiles: Link dotfiles",
 				"change dotfiles: dir ",
 				"change dotfiles: symlink ",
-				"summary: 2 tasks, 3 actions, 3 would change, 0 skipped, 0 warnings, 0 failed",
+				"\n2 tasks · 3 would change · 0 skipped\n",
 			},
 			check: func(t *testing.T, root string) {
 				t.Helper()
@@ -90,12 +90,9 @@ func TestRun(t *testing.T) {
 				}
 			},
 			wantInOutput: []string{
-				"Report:",
-				"Boot ran 2 tasks and checked 3 actions.",
-				"It changed 1 action and skipped 2 actions.",
-				"No actions failed.",
+				"2 tasks · 1 changed · 2 skipped\n",
 			},
-			wantMissing: []string{"summary:", "change dotfiles:", "skip dotfiles:"},
+			wantMissing: []string{"Apply", "Report:", "change dotfiles:", "skip dotfiles:"},
 		},
 		"apply_verbose_prints_actions": {
 			args: []string{"-verbose", "apply"},
@@ -103,7 +100,7 @@ func TestRun(t *testing.T) {
 				"[1/2] Applying task dotfiles: Link dotfiles",
 				"change dotfiles: dir ",
 				"change dotfiles: symlink ",
-				"Report:",
+				"\n2 tasks · 3 changed · 0 skipped\n",
 			},
 			check: func(t *testing.T, root string) {
 				t.Helper()

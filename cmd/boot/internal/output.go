@@ -18,7 +18,7 @@ type failure struct {
 	Err      error
 }
 
-func (e *Engine) printPlan(w io.Writer, runs []taskRun, summary Summary, verbose bool) {
+func (e *Engine) printPlan(w io.Writer, runs []taskRun, verbose bool) {
 	for i := range runs {
 		r := &runs[i]
 		if r.status == taskUnprepared || r.status == taskSkipped {
@@ -39,8 +39,6 @@ func (e *Engine) printPlan(w io.Writer, runs []taskRun, summary Summary, verbose
 			}
 		}
 	}
-	fmt.Fprintf(w, "summary: %d tasks, %d actions, %d would change, %d skipped, %d warnings, %d failed\n",
-		summary.Tasks, summary.Actions, summary.Changed, summary.Skipped, summary.Warnings, summary.Failed)
 }
 
 func (e *Engine) printVerbose(w io.Writer, runs []taskRun) {
@@ -63,41 +61,43 @@ func (e *Engine) printVerbose(w io.Writer, runs []taskRun) {
 	}
 }
 
-func (e *Engine) printReport(w io.Writer, summary Summary) {
-	fmt.Fprintf(w, "%s\n", e.color("Report:", colorBold))
-	fmt.Fprintf(w, "  Boot ran %d %s and checked %d %s.\n",
-		summary.Tasks,
-		plural(summary.Tasks, "task", "tasks"),
-		summary.Actions,
-		plural(summary.Actions, "action", "actions"),
-	)
-	fmt.Fprintf(w, "  It %s %s and skipped %s.\n",
-		"changed",
-		e.color(fmt.Sprintf("%d %s", summary.Changed, plural(summary.Changed, "action", "actions")), colorGreen),
-		fmt.Sprintf("%d %s", summary.Skipped, plural(summary.Skipped, "action", "actions")),
-	)
+func (e *Engine) printSummary(w io.Writer, summary Summary, dryRun bool) {
+	changed := "changed"
+	if dryRun {
+		changed = "would change"
+	}
+
+	parts := []string{
+		fmt.Sprintf("%d %s", summary.Tasks, plural(summary.Tasks, "task", "tasks")),
+		e.color(fmt.Sprintf("%d %s", summary.Changed, changed), colorGreen),
+		fmt.Sprintf("%d skipped", summary.Skipped),
+	}
 	if summary.Warnings > 0 {
-		fmt.Fprintf(w, "  It reported %s.\n", e.color(fmt.Sprintf("%d %s", summary.Warnings, plural(summary.Warnings, "warning", "warnings")), colorYellow))
+		warnings := fmt.Sprintf("%d %s", summary.Warnings, plural(summary.Warnings, "warning", "warnings"))
+		parts = append(parts, e.color(warnings, colorYellow))
 	}
-	if summary.Failed == 0 {
-		fmt.Fprintf(w, "  %s\n", e.color("No actions failed.", colorGreen))
-		return
+	if summary.Failed > 0 {
+		failures := fmt.Sprintf("%d %s", summary.Failed, plural(summary.Failed, "failure", "failures"))
+		parts = append(parts, e.color(failures, colorRed))
 	}
-	fmt.Fprintf(w, "  %s\n", e.color(fmt.Sprintf("%d %s failed.", summary.Failed, plural(summary.Failed, "action", "actions")), colorRed))
+	fmt.Fprintln(w, strings.Join(parts, " · "))
 }
 
 func (e *Engine) printWarnings(w io.Writer, warnings []warning) {
 	if len(warnings) == 0 {
 		return
 	}
-	fmt.Fprintf(w, "%s\n", e.color("Warnings:", colorYellow))
-	for _, warning := range warnings {
-		fmt.Fprintf(w, "%s\n", e.color(fmt.Sprintf("  Task: %s (%s)", warning.TaskID, warning.TaskName), colorYellow))
-		fmt.Fprintf(w, "%s\n", e.color("    Action: "+warning.Action, colorYellow))
-		lines := strings.Split(warning.Message, "\n")
-		fmt.Fprintf(w, "%s\n", e.color("    Warning: "+lines[0], colorYellow))
-		for _, line := range lines[1:] {
-			fmt.Fprintf(w, "%s\n", e.color("      "+line, colorYellow))
+	fmt.Fprintln(w, e.color("Warnings", colorYellow))
+	for i, warning := range warnings {
+		if i == 0 || warning.TaskID != warnings[i-1].TaskID || warning.Action != warnings[i-1].Action {
+			heading := warning.TaskID
+			if warning.Action != "" {
+				heading += " · " + warning.Action
+			}
+			fmt.Fprintln(w, "  "+heading)
+		}
+		for line := range strings.SplitSeq(warning.Message, "\n") {
+			fmt.Fprintln(w, "    "+line)
 		}
 	}
 }
