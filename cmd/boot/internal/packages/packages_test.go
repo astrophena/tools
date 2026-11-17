@@ -96,25 +96,106 @@ exit 0
 }
 
 func TestPackageManagerAptUpdate(t *testing.T) {
+	t.Setenv("TERMUX_VERSION", "")
+	t.Setenv("PREFIX", "")
+
 	testutil.Commands(t, map[string]string{
-		"sh": `#!/bin/sh
-case "$2" in
-"apt update && apt upgrade -y") exit 0 ;;
-"sudo apt update && sudo apt upgrade -y") exit 0 ;;
-*) exit 1 ;;
+		"apt-get": `#!/bin/sh
+case "$*" in
+"--error-on=any update") phase=refresh ;;
+"--simulate --with-new-pkgs -o Dir::Cache::pkgcache= -o Dir::Cache::srcpkgcache= upgrade") phase=simulate ;;
+"--with-new-pkgs --assume-yes upgrade") phase=upgrade ;;
+*) printf 'unexpected apt-get arguments: %s\n' "$*" >&2; exit 2 ;;
 esac
+printf '%s\n' "$phase" >> "$BOOT_APT_LOG"
+if [ "$phase" = "$BOOT_APT_FAILURE" ]; then
+    printf '%s failed in fixture\n' "$phase" >&2
+    exit 100
+fi
+case "$phase" in
+simulate)
+    if [ ! -f "$BOOT_APT_STATE" ]; then
+        printf '%s\n' 'Inst git [1.0] (1.1 local [arm64])' 'Conf git (1.1 local [arm64])' 'Conf curl (1.0 local [arm64])'
+    else
+        printf '%s\n' '0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.'
+    fi ;;
+upgrade) : > "$BOOT_APT_STATE" ;;
+esac
+`,
+		"sudo": `#!/bin/sh
+printf 'sudo ' >> "$BOOT_APT_LOG"
+exec "$@"
 `,
 	})
 
-	rt := &boot.Runtime{
-		Getenv: os.Getenv,
+	cases := map[string]struct {
+		dryRun      bool
+		failure     string
+		wantResults []boot.Result
+		wantCalls   []string
+	}{
+		"plan": {
+			dryRun:      true,
+			wantResults: []boot.Result{boot.ResultChange},
+			wantCalls:   []string{"simulate"},
+		},
+		"apply_then_skip": {
+			wantResults: []boot.Result{boot.ResultChange, boot.ResultSkip},
+			wantCalls:   []string{"refresh", "simulate", "upgrade", "refresh", "simulate"},
+		},
+		"refresh_failed": {
+			failure:     "refresh",
+			wantResults: []boot.Result{""},
+			wantCalls:   []string{"refresh"},
+		},
+		"simulation_failed": {
+			failure:     "simulate",
+			wantResults: []boot.Result{""},
+			wantCalls:   []string{"refresh", "simulate"},
+		},
 	}
-	pm, err := packageManagerByName(rt, "apt")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := pm.update(t.Context()); err != nil {
-		t.Fatalf("update failed: %v", err)
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			log := filepath.Join(dir, "apt.log")
+			t.Setenv("BOOT_APT_LOG", log)
+			t.Setenv("BOOT_APT_STATE", filepath.Join(dir, "upgraded"))
+			t.Setenv("BOOT_APT_FAILURE", tc.failure)
+
+			h := testutil.NewTask(t, "test")
+			m := &module{rt: &boot.Runtime{}, managerName: "apt"}
+			for _, want := range tc.wantResults {
+				action := h.EmitOne("pkg.update", m.update, nil, nil)
+				result, err := action.Apply(t.Context(), tc.dryRun)
+				if tc.failure == "" {
+					if err != nil {
+						t.Fatal(err)
+					}
+				} else if err == nil || !strings.Contains(err.Error(), tc.failure+" failed in fixture") {
+					t.Fatalf("error = %v, want %s failure", err, tc.failure)
+				}
+				if result != want {
+					t.Fatalf("result = %q, want %q", result, want)
+				}
+				if tc.dryRun && action.Describe() != "update system with apt: would update curl, git" {
+					t.Fatalf("description = %q", action.Describe())
+				}
+			}
+
+			calls, err := os.ReadFile(log)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := slices.Clone(tc.wantCalls)
+			if !tc.dryRun && m.rt.NeedsSudo() {
+				for i := range want {
+					want[i] = "sudo " + want[i]
+				}
+			}
+			if got := strings.Split(strings.TrimSpace(string(calls)), "\n"); !slices.Equal(got, want) {
+				t.Fatalf("APT calls = %q, want %q", got, want)
+			}
+		})
 	}
 }
 

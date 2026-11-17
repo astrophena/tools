@@ -270,6 +270,35 @@ func sudoArgs(rt *boot.Runtime, args ...string) []string {
 	return args
 }
 
+func aptUpdates(ctx context.Context, rt *boot.Runtime, dryRun bool) ([]string, error) {
+	// Keep the simulation read-only, including the generated binary caches.
+	argv := []string{
+		"apt-get", "--simulate", "--with-new-pkgs",
+		"-o", "Dir::Cache::pkgcache=", "-o", "Dir::Cache::srcpkgcache=", "upgrade",
+	}
+	if !dryRun {
+		refresh := sudoArgs(rt, "apt-get", "--error-on=any", "update")
+		if err := boot.RunCommand(ctx, "", refresh...); err != nil {
+			return nil, err
+		}
+		argv = sudoArgs(rt, argv...)
+	}
+	out, err := boot.CommandOutput(ctx, "", argv...)
+	if err != nil {
+		return nil, err
+	}
+
+	var updates []string
+	for line := range strings.SplitSeq(string(out), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) >= 2 && (fields[0] == "Inst" || fields[0] == "Conf") {
+			updates = append(updates, fields[1])
+		}
+	}
+	slices.Sort(updates)
+	return slices.Compact(updates), nil
+}
+
 func pacmanUpdates(ctx context.Context, rt *boot.Runtime, dryRun bool) ([]string, error) {
 	if dryRun {
 		return pacmanPendingUpdates(ctx, "")
@@ -452,17 +481,12 @@ func packageManagerByName(rt *boot.Runtime, name string) (packageManager, error)
 			installArgv: func(packages []string) []string {
 				return sudoArgs(rt, append([]string{"apt", "install", "-y"}, packages...)...)
 			},
-			updates: func(context.Context, bool) ([]string, error) {
-				return []string{"system"}, nil
+			updates: func(ctx context.Context, dryRun bool) ([]string, error) {
+				return aptUpdates(ctx, rt, dryRun)
 			},
 			update: func(ctx context.Context) error {
-				var cmdLine string
-				if rt.NeedsSudo() {
-					cmdLine = "sudo apt update && sudo apt upgrade -y"
-				} else {
-					cmdLine = "apt update && apt upgrade -y"
-				}
-				return boot.RunCommand(ctx, "", "sh", "-c", cmdLine)
+				argv := sudoArgs(rt, "apt-get", "--with-new-pkgs", "--assume-yes", "upgrade")
+				return boot.RunCommand(ctx, "", argv...)
 			},
 		}, nil
 	case "pacman":
