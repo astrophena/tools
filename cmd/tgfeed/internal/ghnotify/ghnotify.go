@@ -2,8 +2,7 @@
 // Use of this source code is governed by the ISC
 // license that can be found in the LICENSE.md file.
 
-// Package ghnotify implements an HTTP handler that serves a JSON Feed of GitHub
-// notifications.
+// Package ghnotify serves GitHub notifications as a JSON Feed.
 package ghnotify
 
 import (
@@ -13,7 +12,6 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"slices"
 	"strings"
 	"time"
 
@@ -21,13 +19,10 @@ import (
 	"go.astrophena.name/base/web"
 )
 
-// Handler returns an HTTP handler that serves a JSON Feed of GitHub
-// notifications.
+// Handler serves GitHub notifications for token.
 func Handler(token string, logger *slog.Logger, client *http.Client) http.Handler {
 	if logger == nil {
-		logger = slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{
-			Level: slog.LevelError,
-		}))
+		logger = slog.New(slog.DiscardHandler)
 	}
 	return &handler{
 		token:  token,
@@ -44,7 +39,6 @@ type handler struct {
 
 type notification struct {
 	ID        string    `json:"id"`
-	Unread    bool      `json:"unread"`
 	Reason    string    `json:"reason"`
 	UpdatedAt time.Time `json:"updated_at"`
 	Subject   struct {
@@ -85,9 +79,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var allNotifications []notification
-	page := 1
-
-	for {
+	for page := 1; page <= 10; page++ {
 		u := fmt.Sprintf("%s/notifications?page=%d&per_page=100", ghAPI, page)
 		req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, u, nil)
 		if err != nil {
@@ -132,8 +124,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// GitHub docs mention that Last-Modified header is set, but for some reason
-		// it actually doesn't.
+		// The first page's Date supplies the feed's conditional request timestamp.
 		if page == 1 {
 			w.Header().Set("Last-Modified", res.Header.Get("Date"))
 		}
@@ -149,19 +140,9 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			slog.Int("count", len(notifications)),
 		)
 
-		if len(notifications) == 0 {
-			break
-		}
-
 		allNotifications = append(allNotifications, notifications...)
 
 		if len(notifications) < 100 {
-			break
-		}
-		page++
-
-		// Safety brake to prevent infinite loops.
-		if page > 10 {
 			break
 		}
 	}
@@ -181,31 +162,26 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			slog.String("title", n.Subject.Title),
 		)
 
-		if n.Subject.Type == "PullRequest" {
-			prURL := n.Subject.URL
-			if prURL != "" {
-				pr, err := request.Make[pullRequest](r.Context(), request.Params{
-					Method:     http.MethodGet,
-					URL:        prURL,
-					Headers:    headers,
-					HTTPClient: h.client,
-					Scrubber:   strings.NewReplacer(h.token, "REDACTED"),
-				})
-				if err == nil {
-					if slices.Contains(ignoredAuthors, pr.User.Login) {
-						h.logger.InfoContext(r.Context(), "skipping GitHub PR notification from ignored author",
-							slog.String("author", pr.User.Login),
-							slog.String("pr_url", prURL),
-						)
-						ignoredIDs = append(ignoredIDs, n.ID)
-						continue
-					}
-				} else {
-					h.logger.ErrorContext(r.Context(), "fetching GitHub PR details failed",
-						slog.Any("err", err),
-						slog.String("pr_url", prURL),
-					)
-				}
+		if n.Subject.Type == "PullRequest" && n.Subject.URL != "" {
+			pr, err := request.Make[pullRequest](r.Context(), request.Params{
+				URL:        n.Subject.URL,
+				Headers:    headers,
+				HTTPClient: h.client,
+				Scrubber:   strings.NewReplacer(h.token, "REDACTED"),
+			})
+			switch {
+			case err != nil:
+				h.logger.ErrorContext(r.Context(), "fetching GitHub PR details failed",
+					slog.Any("err", err),
+					slog.String("pr_url", n.Subject.URL),
+				)
+			case pr.User.Login == ignoredAuthor:
+				h.logger.InfoContext(r.Context(), "skipping GitHub PR notification from ignored author",
+					slog.String("author", pr.User.Login),
+					slog.String("pr_url", n.Subject.URL),
+				)
+				ignoredIDs = append(ignoredIDs, n.ID)
+				continue
 			}
 		}
 
@@ -233,8 +209,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		HomePageURL: "https://github.com",
 		Items:       items,
 	}
-	// Source-level ignores are intentional terminal decisions, so they do not
-	// need a downstream delivery acknowledgment.
+	// Ignored notifications can be marked read immediately.
 	if err := MarkAsDone(r.Context(), h.token, h.client, ignoredIDs); err != nil {
 		web.RespondJSONError(w, r, fmt.Errorf("marking ignored notifications as done failed: %v", err))
 		return
@@ -272,9 +247,6 @@ func MarkAsDone(ctx context.Context, token string, client *http.Client, ids []st
 }
 
 func rewriteURL(url string) string {
-	if url == "" {
-		return ""
-	}
 	url = strings.ReplaceAll(url, "https://api.github.com/repos/", "https://github.com/")
 	// Fix PR links. Replace only the last occurrence of /pulls/ to avoid
 	// misidentifying repositories named "pulls".
@@ -284,11 +256,7 @@ func rewriteURL(url string) string {
 	return url
 }
 
-// ignoredAuthors is a list of GitHub usernames whose PRs should be ignored.
-var ignoredAuthors = []string{
-	// I create PRs using Jules manually, so I don't want to be notified about them.
-	"google-labs-jules[bot]",
-}
+const ignoredAuthor = "google-labs-jules[bot]"
 
 type pullRequest struct {
 	User struct {

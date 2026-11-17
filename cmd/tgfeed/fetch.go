@@ -32,13 +32,11 @@ import (
 	"go.starlark.net/starlark"
 )
 
-// Fetch flow.
-
 const (
-	errorThreshold        = 12 // failing continuously for N fetches will disable feed and complain loudly
-	fetchConcurrencyLimit = 10 // N fetches that can run at the same time
-	sendConcurrencyLimit  = 2  // N sends that can run at the same time
-	retryLimit            = 3  // N attempts to retry feed fetching
+	errorThreshold        = 12 // consecutive failures before disabling a feed
+	fetchConcurrencyLimit = 10
+	sendConcurrencyLimit  = 2
+	retryLimit            = 3
 
 	maxRetryTime = 5 * time.Minute
 
@@ -73,7 +71,7 @@ type update struct {
 // A zero value means the caller should continue parsing the feed body.
 type feedStatusResult struct {
 	notModified bool
-	retryIn     time.Duration
+	retryIn     *time.Duration
 }
 
 // feedItemDecision captures both item processing and seen-state updates.
@@ -96,37 +94,21 @@ type feedItemContext struct {
 	seenItemsInitialized bool
 }
 
-// fetch fetches one feed and either emits updates, asks caller to retry, or
-// records a failure.
-//
-// High-level flow:
-//  1. Load feed state and skip disabled feeds.
-//  2. Build and execute an HTTP request with conditional cache headers.
-//  3. Handle status-specific outcomes (not-modified, rate-limit, failures).
-//  4. Parse feed items, update cache metadata, and enqueue outgoing updates.
-//  5. Mark successful fetch statistics.
 func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *update) (retry bool, retryIn time.Duration) {
 	startTime := time.Now()
 
 	fdState, exists := f.feedState(fd.url)
-	disabled := fdState.IsDisabled()
-	etag, lastModified := fdState.CacheHeaders()
 	if !exists {
-		// If we don't remember this feed, it's probably new. Set its last update
-		// date to current so we don't get a lot of unread articles and trigger
-		// Telegram Bot API rate limit.
 		f.slog.Debug("initializing state", "feed", fd.url)
 	}
 
-	if disabled {
+	if fdState.Disabled {
 		f.slog.Debug("skipping, feed is disabled", "feed", fd.url)
 		return false, 0
 	}
 
-	t := &timings{
-		start: time.Now(),
-	}
-	req, err := f.newFeedRequest(ctx, fd, etag, lastModified, t)
+	t := &timings{start: startTime}
+	req, err := f.newFeedRequest(ctx, fd, fdState.ETag, fdState.LastModified, t)
 	if err != nil {
 		f.handleFetchFailure(ctx, fd.url, err)
 		return false, 0
@@ -160,8 +142,8 @@ func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *update) (re
 		fdState.MarkNotModified(time.Now())
 		return false, 0
 	}
-	if status.retryIn > 0 {
-		return true, status.retryIn
+	if status.retryIn != nil {
+		return true, *status.retryIn
 	}
 
 	parsedFeed, err := f.fp.Parse(res.Body)
@@ -173,7 +155,7 @@ func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *update) (re
 		return false, 0
 	}
 
-	f.updateFeedStateFromHeaders(fdState, res)
+	fdState.UpdateCacheHeaders(res.Header.Get("ETag"), res.Header.Get("Last-Modified"))
 	f.enqueueFeedItems(fd, fdState, exists, parsedFeed.Items, updates)
 	fdState.MarkFetchSuccess(time.Now())
 	f.markFetchSuccess(fd.url, len(parsedFeed.Items), startTime)
@@ -181,9 +163,7 @@ func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *update) (re
 	return false, 0
 }
 
-// Request construction and response handling.
-
-func (f *fetcher) newFeedRequest(ctx context.Context, fd *feed, etag string, lastModified string, t *timings) (*http.Request, error) {
+func (f *fetcher) newFeedRequest(ctx context.Context, fd *feed, etag, lastModified string, t *timings) (*http.Request, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fd.url, nil)
 	if err != nil {
 		return nil, err
@@ -225,7 +205,7 @@ func (f *fetcher) logFeedResponse(ctx context.Context, fd *feed, res *http.Respo
 		slog.Any("headers", res.Header),
 	}
 
-	addDuration := func(name string, start time.Time, end time.Time) {
+	addDuration := func(name string, start, end time.Time) {
 		if start.IsZero() || end.IsZero() {
 			return
 		}
@@ -247,28 +227,22 @@ func (f *fetcher) logFeedResponse(ctx context.Context, fd *feed, res *http.Respo
 }
 
 func (f *fetcher) handleFeedStatus(req *http.Request, res *http.Response, fd *feed) (feedStatusResult, error) {
+	f.stats.WriteAccess(func(s *stats.Run) {
+		s.AddHTTPStatusClass(fd.url, res.StatusCode)
+		if res.StatusCode == http.StatusNotModified {
+			s.NotModifiedFeeds++
+		}
+	})
+
 	switch res.StatusCode {
 	case http.StatusNotModified:
 		f.slog.Debug("unmodified feed", "feed", fd.url)
-		f.stats.WriteAccess(func(s *stats.Run) {
-			s.NotModifiedFeeds += 1
-			s.HTTP3xxCount += 1
-			s.FeedStats(fd.url).LastStatusClass = 3
-		})
 		return feedStatusResult{
 			notModified: true,
 		}, nil
 	case http.StatusOK:
-		f.stats.WriteAccess(func(s *stats.Run) {
-			s.HTTP2xxCount += 1
-			s.FeedStats(fd.url).LastStatusClass = 2
-		})
 		return feedStatusResult{}, nil
 	}
-
-	f.stats.WriteAccess(func(s *stats.Run) {
-		s.AddHTTPStatusClass(fd.url, res.StatusCode)
-	})
 
 	body, hasBody := readFeedErrorBody(res.Body)
 
@@ -277,7 +251,7 @@ func (f *fetcher) handleFeedStatus(req *http.Request, res *http.Response, fd *fe
 		if t, found := retry.Retryable(req.URL.Host, body); found {
 			f.slog.Warn("rate-limited", "host", req.URL.Host, "feed", fd.url, "retry_in", t.String())
 			return feedStatusResult{
-				retryIn: t,
+				retryIn: &t,
 			}, nil
 		}
 	}
@@ -285,22 +259,19 @@ func (f *fetcher) handleFeedStatus(req *http.Request, res *http.Response, fd *fe
 	switch res.StatusCode {
 	case http.StatusTooManyRequests, http.StatusServiceUnavailable:
 		if t, found := retry.RetryAfter(res.Header.Get("Retry-After")); found {
-			// Limit backoff to a reasonable maximum (context deadline or 5 minutes),
-			// as Retry-After could be hours or days which would block the goroutine.
-			const maxRetryAfter = 5 * time.Minute
-			if t <= maxRetryAfter {
+			if t <= maxRetryTime {
 				f.slog.Warn("rate-limited (Retry-After)", "feed", fd.url, "retry_in", t.String())
 				return feedStatusResult{
-					retryIn: t,
+					retryIn: &t,
 				}, nil
 			}
-			f.slog.Warn("rate-limited (Retry-After), but wait time is too long", "feed", fd.url, "retry_in", t.String(), "max_retry_in", maxRetryAfter.String())
+			f.slog.Warn("rate-limited (Retry-After), but wait time is too long", "feed", fd.url, "retry_in", t.String(), "max_retry_in", maxRetryTime.String())
 		}
 	}
 
 	if res.StatusCode >= 500 && res.StatusCode < 600 {
 		return feedStatusResult{
-			retryIn: 5 * time.Second,
+			retryIn: new(5 * time.Second),
 		}, nil
 	}
 
@@ -315,17 +286,13 @@ func isTransientError(err error) bool {
 }
 
 func readFeedErrorBody(r io.Reader) (body []byte, hasBody bool) {
-	const readLimit = 16384 // 16 KB is enough for error messages (probably)
+	const readLimit = 16 << 10
 
 	body, err := io.ReadAll(io.LimitReader(r, readLimit))
 	if err != nil {
 		return []byte("unable to read body"), false
 	}
 	return body, true
-}
-
-func (f *fetcher) updateFeedStateFromHeaders(state *state.Feed, res *http.Response) {
-	state.UpdateCacheHeaders(res.Header.Get("ETag"), res.Header.Get("Last-Modified"))
 }
 
 // Request tracing and performance statistics.
@@ -371,7 +338,7 @@ func (t *timings) statsSample() stats.RequestTimingSample {
 	return sample
 }
 
-func durationPtr(start time.Time, end time.Time) *time.Duration {
+func durationPtr(start, end time.Time) *time.Duration {
 	if start.IsZero() || end.IsZero() {
 		return nil
 	}
@@ -429,8 +396,6 @@ func (r *timingReadCloser) Close() error {
 	return r.ReadCloser.Close()
 }
 
-// Item processing.
-
 func (f *fetcher) enqueueFeedItems(fd *feed, state *state.Feed, exists bool, items []*gofeed.Item, updates chan *update) {
 	var (
 		validItems []*gofeed.Item
@@ -449,12 +414,11 @@ func (f *fetcher) enqueueFeedItems(fd *feed, state *state.Feed, exists bool, ite
 	})
 
 	now := time.Now()
+	acknowledge := f.specialFeedAcknowledger(fd.url)
 	for _, feedItem := range items {
 		decision := decideFeedItem(now, itemCtx, feedItem)
 		if !decision.process {
-			// Deliberately skipped items are committed without Telegram delivery so
-			// future runs do not repeatedly reconsider them.
-			acknowledge := f.specialFeedAcknowledger(fd.url)
+			// A skip can acknowledge the source without sending a message.
 			if acknowledge != nil && decision.skipReason != stats.FeedItemSkipReasonSeen {
 				updates <- &update{
 					feed:            fd,
@@ -485,7 +449,6 @@ func (f *fetcher) enqueueFeedItems(fd *feed, state *state.Feed, exists bool, ite
 			f.stats.WriteAccess(func(s *stats.Run) {
 				s.ItemsFilteredTotal += 1
 			})
-			acknowledge := f.specialFeedAcknowledger(fd.url)
 			if acknowledge != nil {
 				updates <- &update{
 					feed:            fd,
@@ -511,10 +474,17 @@ func (f *fetcher) enqueueFeedItems(fd *feed, state *state.Feed, exists bool, ite
 			feed:        fd,
 			items:       []*gofeed.Item{feedItem},
 			dedupeKeys:  appendDedupeKey(nil, decision.markSeen),
-			acknowledge: f.specialFeedAcknowledger(fd.url),
+			acknowledge: acknowledge,
 		}
 	}
-	f.publishDigestUpdate(fd, validItems, dedupeKeys, updates)
+	if len(validItems) > 0 {
+		updates <- &update{
+			feed:        fd,
+			items:       validItems,
+			dedupeKeys:  dedupeKeys,
+			acknowledge: acknowledge,
+		}
+	}
 }
 
 func appendDedupeKey(keys []string, key string) []string {
@@ -532,40 +502,12 @@ func (f *fetcher) recordItemEnqueued(feedURL string) {
 	})
 }
 
-func (f *fetcher) publishDigestUpdate(fd *feed, validItems []*gofeed.Item, dedupeKeys []string, updates chan *update) {
-	if len(validItems) > 0 {
-		updates <- &update{
-			feed:        fd,
-			items:       validItems,
-			dedupeKeys:  dedupeKeys,
-			acknowledge: f.specialFeedAcknowledger(fd.url),
-		}
-	}
-}
-
-func (f *fetcher) prepareSeenItemsState(fd *feed, state *state.Feed) (seenItemsInitialized bool) {
+func (f *fetcher) prepareSeenItemsState(fd *feed, state *state.Feed) bool {
 	seenItemsInitialized, pruned := state.PrepareSeenItems(time.Now(), seenItemsCleanupPeriod)
 	f.stats.WriteAccess(func(s *stats.Run) {
 		s.SeenItemsPrunedTotal += pruned
 	})
-	if !fd.alwaysSendNewItems {
-		return false
-	}
-	return seenItemsInitialized
-}
-
-func feedItemPublishedTime(feedItem *gofeed.Item) *time.Time {
-	if feedItem.PublishedParsed != nil {
-		return feedItem.PublishedParsed
-	}
-	return feedItem.UpdatedParsed
-}
-
-func feedItemActivityTime(feedItem *gofeed.Item) *time.Time {
-	if feedItem.PublishedParsed != nil {
-		return feedItem.PublishedParsed
-	}
-	return feedItem.UpdatedParsed
+	return fd.alwaysSendNewItems && seenItemsInitialized
 }
 
 func decideFeedItem(now time.Time, itemCtx feedItemContext, feedItem *gofeed.Item) feedItemDecision {
@@ -588,7 +530,7 @@ func decideFeedItem(now time.Time, itemCtx feedItemContext, feedItem *gofeed.Ite
 	}
 
 	if itemCtx.feed.alwaysSendNewItems {
-		itemDate := feedItemPublishedTime(feedItem)
+		itemDate := cmp.Or(feedItem.PublishedParsed, feedItem.UpdatedParsed)
 		if itemDate != nil && now.Sub(*itemDate) > lookbackPeriod {
 			return feedItemDecision{
 				skipReason: stats.FeedItemSkipReasonOld,
@@ -604,7 +546,7 @@ func decideFeedItem(now time.Time, itemCtx feedItemContext, feedItem *gofeed.Ite
 		return decision
 	}
 
-	itemDate := feedItemActivityTime(feedItem)
+	itemDate := cmp.Or(feedItem.PublishedParsed, feedItem.UpdatedParsed)
 	if itemDate != nil && itemDate.Before(itemCtx.state.LastUpdated) {
 		return feedItemDecision{
 			skipReason: stats.FeedItemSkipReasonOld,
@@ -630,7 +572,7 @@ func (f *fetcher) applyRule(rule *starlark.Function, item *gofeed.Item, starlark
 		},
 		rule,
 		starlark.Tuple{starlarkVal},
-		[]starlark.Tuple{},
+		nil,
 	)
 	if err != nil {
 		return false, fmt.Errorf("applying rule for item %q: %w", item.Link, err)
@@ -646,7 +588,6 @@ func (f *fetcher) applyRule(rule *starlark.Function, item *gofeed.Item, starlark
 var bmStripper = bluemonday.StrictPolicy()
 
 func (f *fetcher) itemToStarlark(item *gofeed.Item) starlark.Value {
-	// Let's create a copy so we don't mutate the original parsed item structure.
 	cleanedItem := *item
 	cleanedItem.Content = bmStripper.Sanitize(cleanedItem.Content)
 	cleanedItem.Description = bmStripper.Sanitize(cleanedItem.Description)
@@ -690,16 +631,14 @@ func (f *fetcher) markFetchSuccess(url string, parsedItems int, startTime time.T
 	})
 }
 
-// Rendering and delivery.
-
 func (f *fetcher) sendUpdate(ctx context.Context, u *update) error {
 	if u.preparation != nil {
 		return fmt.Errorf("preparing update for feed %q: %w", u.feed.url, u.preparation)
 	}
-	if f.dry && u.acknowledgeOnly {
-		return nil
-	}
 	if u.acknowledgeOnly {
+		if f.dry {
+			return nil
+		}
 		if err := u.acknowledge(ctx, u.dedupeKeys); err != nil {
 			return fmt.Errorf("acknowledging skipped update for feed %q: %w", u.feed.url, err)
 		}
@@ -799,10 +738,7 @@ func (f *fetcher) buildUpdateMessage(u *update) (format.Rendered, error) {
 }
 
 func (f *fetcher) errNotify(ctx context.Context, err error) error {
-	tmpl := f.errorTemplate
-	if tmpl == "" {
-		tmpl = defaultErrorTemplate
-	}
+	tmpl := cmp.Or(f.errorTemplate, defaultErrorTemplate)
 	return f.sender.Send(ctx, sender.Message{
 		Body: fmt.Sprintf(tmpl, err),
 		Target: sender.Target{
@@ -814,8 +750,6 @@ func (f *fetcher) errNotify(ctx context.Context, err error) error {
 	})
 }
 
-// Failure handling.
-
 func (f *fetcher) handleFetchFailure(ctx context.Context, url string, err error) {
 	f.stats.WriteAccess(func(s *stats.Run) {
 		s.FailedFeeds += 1
@@ -823,18 +757,13 @@ func (f *fetcher) handleFetchFailure(ctx context.Context, url string, err error)
 		s.FeedStats(url).Failures += 1
 	})
 
-	var (
-		disabled   bool
-		errorCount int
-	)
 	state, _ := f.feedState(url)
-	disabled = state.MarkFetchFailure(err, errorThreshold)
-	errorCount = state.ErrorCount
+	disabled := state.MarkFetchFailure(err, errorThreshold)
 
 	f.slog.Debug("fetch failed", "feed", url, "error", err)
 
 	if disabled {
-		err = fmt.Errorf("fetching feed %q failed after %d previous attempts: %v; feed was disabled, to reenable it run 'tgfeed reenable %q'", url, errorCount, err, url)
+		err = fmt.Errorf("fetching feed %q failed after %d previous attempts: %v; feed was disabled, to reenable it run 'tgfeed reenable %q'", url, state.ErrorCount, err, url)
 		if err := f.errNotify(ctx, err); err != nil {
 			f.slog.Warn("failed to send error notification", "error", err)
 		} else {

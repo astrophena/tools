@@ -6,6 +6,7 @@
 package telegram
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"log/slog"
@@ -47,11 +48,6 @@ func New(cfg Config) *Sender {
 
 // Send sends msg to Telegram.
 func (s *Sender) Send(ctx context.Context, msg sender.Message) error {
-	chatID := s.chatID
-	if msg.Target.Channel != "" {
-		chatID = msg.Target.Channel
-	}
-
 	var threadID int64
 	if msg.Target.Thread != "" {
 		var err error
@@ -63,14 +59,11 @@ func (s *Sender) Send(ctx context.Context, msg sender.Message) error {
 
 	media := make([]tgbot.Media, 0, len(msg.Media))
 	for _, m := range msg.Media {
-		media = append(media, tgbot.Media{
-			Type: m.Type,
-			URL:  m.URL,
-		})
+		media = append(media, tgbot.Media(m))
 	}
 
 	_, err := s.client.Send(ctx, tgbot.Message{
-		ChatID:             chatID,
+		ChatID:             cmp.Or(msg.Target.Channel, s.chatID),
 		ThreadID:           threadID,
 		Text:               msg.Body,
 		Media:              media,

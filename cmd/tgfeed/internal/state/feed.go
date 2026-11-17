@@ -15,23 +15,9 @@ func (f *Feed) Clone() *Feed {
 		return nil
 	}
 	cp := *f
-	if f.SeenItems != nil {
-		cp.SeenItems = make(map[string]time.Time, len(f.SeenItems))
-		maps.Copy(cp.SeenItems, f.SeenItems)
-	}
-	if f.PendingItems != nil {
-		cp.PendingItems = make(map[string]time.Time, len(f.PendingItems))
-		maps.Copy(cp.PendingItems, f.PendingItems)
-	}
+	cp.SeenItems = maps.Clone(f.SeenItems)
+	cp.PendingItems = maps.Clone(f.PendingItems)
 	return &cp
-}
-
-// IsDisabled reports whether fetching is disabled for this feed.
-func (f *Feed) IsDisabled() bool { return f.Disabled }
-
-// CacheHeaders returns conditional request values to use for the next fetch.
-func (f *Feed) CacheHeaders() (etag string, lastModified string) {
-	return f.ETag, f.LastModified
 }
 
 // MarkNotModified applies bookkeeping for a 304 response.
@@ -42,7 +28,7 @@ func (f *Feed) MarkNotModified(now time.Time) {
 }
 
 // UpdateCacheHeaders persists response cache headers.
-func (f *Feed) UpdateCacheHeaders(etag string, lastModified string) {
+func (f *Feed) UpdateCacheHeaders(etag, lastModified string) {
 	f.ETag = etag
 	if lastModified != "" {
 		f.LastModified = lastModified
@@ -51,17 +37,15 @@ func (f *Feed) UpdateCacheHeaders(etag string, lastModified string) {
 
 // MarkFetchSuccess applies bookkeeping for a successful fetch.
 func (f *Feed) MarkFetchSuccess(now time.Time) {
-	f.LastUpdated = now
-	f.ErrorCount = 0
-	f.LastError = ""
-	f.FetchCount += 1
+	f.MarkNotModified(now)
+	f.FetchCount++
 }
 
 // MarkFetchFailure applies bookkeeping for a failed fetch and reports whether
 // this failure transitioned the feed into disabled state.
 func (f *Feed) MarkFetchFailure(err error, threshold int) (disabled bool) {
-	f.FetchFailCount += 1
-	f.ErrorCount += 1
+	f.FetchFailCount++
+	f.ErrorCount++
 	f.LastError = err.Error()
 	if threshold > 0 && f.ErrorCount >= threshold && !f.Disabled {
 		f.Disabled = true
@@ -90,13 +74,13 @@ func (f *Feed) PrepareSeenItems(now time.Time, cleanupPeriod time.Duration) (jus
 	for guid, seenAt := range f.SeenItems {
 		if now.Sub(seenAt) > cleanupPeriod {
 			delete(f.SeenItems, guid)
-			pruned += 1
+			pruned++
 		}
 	}
 	for guid, pendingAt := range f.PendingItems {
 		if now.Sub(pendingAt) > cleanupPeriod {
 			delete(f.PendingItems, guid)
-			pruned += 1
+			pruned++
 		}
 	}
 	return justEnabled, pruned

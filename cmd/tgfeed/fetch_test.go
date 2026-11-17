@@ -66,9 +66,6 @@ func TestRetryExhaustionCountsAsFailure(t *testing.T) {
 		if err := f.run(t.Context()); err != nil {
 			t.Fatal(err)
 		}
-		if err := f.statsStore.Close(); err != nil {
-			t.Fatal(err)
-		}
 
 		state := env.state(t)
 
@@ -585,9 +582,10 @@ func TestFeedItemPassesRules(t *testing.T) {
 	}
 
 	cases := map[string]struct {
-		fd   *feed
-		item *gofeed.Item
-		want bool
+		fd      *feed
+		item    *gofeed.Item
+		want    bool
+		wantErr bool
 	}{
 		"passes_without_rules": {
 			fd: &feed{
@@ -619,6 +617,7 @@ func TestFeedItemPassesRules(t *testing.T) {
 			want: false,
 		},
 		"return_rule_error": {
+			wantErr: true,
 			fd: &feed{
 				blockRule: makeRule(t, "def rule(item):\n  return 1 / 0\n", "rule"),
 			},
@@ -632,7 +631,7 @@ func TestFeedItemPassesRules(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			f := newTestFetcher(t, newTestEnv(t, nil, nil))
 			got, err := f.feedItemPassesRules(tc.fd, tc.item, f.itemToStarlark(tc.item))
-			if name == "return_rule_error" {
+			if tc.wantErr {
 				if err == nil {
 					t.Fatal("want error")
 				}
@@ -679,9 +678,10 @@ func TestHandleFeedStatus(t *testing.T) {
 		reqURL               string
 		statusCode           int
 		body                 string
+		retryAfter           string
 		initialState         state.Feed
 		wantNotModified      bool
-		wantRetryIn          time.Duration
+		wantRetryIn          *time.Duration
 		wantErrContains      string
 		wantNotModifiedFeeds int
 	}{
@@ -693,28 +693,31 @@ func TestHandleFeedStatus(t *testing.T) {
 				LastError:  "oops",
 			},
 			wantNotModified:      true,
-			wantRetryIn:          0,
 			wantNotModifiedFeeds: 1,
 		},
 		"status_ok": {
 			reqURL:          "https://example.com/feed.xml",
 			statusCode:      http.StatusOK,
 			wantNotModified: false,
-			wantRetryIn:     0,
 		},
 		"telegram_rss_bridge_retry": {
 			reqURL:          "https://tg.i-c-a.su/feed.json",
 			statusCode:      http.StatusTooManyRequests,
 			body:            `{"errors":["FLOOD_WAIT_15"]}`,
 			wantNotModified: false,
-			wantRetryIn:     15 * time.Second,
+			wantRetryIn:     new(15 * time.Second),
+		},
+		"retry_immediately": {
+			reqURL:      "https://example.com/feed.xml",
+			statusCode:  http.StatusTooManyRequests,
+			retryAfter:  "0",
+			wantRetryIn: new(time.Duration(0)),
 		},
 		"unexpected_status_returns_error": {
 			reqURL:          "https://example.com/feed.xml",
 			statusCode:      http.StatusTeapot,
 			body:            "teapot",
 			wantNotModified: false,
-			wantRetryIn:     0,
 			wantErrContains: "want 200, got 418: teapot",
 		},
 	}
@@ -737,6 +740,7 @@ func TestHandleFeedStatus(t *testing.T) {
 			}
 
 			rec := httptest.NewRecorder()
+			rec.Header().Set("Retry-After", tc.retryAfter)
 			rec.WriteHeader(tc.statusCode)
 			if tc.body != "" {
 				rec.WriteString(tc.body)

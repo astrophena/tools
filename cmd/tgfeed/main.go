@@ -45,7 +45,6 @@ import (
 //go:embed defaults/error.tmpl
 var defaultErrorTemplate string
 
-// Some types of errors that can happen during tgfeed execution.
 var (
 	errAlreadyRunning = errors.New("already running")
 	errNoFeed         = errors.New("no such feed")
@@ -56,8 +55,6 @@ const (
 	deliveryDrainTimeout  = 30 * time.Second
 	finalStateSaveTimeout = 30 * time.Second
 )
-
-// Entry point and program state.
 
 func main() { cli.Main(new(fetcher)) }
 
@@ -89,15 +86,12 @@ type fetcher struct {
 	stateMu       sync.RWMutex
 	state         map[string]*state.Feed
 
-	stats      syncx.Protected[*stats.Run]
-	statsStore *stats.Store
-	sender     sender.Sender
-	store      *state.Store
+	stats  syncx.Protected[*stats.Run]
+	sender sender.Sender
+	store  *state.Store
 
 	runLock *os.File
 }
-
-// Bootstrap and commands.
 
 func (f *fetcher) Flags(fs *flag.FlagSet) {
 	fs.BoolVar(&f.dry, "dry", false, "Enable dry-run mode: log actions, but don't send updates or save state.")
@@ -142,9 +136,7 @@ func (f *fetcher) Run(ctx context.Context) error {
 	switch env.Args[0] {
 	case "admin":
 		reader := stats.OpenReader(f.stateDir)
-		if err := reader.Bootstrap(ctx); err != nil {
-			return fmt.Errorf("bootstrapping stats database failed: %w", err)
-		}
+		defer reader.Close()
 		return admin.Run(ctx, admin.Config{
 			Addr:       f.adminAddr,
 			StateDir:   f.stateDir,
@@ -197,13 +189,10 @@ func (f *fetcher) needsLocalStateDir(command string) bool {
 	return f.remoteURL == "" || slices.Contains([]string{"admin", "run"}, command)
 }
 
-// Run orchestration.
-
 func (f *fetcher) run(ctx context.Context) error {
-	if f.running.Load() {
+	if !f.running.CompareAndSwap(false, true) {
 		return errAlreadyRunning
 	}
-	f.running.Store(true)
 	defer f.running.Store(false)
 
 	if err := f.acquireRunLock(); err != nil {
@@ -214,8 +203,9 @@ func (f *fetcher) run(ctx context.Context) error {
 	f.stats = syncx.Protect(&stats.Run{
 		StartTime: time.Now(),
 	})
-	f.statsStore = stats.OpenWriter(f.stateDir)
-	if err := f.statsStore.Bootstrap(ctx); err != nil {
+	statsStore := stats.OpenWriter(f.stateDir)
+	defer statsStore.Close()
+	if err := statsStore.Bootstrap(ctx); err != nil {
 		return fmt.Errorf("bootstrapping stats database failed: %w", err)
 	}
 
@@ -229,10 +219,10 @@ func (f *fetcher) run(ctx context.Context) error {
 	updates := make(chan *update, 100)
 	var queuedUpdates []*update
 
-	var baseWg sync.WaitGroup
-	baseWg.Go(func() {
-		for feedItem := range updates {
-			queuedUpdates = append(queuedUpdates, feedItem)
+	var collectWg sync.WaitGroup
+	collectWg.Go(func() {
+		for u := range updates {
+			queuedUpdates = append(queuedUpdates, u)
 		}
 	})
 
@@ -260,7 +250,7 @@ func (f *fetcher) run(ctx context.Context) error {
 
 	fetchWg.Wait()
 	close(updates)
-	baseWg.Wait()
+	collectWg.Wait()
 
 	runErr := f.deliverUpdates(ctx, queuedUpdates)
 	if err := ctx.Err(); err != nil {
@@ -291,31 +281,13 @@ func (f *fetcher) run(ctx context.Context) error {
 		}
 
 		s.TopSlowestFeeds = stats.TopFeedStats(s.FeedStatsByURL, func(a *stats.FeedStats, b *stats.FeedStats) int {
-			if a.FetchDuration == b.FetchDuration {
-				return strings.Compare(a.URL, b.URL)
-			}
-			if a.FetchDuration > b.FetchDuration {
-				return -1
-			}
-			return 1
+			return cmp.Or(cmp.Compare(b.FetchDuration, a.FetchDuration), strings.Compare(a.URL, b.URL))
 		})
 		s.TopErrorFeeds = stats.TopFeedStats(s.FeedStatsByURL, func(a *stats.FeedStats, b *stats.FeedStats) int {
-			if a.Failures == b.Failures {
-				return strings.Compare(a.URL, b.URL)
-			}
-			if a.Failures > b.Failures {
-				return -1
-			}
-			return 1
+			return cmp.Or(cmp.Compare(b.Failures, a.Failures), strings.Compare(a.URL, b.URL))
 		})
 		s.TopNewItemFeeds = stats.TopFeedStats(s.FeedStatsByURL, func(a *stats.FeedStats, b *stats.FeedStats) int {
-			if a.ItemsEnqueued == b.ItemsEnqueued {
-				return strings.Compare(a.URL, b.URL)
-			}
-			if a.ItemsEnqueued > b.ItemsEnqueued {
-				return -1
-			}
-			return 1
+			return cmp.Or(cmp.Compare(b.ItemsEnqueued, a.ItemsEnqueued), strings.Compare(a.URL, b.URL))
 		})
 		s.MemoryUsage = m.Alloc
 	})
@@ -333,7 +305,7 @@ func (f *fetcher) run(ctx context.Context) error {
 	}
 
 	f.stats.ReadAccess(func(s *stats.Run) {
-		if err := f.statsStore.SaveRun(saveCtx, s); err != nil {
+		if err := statsStore.SaveRun(saveCtx, s); err != nil {
 			f.slog.Warn("failed to upload stats", "error", err)
 		}
 	})
@@ -373,10 +345,7 @@ func (f *fetcher) deliverUpdates(ctx context.Context, updates []*update) error {
 }
 
 func (f *fetcher) runFeedFetch(ctx context.Context, fd *feed, updates chan *update) {
-	var (
-		retries     int
-		feedRetried bool
-	)
+	var retries int
 
 	for {
 		retry, retryIn := f.fetch(ctx, fd, updates)
@@ -386,11 +355,10 @@ func (f *fetcher) runFeedFetch(ctx context.Context, fd *feed, updates chan *upda
 		if !f.retryFeedFetch(ctx, fd, retries, retryIn) {
 			break
 		}
-		feedRetried = true
 		retries += 1
 	}
 
-	if feedRetried {
+	if retries > 0 {
 		f.stats.WriteAccess(func(s *stats.Run) {
 			s.FeedsRetriedCount += 1
 		})
@@ -434,8 +402,6 @@ func (f *fetcher) cleanState() {
 	}
 	f.pruneFeedState(keep)
 }
-
-// User-facing commands.
 
 func (f *fetcher) listFeeds(ctx context.Context, w io.Writer) error {
 	if err := f.loadState(ctx); err != nil {
@@ -568,8 +534,6 @@ func (f *fetcher) reenable(ctx context.Context, url string) error {
 	return f.saveFeedState(ctx)
 }
 
-// Low-level helpers.
-
 // ask prompts the user for a yes or no answer.
 func (f *fetcher) ask(prompt string, stdin io.Reader) bool {
 	r := bufio.NewReader(stdin)
@@ -594,10 +558,10 @@ func (f *fetcher) ask(prompt string, stdin io.Reader) bool {
 
 func parseInt(s string) int64 {
 	i, err := strconv.ParseInt(s, 10, 64)
-	if err == nil {
-		return i
+	if err != nil {
+		return 0
 	}
-	return 0
+	return i
 }
 
 func shuffle[S any](s []S) []S {

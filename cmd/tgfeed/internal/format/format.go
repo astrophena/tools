@@ -2,21 +2,7 @@
 // Use of this source code is governed by the ISC
 // license that can be found in the LICENSE.md file.
 
-// Package format builds, validates, and parses tgfeed message render output.
-//
-// The formatter pipeline is:
-//
-//   - build formatter input with [BuildFormatInput]
-//   - call a Starlark format function using [CallStarlarkFormatter]
-//   - validate output with [ParseFormattedMessage]
-//   - fall back to [DefaultUpdateMessage] when custom formatting is missing
-//     or invalid
-//
-// Formatter output accepted by [ParseFormattedMessage] is either:
-//
-//   - a string body
-//   - a tuple of (body, keyboard) where keyboard is a list of rows and each
-//     row is a list of dictionaries with text and url fields
+// Package format renders tgfeed messages and decodes Starlark formatter results.
 package format
 
 import (
@@ -127,14 +113,12 @@ func CallStarlarkFormatter(formatFn *starlark.Function, items starlark.Value, pr
 		},
 		formatFn,
 		starlark.Tuple{items},
-		[]starlark.Tuple{},
+		nil,
 	)
 }
 
-// ParseFormattedMessage validates and parses formatter output.
-//
-// It returns [ValidationError] when the output shape or field types are
-// invalid.
+// ParseFormattedMessage decodes a string or a (text, keyboard?, media?) tuple.
+// It returns a [ValidationError] for an invalid value.
 func ParseFormattedMessage(v starlark.Value) (Rendered, error) {
 	switch val := v.(type) {
 	case starlark.String:
@@ -201,35 +185,16 @@ func parseMediaList(v starlark.Value) ([]sender.Media, error) {
 	}
 
 	media := make([]sender.Media, 0, list.Len())
-	iter := list.Iterate()
-	defer iter.Done()
-
-	var mediaValue starlark.Value
-	for iter.Next(&mediaValue) {
+	for mediaValue := range list.Elements() {
 		mediaDict, ok := mediaValue.(*starlark.Dict)
 		if !ok {
 			continue
 		}
-		var out sender.Media
-		for _, item := range mediaDict.Items() {
-			key, ok1 := item[0].(starlark.String)
-			val, ok2 := item[1].(starlark.String)
-			if !ok1 || !ok2 {
-				continue
-			}
-
-			switch key.GoString() {
-			case "type":
-				out.Type = val.GoString()
-			case "url":
-				out.URL = val.GoString()
-			}
+		kind := stringField(mediaDict, "type")
+		url := stringField(mediaDict, "url")
+		if kind != "" && url != "" {
+			media = append(media, sender.Media{Type: kind, URL: url})
 		}
-
-		if out.Type == "" || out.URL == "" {
-			continue
-		}
-		media = append(media, out)
 	}
 
 	return media, nil
@@ -246,20 +211,14 @@ func parseInlineKeyboard(v starlark.Value) ([]sender.ActionRow, error) {
 	}
 
 	rows := make([]sender.ActionRow, 0, list.Len())
-	iter := list.Iterate()
-	defer iter.Done()
-
-	var rowValue starlark.Value
-	for iter.Next(&rowValue) {
+	for rowValue := range list.Elements() {
 		rowList, ok := rowValue.(*starlark.List)
 		if !ok {
 			continue
 		}
 
 		buttons := make([]sender.Action, 0, rowList.Len())
-		rowIter := rowList.Iterate()
-		var buttonValue starlark.Value
-		for rowIter.Next(&buttonValue) {
+		for buttonValue := range rowList.Elements() {
 			buttonDict, ok := buttonValue.(*starlark.Dict)
 			if !ok {
 				continue
@@ -268,8 +227,6 @@ func parseInlineKeyboard(v starlark.Value) ([]sender.ActionRow, error) {
 				buttons = append(buttons, button)
 			}
 		}
-		rowIter.Done()
-
 		if len(buttons) > 0 {
 			rows = append(rows, buttons)
 		}
@@ -279,32 +236,22 @@ func parseInlineKeyboard(v starlark.Value) ([]sender.ActionRow, error) {
 }
 
 func parseInlineKeyboardButton(button *starlark.Dict) (sender.Action, bool) {
-	var out sender.Action
-	for _, item := range button.Items() {
-		key, ok1 := item[0].(starlark.String)
-		val, ok2 := item[1].(starlark.String)
-		if !ok1 || !ok2 {
-			continue
-		}
-
-		switch key.GoString() {
-		case "text":
-			out.Label = val.GoString()
-		case "url":
-			out.URL = val.GoString()
-		}
-	}
-
-	if out.Label == "" || out.URL == "" {
-		return sender.Action{}, false
-	}
-	return out, true
+	label := stringField(button, "text")
+	url := stringField(button, "url")
+	return sender.Action{Label: label, URL: url}, label != "" && url != ""
 }
 
-// DefaultUpdateMessage renders the built-in fallback message.
-//
-// It is intended for cases where custom formatting is unavailable.
-func DefaultUpdateMessage(u Update, defaultTitle string, messageTemplate string) Rendered {
+func stringField(dict *starlark.Dict, key string) string {
+	value, _, err := dict.Get(starlark.String(key))
+	if err != nil {
+		return ""
+	}
+	s, _ := starlark.AsString(value)
+	return s
+}
+
+// DefaultUpdateMessage renders a message for feeds without a custom formatter.
+func DefaultUpdateMessage(u Update, defaultTitle, messageTemplate string) Rendered {
 	if u.Feed.Digest {
 		var msg strings.Builder
 		fmt.Fprintf(&msg, "<b>%s</b>\n\n", defaultTitle)
@@ -317,34 +264,34 @@ func DefaultUpdateMessage(u Update, defaultTitle string, messageTemplate string)
 		}
 	}
 
-	msg := fmt.Sprintf(messageTemplate, defaultTitle, u.Items[0].Link)
-	if u, err := urlpkg.Parse(u.Items[0].Link); err == nil {
-		switch u.Hostname() {
+	item := u.Items[0]
+	msg := fmt.Sprintf(messageTemplate, defaultTitle, item.Link)
+	if url, err := urlpkg.Parse(item.Link); err == nil {
+		switch url.Hostname() {
 		case "t.me":
 			msg += " #tg"
 		case "www.youtube.com":
 			msg += " #youtube"
 		default:
-			msg += " #" + nonAlphaNumRe().ReplaceAllString(u.Hostname(), "")
+			msg += " #" + nonAlphaNumRe().ReplaceAllString(url.Hostname(), "")
 		}
 	}
 
 	var actions []sender.ActionRow
-	if strings.HasPrefix(u.Items[0].GUID, "https://news.ycombinator.com/item?id=") {
+	if strings.HasPrefix(item.GUID, "https://news.ycombinator.com/item?id=") {
 		actions = []sender.ActionRow{
 			{
 				{
 					Label: "↪ Hacker News",
-					URL:   u.Items[0].GUID,
+					URL:   item.GUID,
 				},
 			},
 		}
 	}
 
 	return Rendered{
-		Body:           msg,
-		Actions:        actions,
-		DisablePreview: u.Feed.Digest,
+		Body:    msg,
+		Actions: actions,
 	}
 }
 
