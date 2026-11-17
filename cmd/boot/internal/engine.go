@@ -219,7 +219,7 @@ func (e *Engine) Run(ctx context.Context, w io.Writer, selection Selection, opts
 		e.printSummary(w, summary, opts.DryRun)
 		e.printWarnings(w, collectedWarnings)
 		if !opts.DryRun {
-			err = e.printFailures(w, runs, summary.Failed)
+			e.printFailures(w, runs, summary.Failed)
 		}
 	}
 	if err != nil {

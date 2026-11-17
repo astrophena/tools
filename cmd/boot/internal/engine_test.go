@@ -784,6 +784,30 @@ func TestApplyProgressTitleReportsRunningAction(t *testing.T) {
 	}
 }
 
+func TestFailureReportLogsLongOutput(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("TMPDIR", dir)
+	var out bytes.Buffer
+	long := "command failed\n" + strings.Repeat("command output\n", 9) + "last line"
+	printFailure(&out, "packages", "install packages", errors.New(long))
+	printFailure(&out, "repos", "", errors.New("dependency failed"))
+
+	got := out.String()
+	assertContains(t, got, "  packages · install packages\n    command failed\n", "failure")
+	assertContains(t, got, "  repos\n    dependency failed\n", "failure")
+	if strings.Contains(got, "last line") {
+		t.Fatalf("failure showed full output:\n%s", got)
+	}
+	logs, err := filepath.Glob(filepath.Join(dir, "boot-error-*.log"))
+	if err != nil || len(logs) != 1 {
+		t.Fatalf("logs = %v, err = %v, want one log", logs, err)
+	}
+	assertContains(t, got, "    log: "+logs[0]+"\n", "failure")
+	if got := readFile(t, logs[0]); got != "packages · install packages\n"+long+"\n" {
+		t.Fatalf("unexpected log contents:\n%s", got)
+	}
+}
+
 type notifyingBuffer struct {
 	mu    sync.Mutex
 	buf   bytes.Buffer

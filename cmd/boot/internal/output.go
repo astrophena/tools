@@ -5,18 +5,12 @@
 package internal
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"strings"
 )
-
-type failure struct {
-	TaskID   string
-	TaskName string
-	Action   string
-	Err      error
-}
 
 func (e *Engine) printPlan(w io.Writer, runs []taskRun, verbose bool) {
 	for i := range runs {
@@ -102,82 +96,60 @@ func (e *Engine) printWarnings(w io.Writer, warnings []warning) {
 	}
 }
 
-func (e *Engine) printFailures(w io.Writer, runs []taskRun, failed int) error {
+func (e *Engine) printFailures(w io.Writer, runs []taskRun, failed int) {
 	if failed == 0 {
-		return nil
+		return
 	}
-	fmt.Fprintf(w, "%s\n", e.color("errors:", colorRed))
+	fmt.Fprintln(w, e.color("Failures", colorRed))
 	for i := range runs {
 		r := &runs[i]
-		f := failure{TaskID: r.task.ID, TaskName: r.task.Name, Err: r.err}
-		if f.Err != nil {
-			if err := e.printFailure(w, f); err != nil {
-				return err
-			}
+		if r.err != nil {
+			printFailure(w, r.task.ID, "", r.err)
 		}
 		for _, action := range r.actions {
-			if action.err == nil {
-				continue
-			}
-			f.Action = action.description
-			f.Err = action.err
-			if err := e.printFailure(w, f); err != nil {
-				return err
+			if action.err != nil {
+				printFailure(w, r.task.ID, action.description, action.err)
 			}
 		}
 	}
-	return nil
 }
 
-func (e *Engine) printFailure(w io.Writer, f failure) error {
-	logPath, err := writeFailureLog(f)
-	if err != nil {
-		return err
+func printFailure(w io.Writer, taskID, action string, err error) {
+	heading := taskID
+	if action != "" {
+		heading += " · " + action
 	}
-	if f.TaskID != "" {
-		fmt.Fprintf(w, "%s\n", e.color(fmt.Sprintf("  task: %s (%s)", f.TaskID, f.TaskName), colorRed))
-	}
-	if f.Action != "" {
-		fmt.Fprintf(w, "%s\n", e.color("    action: "+f.Action, colorRed))
-	}
-	fmt.Fprintf(w, "%s\n", e.color("    error: "+firstLine(f.Err.Error()), colorRed))
-	fmt.Fprintf(w, "%s\n", e.color("    log: "+logPath, colorRed))
-	if output := restLines(f.Err.Error()); output != "" {
-		fmt.Fprintf(w, "%s\n", e.color("    output:", colorRed))
-		for line := range strings.SplitSeq(output, "\n") {
-			fmt.Fprintf(w, "%s\n", e.color("      "+line, colorRed))
+	fmt.Fprintln(w, "  "+heading)
+
+	text := strings.TrimSpace(err.Error())
+	const previewLines = 8
+	lines := strings.Split(text, "\n")
+	var logPath string
+	if len(lines) > previewLines {
+		if path, err := writeFailureLog(heading, text); err == nil {
+			logPath = path
+			lines = lines[:previewLines]
 		}
 	}
-	return nil
+	for _, line := range lines {
+		fmt.Fprintln(w, "    "+line)
+	}
+	if logPath != "" {
+		fmt.Fprintln(w, "    log: "+logPath)
+	}
 }
 
-func writeFailureLog(f failure) (string, error) {
+func writeFailureLog(heading, message string) (string, error) {
 	file, err := os.CreateTemp("", "boot-error-*.log")
 	if err != nil {
 		return "", err
 	}
-	defer file.Close()
-	if f.TaskID != "" {
-		fmt.Fprintf(file, "task: %s (%s)\n", f.TaskID, f.TaskName)
+	_, err = fmt.Fprintln(file, heading+"\n"+message)
+	if err := errors.Join(err, file.Close()); err != nil {
+		os.Remove(file.Name())
+		return "", err
 	}
-	if f.Action != "" {
-		fmt.Fprintf(file, "action: %s\n", f.Action)
-	}
-	fmt.Fprintf(file, "error:\n%s\n", f.Err)
 	return file.Name(), nil
-}
-
-func firstLine(s string) string {
-	line, _, _ := strings.Cut(s, "\n")
-	return line
-}
-
-func restLines(s string) string {
-	_, rest, ok := strings.Cut(strings.TrimSpace(s), "\n")
-	if !ok {
-		return ""
-	}
-	return strings.TrimSpace(rest)
 }
 
 func plural(n int, singular, plural string) string {
