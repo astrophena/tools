@@ -398,10 +398,10 @@ func TestUpdateReportsRebootAfterSuccessfulApply(t *testing.T) {
 					return tc.updateErr
 				},
 			})
-			if len(h.Task.Actions) != 1 {
-				t.Fatalf("actions = %d, want 1", len(h.Task.Actions))
+			if len(h.Actions) != 1 {
+				t.Fatalf("actions = %d, want 1", len(h.Actions))
 			}
-			result, warnings, err := testutil.RunAction(t.Context(), h.Task.Actions[0], false)
+			result, warnings, err := testutil.RunAction(t.Context(), h.Actions[0], false)
 			if !errors.Is(err, tc.updateErr) {
 				t.Fatalf("update error = %v, want %v", err, tc.updateErr)
 			}

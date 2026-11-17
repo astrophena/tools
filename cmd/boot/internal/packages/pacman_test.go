@@ -44,10 +44,10 @@ printf 'zlib\nknown\ngit\n'
 			if _, err := starlark.Call(h.Thread, builtin, starlark.Tuple{packages}, nil); err != nil {
 				t.Fatal(err)
 			}
-			if len(h.Task.Actions) != 1 {
-				t.Fatalf("actions = %d, want 1", len(h.Task.Actions))
+			if len(h.Actions) != 1 {
+				t.Fatalf("actions = %d, want 1", len(h.Actions))
 			}
-			result, warnings, err := testutil.RunAction(t.Context(), h.Task.Actions[0], true)
+			result, warnings, err := testutil.RunAction(t.Context(), h.Actions[0], true)
 			if err != nil {
 				t.Fatal(err)
 			}

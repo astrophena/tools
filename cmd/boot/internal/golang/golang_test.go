@@ -39,13 +39,13 @@ func TestGoInstallCreatesOneActionPerPackage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("go.install failed: %v", err)
 	}
-	if len(h.Task.Actions) != 2 {
-		t.Fatalf("got %d actions, want 2", len(h.Task.Actions))
+	if len(h.Actions) != 2 {
+		t.Fatalf("got %d actions, want 2", len(h.Actions))
 	}
-	if got := h.Task.Actions[0].Summary; !strings.Contains(got, "example.com/one@latest") {
+	if got := h.Actions[0].Summary; !strings.Contains(got, "example.com/one@latest") {
 		t.Errorf("first action summary = %q", got)
 	}
-	if got := h.Task.Actions[1].Summary; !strings.Contains(got, "example.com/two@latest") {
+	if got := h.Actions[1].Summary; !strings.Contains(got, "example.com/two@latest") {
 		t.Errorf("second action summary = %q", got)
 	}
 }
@@ -72,18 +72,18 @@ func TestGoInstallLocalConditions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("go.install_local failed: %v", err)
 	}
-	if len(h.Task.Actions) != 2 {
-		t.Fatalf("got %d actions, want 2", len(h.Task.Actions))
+	if len(h.Actions) != 2 {
+		t.Fatalf("got %d actions, want 2", len(h.Actions))
 	}
 
-	res, err := h.Task.Actions[0].Apply(t.Context(), true)
+	res, err := h.Actions[0].Apply(t.Context(), true)
 	if err != nil {
 		t.Fatalf("apply failed: %v", err)
 	}
 	if res != boot.ResultChange {
 		t.Errorf("got result %v, want %v", res, boot.ResultChange)
 	}
-	res, err = h.Task.Actions[1].Apply(t.Context(), true)
+	res, err = h.Actions[1].Apply(t.Context(), true)
 	if err != nil {
 		t.Fatalf("apply failed: %v", err)
 	}

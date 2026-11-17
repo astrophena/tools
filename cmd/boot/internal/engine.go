@@ -29,7 +29,7 @@ type Engine struct {
 	Tasks []*Task
 }
 
-// Task is a recipe-defined unit of work. Its actions are rebuilt for each run.
+// Task is a recipe-defined unit of work.
 type Task struct {
 	ID              string
 	Name            string
@@ -38,7 +38,6 @@ type Task struct {
 	ContinueOnError bool
 	RequiresSudo    bool
 	Run             starlark.Callable
-	Actions         []Action
 }
 
 // Action brings the host toward a task's requested state. Apply may probe the
@@ -188,17 +187,11 @@ func (e *Engine) Run(ctx context.Context, w io.Writer, selection Selection, opts
 	var progress *runProgress
 	if prepare(ctx, runs, opts, warnings) {
 		if !opts.DryRun {
-			var prepared []*Task
-			for i := range runs {
-				if runs[i].status == taskPending {
-					prepared = append(prepared, runs[i].task)
-				}
-			}
 			promptOutput := w
 			if opts.JSON {
 				promptOutput = io.Discard
 			}
-			if err := e.prepareSudo(ctx, promptOutput, prepared); err != nil {
+			if err := e.prepareSudo(ctx, promptOutput, runs); err != nil {
 				return err
 			}
 		}
@@ -251,11 +244,10 @@ func prepare(ctx context.Context, runs []taskRun, opts RunOptions, warnings *war
 
 func (r *taskRun) prepare(ctx context.Context, opts RunOptions, warnings *warningCollector) {
 	task := r.task
-	task.Actions = nil
+	var actions []Action
 	thread := &starlark.Thread{Name: "boot:" + task.ID}
-	SetTask(thread, task)
+	CollectActions(thread, &actions)
 	if _, err := starlark.Call(thread, task.Run, nil, nil); err != nil {
-		task.Actions = nil
 		r.err = err
 		r.status = taskPrepareFailed
 		return
@@ -263,12 +255,13 @@ func (r *taskRun) prepare(ctx context.Context, opts RunOptions, warnings *warnin
 
 	r.status = taskPending
 	if !opts.Interactive || opts.DryRun {
+		r.prepared = actions
 		return
 	}
 
 	// Ask for consent before sudo prompting and parallel execution.
-	pending := task.Actions[:0]
-	for _, action := range task.Actions {
+	pending := actions[:0]
+	for _, action := range actions {
 		if !action.IsConsent {
 			pending = append(pending, action)
 			continue
@@ -278,17 +271,15 @@ func (r *taskRun) prepare(ctx context.Context, opts RunOptions, warnings *warnin
 		r.consentCount++
 		switch {
 		case result.err != nil:
-			task.Actions = nil
 			r.status = taskPrepareFailed
 			return
 		case result.result == ResultStop:
-			task.Actions = nil
 			r.status = taskSkipped
 			return
 		}
 	}
-	clear(task.Actions[len(pending):])
-	task.Actions = pending
+	clear(actions[len(pending):])
+	r.prepared = pending
 }
 
 func summarize(runs []taskRun) Summary {

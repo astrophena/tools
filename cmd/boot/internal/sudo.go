@@ -15,11 +15,11 @@ import (
 )
 
 // prepareSudo authenticates before execution so prompts stay out of parallel output.
-func (e *Engine) prepareSudo(ctx context.Context, w io.Writer, tasks []*Task) error {
+func (e *Engine) prepareSudo(ctx context.Context, w io.Writer, runs []taskRun) error {
 	if e.Runtime == nil || !e.Runtime.NeedsSudo() {
 		return nil
 	}
-	reasons := sudoReasons(tasks)
+	reasons := sudoReasons(runs)
 	if len(reasons) == 0 {
 		return nil
 	}
@@ -101,11 +101,16 @@ func (w *sudoOutput) Write(p []byte) (int, error) {
 // sudoReasons prefers action-level reasons over task-level reasons.
 // Task.RequiresSudo is still useful for opaque recipe tasks, but action summaries
 // are more precise once module calls have expanded the task body.
-func sudoReasons(tasks []*Task) []string {
+func sudoReasons(runs []taskRun) []string {
 	var reasons []string
-	for _, task := range tasks {
+	for i := range runs {
+		r := &runs[i]
+		if r.status != taskPending {
+			continue
+		}
+		task := r.task
 		start := len(reasons)
-		for _, action := range task.Actions {
+		for _, action := range r.prepared {
 			if action.RequiresSudo {
 				reasons = append(reasons, fmt.Sprintf("%s: %s", task.ID, action.Summary))
 			}

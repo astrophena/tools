@@ -456,11 +456,10 @@ func TestPrepareSudo(t *testing.T) {
 		Runtime: &Runtime{},
 	}
 	var out bytes.Buffer
-	if err := engine.prepareSudo(t.Context(), &out, []*Task{
+	if err := engine.prepareSudo(t.Context(), &out, []taskRun{
 		{
-			ID:           "root_task",
-			Name:         "Root task",
-			RequiresSudo: true,
+			task:   &Task{ID: "root_task", Name: "Root task", RequiresSudo: true},
+			status: taskPending,
 		},
 	}); err != nil {
 		t.Fatal(err)
@@ -549,12 +548,11 @@ esac
 }
 
 func TestSudoReasonsPreferActionDetails(t *testing.T) {
-	reasons := sudoReasons([]*Task{
+	reasons := sudoReasons([]taskRun{
 		{
-			ID:           "setup_etc",
-			Name:         "Install /etc files",
-			RequiresSudo: true,
-			Actions: []Action{
+			task:   &Task{ID: "setup_etc", Name: "Install /etc files", RequiresSudo: true},
+			status: taskPending,
+			prepared: []Action{
 				{
 					Summary:      "sync tree prefs/etc to /etc (sudo)",
 					RequiresSudo: true,

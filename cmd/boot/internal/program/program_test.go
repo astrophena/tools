@@ -158,15 +158,8 @@ func TestUpdateRejectsInvalidArgv(t *testing.T) {
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			task := &boot.Task{
-				ID: "test",
-			}
-			thread := &starlark.Thread{
-				Name: "test",
-			}
-			boot.SetTask(thread, task)
-
-			_, err := update(thread, starlark.NewBuiltin("program.update", update), starlark.Tuple{tc.argv}, nil)
+			h := testutil.NewTask(t, "test")
+			_, err := update(h.Thread, starlark.NewBuiltin("program.update", update), starlark.Tuple{tc.argv}, nil)
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("error = %v, want mention %q", err, tc.want)
 			}

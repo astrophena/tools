@@ -11,23 +11,23 @@ import (
 	"go.starlark.net/starlark"
 )
 
-const taskKey = "boot:task"
+const actionsKey = "boot:actions"
 
-// SetTask associates a task with a Starlark thread.
-func SetTask(thread *starlark.Thread, task *Task) {
-	thread.SetLocal(taskKey, task)
+// CollectActions directs actions emitted by a Starlark thread to dst.
+func CollectActions(thread *starlark.Thread, dst *[]Action) {
+	thread.SetLocal(actionsKey, dst)
 }
 
 // AddAction appends an action to the thread's current task.
 func AddAction(thread *starlark.Thread, action Action) {
-	task := thread.Local(taskKey).(*Task)
-	task.Actions = append(task.Actions, action)
+	dst := thread.Local(actionsKey).(*[]Action)
+	*dst = append(*dst, action)
 }
 
 // TaskBuiltin returns a builtin that can only be called from a task.
 func TaskBuiltin(name string, fn func(*starlark.Thread, *starlark.Builtin, starlark.Tuple, []starlark.Tuple) (starlark.Value, error)) *starlark.Builtin {
 	return starlark.NewBuiltin(name, func(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-		if thread.Local(taskKey) == nil {
+		if thread.Local(actionsKey) == nil {
 			return nil, fmt.Errorf("%s: can only be called from a task", b.Name())
 		}
 		return fn(thread, b, args, kwargs)

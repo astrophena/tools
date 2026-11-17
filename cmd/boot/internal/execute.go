@@ -19,6 +19,7 @@ type actionResult struct {
 
 type taskRun struct {
 	task         *Task
+	prepared     []Action
 	status       taskStatus
 	err          error
 	actions      []actionResult
@@ -105,7 +106,7 @@ func execute(ctx context.Context, runs []taskRun, opts RunOptions, warnings *war
 }
 
 func (r *taskRun) execute(ctx context.Context, opts RunOptions, warnings *warningCollector, limiter actionLimiter, progress *runProgress) {
-	actions := r.task.Actions
+	actions := r.prepared
 	for start := 0; start < len(actions); {
 		end := start + 1
 		if opts.Concurrency > 1 && actions[start].Concurrent {
