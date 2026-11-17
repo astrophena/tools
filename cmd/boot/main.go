@@ -33,6 +33,7 @@ import (
 	bootssh "go.astrophena.name/tools/cmd/boot/internal/ssh"
 	bootsystemd "go.astrophena.name/tools/cmd/boot/internal/systemd"
 
+	"go.starlark.net/starlarkstruct"
 	"golang.org/x/term"
 )
 
@@ -193,20 +194,20 @@ func (a *app) engine(env *cli.Env) (*boot.Engine, error) {
 	return &boot.Engine{
 		Runtime: rt,
 		Entry:   a.entry.value,
-		Modules: []boot.Module{
-			bootconsent.Module(),
-			bootenv.Module(),
-			bootfetch.Module(),
-			bootflatpak.Module(),
-			bootfs.Module(),
-			bootpkg.Module(),
-			bootpacman.Module(),
-			bootprogram.Module(),
-			bootgit.Module(),
-			bootgo.Module(),
-			bootrescue.Module(),
-			bootssh.Module(),
-			bootsystemd.Module(),
+		Modules: []*starlarkstruct.Module{
+			bootconsent.Module(rt),
+			bootenv.Module(rt),
+			bootfetch.Module(rt),
+			bootflatpak.Module(rt),
+			bootfs.Module(rt),
+			bootpkg.Module(rt),
+			bootpacman.Module(rt),
+			bootprogram.Module(rt),
+			bootgit.Module(rt),
+			bootgo.Module(rt),
+			bootrescue.Module(rt),
+			bootssh.Module(rt),
+			bootsystemd.Module(rt),
 		},
 	}, nil
 }

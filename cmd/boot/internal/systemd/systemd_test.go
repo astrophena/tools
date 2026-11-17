@@ -24,7 +24,7 @@ func TestSystemUnitRequiresSudo(t *testing.T) {
 		t.Skip("sudo is not needed when running as root")
 	}
 	h := testutil.NewTask(t, "test")
-	m := &impl{
+	m := &module{
 		rt: &boot.Runtime{},
 	}
 	action := h.EmitOne("systemd.system_unit", m.systemUnit, nil, []starlark.Tuple{
@@ -49,7 +49,7 @@ func TestSystemUnitPlanChecksWithoutSudo(t *testing.T) {
 		"systemctl": "#!/bin/sh\necho enabled\n",
 	})
 	h := testutil.NewTask(t, "test")
-	m := &impl{
+	m := &module{
 		rt: &boot.Runtime{},
 	}
 	action := h.EmitOne("systemd.system_unit", m.systemUnit, nil, []starlark.Tuple{
@@ -113,7 +113,7 @@ esac
 			})
 
 			h := testutil.NewTask(t, "test")
-			m := &impl{}
+			m := &module{}
 			action := h.EmitOne("systemd.user_unit", m.userUnit, nil, []starlark.Tuple{
 				{starlark.String("name"), starlark.String("periodic.timer")},
 				{starlark.String("enabled"), starlark.True},

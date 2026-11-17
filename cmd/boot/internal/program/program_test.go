@@ -53,8 +53,8 @@ fi
 			})
 
 			h := testutil.NewTask(t, "test")
-			m := module{}
-			action := h.EmitOne("program.update", m.update, starlark.Tuple{
+
+			action := h.EmitOne("program.update", update, starlark.Tuple{
 				starlark.NewList([]starlark.Value{
 					starlark.String("updater"),
 					starlark.String("update"),
@@ -83,8 +83,8 @@ func TestUpdateRejectsInvalidCheckResult(t *testing.T) {
 		"updater": "#!/bin/sh\necho maybe\n",
 	})
 	h := testutil.NewTask(t, "test")
-	m := module{}
-	action := h.EmitOne("program.update", m.update, starlark.Tuple{
+
+	action := h.EmitOne("program.update", update, starlark.Tuple{
 		starlark.NewList([]starlark.Value{
 			starlark.String("updater"),
 		}),
@@ -120,8 +120,8 @@ exit 1
 		t.Run(name, func(t *testing.T) {
 			testutil.Commands(t, map[string]string{"updater": tc.script})
 			h := testutil.NewTask(t, "test")
-			m := module{}
-			action := h.EmitOne("program.update", m.update, starlark.Tuple{
+
+			action := h.EmitOne("program.update", update, starlark.Tuple{
 				starlark.NewList([]starlark.Value{
 					starlark.String("updater"),
 				}),
@@ -165,8 +165,8 @@ func TestUpdateRejectsInvalidArgv(t *testing.T) {
 				Name: "test",
 			}
 			boot.SetTask(thread, task)
-			m := module{}
-			_, err := m.update(thread, starlark.NewBuiltin("program.update", m.update), starlark.Tuple{tc.argv}, nil)
+
+			_, err := update(thread, starlark.NewBuiltin("program.update", update), starlark.Tuple{tc.argv}, nil)
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("error = %v, want mention %q", err, tc.want)
 			}

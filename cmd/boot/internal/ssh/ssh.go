@@ -17,29 +17,25 @@ import (
 	boot "go.astrophena.name/tools/cmd/boot/internal"
 
 	"go.starlark.net/starlark"
+	"go.starlark.net/starlarkstruct"
 )
 
 // Module returns the Starlark ssh module.
-func Module() boot.Module { return module{} }
-
-type module struct{}
-
-func (module) Name() string { return "ssh" }
-
-func (module) Members(rt *boot.Runtime) starlark.StringDict {
-	m := &impl{
-		rt: rt,
-	}
-	return starlark.StringDict{
-		"key": starlark.NewBuiltin("ssh.key", m.key),
+func Module(rt *boot.Runtime) *starlarkstruct.Module {
+	m := &module{rt: rt}
+	return &starlarkstruct.Module{
+		Name: "ssh",
+		Members: starlark.StringDict{
+			"key": starlark.NewBuiltin("ssh.key", m.key),
+		},
 	}
 }
 
-type impl struct {
+type module struct {
 	rt *boot.Runtime
 }
 
-func (m *impl) key(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+func (m *module) key(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	if err := boot.RequireTask(thread, b); err != nil {
 		return nil, err
 	}

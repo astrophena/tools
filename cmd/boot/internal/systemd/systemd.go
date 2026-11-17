@@ -15,38 +15,34 @@ import (
 	boot "go.astrophena.name/tools/cmd/boot/internal"
 
 	"go.starlark.net/starlark"
+	"go.starlark.net/starlarkstruct"
 )
 
 // Module returns the Starlark systemd module.
-func Module() boot.Module { return module{} }
-
-type module struct{}
-
-func (module) Name() string { return "systemd" }
-
-func (module) Members(rt *boot.Runtime) starlark.StringDict {
-	m := &impl{
-		rt: rt,
-	}
-	return starlark.StringDict{
-		"system_unit": starlark.NewBuiltin("systemd.system_unit", m.systemUnit),
-		"user_unit":   starlark.NewBuiltin("systemd.user_unit", m.userUnit),
+func Module(rt *boot.Runtime) *starlarkstruct.Module {
+	m := &module{rt: rt}
+	return &starlarkstruct.Module{
+		Name: "systemd",
+		Members: starlark.StringDict{
+			"system_unit": starlark.NewBuiltin("systemd.system_unit", m.systemUnit),
+			"user_unit":   starlark.NewBuiltin("systemd.user_unit", m.userUnit),
+		},
 	}
 }
 
-type impl struct {
+type module struct {
 	rt *boot.Runtime
 }
 
-func (m *impl) userUnit(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+func (m *module) userUnit(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	return m.unit(thread, b, true, args, kwargs)
 }
 
-func (m *impl) systemUnit(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+func (m *module) systemUnit(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	return m.unit(thread, b, false, args, kwargs)
 }
 
-func (m *impl) unit(thread *starlark.Thread, b *starlark.Builtin, user bool, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+func (m *module) unit(thread *starlark.Thread, b *starlark.Builtin, user bool, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	if err := boot.RequireTask(thread, b); err != nil {
 		return nil, err
 	}

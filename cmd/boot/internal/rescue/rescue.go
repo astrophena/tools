@@ -21,29 +21,25 @@ import (
 	boot "go.astrophena.name/tools/cmd/boot/internal"
 
 	"go.starlark.net/starlark"
+	"go.starlark.net/starlarkstruct"
 )
 
 // Module returns the Starlark rescue module.
-func Module() boot.Module { return module{} }
-
-type module struct{}
-
-func (module) Name() string { return "rescue" }
-
-func (module) Members(rt *boot.Runtime) starlark.StringDict {
-	m := &impl{
-		rt: rt,
-	}
-	return starlark.StringDict{
-		"update": starlark.NewBuiltin("rescue.update", m.update),
+func Module(rt *boot.Runtime) *starlarkstruct.Module {
+	m := &module{rt: rt}
+	return &starlarkstruct.Module{
+		Name: "rescue",
+		Members: starlark.StringDict{
+			"update": starlark.NewBuiltin("rescue.update", m.update),
+		},
 	}
 }
 
-type impl struct {
+type module struct {
 	rt *boot.Runtime
 }
 
-func (m *impl) update(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+func (m *module) update(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	if err := boot.RequireTask(thread, b); err != nil {
 		return nil, err
 	}

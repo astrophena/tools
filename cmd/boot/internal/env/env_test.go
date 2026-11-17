@@ -24,8 +24,7 @@ func TestGet(t *testing.T) {
 		},
 	}
 
-	m := Module()
-	members := m.Members(rt)
+	members := Module(rt).Members
 	get, ok := members["get"].(*starlark.Builtin)
 	if !ok {
 		t.Fatal("env.get is not a builtin")
@@ -83,8 +82,7 @@ func TestGet(t *testing.T) {
 }
 
 func TestHostname(t *testing.T) {
-	m := Module()
-	members := m.Members(&boot.Runtime{})
+	members := Module(&boot.Runtime{}).Members
 	hostname, ok := members["hostname"].(*starlark.Builtin)
 	if !ok {
 		t.Fatal("env.hostname is not a builtin")
@@ -119,7 +117,7 @@ func TestLoadDirOverridesRuntimeEnv(t *testing.T) {
 			return ""
 		},
 	}
-	members := Module().Members(rt)
+	members := Module(rt).Members
 	loadDir := members["load_dir"].(*starlark.Builtin)
 	if _, err := loadDir.CallInternal(&starlark.Thread{
 		Name: "test",
@@ -152,7 +150,7 @@ func TestLoadDir(t *testing.T) {
 	rt := &boot.Runtime{
 		Root: root,
 	}
-	members := Module().Members(rt)
+	members := Module(rt).Members
 	loadDir := members["load_dir"].(*starlark.Builtin)
 	if _, err := loadDir.CallInternal(&starlark.Thread{
 		Name: "test",

@@ -15,28 +15,24 @@ import (
 	boot "go.astrophena.name/tools/cmd/boot/internal"
 
 	"go.starlark.net/starlark"
+	"go.starlark.net/starlarkstruct"
 )
 
 // Module returns the Starlark env module.
-func Module() boot.Module { return module{} }
-
-type module struct{}
-
-func (module) Name() string { return "env" }
-
-func (module) Members(rt *boot.Runtime) starlark.StringDict {
-	m := &impl{
-		rt: rt,
-	}
-	return starlark.StringDict{
-		"command_exists": starlark.NewBuiltin("env.command_exists", m.commandExists),
-		"get":            starlark.NewBuiltin("env.get", m.get),
-		"hostname":       starlark.NewBuiltin("env.hostname", m.hostname),
-		"load_dir":       starlark.NewBuiltin("env.load_dir", m.loadDir),
+func Module(rt *boot.Runtime) *starlarkstruct.Module {
+	m := &module{rt: rt}
+	return &starlarkstruct.Module{
+		Name: "env",
+		Members: starlark.StringDict{
+			"command_exists": starlark.NewBuiltin("env.command_exists", m.commandExists),
+			"get":            starlark.NewBuiltin("env.get", m.get),
+			"hostname":       starlark.NewBuiltin("env.hostname", m.hostname),
+			"load_dir":       starlark.NewBuiltin("env.load_dir", m.loadDir),
+		},
 	}
 }
 
-func (m *impl) commandExists(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+func (m *module) commandExists(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	var name string
 	if err := starlark.UnpackArgs(b.Name(), args, kwargs, "name", &name); err != nil {
 		return nil, err
@@ -45,11 +41,11 @@ func (m *impl) commandExists(thread *starlark.Thread, b *starlark.Builtin, args 
 	return starlark.Bool(err == nil), nil
 }
 
-type impl struct {
+type module struct {
 	rt *boot.Runtime
 }
 
-func (m *impl) get(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+func (m *module) get(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	var (
 		key        string
 		defaultVal string
@@ -69,7 +65,7 @@ func (m *impl) get(thread *starlark.Thread, b *starlark.Builtin, args starlark.T
 	return starlark.String(val), nil
 }
 
-func (m *impl) hostname(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+func (m *module) hostname(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	if err := starlark.UnpackArgs(b.Name(), args, kwargs); err != nil {
 		return nil, err
 	}
@@ -81,7 +77,7 @@ func (m *impl) hostname(thread *starlark.Thread, b *starlark.Builtin, args starl
 	return starlark.String(name), nil
 }
 
-func (m *impl) loadDir(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+func (m *module) loadDir(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	var path string
 	if err := starlark.UnpackArgs(b.Name(), args, kwargs, "path", &path); err != nil {
 		return nil, err

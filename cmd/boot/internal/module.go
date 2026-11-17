@@ -14,14 +14,6 @@ import (
 	"go.starlark.net/starlark"
 )
 
-// Module provides a Starlark global and its members.
-type Module interface {
-	// Name is the Starlark global name for this module.
-	Name() string
-	// Members returns the module members for the given runtime.
-	Members(*Runtime) starlark.StringDict
-}
-
 // Runtime holds paths, environment, and I/O shared by Starlark modules. Root
 // anchors relative paths; Home may differ from the process home directory.
 type Runtime struct {

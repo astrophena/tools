@@ -19,39 +19,30 @@ import (
 	boot "go.astrophena.name/tools/cmd/boot/internal"
 
 	"go.starlark.net/starlark"
+	"go.starlark.net/starlarkstruct"
 )
 
 // Module returns the Starlark git module.
-func Module() boot.Module { return &module{} }
+func Module(rt *boot.Runtime) *starlarkstruct.Module {
+	m := &module{rt: rt}
+	return &starlarkstruct.Module{
+		Name: "git",
+		Members: starlark.StringDict{
+			"clone": starlark.NewBuiltin("git.clone", m.clone),
+			"pull":  starlark.NewBuiltin("git.pull", m.pull),
+			"sync":  starlark.NewBuiltin("git.sync", m.sync),
+		},
+	}
+}
 
 type module struct {
+	rt *boot.Runtime
+
 	mu    sync.Mutex
 	repos map[string]*sync.Mutex
 }
 
-func (*module) Name() string { return "git" }
-
-func (mod *module) Members(rt *boot.Runtime) starlark.StringDict {
-	m := &impl{
-		rt:  rt,
-		mod: mod,
-	}
-	return starlark.StringDict{
-		"clone": starlark.NewBuiltin("git.clone", m.clone),
-		"pull":  starlark.NewBuiltin("git.pull", m.pull),
-		"sync":  starlark.NewBuiltin("git.sync", m.sync),
-	}
-}
-
-type impl struct {
-	rt  *boot.Runtime
-	mod *module
-}
-
 func (m *module) lockRepo(dst string) func() {
-	if m == nil {
-		return func() {}
-	}
 	m.mu.Lock()
 	if m.repos == nil {
 		m.repos = make(map[string]*sync.Mutex)
@@ -67,7 +58,7 @@ func (m *module) lockRepo(dst string) func() {
 	return lock.Unlock
 }
 
-func (m *impl) sync(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+func (m *module) sync(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	if err := boot.RequireTask(thread, b); err != nil {
 		return nil, err
 	}
@@ -91,7 +82,7 @@ func (m *impl) sync(thread *starlark.Thread, b *starlark.Builtin, args starlark.
 		Summary:    summary,
 		Concurrent: true,
 		Apply: func(ctx context.Context, dryRun bool) (boot.Result, error) {
-			unlock := m.mod.lockRepo(dst)
+			unlock := m.lockRepo(dst)
 			defer unlock()
 
 			if _, err := os.Stat(filepath.Join(dst, ".git")); errors.Is(err, fs.ErrNotExist) {
@@ -113,7 +104,7 @@ func (m *impl) sync(thread *starlark.Thread, b *starlark.Builtin, args starlark.
 	return starlark.None, nil
 }
 
-func (m *impl) pull(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+func (m *module) pull(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	if err := boot.RequireTask(thread, b); err != nil {
 		return nil, err
 	}
@@ -129,7 +120,7 @@ func (m *impl) pull(thread *starlark.Thread, b *starlark.Builtin, args starlark.
 		Summary:    fmt.Sprintf("git pull %s", dst),
 		Concurrent: true,
 		Apply: func(ctx context.Context, dryRun bool) (boot.Result, error) {
-			unlock := m.mod.lockRepo(dst)
+			unlock := m.lockRepo(dst)
 			defer unlock()
 
 			if _, err := os.Stat(filepath.Join(dst, ".git")); errors.Is(err, fs.ErrNotExist) {
@@ -143,7 +134,7 @@ func (m *impl) pull(thread *starlark.Thread, b *starlark.Builtin, args starlark.
 	return starlark.None, nil
 }
 
-func (m *impl) clone(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+func (m *module) clone(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	if err := boot.RequireTask(thread, b); err != nil {
 		return nil, err
 	}
@@ -172,7 +163,7 @@ func (m *impl) clone(thread *starlark.Thread, b *starlark.Builtin, args starlark
 		Summary:    summary,
 		Concurrent: true,
 		Apply: func(ctx context.Context, dryRun bool) (boot.Result, error) {
-			unlock := m.mod.lockRepo(dst)
+			unlock := m.lockRepo(dst)
 			defer unlock()
 
 			if _, err := os.Stat(filepath.Join(dst, ".git")); err == nil {

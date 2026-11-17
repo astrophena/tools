@@ -27,7 +27,7 @@ func TestGoInstallCreatesOneActionPerPackage(t *testing.T) {
 	}
 	h := testutil.NewTask(t, "test")
 
-	m := &impl{
+	m := &module{
 		rt: rt,
 	}
 	_, err := m.install(h.Thread, starlark.NewBuiltin("go.install", m.install), starlark.Tuple{
@@ -62,7 +62,7 @@ func TestGoInstallLocalConditions(t *testing.T) {
 	}
 	h := testutil.NewTask(t, "test")
 
-	m := &impl{
+	m := &module{
 		rt: rt,
 	}
 	_, err := m.installLocal(h.Thread, starlark.NewBuiltin("go.install_local", m.installLocal), nil, []starlark.Tuple{

@@ -24,7 +24,7 @@ import (
 type Engine struct {
 	Runtime *Runtime
 	Entry   string
-	Modules []Module
+	Modules []*starlarkstruct.Module
 
 	Tasks []*Task
 }
@@ -117,10 +117,7 @@ func (e *Engine) Load(ctx context.Context) error {
 		"struct": starlark.NewBuiltin("struct", starlarkstruct.Make),
 	}
 	for _, mod := range e.Modules {
-		predeclared[mod.Name()] = &starlarkstruct.Module{
-			Name:    mod.Name(),
-			Members: mod.Members(e.Runtime),
-		}
+		predeclared[mod.Name] = mod
 	}
 
 	intr := &interpreter.Interpreter{

@@ -24,7 +24,7 @@ Use `Warn` to add a non-fatal message to the run's final report.
 
 ## Modules
 
-A module implements `Name() string` and `Members(*Runtime) starlark.StringDict`.
+A module constructs a `starlarkstruct.Module` with the shared `Runtime`.
 Keep its Starlark functions focused on recipe operations. Functions that emit
 actions should:
 

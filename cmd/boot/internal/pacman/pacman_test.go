@@ -74,7 +74,7 @@ func TestPacnewFilesSorted(t *testing.T) {
 func runOrphansAction(t *testing.T) (boot.Result, []string) {
 	t.Helper()
 	h := testutil.NewTask(t, "test")
-	m := &impl{
+	m := &module{
 		rt: &boot.Runtime{},
 	}
 	action := h.EmitOne("pacman.check_orphans", m.checkOrphans, nil, nil)

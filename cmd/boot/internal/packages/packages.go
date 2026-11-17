@@ -19,39 +19,33 @@ import (
 	boot "go.astrophena.name/tools/cmd/boot/internal"
 
 	"go.starlark.net/starlark"
+	"go.starlark.net/starlarkstruct"
 )
 
 // Module returns the Starlark pkg module.
-func Module() boot.Module { return &module{} }
+func Module(rt *boot.Runtime) *starlarkstruct.Module {
+	m := &module{rt: rt}
+	return &starlarkstruct.Module{
+		Name: "pkg",
+		Members: starlark.StringDict{
+			"check_explicit_packages": starlark.NewBuiltin("pkg.check_explicit_packages", m.checkExplicitPackages),
+			"configure":               starlark.NewBuiltin("pkg.configure", m.configure),
+			"install":                 starlark.NewBuiltin("pkg.install", m.install),
+			"manager":                 starlark.NewBuiltin("pkg.manager", m.manager),
+			"update":                  starlark.NewBuiltin("pkg.update", m.update),
+		},
+	}
+}
 
 type module struct {
-	mu      sync.Mutex
-	manager string
-	pkgMu   sync.Mutex
+	rt *boot.Runtime
+
+	mu          sync.Mutex
+	managerName string
+	pkgMu       sync.Mutex
 }
 
-func (*module) Name() string { return "pkg" }
-
-func (m *module) Members(rt *boot.Runtime) starlark.StringDict {
-	impl := &impl{
-		rt:  rt,
-		mod: m,
-	}
-	return starlark.StringDict{
-		"check_explicit_packages": starlark.NewBuiltin("pkg.check_explicit_packages", impl.checkExplicitPackages),
-		"configure":               starlark.NewBuiltin("pkg.configure", impl.configure),
-		"install":                 starlark.NewBuiltin("pkg.install", impl.install),
-		"manager":                 starlark.NewBuiltin("pkg.manager", impl.manager),
-		"update":                  starlark.NewBuiltin("pkg.update", impl.update),
-	}
-}
-
-type impl struct {
-	rt  *boot.Runtime
-	mod *module
-}
-
-func (m *impl) configure(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+func (m *module) configure(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	var manager string
 	if err := starlark.UnpackArgs(b.Name(), args, kwargs, "manager", &manager); err != nil {
 		return nil, err
@@ -59,13 +53,13 @@ func (m *impl) configure(_ *starlark.Thread, b *starlark.Builtin, args starlark.
 	if _, err := packageManagerByName(m.rt, manager); err != nil {
 		return nil, err
 	}
-	m.mod.mu.Lock()
-	m.mod.manager = manager
-	m.mod.mu.Unlock()
+	m.mu.Lock()
+	m.managerName = manager
+	m.mu.Unlock()
 	return starlark.None, nil
 }
 
-func (m *impl) manager(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+func (m *module) manager(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	if len(args) > 0 || len(kwargs) > 0 {
 		return nil, fmt.Errorf("%s: unexpected arguments", b.Name())
 	}
@@ -76,7 +70,7 @@ func (m *impl) manager(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tu
 	return starlark.String(pm.name), nil
 }
 
-func (m *impl) install(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+func (m *module) install(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	if err := boot.RequireTask(thread, b); err != nil {
 		return nil, err
 	}
@@ -104,8 +98,8 @@ func (m *impl) install(thread *starlark.Thread, b *starlark.Builtin, args starla
 		Summary:      fmt.Sprintf("install packages with %s: %s", pm.name, strings.Join(names, ", ")),
 		RequiresSudo: pm.requiresSudo,
 		Apply: func(ctx context.Context, dryRun bool) (boot.Result, error) {
-			m.mod.pkgMu.Lock()
-			defer m.mod.pkgMu.Unlock()
+			m.pkgMu.Lock()
+			defer m.pkgMu.Unlock()
 
 			missing, err := pm.missing(ctx, names)
 			if err != nil {
@@ -123,7 +117,7 @@ func (m *impl) install(thread *starlark.Thread, b *starlark.Builtin, args starla
 	return starlark.None, nil
 }
 
-func (m *impl) update(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+func (m *module) update(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	if err := boot.RequireTask(thread, b); err != nil {
 		return nil, err
 	}
@@ -140,7 +134,7 @@ func (m *impl) update(thread *starlark.Thread, b *starlark.Builtin, args starlar
 	return starlark.None, nil
 }
 
-func (m *impl) addUpdateActions(thread *starlark.Thread, pm packageManager) {
+func (m *module) addUpdateActions(thread *starlark.Thread, pm packageManager) {
 	summary := fmt.Sprintf("update system with %s", pm.name)
 	currentSummary := summary
 	var summaryMu sync.Mutex
@@ -153,8 +147,8 @@ func (m *impl) addUpdateActions(thread *starlark.Thread, pm packageManager) {
 		},
 		RequiresSudo: pm.requiresSudo,
 		Apply: func(ctx context.Context, dryRun bool) (boot.Result, error) {
-			m.mod.pkgMu.Lock()
-			defer m.mod.pkgMu.Unlock()
+			m.pkgMu.Lock()
+			defer m.pkgMu.Unlock()
 
 			updates, err := pm.updates(ctx, dryRun)
 			if err != nil {
@@ -190,7 +184,7 @@ func (m *impl) addUpdateActions(thread *starlark.Thread, pm packageManager) {
 	})
 }
 
-func (m *impl) checkExplicitPackages(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+func (m *module) checkExplicitPackages(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	if err := boot.RequireTask(thread, b); err != nil {
 		return nil, err
 	}
@@ -234,12 +228,12 @@ func (m *impl) checkExplicitPackages(thread *starlark.Thread, b *starlark.Builti
 	return starlark.None, nil
 }
 
-func (m *impl) resolveManager() (packageManager, error) {
-	m.mod.mu.Lock()
-	defer m.mod.mu.Unlock()
+func (m *module) resolveManager() (packageManager, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
-	if m.mod.manager != "" {
-		return packageManagerByName(m.rt, m.mod.manager)
+	if m.managerName != "" {
+		return packageManagerByName(m.rt, m.managerName)
 	}
 
 	manager := m.rt.EnvValue("BOOT_PACKAGE_MANAGER")
@@ -254,7 +248,7 @@ func (m *impl) resolveManager() (packageManager, error) {
 	}
 
 	if manager != "" {
-		m.mod.manager = manager
+		m.managerName = manager
 		return packageManagerByName(m.rt, manager)
 	}
 

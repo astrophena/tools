@@ -56,7 +56,7 @@ func TestRequire(t *testing.T) {
 			}
 
 			h := testutil.NewTask(t, "test")
-			m := &impl{
+			m := &module{
 				rt: rt,
 			}
 
