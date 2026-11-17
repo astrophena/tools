@@ -59,46 +59,7 @@ func (m *module) lockRepo(dst string) func() {
 }
 
 func (m *module) sync(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	var (
-		url      string
-		dest     string
-		revision string
-	)
-	if err := starlark.UnpackArgs(b.Name(), args, kwargs, "url", &url, "dest", &dest, "revision?", &revision); err != nil {
-		return nil, err
-	}
-
-	dst := m.rt.ResolveTarget(dest)
-	summary := fmt.Sprintf("git sync %s to %s", url, dst)
-	if revision != "" {
-		summary += " at " + revision
-	}
-
-	boot.AddAction(thread, boot.Action{
-		Title:      "git sync " + filepath.Base(dst),
-		Summary:    summary,
-		Concurrent: true,
-		Apply: func(ctx context.Context, dryRun bool) (boot.Result, error) {
-			unlock := m.lockRepo(dst)
-			defer unlock()
-
-			if _, err := os.Stat(filepath.Join(dst, ".git")); errors.Is(err, fs.ErrNotExist) {
-				if dryRun {
-					return boot.ResultChange, nil
-				}
-				if err := cloneRepository(ctx, url, dst, revision); err != nil {
-					return "", err
-				}
-				return boot.ResultChange, nil
-			} else if err != nil {
-				return "", err
-			}
-
-			return updateRepository(ctx, dst, revision, dryRun)
-		},
-	})
-
-	return starlark.None, nil
+	return m.cloneOrSync(thread, b, args, kwargs, "sync")
 }
 
 func (m *module) pull(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
@@ -129,6 +90,10 @@ func (m *module) pull(thread *starlark.Thread, b *starlark.Builtin, args starlar
 }
 
 func (m *module) clone(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	return m.cloneOrSync(thread, b, args, kwargs, "clone")
+}
+
+func (m *module) cloneOrSync(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple, verb string) (starlark.Value, error) {
 	var (
 		url      string
 		dest     string
@@ -144,13 +109,14 @@ func (m *module) clone(thread *starlark.Thread, b *starlark.Builtin, args starla
 	}
 
 	dst := m.rt.ResolveTarget(dest)
-	summary := fmt.Sprintf("git clone %s to %s", url, dst)
+	command := "git " + verb
+	summary := fmt.Sprintf("%s %s to %s", command, url, dst)
 	if revision != "" {
 		summary += " at " + revision
 	}
 
 	boot.AddAction(thread, boot.Action{
-		Title:      "git clone " + filepath.Base(dst),
+		Title:      command + " " + filepath.Base(dst),
 		Summary:    summary,
 		Concurrent: true,
 		Apply: func(ctx context.Context, dryRun bool) (boot.Result, error) {
@@ -158,7 +124,7 @@ func (m *module) clone(thread *starlark.Thread, b *starlark.Builtin, args starla
 			defer unlock()
 
 			if _, err := os.Stat(filepath.Join(dst, ".git")); err == nil {
-				if revision == "" {
+				if verb == "clone" && revision == "" {
 					return boot.ResultSkip, nil
 				}
 				return updateRepository(ctx, dst, revision, dryRun)
