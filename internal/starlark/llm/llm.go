@@ -17,12 +17,10 @@ import (
 	"go.starlark.net/starlarkstruct"
 )
 
-// Module returns a Starlark module that exposes a minimal Responses API call.
+// Module returns the llm Starlark module. Usage tracking is disabled if
+// usagePath is empty or the usage file cannot be opened.
 func Module(client *llm.Client, usagePath string) *starlarkstruct.Module {
-	usage, err := newUsageStore(usagePath)
-	if err != nil {
-		usage = nil
-	}
+	usage, _ := newUsageStore(usagePath)
 	m := &module{
 		client: client,
 		usage:  usage,
@@ -42,8 +40,6 @@ type module struct {
 }
 
 func (m *module) generate(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	ctx := interpreter.Context(thread)
-
 	if m.client == nil {
 		return starlark.None, fmt.Errorf("%s: LLM API is not available", b.Name())
 	}
@@ -55,7 +51,6 @@ func (m *module) generate(thread *starlark.Thread, b *starlark.Builtin, args sta
 		usageKey     string
 		image        starlark.Bytes
 	)
-
 	if err := starlark.UnpackArgs(
 		b.Name(), args, kwargs,
 		"model", &model,
@@ -76,11 +71,11 @@ func (m *module) generate(thread *starlark.Thread, b *starlark.Builtin, args sta
 		if len(item) != 2 {
 			return nil, fmt.Errorf("%s: contents[%d] must have exactly two elements: role and content", b.Name(), i)
 		}
-		role, ok := item.Index(0).(starlark.String)
+		role, ok := item[0].(starlark.String)
 		if !ok {
 			return nil, fmt.Errorf("%s: in contents[%d] role must be a string", b.Name(), i)
 		}
-		content, ok := item.Index(1).(starlark.String)
+		content, ok := item[1].(starlark.String)
 		if !ok {
 			return nil, fmt.Errorf("%s: in contents[%d] content must be a string", b.Name(), i)
 		}
@@ -95,8 +90,8 @@ func (m *module) generate(thread *starlark.Thread, b *starlark.Builtin, args sta
 		})
 	}
 	if image.Len() > 0 {
-		mime := http.DetectContentType([]byte(image))
-		imageURL := "data:" + mime + ";base64," + base64.StdEncoding.EncodeToString([]byte(image))
+		data := []byte(image)
+		imageURL := "data:" + http.DetectContentType(data) + ";base64," + base64.StdEncoding.EncodeToString(data)
 		messages = append(messages, llm.Message{
 			Role: "user",
 			Content: []llm.ContentPart{
@@ -108,7 +103,7 @@ func (m *module) generate(thread *starlark.Thread, b *starlark.Builtin, args sta
 		})
 	}
 
-	resp, err := m.client.CreateResponse(ctx, llm.ResponseParams{
+	resp, err := m.client.CreateResponse(interpreter.Context(thread), llm.ResponseParams{
 		Model:        model,
 		Input:        messages,
 		Instructions: instructions,
