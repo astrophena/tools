@@ -150,7 +150,7 @@ func (e *engine) doInit(ctx context.Context) error {
 		Secret:       e.tgSecret,
 		Owner:        e.tgOwner,
 		HTTPClient:   e.httpc,
-		KVCache:      kvcache.Module(ctx, e.store),
+		KVCache:      kvcache.Module(e.store),
 		Scrubber:     e.scrubber,
 		Logger:       e.logger.WithGroup("bot"),
 		LLMUsagePath: e.llmUsagePath,

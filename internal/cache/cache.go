@@ -2,20 +2,39 @@
 // Use of this source code is governed by the ISC
 // license that can be found in the LICENSE.md file.
 
-// Package cache implements a key-value store backed in-memory or by JSON file.
+// Package cache provides in-memory and file-backed caches.
 package cache
 
 import (
 	"context"
+	"time"
 )
 
-// Store is a generic interface for a key-value store.
+// Store is a byte-valued cache with expiration based on last access.
 type Store interface {
-	// Get retrieves a value for a given key.
-	// It must return (nil, nil) if the key is not found.
-	Get(ctx context.Context, key string) ([]byte, error)
-	// Set stores a value for a given key.
-	Set(ctx context.Context, key string, value []byte) error
-	// Close closes the store and releases any resources.
+	// Get retrieves a value and refreshes its expiration. A missing or expired
+	// key returns (nil, nil).
+	Get(key string) ([]byte, error)
+	// Set stores a value and refreshes its expiration.
+	Set(key string, value []byte) error
+	// Close finishes any pending persistence work.
 	Close() error
+}
+
+type entry struct {
+	Value        []byte    `json:"value"`
+	LastAccessed time.Time `json:"last_accessed"`
+}
+
+func evictPeriodically(ctx context.Context, ttl time.Duration, evict func()) {
+	// Keep short or nonpositive TTLs from spinning the cleanup loop.
+	interval := min(max(ttl/2, time.Millisecond), 24*time.Hour)
+	for ctx.Err() == nil {
+		select {
+		case <-time.After(interval):
+			evict()
+		case <-ctx.Done():
+			return
+		}
+	}
 }

@@ -17,7 +17,7 @@ import (
 
 func TestSetGet(t *testing.T) {
 	s := cache.NewMemStore(t.Context(), time.Minute)
-	mod := Module(t.Context(), s)
+	mod := Module(s)
 	thread := &starlark.Thread{
 		Name: t.Name(),
 	}
@@ -27,7 +27,6 @@ func TestSetGet(t *testing.T) {
 	key2 := starlark.String("anotherkey")
 	value2 := starlark.MakeInt(123)
 
-	// Test set.
 	_, err := mod.Members["set"].(*starlark.Builtin).CallInternal(thread, starlark.Tuple{key1, value1}, nil)
 	if err != nil {
 		t.Fatalf("set(%q, %q) failed: %v", key1, value1, err)
@@ -37,7 +36,6 @@ func TestSetGet(t *testing.T) {
 		t.Fatalf("set(%q, %v) failed: %v", key2, value2, err)
 	}
 
-	// Test get existing key.
 	got, err := mod.Members["get"].(*starlark.Builtin).CallInternal(thread, starlark.Tuple{key1}, nil)
 	if err != nil {
 		t.Fatalf("get(%q) failed: %v", key1, err)
@@ -54,7 +52,6 @@ func TestSetGet(t *testing.T) {
 		t.Errorf("get(%q) = %v, want %v", key2, got, value2)
 	}
 
-	// Test get non-existent key.
 	nonExistentKey := starlark.String("nokey")
 	got, err = mod.Members["get"].(*starlark.Builtin).CallInternal(thread, starlark.Tuple{nonExistentKey}, nil)
 	if err != nil {
@@ -64,7 +61,6 @@ func TestSetGet(t *testing.T) {
 		t.Errorf("get(%q) = %v, want None", nonExistentKey, got)
 	}
 
-	// Test overwrite value.
 	newValue1 := starlark.Bool(true)
 	_, err = mod.Members["set"].(*starlark.Builtin).CallInternal(thread, starlark.Tuple{key1, newValue1}, nil)
 	if err != nil {
@@ -83,7 +79,7 @@ func TestTTL(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		ttl := 50 * time.Millisecond
 		s := cache.NewMemStore(t.Context(), ttl)
-		mod := Module(t.Context(), s)
+		mod := Module(s)
 		thread := &starlark.Thread{
 			Name: t.Name(),
 		}
@@ -91,13 +87,11 @@ func TestTTL(t *testing.T) {
 		key := starlark.String("expiring_key")
 		value := starlark.String("expiring_value")
 
-		// Set an entry.
 		_, err := mod.Members["set"].(*starlark.Builtin).CallInternal(thread, starlark.Tuple{key, value}, nil)
 		if err != nil {
 			t.Fatalf("set(%q, %q) failed: %v", key, value, err)
 		}
 
-		// Get immediately, should exist.
 		got, err := mod.Members["get"].(*starlark.Builtin).CallInternal(thread, starlark.Tuple{key}, nil)
 		if err != nil {
 			t.Fatalf("get(%q) immediately failed: %v", key, err)
@@ -106,10 +100,8 @@ func TestTTL(t *testing.T) {
 			t.Errorf("get(%q) immediately = %v, want %v", key, got, value)
 		}
 
-		// Wait for longer than TTL.
 		time.Sleep(ttl + 20*time.Millisecond)
 
-		// Get again, should be None (expired).
 		got, err = mod.Members["get"].(*starlark.Builtin).CallInternal(thread, starlark.Tuple{key}, nil)
 		if err != nil {
 			t.Fatalf("get(%q) after TTL failed: %v", key, err)
@@ -124,37 +116,32 @@ func TestTTL_ResetOnGet(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		ttl := 100 * time.Millisecond
 		s := cache.NewMemStore(t.Context(), ttl)
-		mod := Module(t.Context(), s)
+		mod := Module(s)
 		thread := &starlark.Thread{
-			Name: "TestKVCache_TTL_ResetOnGet",
+			Name: t.Name(),
 		}
 
 		key := starlark.String("reset_key")
 		value := starlark.String("reset_value")
 
-		// Set an entry.
 		_, err := mod.Members["set"].(*starlark.Builtin).CallInternal(thread, starlark.Tuple{key, value}, nil)
 		if err != nil {
 			t.Fatalf("set(%q, %q) failed: %v", key, value, err)
 		}
 
-		// Wait for less than TTL.
 		time.Sleep(ttl / 2)
 
-		// Get the entry, should exist and reset the timer.
 		got, err := mod.Members["get"].(*starlark.Builtin).CallInternal(thread, starlark.Tuple{key}, nil)
 		if err != nil {
 			t.Fatalf("get(%q) before expiry failed: %v", key, err)
 		}
 		if eq, _ := starlark.Equal(got, value); !eq {
-			// Fatal because next steps depend on this.
 			t.Fatalf("get(%q) before expiry = %v, want %v", key, got, value)
 		}
 
 		// Wait again for less than TTL (but total time > original TTL).
 		time.Sleep(ttl / 2)
 
-		// Get again, should still exist because the first get reset the timer.
 		got, err = mod.Members["get"].(*starlark.Builtin).CallInternal(thread, starlark.Tuple{key}, nil)
 		if err != nil {
 			t.Fatalf("get(%q) after reset failed: %v", key, err)
@@ -163,10 +150,8 @@ func TestTTL_ResetOnGet(t *testing.T) {
 			t.Errorf("get(%q) after reset = %v, want %v (expected TTL reset)", key, got, value)
 		}
 
-		// Wait for longer than TTL after the last get.
 		time.Sleep(ttl + 20*time.Millisecond)
 
-		// Get again, should now be expired.
 		got, err = mod.Members["get"].(*starlark.Builtin).CallInternal(thread, starlark.Tuple{key}, nil)
 		if err != nil {
 			t.Fatalf("get(%q) finally failed: %v", key, err)
@@ -202,6 +187,17 @@ func TestSerialization(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			switch v.(type) {
+			case starlark.Tuple:
+				if want := `{"__starlark_type__":"tuple","values":["b",2]}`; string(data) != want {
+					t.Fatalf("encoded tuple = %s, want %s", data, want)
+				}
+			case *starlarkstruct.Struct:
+				if want := `{"__starlark_type__":"struct","values":{"d":4}}`; string(data) != want {
+					t.Fatalf("encoded struct = %s, want %s", data, want)
+				}
+			}
+
 			got, err := jsonToStarlark(data)
 			if err != nil {
 				t.Fatal(err)

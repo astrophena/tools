@@ -6,90 +6,71 @@ package cache
 
 import (
 	"context"
+	"sync"
 	"time"
-
-	"go.astrophena.name/base/syncx"
 )
 
-// MemStore is an in-memory implementation of the [Store] interface.
+// MemStore stores values in memory.
 type MemStore struct {
-	ttl   time.Duration
-	cache syncx.Map[string, cacheEntry]
+	ttl time.Duration
+
+	mu    sync.Mutex
+	cache map[string]entry
 }
 
-// NewMemStore creates a new [MemStore] with the given TTL.
+// NewMemStore creates a cache with the given TTL. The context controls the
+// lifetime of its background eviction loop.
 func NewMemStore(ctx context.Context, ttl time.Duration) *MemStore {
-	s := &MemStore{
-		ttl: ttl,
-	}
-	s.cleanup(ctx, true)
-	go s.cleanup(ctx, false)
+	s := &MemStore{ttl: ttl}
+	go evictPeriodically(ctx, ttl, s.evictExpired)
 	return s
 }
 
-type cacheEntry struct {
-	value        []byte
-	lastAccessed time.Time
-}
+func (s *MemStore) evictExpired() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-func (s *MemStore) cleanup(ctx context.Context, firstRun bool) {
-	if firstRun {
-		s.performCleanup()
-		return
-	}
-
-	sleepDuration := min(s.ttl/2, 24*time.Hour)
-
-	for {
-		select {
-		case <-time.After(sleepDuration):
-			s.performCleanup()
-		case <-ctx.Done():
-			return
+	for key, e := range s.cache {
+		if time.Since(e.LastAccessed) > s.ttl {
+			delete(s.cache, key)
 		}
 	}
 }
 
-func (s *MemStore) performCleanup() {
-	s.cache.Range(func(key string, entry cacheEntry) bool {
-		if time.Since(entry.lastAccessed) > s.ttl {
-			s.cache.Delete(key)
-		}
-		return true
-	})
-}
+// Get retrieves a copy of the stored value and refreshes its expiration.
+func (s *MemStore) Get(key string) ([]byte, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-// Get retrieves a value for a given key.
-func (s *MemStore) Get(_ context.Context, key string) ([]byte, error) {
-	entry, ok := s.cache.Load(key)
+	e, ok := s.cache[key]
 	if !ok {
 		return nil, nil
 	}
 
-	if time.Since(entry.lastAccessed) > s.ttl {
-		s.cache.Delete(key)
+	if time.Since(e.LastAccessed) > s.ttl {
+		delete(s.cache, key)
 		return nil, nil
 	}
 
-	entry.lastAccessed = time.Now()
-	s.cache.Store(key, entry)
-
-	// Return a copy to prevent the caller from mutating the cache.
-	return append([]byte(nil), entry.value...), nil
+	e.LastAccessed = time.Now()
+	s.cache[key] = e
+	return append([]byte(nil), e.Value...), nil
 }
 
-// Set stores a value for a given key.
-func (s *MemStore) Set(_ context.Context, key string, value []byte) error {
-	// Store a copy to prevent the caller from mutating the cache.
-	valueCopy := append([]byte(nil), value...)
-	s.cache.Store(key, cacheEntry{
-		value:        valueCopy,
-		lastAccessed: time.Now(),
-	})
+// Set stores a copy of value and refreshes its expiration.
+func (s *MemStore) Set(key string, value []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.cache == nil {
+		s.cache = make(map[string]entry)
+	}
+	s.cache[key] = entry{
+		Value:        append([]byte(nil), value...),
+		LastAccessed: time.Now(),
+	}
 	return nil
 }
 
-// Close is a no-op for MemStore.
-func (s *MemStore) Close() error {
-	return nil
-}
+// Close returns nil. Eviction stops when the constructor's context is canceled.
+func (s *MemStore) Close() error { return nil }

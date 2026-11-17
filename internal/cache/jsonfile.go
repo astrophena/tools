@@ -17,7 +17,7 @@ import (
 	"crawshaw.dev/jsonfile"
 )
 
-// JSONFile is a file-backed implementation of the [Store] interface.
+// JSONFile stores cache entries in a JSON file.
 type JSONFile struct {
 	path        string
 	metricsPath string
@@ -35,7 +35,7 @@ type JSONFile struct {
 	cleanupDeletes atomic.Uint64
 }
 
-// JSONFileStats describes file-backed cache activity since process start.
+// JSONFileStats reports cache activity for this session and across restarts.
 type JSONFileStats struct {
 	Path                string
 	MetricsPath         string
@@ -63,11 +63,6 @@ type jsonStore struct {
 	Data map[string]entry `json:"data"`
 }
 
-type entry struct {
-	Value        []byte    `json:"value"`
-	LastAccessed time.Time `json:"last_accessed"`
-}
-
 type persistedStats struct {
 	Gets           uint64 `json:"gets"`
 	GetHits        uint64 `json:"get_hits"`
@@ -79,19 +74,12 @@ type persistedStats struct {
 	CleanupDeletes uint64 `json:"cleanup_deletes"`
 }
 
-// NewJSONFile creates a new [JSONFile] backed by the file at path with the given TTL.
+// NewJSONFile opens or creates a cache file. The context controls the
+// lifetime of its background eviction loop.
 func NewJSONFile(ctx context.Context, path string, ttl time.Duration) (*JSONFile, error) {
 	f, err := jsonfile.Load[jsonStore](path)
 	if errors.Is(err, fs.ErrNotExist) {
 		f, err = jsonfile.New[jsonStore](path)
-		if err == nil {
-			if err := f.Write(func(js *jsonStore) error {
-				js.Data = make(map[string]entry)
-				return nil
-			}); err != nil {
-				return nil, err
-			}
-		}
 	}
 	if err != nil {
 		return nil, err
@@ -108,31 +96,13 @@ func NewJSONFile(ctx context.Context, path string, ttl time.Duration) (*JSONFile
 	} else if !errors.Is(err, fs.ErrNotExist) {
 		return nil, err
 	}
-	s.cleanup(ctx, true)
-	go s.cleanup(ctx, false)
+	s.evictExpired()
+	go evictPeriodically(ctx, ttl, s.evictExpired)
 
 	return s, nil
 }
 
-func (s *JSONFile) cleanup(ctx context.Context, firstRun bool) {
-	if firstRun {
-		s.performCleanup()
-		return
-	}
-
-	sleepDuration := min(s.ttl/2, 24*time.Hour)
-
-	for {
-		select {
-		case <-time.After(sleepDuration):
-			s.performCleanup()
-		case <-ctx.Done():
-			return
-		}
-	}
-}
-
-func (s *JSONFile) performCleanup() {
+func (s *JSONFile) evictExpired() {
 	var deleted uint64
 	err := s.f.Write(func(js *jsonStore) error {
 		for key, e := range js.Data {
@@ -149,13 +119,13 @@ func (s *JSONFile) performCleanup() {
 	}
 }
 
-// Get retrieves a value for a given key.
-func (s *JSONFile) Get(_ context.Context, key string) ([]byte, error) {
+// Get retrieves the stored value and refreshes its expiration.
+func (s *JSONFile) Get(key string) ([]byte, error) {
 	s.gets.Add(1)
-	var val []byte
 	var (
+		val     []byte
 		hit     bool
-		mutated bool
+		expired bool
 	)
 	err := s.f.Write(func(js *jsonStore) error {
 		e, ok := js.Data[key]
@@ -166,13 +136,12 @@ func (s *JSONFile) Get(_ context.Context, key string) ([]byte, error) {
 		hit = true
 		if time.Since(e.LastAccessed) > s.ttl {
 			delete(js.Data, key)
-			mutated = true
+			expired = true
 			return nil
 		}
 
 		e.LastAccessed = time.Now()
 		js.Data[key] = e
-		mutated = true
 		val = e.Value
 		return nil
 	})
@@ -181,17 +150,17 @@ func (s *JSONFile) Get(_ context.Context, key string) ([]byte, error) {
 	} else {
 		s.getMisses.Add(1)
 	}
-	if err == nil && hit && val == nil {
+	if err == nil && expired {
 		s.expired.Add(1)
 	}
-	if err == nil && mutated {
+	if err == nil && hit {
 		s.recordRewrite()
 	}
 	return val, err
 }
 
-// Set stores a value for a given key.
-func (s *JSONFile) Set(_ context.Context, key string, val []byte) error {
+// Set stores a value and refreshes its expiration.
+func (s *JSONFile) Set(key string, val []byte) error {
 	s.sets.Add(1)
 	err := s.f.Write(func(js *jsonStore) error {
 		if js.Data == nil {
@@ -209,12 +178,12 @@ func (s *JSONFile) Set(_ context.Context, key string, val []byte) error {
 	return err
 }
 
-// Close closes the file store.
+// Close saves the cumulative cache metrics.
 func (s *JSONFile) Close() error {
 	return writePersistedStats(s.metricsPath, s.persisted.add(s.sessionStats()))
 }
 
-// Stats returns cumulative file-store metrics since process start.
+// Stats returns the current cache metrics.
 func (s *JSONFile) Stats() JSONFileStats {
 	session := s.sessionStats()
 	totals := s.persisted.add(session)
@@ -299,11 +268,11 @@ func writePersistedStats(path string, stats persistedStats) error {
 	if err != nil {
 		return err
 	}
-	_, err = f.Write(b)
-	if err1 := f.Close(); err == nil && err1 != nil {
-		err = err1
-	}
-	if err != nil {
+	defer os.Remove(f.Name())
+
+	_, writeErr := f.Write(b)
+	closeErr := f.Close()
+	if err := errors.Join(writeErr, closeErr); err != nil {
 		return err
 	}
 	return os.Rename(f.Name(), path)
