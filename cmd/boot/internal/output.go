@@ -18,13 +18,49 @@ type failure struct {
 	Err      error
 }
 
-func taskFailure(failures []failure, task *Task) (failure, bool) {
-	for _, failure := range failures {
-		if failure.TaskID == task.ID && failure.Action == "" {
-			return failure, true
+func (e *Engine) printPlan(w io.Writer, runs []taskRun, summary Summary, verbose bool) {
+	for i := range runs {
+		r := &runs[i]
+		if r.status == taskUnprepared || r.status == taskSkipped {
+			continue
+		}
+		fmt.Fprintf(w, "[%d/%d] Planning task %s: %s\n", i+1, len(runs), r.task.ID, r.task.Name)
+		if r.status == taskPrepareFailed {
+			fmt.Fprintf(w, "%s %s: %v\n", e.color("fail", colorRed), r.task.ID, r.err)
+		}
+		for _, action := range r.executionActions() {
+			switch {
+			case action.err != nil:
+				fmt.Fprintf(w, "%s %s: %s: %v\n", e.color("fail", colorRed), r.task.ID, action.description, action.err)
+			case action.result == ResultChange:
+				fmt.Fprintf(w, "%s %s: %s\n", e.color("change", colorGreen), r.task.ID, action.description)
+			case verbose:
+				fmt.Fprintf(w, "skip %s: %s\n", r.task.ID, action.description)
+			}
 		}
 	}
-	return failure{}, false
+	fmt.Fprintf(w, "summary: %d tasks, %d actions, %d would change, %d skipped, %d warnings, %d failed\n",
+		summary.Tasks, summary.Actions, summary.Changed, summary.Skipped, summary.Warnings, summary.Failed)
+}
+
+func (e *Engine) printVerbose(w io.Writer, runs []taskRun) {
+	for i := range runs {
+		r := &runs[i]
+		if r.status < taskPending {
+			continue
+		}
+		fmt.Fprintf(w, "[%d/%d] Applying task %s: %s\n", i+1, len(runs), r.task.ID, r.task.Name)
+		for _, action := range r.executionActions() {
+			if action.err != nil {
+				continue
+			}
+			label := string(action.result)
+			if action.result == ResultChange {
+				label = e.color(label, colorGreen)
+			}
+			fmt.Fprintf(w, "%s %s: %s\n", label, r.task.ID, action.description)
+		}
+	}
 }
 
 func (e *Engine) printReport(w io.Writer, summary Summary) {
@@ -66,29 +102,50 @@ func (e *Engine) printWarnings(w io.Writer, warnings []warning) {
 	}
 }
 
-func (e *Engine) printFailures(w io.Writer, failures []failure) error {
-	if len(failures) == 0 {
+func (e *Engine) printFailures(w io.Writer, runs []taskRun, failed int) error {
+	if failed == 0 {
 		return nil
 	}
 	fmt.Fprintf(w, "%s\n", e.color("errors:", colorRed))
-	for _, failure := range failures {
-		logPath, err := writeFailureLog(failure)
-		if err != nil {
-			return err
-		}
-		if failure.TaskID != "" {
-			fmt.Fprintf(w, "%s\n", e.color(fmt.Sprintf("  task: %s (%s)", failure.TaskID, failure.TaskName), colorRed))
-		}
-		if failure.Action != "" {
-			fmt.Fprintf(w, "%s\n", e.color("    action: "+failure.Action, colorRed))
-		}
-		fmt.Fprintf(w, "%s\n", e.color("    error: "+firstLine(failure.Err.Error()), colorRed))
-		fmt.Fprintf(w, "%s\n", e.color("    log: "+logPath, colorRed))
-		if output := restLines(failure.Err.Error()); output != "" {
-			fmt.Fprintf(w, "%s\n", e.color("    output:", colorRed))
-			for line := range strings.SplitSeq(output, "\n") {
-				fmt.Fprintf(w, "%s\n", e.color("      "+line, colorRed))
+	for i := range runs {
+		r := &runs[i]
+		f := failure{TaskID: r.task.ID, TaskName: r.task.Name, Err: r.err}
+		if f.Err != nil {
+			if err := e.printFailure(w, f); err != nil {
+				return err
 			}
+		}
+		for _, action := range r.actions {
+			if action.err == nil {
+				continue
+			}
+			f.Action = action.description
+			f.Err = action.err
+			if err := e.printFailure(w, f); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (e *Engine) printFailure(w io.Writer, f failure) error {
+	logPath, err := writeFailureLog(f)
+	if err != nil {
+		return err
+	}
+	if f.TaskID != "" {
+		fmt.Fprintf(w, "%s\n", e.color(fmt.Sprintf("  task: %s (%s)", f.TaskID, f.TaskName), colorRed))
+	}
+	if f.Action != "" {
+		fmt.Fprintf(w, "%s\n", e.color("    action: "+f.Action, colorRed))
+	}
+	fmt.Fprintf(w, "%s\n", e.color("    error: "+firstLine(f.Err.Error()), colorRed))
+	fmt.Fprintf(w, "%s\n", e.color("    log: "+logPath, colorRed))
+	if output := restLines(f.Err.Error()); output != "" {
+		fmt.Fprintf(w, "%s\n", e.color("    output:", colorRed))
+		for line := range strings.SplitSeq(output, "\n") {
+			fmt.Fprintf(w, "%s\n", e.color("      "+line, colorRed))
 		}
 	}
 	return nil

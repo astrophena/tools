@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"slices"
 	"strings"
 	"text/tabwriter"
 
@@ -171,205 +170,153 @@ func (e *Engine) Run(ctx context.Context, w io.Writer, selection Selection, opts
 	if e.Runtime != nil {
 		e.Runtime.Interactive = opts.Interactive
 		e.Runtime.Color = opts.Color
-	}
-	return e.run(ctx, w, selection, opts)
-}
-
-// prepare evaluates task bodies and records which tasks are ready to execute.
-//
-// A task body is run once per engine Run call. It emits Actions into task.Actions
-// through module functions. In interactive apply mode, consent actions are
-// special-cased here: asking for consent after sudo prompting or after starting
-// parallel work would be surprising, so consent runs while the task is still
-// being prepared. Accepted consent actions are deleted from the action list so
-// they are not counted or executed twice; denied/non-interactive consent marks
-// the task as unplanned by returning ResultStop.
-func (e *Engine) prepare(ctx context.Context, tasks []*Task, opts RunOptions, warnings *warningCollector) (planned map[string]bool, summary Summary, failures []failure, stopOnError bool) {
-	planned = make(map[string]bool)
-	summary.Tasks = len(tasks)
-
-	for _, task := range tasks {
-		task.Actions = nil
-		thread := &starlark.Thread{
-			Name: "boot:" + task.ID,
+		if opts.JSON {
+			stdout := e.Runtime.Stdout
+			e.Runtime.Stdout = io.Discard
+			defer func() { e.Runtime.Stdout = stdout }()
 		}
-		SetTask(thread, task)
-		if _, err := starlark.Call(thread, task.Run, nil, nil); err != nil {
-			if !task.ContinueOnError {
-				stopOnError = true
-			}
-			summary.Failed++
-			failures = append(failures, failure{
-				TaskID:   task.ID,
-				TaskName: task.Name,
-				Err:      err,
-			})
-			if opts.FailFast && !task.ContinueOnError {
-				break
-			}
-			continue
-		}
-		if opts.Interactive && !opts.DryRun {
-			stop := false
-			for i := 0; i < len(task.Actions); i++ {
-				action := task.Actions[i]
-				if action.IsConsent {
-					summary.Actions++
-					result, err := warnings.run(ctx, task, action, false)
-					if err != nil {
-						if !task.ContinueOnError {
-							stopOnError = true
-						}
-						summary.Failed++
-						failures = append(failures, failure{
-							TaskID:   task.ID,
-							TaskName: task.Name,
-							Action:   action.description(),
-							Err:      err,
-						})
-						if opts.FailFast && !task.ContinueOnError {
-							stop = true
-							break
-						}
-						continue
-					}
-					switch result {
-					case ResultSkip, ResultStop:
-						summary.Skipped++
-					case ResultChange:
-						summary.Changed++
-					}
-					if result == ResultStop {
-						task.Actions = nil
-						stop = true
-						break
-					}
-					task.Actions = slices.Delete(task.Actions, i, i+1)
-					i--
-				}
-			}
-			if stop && opts.FailFast && !task.ContinueOnError {
-				break
-			}
-			if stop {
-				continue
-			}
-		}
-		planned[task.ID] = true
 	}
-	return planned, summary, failures, stopOnError
-}
 
-func (e *Engine) run(ctx context.Context, w io.Writer, selection Selection, opts RunOptions) error {
-	if opts.JSON && e.Runtime != nil {
-		oldStdout := e.Runtime.Stdout
-		e.Runtime.Stdout = io.Discard
-		defer func() { e.Runtime.Stdout = oldStdout }()
-	}
 	tasks, err := e.Selected(selection)
 	if err != nil {
 		return err
 	}
+	runs := make([]taskRun, len(tasks))
+	for i, task := range tasks {
+		runs[i].task = task
+	}
+
 	warnings := &warningCollector{}
-	planned, summary, failures, stopOnError := e.prepare(ctx, tasks, opts, warnings)
-	promptOutput := w
-	if opts.JSON {
-		promptOutput = io.Discard
-	}
-	if !opts.DryRun {
-		if err := newSudoPrompter(e).prepare(ctx, promptOutput, tasks); err != nil {
-			return err
-		}
-	}
-	run := execution{
-		planned:  planned,
-		summary:  summary,
-		failures: failures,
-	}
-	taskDone := func(*Task) {}
 	var pb *progressbar.Bar
-	if !opts.DryRun && !opts.Verbose && !opts.JSON && !(stopOnError && opts.FailFast) {
-		pb = progressbar.New(w, len(tasks), opts.Interactive)
-		pb.Start()
-		taskDone = func(task *Task) {
-			pb.SetTitle(task.Name)
-			pb.Increment()
+	if prepare(ctx, runs, opts, warnings) {
+		if !opts.DryRun {
+			var prepared []*Task
+			for i := range runs {
+				if runs[i].status == taskPending {
+					prepared = append(prepared, runs[i].task)
+				}
+			}
+			promptOutput := w
+			if opts.JSON {
+				promptOutput = io.Discard
+			}
+			if err := e.prepareSudo(ctx, promptOutput, prepared); err != nil {
+				return err
+			}
 		}
+
+		taskDone := func(*Task) {}
+		if !opts.DryRun && !opts.Verbose && !opts.JSON {
+			pb = progressbar.New(w, len(runs), opts.Interactive)
+			pb.Start()
+			taskDone = func(task *Task) {
+				pb.SetTitle(task.Name)
+				pb.Increment()
+			}
+		}
+		execute(ctx, runs, opts, warnings, taskDone)
 	}
-	if !(stopOnError && opts.FailFast) {
-		run = e.execute(ctx, tasks, run, opts, warnings, taskDone)
-	}
+
+	summary := summarize(runs)
 	if pb != nil {
-		pb.Stop(run.summary.Failed > 0)
+		pb.Stop(summary.Failed > 0)
 	}
 	collectedWarnings := warnings.all()
-	run.summary.Warnings = len(collectedWarnings)
-	if opts.JSON {
-		err = e.printJSON(w, run, collectedWarnings, opts.DryRun)
-	} else if opts.DryRun {
-		e.printPlan(w, tasks, run, opts.Verbose)
+	summary.Warnings = len(collectedWarnings)
+	switch {
+	case opts.JSON:
+		err = printJSON(w, runs, summary, collectedWarnings, opts.DryRun)
+	case opts.DryRun:
+		e.printPlan(w, runs, summary, opts.Verbose)
 		e.printWarnings(w, collectedWarnings)
-	} else {
+	default:
 		if opts.Verbose {
-			e.printVerbose(w, tasks, run)
+			e.printVerbose(w, runs)
 		}
-		e.printReport(w, run.summary)
+		e.printReport(w, summary)
 		e.printWarnings(w, collectedWarnings)
-		err = e.printFailures(w, run.failures)
+		err = e.printFailures(w, runs, summary.Failed)
 	}
 	if err != nil {
 		return err
 	}
-	if run.summary.Failed > 0 {
+	if summary.Failed > 0 {
 		return errors.New("one or more tasks failed")
 	}
 	return nil
 }
 
-func (e *Engine) printPlan(w io.Writer, tasks []*Task, run execution, verbose bool) {
-	actions := run.orderedActions()
-	for i, task := range tasks {
-		if !run.planned[task.ID] {
-			if failure, ok := taskFailure(run.failures, task); ok {
-				fmt.Fprintf(w, "[%d/%d] Planning task %s: %s\n", i+1, len(tasks), task.ID, task.Name)
-				fmt.Fprintf(w, "%s %s: %v\n", e.color("fail", colorRed), task.ID, failure.Err)
-			}
-			continue
-		}
-		fmt.Fprintf(w, "[%d/%d] Planning task %s: %s\n", i+1, len(tasks), task.ID, task.Name)
-		for _, action := range actions {
-			if action.task != task {
-				continue
-			}
-			if action.err != nil {
-				fmt.Fprintf(w, "%s %s: %s: %v\n", e.color("fail", colorRed), task.ID, action.action.description(), action.err)
-			} else if action.result == ResultChange {
-				fmt.Fprintf(w, "%s %s: %s\n", e.color(string(action.result), colorGreen), task.ID, action.action.description())
-			} else if verbose {
-				fmt.Fprintf(w, "skip %s: %s\n", task.ID, action.action.description())
-			}
+func prepare(ctx context.Context, runs []taskRun, opts RunOptions, warnings *warningCollector) bool {
+	for i := range runs {
+		r := &runs[i]
+		r.prepare(ctx, opts, warnings)
+		if r.status == taskPrepareFailed && opts.FailFast && !r.task.ContinueOnError {
+			return false
 		}
 	}
-	fmt.Fprintf(w, "summary: %d tasks, %d actions, %d would change, %d skipped, %d warnings, %d failed\n",
-		run.summary.Tasks, run.summary.Actions, run.summary.Changed, run.summary.Skipped, run.summary.Warnings, run.summary.Failed)
+	return true
 }
 
-func (e *Engine) printVerbose(w io.Writer, tasks []*Task, run execution) {
-	actions := run.orderedActions()
-	for i, task := range tasks {
-		if !run.planned[task.ID] {
+func (r *taskRun) prepare(ctx context.Context, opts RunOptions, warnings *warningCollector) {
+	task := r.task
+	task.Actions = nil
+	thread := &starlark.Thread{Name: "boot:" + task.ID}
+	SetTask(thread, task)
+	if _, err := starlark.Call(thread, task.Run, nil, nil); err != nil {
+		task.Actions = nil
+		r.err = err
+		r.status = taskPrepareFailed
+		return
+	}
+
+	r.status = taskPending
+	if !opts.Interactive || opts.DryRun {
+		return
+	}
+
+	// Ask for consent before sudo prompting and parallel execution.
+	pending := task.Actions[:0]
+	for _, action := range task.Actions {
+		if !action.IsConsent {
+			pending = append(pending, action)
 			continue
 		}
-		fmt.Fprintf(w, "[%d/%d] Applying task %s: %s\n", i+1, len(tasks), task.ID, task.Name)
-		for _, action := range actions {
-			if action.task != task || action.err != nil {
-				continue
-			}
-			label := string(action.result)
-			if action.result == ResultChange {
-				label = e.color(label, colorGreen)
-			}
-			fmt.Fprintf(w, "%s %s: %s\n", label, task.ID, action.action.description())
+		result := r.runAction(ctx, action, false, warnings)
+		r.actions = append(r.actions, result)
+		r.consentCount++
+		switch {
+		case result.err != nil:
+			task.Actions = nil
+			r.status = taskPrepareFailed
+			return
+		case result.result == ResultStop:
+			task.Actions = nil
+			r.status = taskSkipped
+			return
 		}
 	}
+	clear(task.Actions[len(pending):])
+	task.Actions = pending
+}
+
+func summarize(runs []taskRun) Summary {
+	s := Summary{Tasks: len(runs)}
+	for i := range runs {
+		r := &runs[i]
+		if r.err != nil {
+			s.Failed++
+		}
+		s.Actions += len(r.actions)
+		for _, action := range r.actions {
+			switch {
+			case action.err != nil:
+				s.Failed++
+			case action.result == ResultChange:
+				s.Changed++
+			case action.result == ResultSkip || action.result == ResultStop:
+				s.Skipped++
+			}
+		}
+	}
+	return s
 }

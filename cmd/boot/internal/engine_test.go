@@ -307,6 +307,48 @@ func TestApplyFailFastPreservesContinueOnError(t *testing.T) {
 	}
 }
 
+func TestApplyConsentErrorDoesNotRunTask(t *testing.T) {
+	var prompts int
+	var ranTask, ranDependent, ranIndependent bool
+	mark := func(ran *bool) Action {
+		return Action{Apply: func(context.Context, bool) (Result, error) {
+			*ran = true
+			return ResultChange, nil
+		}}
+	}
+	guarded := testTask("guarded", Action{
+		Summary:   "request consent",
+		IsConsent: true,
+		Apply: func(context.Context, bool) (Result, error) {
+			prompts++
+			return "", errors.New("consent unavailable")
+		},
+	}, mark(&ranTask))
+	guarded.ContinueOnError = true
+
+	dependent := testTask("dependent", mark(&ranDependent))
+	dependent.DependsOn = []string{guarded.ID}
+	dependent.ContinueOnError = true
+	independent := testTask("independent", mark(&ranIndependent))
+
+	engine := &Engine{Tasks: []*Task{guarded, dependent, independent}}
+	var out bytes.Buffer
+	err := engine.Run(t.Context(), &out, Selection{}, RunOptions{
+		Interactive: true,
+		FailFast:    true,
+		JSON:        true,
+	})
+	if err == nil {
+		t.Fatal("Run succeeded, want consent failure")
+	}
+	if prompts != 1 || ranTask || ranDependent || !ranIndependent {
+		t.Fatalf("prompts = %d, ran guarded = %t, dependent = %t, independent = %t",
+			prompts, ranTask, ranDependent, ranIndependent)
+	}
+	assertContains(t, out.String(), "consent unavailable", "JSON report")
+	assertContains(t, out.String(), "dependency guarded failed", "JSON report")
+}
+
 func TestApplyStopsCurrentTaskOnResultStop(t *testing.T) {
 	var ranSecondAction bool
 	engine := &Engine{
@@ -413,7 +455,7 @@ func TestPrepareSudo(t *testing.T) {
 		Runtime: &Runtime{},
 	}
 	var out bytes.Buffer
-	if err := newSudoPrompter(engine).prepare(t.Context(), &out, []*Task{
+	if err := engine.prepareSudo(t.Context(), &out, []*Task{
 		{
 			ID:           "root_task",
 			Name:         "Root task",
@@ -439,13 +481,11 @@ case "$*" in
 esac
 `)
 
-	prompter := newSudoPrompter(&Engine{
-		Runtime: &Runtime{
-			Interactive: true,
-		},
-	})
+	rt := &Runtime{
+		Interactive: true,
+	}
 	var out bytes.Buffer
-	if err := prompter.authenticate(t.Context(), &out); err != nil {
+	if err := authenticateSudo(t.Context(), rt, &out); err != nil {
 		t.Fatal(err)
 	}
 	if out.Len() != 0 {
@@ -468,14 +508,12 @@ case "$*" in
 esac
 `)
 
-	prompter := newSudoPrompter(&Engine{
-		Runtime: &Runtime{
-			Stdin:       strings.NewReader("password\n"),
-			Interactive: true,
-		},
-	})
+	rt := &Runtime{
+		Stdin:       strings.NewReader("password\n"),
+		Interactive: true,
+	}
 	var out bytes.Buffer
-	if err := prompter.authenticate(t.Context(), &out); err != nil {
+	if err := authenticateSudo(t.Context(), rt, &out); err != nil {
 		t.Fatal(err)
 	}
 	assertContains(t, out.String(), "[sudo] password for test:\n", "sudo prompt output")
@@ -495,10 +533,8 @@ case "$*" in
 esac
 `)
 
-	prompter := newSudoPrompter(&Engine{
-		Runtime: &Runtime{},
-	})
-	err := prompter.authenticate(t.Context(), io.Discard)
+	rt := &Runtime{}
+	err := authenticateSudo(t.Context(), rt, io.Discard)
 	if err == nil {
 		t.Fatal("sudo authentication succeeded, want failure")
 	}

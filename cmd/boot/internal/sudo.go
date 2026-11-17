@@ -14,20 +14,9 @@ import (
 	"strings"
 )
 
-// sudoPrompter authenticates before actions run, keeping password prompts out
-// of concurrent output.
-type sudoPrompter struct {
-	engine *Engine
-}
-
-func newSudoPrompter(engine *Engine) *sudoPrompter {
-	return &sudoPrompter{
-		engine: engine,
-	}
-}
-
-func (p *sudoPrompter) prepare(ctx context.Context, w io.Writer, tasks []*Task) error {
-	if p.engine.Runtime == nil || !p.engine.Runtime.NeedsSudo() {
+// prepareSudo authenticates before execution so prompts stay out of parallel output.
+func (e *Engine) prepareSudo(ctx context.Context, w io.Writer, tasks []*Task) error {
+	if e.Runtime == nil || !e.Runtime.NeedsSudo() {
 		return nil
 	}
 	reasons := sudoReasons(tasks)
@@ -41,22 +30,20 @@ func (p *sudoPrompter) prepare(ctx context.Context, w io.Writer, tasks []*Task) 
 	for _, reason := range reasons {
 		fmt.Fprintf(w, "  - %s\n", reason)
 	}
-	if err := p.authenticate(ctx, w); err != nil {
-		return err
-	}
-	return nil
+
+	return authenticateSudo(ctx, e.Runtime, w)
 }
 
-func (p *sudoPrompter) authenticate(ctx context.Context, w io.Writer) error {
+func authenticateSudo(ctx context.Context, rt *Runtime, w io.Writer) error {
 	out, err := runCachedSudo(ctx)
 	if err == nil {
 		return nil
 	}
-	if p.engine.Runtime == nil || !p.engine.Runtime.Interactive {
+	if !rt.Interactive {
 		return sudoAuthError(err, out)
 	}
 
-	out, err = p.runInteractiveSudo(ctx, w)
+	out, err = runInteractiveSudo(ctx, rt.Stdin, w)
 	if err != nil {
 		return sudoAuthError(err, out)
 	}
@@ -72,14 +59,9 @@ func runCachedSudo(ctx context.Context) ([]byte, error) {
 	return out.Bytes(), err
 }
 
-func (p *sudoPrompter) runInteractiveSudo(ctx context.Context, w io.Writer) ([]byte, error) {
-	if w == nil {
-		w = io.Discard
-	}
-	rt := p.engine.Runtime
-	in := io.Reader(os.Stdin)
-	if rt != nil && rt.Stdin != nil {
-		in = rt.Stdin
+func runInteractiveSudo(ctx context.Context, in io.Reader, w io.Writer) ([]byte, error) {
+	if in == nil {
+		in = os.Stdin
 	}
 	out := &sudoOutput{
 		w: w,
@@ -89,10 +71,11 @@ func (p *sudoPrompter) runInteractiveSudo(ctx context.Context, w io.Writer) ([]b
 	cmd.Stdout = out
 	cmd.Stderr = out
 	err := cmd.Run()
-	if !out.endsWithNewline() {
+	b := out.buf.Bytes()
+	if len(b) == 0 || b[len(b)-1] != '\n' {
 		fmt.Fprintln(w)
 	}
-	return out.Bytes(), err
+	return b, err
 }
 
 func sudoAuthError(err error, out []byte) error {
@@ -106,27 +89,13 @@ func sudoAuthError(err error, out []byte) error {
 type sudoOutput struct {
 	w io.Writer
 
-	buf   bytes.Buffer
-	wrote bool
-	last  byte
+	buf bytes.Buffer
 }
 
 func (w *sudoOutput) Write(p []byte) (int, error) {
 	n, err := w.w.Write(p)
-	if n > 0 {
-		w.wrote = true
-		w.last = p[n-1]
-		_, _ = w.buf.Write(p[:n])
-	}
+	w.buf.Write(p[:n])
 	return n, err
-}
-
-func (w *sudoOutput) Bytes() []byte {
-	return w.buf.Bytes()
-}
-
-func (w *sudoOutput) endsWithNewline() bool {
-	return w.wrote && w.last == '\n'
 }
 
 // sudoReasons prefers action-level reasons over task-level reasons.
@@ -135,20 +104,14 @@ func (w *sudoOutput) endsWithNewline() bool {
 func sudoReasons(tasks []*Task) []string {
 	var reasons []string
 	for _, task := range tasks {
-		actions := sudoActionReasons(task)
-		if len(actions) == 0 && task.RequiresSudo {
-			reasons = append(reasons, fmt.Sprintf("task %s: %s", task.ID, task.Name))
+		start := len(reasons)
+		for _, action := range task.Actions {
+			if action.RequiresSudo {
+				reasons = append(reasons, fmt.Sprintf("%s: %s", task.ID, action.Summary))
+			}
 		}
-		reasons = append(reasons, actions...)
-	}
-	return reasons
-}
-
-func sudoActionReasons(task *Task) []string {
-	var reasons []string
-	for _, action := range task.Actions {
-		if action.RequiresSudo {
-			reasons = append(reasons, fmt.Sprintf("%s: %s", task.ID, action.Summary))
+		if len(reasons) == start && task.RequiresSudo {
+			reasons = append(reasons, fmt.Sprintf("task %s: %s", task.ID, task.Name))
 		}
 	}
 	return reasons

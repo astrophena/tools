@@ -9,11 +9,7 @@ import (
 	"io"
 )
 
-// jsonRun is the complete machine-readable report for a run.
-//
-// JSON mode is collected and emitted once at the end instead of streaming. That
-// keeps stdout valid JSON even when an action fails midway and makes it safe
-// for other programs to parse boot output without watching event boundaries.
+// jsonRun is written after all results have been collected.
 type jsonRun struct {
 	DryRun   bool         `json:"dry_run"`
 	Summary  Summary      `json:"summary"`
@@ -29,32 +25,39 @@ type jsonAction struct {
 	Error    string `json:"error,omitempty"`
 }
 
-func (e *Engine) printJSON(w io.Writer, run execution, warnings []warning, dryRun bool) error {
+func printJSON(w io.Writer, runs []taskRun, summary Summary, warnings []warning, dryRun bool) error {
 	report := jsonRun{
 		DryRun:   dryRun,
-		Summary:  run.summary,
+		Summary:  summary,
 		Warnings: warnings,
 	}
-	for _, failure := range run.failures {
-		if failure.Action == "" {
+	for i := range runs {
+		r := &runs[i]
+		if r.err != nil {
 			report.Actions = append(report.Actions, jsonAction{
-				TaskID:   failure.TaskID,
-				TaskName: failure.TaskName,
-				Error:    failure.Err.Error(),
+				TaskID:   r.task.ID,
+				TaskName: r.task.Name,
+				Error:    r.err.Error(),
 			})
 		}
 	}
-	for _, action := range run.orderedActions() {
-		item := jsonAction{
-			TaskID:   action.task.ID,
-			TaskName: action.task.Name,
-			Summary:  action.action.description(),
-			Result:   action.result,
+	for i := range runs {
+		r := &runs[i]
+		for j, action := range r.actions {
+			if j < r.consentCount && action.err == nil {
+				continue
+			}
+			item := jsonAction{
+				TaskID:   r.task.ID,
+				TaskName: r.task.Name,
+				Summary:  action.description,
+				Result:   action.result,
+			}
+			if action.err != nil {
+				item.Error = action.err.Error()
+			}
+			report.Actions = append(report.Actions, item)
 		}
-		if action.err != nil {
-			item.Error = action.err.Error()
-		}
-		report.Actions = append(report.Actions, item)
 	}
 	return json.NewEncoder(w).Encode(report)
 }
