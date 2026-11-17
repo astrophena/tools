@@ -808,6 +808,47 @@ func TestFailureReportLogsLongOutput(t *testing.T) {
 	}
 }
 
+func TestApplyInterrupted(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("TMPDIR", dir)
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	interrupt := Action{
+		Summary: "interrupt",
+		Apply: func(context.Context, bool) (Result, error) {
+			cancel()
+			return "", errors.New("signal: interrupt\n" + strings.Repeat("command output\n", 10))
+		},
+	}
+	var laterRuns int
+	later := Action{
+		Summary: "later",
+		Apply: func(context.Context, bool) (Result, error) {
+			laterRuns++
+			return ResultChange, nil
+		},
+	}
+	engine := &Engine{Tasks: []*Task{
+		testTask("first", interrupt, later),
+		testTask("second", later),
+	}}
+	var out bytes.Buffer
+	if err := engine.Run(ctx, &out, Selection{}, RunOptions{Interactive: true}); !errors.Is(err, context.Canceled) {
+		t.Fatalf("Run returned %v, want context.Canceled", err)
+	}
+	if laterRuns != 0 {
+		t.Fatalf("ran %d actions after cancellation", laterRuns)
+	}
+	if strings.Contains(out.String(), "Failures") || strings.Contains(out.String(), "command output") {
+		t.Fatalf("interrupted run printed a failure report:\n%s", &out)
+	}
+	logs, err := filepath.Glob(filepath.Join(dir, "boot-error-*.log"))
+	if err != nil || len(logs) != 0 {
+		t.Fatalf("logs = %v, err = %v, want no logs", logs, err)
+	}
+}
+
 type notifyingBuffer struct {
 	mu    sync.Mutex
 	buf   bytes.Buffer

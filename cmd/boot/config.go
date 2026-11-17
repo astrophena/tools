@@ -43,6 +43,8 @@ func loadConfig(ctx context.Context, env *cli.Env, cfg *options) error {
 	}
 
 	thread := &starlark.Thread{Name: "boot:config"}
+	stop := context.AfterFunc(ctx, func() { thread.Cancel(ctx.Err().Error()) })
+	defer stop()
 	predeclared := starlark.StringDict{
 		"boot": &starlarkstruct.Module{
 			Name: "boot",

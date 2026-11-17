@@ -164,6 +164,9 @@ func (e *Engine) List(w io.Writer, selection Selection) error {
 
 // Run prepares and executes selected tasks.
 func (e *Engine) Run(ctx context.Context, w io.Writer, selection Selection, opts RunOptions) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if e.Runtime != nil {
 		e.Runtime.Interactive = opts.Interactive
 		e.Runtime.Color = opts.Color
@@ -192,6 +195,9 @@ func (e *Engine) Run(ctx context.Context, w io.Writer, selection Selection, opts
 				promptOutput = io.Discard
 			}
 			if err := e.prepareSudo(ctx, promptOutput, runs); err != nil {
+				if canceled := ctx.Err(); canceled != nil {
+					return canceled
+				}
 				return err
 			}
 		}
@@ -200,6 +206,13 @@ func (e *Engine) Run(ctx context.Context, w io.Writer, selection Selection, opts
 			progress = startProgress(w, len(runs))
 		}
 		execute(ctx, runs, opts, warnings, progress)
+	}
+
+	if err := ctx.Err(); err != nil {
+		if progress != nil {
+			progress.bar.Stop(false)
+		}
+		return err
 	}
 
 	summary := summarize(runs)
@@ -233,13 +246,16 @@ func (e *Engine) Run(ctx context.Context, w io.Writer, selection Selection, opts
 
 func prepare(ctx context.Context, runs []taskRun, opts RunOptions, warnings *warningCollector) bool {
 	for i := range runs {
+		if ctx.Err() != nil {
+			return false
+		}
 		r := &runs[i]
 		r.prepare(ctx, opts, warnings)
 		if r.status == taskPrepareFailed && opts.FailFast && !r.task.ContinueOnError {
 			return false
 		}
 	}
-	return true
+	return ctx.Err() == nil
 }
 
 func (r *taskRun) prepare(ctx context.Context, opts RunOptions, warnings *warningCollector) {
@@ -247,7 +263,10 @@ func (r *taskRun) prepare(ctx context.Context, opts RunOptions, warnings *warnin
 	var actions []Action
 	thread := &starlark.Thread{Name: "boot:" + task.ID}
 	CollectActions(thread, &actions)
-	if _, err := starlark.Call(thread, task.Run, nil, nil); err != nil {
+	stop := context.AfterFunc(ctx, func() { thread.Cancel(ctx.Err().Error()) })
+	_, err := starlark.Call(thread, task.Run, nil, nil)
+	stop()
+	if err != nil {
 		r.err = err
 		r.status = taskPrepareFailed
 		return
@@ -262,6 +281,9 @@ func (r *taskRun) prepare(ctx context.Context, opts RunOptions, warnings *warnin
 	// Ask for consent before sudo prompting and parallel execution.
 	pending := actions[:0]
 	for _, action := range actions {
+		if ctx.Err() != nil {
+			return
+		}
 		if !action.IsConsent {
 			pending = append(pending, action)
 			continue

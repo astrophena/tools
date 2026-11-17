@@ -332,6 +332,9 @@ func (intr *Interpreter) invokeLoader(key ModuleKey) (dict starlark.StringDict, 
 }
 
 func (intr *Interpreter) runModule(ctx context.Context, key ModuleKey, kind threadKind) (starlark.StringDict, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	dict, src, err := intr.invokeLoader(key)
 	switch {
 	case err != nil:
@@ -370,5 +373,11 @@ func (intr *Interpreter) runModule(ctx context.Context, key ModuleKey, kind thre
 	intr.visited = append(intr.visited, key)
 	intr.visitedMu.Unlock()
 
-	return starlark.ExecFileOptions(&syntax.FileOptions{}, th, key.String(), src, intr.globals)
+	stop := context.AfterFunc(ctx, func() { th.Cancel(ctx.Err().Error()) })
+	defer stop()
+	globals, err := starlark.ExecFileOptions(&syntax.FileOptions{}, th, key.String(), src, intr.globals)
+	if canceled := ctx.Err(); canceled != nil {
+		return nil, canceled
+	}
+	return globals, err
 }

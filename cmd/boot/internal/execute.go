@@ -58,7 +58,7 @@ func execute(ctx context.Context, runs []taskRun, opts RunOptions, warnings *war
 	for {
 		if !stopping {
 			for i := range runs {
-				if active == limit {
+				if active == limit || ctx.Err() != nil {
 					break
 				}
 				r := &runs[i]
@@ -96,6 +96,9 @@ func execute(ctx context.Context, runs []taskRun, opts RunOptions, warnings *war
 
 		r := <-results
 		active--
+		if ctx.Err() != nil {
+			continue
+		}
 		r.status = taskSucceeded
 		if slices.ContainsFunc(r.executionActions(), func(a actionResult) bool { return a.err != nil }) {
 			r.status = taskFailed
@@ -107,7 +110,7 @@ func execute(ctx context.Context, runs []taskRun, opts RunOptions, warnings *war
 
 func (r *taskRun) execute(ctx context.Context, opts RunOptions, warnings *warningCollector, limiter actionLimiter, progress *runProgress) {
 	actions := r.prepared
-	for start := 0; start < len(actions); {
+	for start := 0; start < len(actions) && ctx.Err() == nil; {
 		end := start + 1
 		if opts.Concurrency > 1 && actions[start].Concurrent {
 			for end < len(actions) && actions[end].Concurrent {
@@ -172,6 +175,10 @@ type actionLimiter chan struct{}
 func (l actionLimiter) acquire(ctx context.Context) error {
 	select {
 	case l <- struct{}{}:
+		if err := ctx.Err(); err != nil {
+			l.release()
+			return err
+		}
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()

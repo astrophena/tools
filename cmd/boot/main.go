@@ -72,7 +72,13 @@ func (a *app) Flags(fs *flag.FlagSet) {
 	})
 }
 
-func (a *app) Run(ctx context.Context) error {
+func (a *app) Run(ctx context.Context) (err error) {
+	defer func() {
+		if ctx.Err() == context.Canceled {
+			err = errors.New("interrupted")
+		}
+	}()
+
 	env := cli.GetEnv(ctx)
 	if len(env.Args) != 1 {
 		return fmt.Errorf("%w: command is required\nusage: boot [flags...] <list|plan|apply>\nrun 'boot -help' for details", cli.ErrInvalidArgs)

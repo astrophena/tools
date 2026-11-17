@@ -17,6 +17,7 @@ import (
 
 	"go.starlark.net/starlark"
 	"go.starlark.net/starlarkstruct"
+	"golang.org/x/sys/unix"
 )
 
 // Module returns the Starlark consent module.
@@ -53,14 +54,14 @@ func (m *module) require(thread *starlark.Thread, b *starlark.Builtin, args star
 	boot.AddAction(thread, boot.Action{
 		Summary:   "would ask for consent: " + message,
 		IsConsent: true,
-		Apply: func(_ context.Context, dryRun bool) (boot.Result, error) {
+		Apply: func(ctx context.Context, dryRun bool) (boot.Result, error) {
 			if dryRun {
 				return boot.ResultChange, nil
 			}
 			if m.rt != nil && !m.rt.Interactive {
 				return boot.ResultStop, nil
 			}
-			ok, err := ask(m.rt, message, defaultYes)
+			ok, err := ask(ctx, m.rt, message, defaultYes)
 			if err != nil {
 				return "", err
 			}
@@ -73,7 +74,7 @@ func (m *module) require(thread *starlark.Thread, b *starlark.Builtin, args star
 	return starlark.None, nil
 }
 
-func ask(rt *boot.Runtime, message string, defaultYes bool) (bool, error) {
+func ask(ctx context.Context, rt *boot.Runtime, message string, defaultYes bool) (bool, error) {
 	in := io.Reader(os.Stdin)
 	out := io.Writer(os.Stdout)
 	if rt != nil {
@@ -93,7 +94,14 @@ func ask(rt *boot.Runtime, message string, defaultYes bool) (bool, error) {
 		return false, err
 	}
 
+	if file, ok := in.(*os.File); ok && ctx.Done() != nil {
+		in = promptReader{ctx: ctx, file: file}
+	}
 	line, err := bufio.NewReader(in).ReadString('\n')
+	if canceled := ctx.Err(); canceled != nil {
+		fmt.Fprintln(out)
+		return false, canceled
+	}
 	if err != nil && err != io.EOF {
 		return false, err
 	}
@@ -107,5 +115,32 @@ func ask(rt *boot.Runtime, message string, defaultYes bool) (bool, error) {
 		return defaultYes, nil
 	default:
 		return false, nil
+	}
+}
+
+type promptReader struct {
+	ctx  context.Context
+	file *os.File
+}
+
+func (r promptReader) Read(p []byte) (int, error) {
+	fds := []unix.PollFd{{Fd: int32(r.file.Fd()), Events: unix.POLLIN}}
+	for {
+		if err := r.ctx.Err(); err != nil {
+			return 0, err
+		}
+		n, err := unix.Poll(fds, 100)
+		if err == unix.EINTR {
+			continue
+		}
+		if err != nil {
+			return 0, err
+		}
+		if n != 0 {
+			if err := r.ctx.Err(); err != nil {
+				return 0, err
+			}
+			return r.file.Read(p)
+		}
 	}
 }
