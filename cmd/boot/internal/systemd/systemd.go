@@ -24,8 +24,8 @@ func Module(rt *boot.Runtime) *starlarkstruct.Module {
 	return &starlarkstruct.Module{
 		Name: "systemd",
 		Members: starlark.StringDict{
-			"system_unit": starlark.NewBuiltin("systemd.system_unit", m.systemUnit),
-			"user_unit":   starlark.NewBuiltin("systemd.user_unit", m.userUnit),
+			"system_unit": boot.TaskBuiltin("systemd.system_unit", m.systemUnit),
+			"user_unit":   boot.TaskBuiltin("systemd.user_unit", m.userUnit),
 		},
 	}
 }
@@ -43,9 +43,6 @@ func (m *module) systemUnit(thread *starlark.Thread, b *starlark.Builtin, args s
 }
 
 func (m *module) unit(thread *starlark.Thread, b *starlark.Builtin, user bool, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	if err := boot.RequireTask(thread, b); err != nil {
-		return nil, err
-	}
 	var (
 		name         string
 		enabled      bool

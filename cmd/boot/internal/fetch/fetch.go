@@ -30,7 +30,7 @@ func Module(rt *boot.Runtime) *starlarkstruct.Module {
 	return &starlarkstruct.Module{
 		Name: "fetch",
 		Members: starlark.StringDict{
-			"file": starlark.NewBuiltin("fetch.file", m.file),
+			"file": boot.TaskBuiltin("fetch.file", m.file),
 		},
 	}
 }
@@ -40,10 +40,6 @@ type module struct {
 }
 
 func (m *module) file(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	if err := boot.RequireTask(thread, b); err != nil {
-		return nil, err
-	}
-
 	var (
 		url      string
 		path     string

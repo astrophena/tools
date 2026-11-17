@@ -28,9 +28,9 @@ func Module(rt *boot.Runtime) *starlarkstruct.Module {
 	return &starlarkstruct.Module{
 		Name: "git",
 		Members: starlark.StringDict{
-			"clone": starlark.NewBuiltin("git.clone", m.clone),
-			"pull":  starlark.NewBuiltin("git.pull", m.pull),
-			"sync":  starlark.NewBuiltin("git.sync", m.sync),
+			"clone": boot.TaskBuiltin("git.clone", m.clone),
+			"pull":  boot.TaskBuiltin("git.pull", m.pull),
+			"sync":  boot.TaskBuiltin("git.sync", m.sync),
 		},
 	}
 }
@@ -59,10 +59,6 @@ func (m *module) lockRepo(dst string) func() {
 }
 
 func (m *module) sync(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	if err := boot.RequireTask(thread, b); err != nil {
-		return nil, err
-	}
-
 	var (
 		url      string
 		dest     string
@@ -105,10 +101,6 @@ func (m *module) sync(thread *starlark.Thread, b *starlark.Builtin, args starlar
 }
 
 func (m *module) pull(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	if err := boot.RequireTask(thread, b); err != nil {
-		return nil, err
-	}
-
 	var dest string
 	if err := starlark.UnpackArgs(b.Name(), args, kwargs, "dest", &dest); err != nil {
 		return nil, err
@@ -135,10 +127,6 @@ func (m *module) pull(thread *starlark.Thread, b *starlark.Builtin, args starlar
 }
 
 func (m *module) clone(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	if err := boot.RequireTask(thread, b); err != nil {
-		return nil, err
-	}
-
 	var (
 		url      string
 		dest     string

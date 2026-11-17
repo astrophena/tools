@@ -24,16 +24,12 @@ func Module(*boot.Runtime) *starlarkstruct.Module {
 	return &starlarkstruct.Module{
 		Name: "program",
 		Members: starlark.StringDict{
-			"update": starlark.NewBuiltin("program.update", update),
+			"update": boot.TaskBuiltin("program.update", update),
 		},
 	}
 }
 
 func update(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	if err := boot.RequireTask(thread, b); err != nil {
-		return nil, err
-	}
-
 	var list *starlark.List
 	if err := starlark.UnpackArgs(b.Name(), args, kwargs, "argv", &list); err != nil {
 		return nil, err

@@ -39,6 +39,17 @@ func TestRun(t *testing.T) {
 			wantErr:     cli.ErrInvalidArgs,
 			wantErrText: "recipe BOOT.star not found",
 		},
+		"action_outside_task": {
+			args: []string{"plan"},
+			setup: func(t *testing.T, root string) {
+				t.Helper()
+				if err := os.WriteFile(filepath.Join(root, "BOOT.star"), []byte("program.update([\"updater\"])\n"), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			},
+			wantErr:     cli.ErrInvalidArgs,
+			wantErrText: "program.update: can only be called from a task",
+		},
 		"list": {
 			args: []string{"list"},
 			wantInOutput: []string{

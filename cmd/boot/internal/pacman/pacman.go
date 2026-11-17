@@ -29,9 +29,9 @@ func Module(rt *boot.Runtime) *starlarkstruct.Module {
 	return &starlarkstruct.Module{
 		Name: "pacman",
 		Members: starlark.StringDict{
-			"check_explicit_packages": starlark.NewBuiltin("pacman.check_explicit_packages", m.checkExplicitPackages),
-			"check_orphans":           starlark.NewBuiltin("pacman.check_orphans", m.checkOrphans),
-			"check_pacnew":            starlark.NewBuiltin("pacman.check_pacnew", m.checkPacnew),
+			"check_explicit_packages": boot.TaskBuiltin("pacman.check_explicit_packages", m.checkExplicitPackages),
+			"check_orphans":           boot.TaskBuiltin("pacman.check_orphans", m.checkOrphans),
+			"check_pacnew":            boot.TaskBuiltin("pacman.check_pacnew", m.checkPacnew),
 		},
 	}
 }
@@ -41,9 +41,6 @@ type module struct {
 }
 
 func (m *module) checkOrphans(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	if err := boot.RequireTask(thread, b); err != nil {
-		return nil, err
-	}
 	if err := starlark.UnpackArgs(b.Name(), args, kwargs); err != nil {
 		return nil, err
 	}
@@ -74,9 +71,6 @@ func (m *module) checkOrphans(thread *starlark.Thread, b *starlark.Builtin, args
 }
 
 func (m *module) checkExplicitPackages(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	if err := boot.RequireTask(thread, b); err != nil {
-		return nil, err
-	}
 	var packages *starlark.List
 	if err := starlark.UnpackArgs(b.Name(), args, kwargs, "packages", &packages); err != nil {
 		return nil, err
@@ -115,9 +109,6 @@ func (m *module) checkExplicitPackages(thread *starlark.Thread, b *starlark.Buil
 }
 
 func (m *module) checkPacnew(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	if err := boot.RequireTask(thread, b); err != nil {
-		return nil, err
-	}
 	var managedEtc string
 	if err := starlark.UnpackArgs(b.Name(), args, kwargs, "managed_etc", &managedEtc); err != nil {
 		return nil, err

@@ -32,15 +32,15 @@ func Module(rt *boot.Runtime) *starlarkstruct.Module {
 	return &starlarkstruct.Module{
 		Name: "fs",
 		Members: starlark.StringDict{
-			"chmod":     starlark.NewBuiltin("fs.chmod", m.chmod),
-			"dir":       starlark.NewBuiltin("fs.dir", m.dir),
-			"symlink":   starlark.NewBuiltin("fs.symlink", m.symlink),
-			"file":      starlark.NewBuiltin("fs.file", m.file),
+			"chmod":     boot.TaskBuiltin("fs.chmod", m.chmod),
+			"dir":       boot.TaskBuiltin("fs.dir", m.dir),
+			"symlink":   boot.TaskBuiltin("fs.symlink", m.symlink),
+			"file":      boot.TaskBuiltin("fs.file", m.file),
 			"newer":     starlark.NewBuiltin("fs.newer", m.newer),
-			"remove":    starlark.NewBuiltin("fs.remove", m.remove),
+			"remove":    boot.TaskBuiltin("fs.remove", m.remove),
 			"sha256":    starlark.NewBuiltin("fs.sha256", m.sha256),
-			"sync_tree": starlark.NewBuiltin("fs.sync_tree", m.syncTree),
-			"template":  starlark.NewBuiltin("fs.template", m.template),
+			"sync_tree": boot.TaskBuiltin("fs.sync_tree", m.syncTree),
+			"template":  boot.TaskBuiltin("fs.template", m.template),
 		},
 	}
 }
@@ -50,10 +50,6 @@ type module struct {
 }
 
 func (m *module) chmod(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	if err := boot.RequireTask(thread, b); err != nil {
-		return nil, err
-	}
-
 	var (
 		path string
 		mode int
@@ -89,10 +85,6 @@ func (m *module) chmod(thread *starlark.Thread, b *starlark.Builtin, args starla
 }
 
 func (m *module) remove(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	if err := boot.RequireTask(thread, b); err != nil {
-		return nil, err
-	}
-
 	var path string
 	if err := starlark.UnpackArgs(b.Name(), args, kwargs, "path", &path); err != nil {
 		return nil, err
@@ -121,10 +113,6 @@ func (m *module) remove(thread *starlark.Thread, b *starlark.Builtin, args starl
 }
 
 func (m *module) syncTree(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	if err := boot.RequireTask(thread, b); err != nil {
-		return nil, err
-	}
-
 	var (
 		source       string
 		target       string
@@ -227,10 +215,6 @@ func rsyncCommand(ctx context.Context, rt *boot.Runtime, sudo bool, args []strin
 }
 
 func (m *module) file(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	if err := boot.RequireTask(thread, b); err != nil {
-		return nil, err
-	}
-
 	var (
 		path    string
 		content string
@@ -283,10 +267,6 @@ func (m *module) addFile(thread *starlark.Thread, path, content string, mode os.
 }
 
 func (m *module) template(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	if err := boot.RequireTask(thread, b); err != nil {
-		return nil, err
-	}
-
 	var (
 		path   string
 		text   string
@@ -367,10 +347,6 @@ func (m *module) newer(thread *starlark.Thread, b *starlark.Builtin, args starla
 }
 
 func (m *module) dir(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	if err := boot.RequireTask(thread, b); err != nil {
-		return nil, err
-	}
-
 	var path string
 	if err := starlark.UnpackArgs(b.Name(), args, kwargs, "path", &path); err != nil {
 		return nil, err
@@ -398,10 +374,6 @@ func (m *module) dir(thread *starlark.Thread, b *starlark.Builtin, args starlark
 }
 
 func (m *module) symlink(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	if err := boot.RequireTask(thread, b); err != nil {
-		return nil, err
-	}
-
 	var (
 		source string
 		target string

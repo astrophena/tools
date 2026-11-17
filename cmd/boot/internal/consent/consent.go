@@ -25,7 +25,7 @@ func Module(rt *boot.Runtime) *starlarkstruct.Module {
 	return &starlarkstruct.Module{
 		Name: "consent",
 		Members: starlark.StringDict{
-			"require": starlark.NewBuiltin("consent.require", m.require),
+			"require": boot.TaskBuiltin("consent.require", m.require),
 		},
 	}
 }
@@ -35,10 +35,6 @@ type module struct {
 }
 
 func (m *module) require(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	if err := boot.RequireTask(thread, b); err != nil {
-		return nil, err
-	}
-
 	var (
 		message    string
 		defaultYes bool

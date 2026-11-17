@@ -21,15 +21,12 @@ func Module(*boot.Runtime) *starlarkstruct.Module {
 	return &starlarkstruct.Module{
 		Name: "flatpak",
 		Members: starlark.StringDict{
-			"update": starlark.NewBuiltin("flatpak.update", update),
+			"update": boot.TaskBuiltin("flatpak.update", update),
 		},
 	}
 }
 
 func update(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	if err := boot.RequireTask(thread, b); err != nil {
-		return nil, err
-	}
 	if err := starlark.UnpackArgs(b.Name(), args, kwargs); err != nil {
 		return nil, err
 	}

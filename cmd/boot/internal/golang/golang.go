@@ -35,8 +35,8 @@ func Module(rt *boot.Runtime) *starlarkstruct.Module {
 	return &starlarkstruct.Module{
 		Name: "go",
 		Members: starlark.StringDict{
-			"install":       starlark.NewBuiltin("go.install", m.install),
-			"install_local": starlark.NewBuiltin("go.install_local", m.installLocal),
+			"install":       boot.TaskBuiltin("go.install", m.install),
+			"install_local": boot.TaskBuiltin("go.install_local", m.installLocal),
 		},
 	}
 }
@@ -46,10 +46,6 @@ type module struct {
 }
 
 func (m *module) install(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	if err := boot.RequireTask(thread, b); err != nil {
-		return nil, err
-	}
-
 	var (
 		packages *starlark.List
 		cwd      string
@@ -79,10 +75,6 @@ func (m *module) install(thread *starlark.Thread, b *starlark.Builtin, args star
 }
 
 func (m *module) installLocal(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	if err := boot.RequireTask(thread, b); err != nil {
-		return nil, err
-	}
-
 	var (
 		pkg            string
 		cwd            string

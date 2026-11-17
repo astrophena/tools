@@ -30,7 +30,7 @@ func Module(rt *boot.Runtime) *starlarkstruct.Module {
 	return &starlarkstruct.Module{
 		Name: "rescue",
 		Members: starlark.StringDict{
-			"update": starlark.NewBuiltin("rescue.update", m.update),
+			"update": boot.TaskBuiltin("rescue.update", m.update),
 		},
 	}
 }
@@ -40,9 +40,6 @@ type module struct {
 }
 
 func (m *module) update(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	if err := boot.RequireTask(thread, b); err != nil {
-		return nil, err
-	}
 	var (
 		source string
 		espDir string = "/efi/EFI/Linux"

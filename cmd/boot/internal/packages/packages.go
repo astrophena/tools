@@ -28,11 +28,11 @@ func Module(rt *boot.Runtime) *starlarkstruct.Module {
 	return &starlarkstruct.Module{
 		Name: "pkg",
 		Members: starlark.StringDict{
-			"check_explicit_packages": starlark.NewBuiltin("pkg.check_explicit_packages", m.checkExplicitPackages),
+			"check_explicit_packages": boot.TaskBuiltin("pkg.check_explicit_packages", m.checkExplicitPackages),
 			"configure":               starlark.NewBuiltin("pkg.configure", m.configure),
-			"install":                 starlark.NewBuiltin("pkg.install", m.install),
+			"install":                 boot.TaskBuiltin("pkg.install", m.install),
 			"manager":                 starlark.NewBuiltin("pkg.manager", m.manager),
-			"update":                  starlark.NewBuiltin("pkg.update", m.update),
+			"update":                  boot.TaskBuiltin("pkg.update", m.update),
 		},
 	}
 }
@@ -71,10 +71,6 @@ func (m *module) manager(_ *starlark.Thread, b *starlark.Builtin, args starlark.
 }
 
 func (m *module) install(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	if err := boot.RequireTask(thread, b); err != nil {
-		return nil, err
-	}
-
 	var packages *starlark.List
 	if err := starlark.UnpackArgs(b.Name(), args, kwargs, "packages", &packages); err != nil {
 		return nil, err
@@ -118,10 +114,6 @@ func (m *module) install(thread *starlark.Thread, b *starlark.Builtin, args star
 }
 
 func (m *module) update(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	if err := boot.RequireTask(thread, b); err != nil {
-		return nil, err
-	}
-
 	if err := starlark.UnpackArgs(b.Name(), args, kwargs); err != nil {
 		return nil, err
 	}
@@ -185,9 +177,6 @@ func (m *module) addUpdateActions(thread *starlark.Thread, pm packageManager) {
 }
 
 func (m *module) checkExplicitPackages(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	if err := boot.RequireTask(thread, b); err != nil {
-		return nil, err
-	}
 	var packages *starlark.List
 	if err := starlark.UnpackArgs(b.Name(), args, kwargs, "packages", &packages); err != nil {
 		return nil, err
