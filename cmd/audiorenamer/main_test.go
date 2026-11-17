@@ -32,7 +32,7 @@ func TestRun(t *testing.T) {
 		// List of file names that should be located in temporary directory.
 		wantFilesInDir []string
 	}{
-		"without directory": {
+		"without_directory": {
 			args:    []string{},
 			wantErr: cli.ErrInvalidArgs,
 		},
@@ -41,7 +41,7 @@ func TestRun(t *testing.T) {
 			wantErr:      cli.ErrExitVersion,
 			wantInStderr: "audiorenamer",
 		},
-		"rename (mp3)": {
+		"rename_mp3": {
 			args:          []string{"[TMPDIR]"},
 			copyToDirGlob: "testdata/mp3/*.mp3",
 			wantFilesInDir: []string{
@@ -52,7 +52,7 @@ func TestRun(t *testing.T) {
 			},
 			wantInStderr: `"msg":"finished","processed":4,"renamed":4,"existing":0`,
 		},
-		"rename (flac)": {
+		"rename_flac": {
 			args:          []string{"[TMPDIR]"},
 			copyToDirGlob: "testdata/flac/*.flac",
 			wantFilesInDir: []string{
@@ -63,12 +63,12 @@ func TestRun(t *testing.T) {
 			},
 			wantInStderr: `"msg":"finished","processed":4,"renamed":4,"existing":0`,
 		},
-		"skipped not audio": {
+		"skipped_not_audio": {
 			args:          []string{"[TMPDIR]"},
 			copyToDirGlob: "testdata/notaudio.mp3",
 			wantInStderr:  `"msg":"finished","processed":0,"renamed":0,"existing":0`,
 		},
-		"not renamed": {
+		"not_renamed": {
 			args:          []string{"[TMPDIR]"},
 			copyToDirGlob: "testdata/already/*.flac",
 			wantFilesInDir: []string{
@@ -79,7 +79,7 @@ func TestRun(t *testing.T) {
 			},
 			wantInStderr: `"msg":"finished","processed":4,"renamed":0,"existing":4`,
 		},
-		"dry run": {
+		"dry_run": {
 			args:          []string{"-dry", "[TMPDIR]"},
 			copyToDirGlob: "testdata/mp3/*.mp3",
 			wantInStderr:  `"msg":"finished dry run","processed":4,"renamed":4,"existing":0`,

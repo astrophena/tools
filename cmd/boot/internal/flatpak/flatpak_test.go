@@ -21,17 +21,17 @@ func TestUpdate(t *testing.T) {
 		want          boot.Result
 		wantApplyCall bool
 	}{
-		"applies updates": {
+		"applies_updates": {
 			updates:       "org.example.App",
 			want:          boot.ResultChange,
 			wantApplyCall: true,
 		},
-		"dry run does not apply": {
+		"dry_run_does_not_apply": {
 			updates: "org.example.App",
 			dryRun:  true,
 			want:    boot.ResultChange,
 		},
-		"skips without updates": {
+		"skips_without_updates": {
 			want: boot.ResultSkip,
 		},
 	}

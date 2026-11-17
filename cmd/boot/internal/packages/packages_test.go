@@ -182,7 +182,7 @@ func TestPacmanRebootRequired(t *testing.T) {
 		want     []string
 		wantErr  bool
 	}{
-		"kernel module owners": {
+		"kernel_module_owners": {
 			packages: []string{"linux", "git", "nvidia-open"},
 			output: strings.Join([]string{
 				"linux /usr/lib/modules/6.15.1-arch1-1/kernel/fs/btrfs/btrfs.ko.zst",
@@ -191,7 +191,7 @@ func TestPacmanRebootRequired(t *testing.T) {
 			}, "\n"),
 			want: []string{"linux", "nvidia-open"},
 		},
-		"duplicate module paths": {
+		"duplicate_module_paths": {
 			packages: []string{"linux"},
 			output: strings.Join([]string{
 				"linux /usr/lib/modules/",
@@ -199,11 +199,11 @@ func TestPacmanRebootRequired(t *testing.T) {
 			}, "\n"),
 			want: []string{"linux"},
 		},
-		"ordinary packages": {
+		"ordinary_packages": {
 			packages: []string{"git"},
 			output:   "git /usr/bin/git",
 		},
-		"query failure": {
+		"query_failure": {
 			packages: []string{"linux"},
 			exitCode: 1,
 			wantErr:  true,
@@ -298,15 +298,15 @@ func TestUpdateReportsRebootAfterSuccessfulApply(t *testing.T) {
 		updateErr      error
 		wantWarning    string
 	}{
-		"kernel modules updated": {
+		"kernel_modules_updated": {
 			updates:        []string{"linux", "git", "nvidia-open"},
 			rebootPackages: []string{"linux", "nvidia-open"},
 			wantWarning:    "machine needs rebooting after updating linux, nvidia-open",
 		},
-		"ordinary package updated": {
+		"ordinary_package_updated": {
 			updates: []string{"git"},
 		},
-		"update failed": {
+		"update_failed": {
 			updates:        []string{"linux"},
 			rebootPackages: []string{"linux"},
 			updateErr:      errors.New("update failed"),

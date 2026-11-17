@@ -206,7 +206,7 @@ func TestFailFastStopsBeforeStartingLaterTasks(t *testing.T) {
 				DryRun: true,
 			},
 		},
-		"verbose apply": {
+		"verbose_apply": {
 			opts: RunOptions{
 				Verbose: true,
 			},

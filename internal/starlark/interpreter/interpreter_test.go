@@ -72,7 +72,7 @@ func TestMakeModuleKey(t *testing.T) {
 				Path:    "some/mod",
 			},
 		},
-		"clean absolute": {
+		"clean_absolute": {
 			thread: thread,
 			ref:    "//some/mod/../blah",
 			want: ModuleKey{
@@ -88,7 +88,7 @@ func TestMakeModuleKey(t *testing.T) {
 				Path:    "dir/some/mod",
 			},
 		},
-		"dot relative": {
+		"dot_relative": {
 			thread: thread,
 			ref:    "./mod",
 			want: ModuleKey{
@@ -96,7 +96,7 @@ func TestMakeModuleKey(t *testing.T) {
 				Path:    "dir/mod",
 			},
 		},
-		"parent relative": {
+		"parent_relative": {
 			thread: thread,
 			ref:    "../mod",
 			want: ModuleKey{
@@ -104,34 +104,34 @@ func TestMakeModuleKey(t *testing.T) {
 				Path:    "mod",
 			},
 		},
-		"package absolute": {
+		"package_absolute": {
 			ref: "@pkg//some/mod",
 			want: ModuleKey{
 				Package: "pkg",
 				Path:    "some/mod",
 			},
 		},
-		"empty package": {
+		"empty_package": {
 			thread: thread,
 			ref:    "@//mod",
 			err:    "package alias can't be empty",
 		},
-		"malformed package": {
+		"malformed_package": {
 			thread: thread,
 			ref:    "@mod",
 			err:    "module path should be",
 		},
-		"outside absolute": {
+		"outside_absolute": {
 			thread: thread,
 			ref:    "//..",
 			err:    "outside the package root",
 		},
-		"outside relative": {
+		"outside_relative": {
 			thread: thread,
 			ref:    "../../mod",
 			err:    "outside the package root",
 		},
-		"missing local": {
+		"missing_local": {
 			thread: new(starlark.Thread),
 			ref:    "//some/mod",
 			err:    "no current package name",

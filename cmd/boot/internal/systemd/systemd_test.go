@@ -85,12 +85,12 @@ func TestUserUnit(t *testing.T) {
 		want       boot.Result
 		wantReload bool
 	}{
-		"changes when reload needed": {
+		"changes_when_reload_needed": {
 			needReload: "yes",
 			want:       boot.ResultChange,
 			wantReload: true,
 		},
-		"skips when current": {
+		"skips_when_current": {
 			needReload: "no",
 			dryRun:     true,
 			want:       boot.ResultSkip,

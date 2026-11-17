@@ -56,7 +56,7 @@ func TestChartJSON(t *testing.T) {
 		chart string
 		want  []string
 	}{
-		"latency trend": {
+		"latency_trend": {
 			chart: latencyTrendChart(StatsProps{
 				Runs: []stats.RunSummary{timelineRun},
 			}),
@@ -67,28 +67,28 @@ func TestChartJSON(t *testing.T) {
 				`"select_urls":["/stats?started_at_unix=42"]`,
 			},
 		},
-		"request phases": {
+		"request_phases": {
 			chart: requestPhaseChart(activeRun),
 			want: []string{
 				`"labels":["DNS","TCP","TLS","Request write","Response wait","Body read"]`,
 				`"data":[0.125,0,0,0,0,0]`,
 			},
 		},
-		"item disposition": {
+		"item_disposition": {
 			chart: itemDispositionChart(activeRun),
 			want: []string{
 				`"labels":["Enqueued","Deduplicated","Skipped old","Filtered"]`,
 				`"data":[3,4,5,6]`,
 			},
 		},
-		"delivery breakdown": {
+		"delivery_breakdown": {
 			chart: deliveryFailureChart(activeRun),
 			want: []string{
 				`"labels":["Sent","Send failed","Formatting failed"]`,
 				`"data":[7,1,2]`,
 			},
 		},
-		"delivery latency": {
+		"delivery_latency": {
 			chart: deliveryLatencyChart(activeRun),
 			want: []string{
 				`"preset":"seconds"`,
@@ -96,7 +96,7 @@ func TestChartJSON(t *testing.T) {
 				`"data":[0.1,0.2,0.3,0.4]`,
 			},
 		},
-		"http status": {
+		"http_status": {
 			chart: httpStatusChart(activeRun),
 			want: []string{
 				`"labels":["2xx","3xx","4xx","5xx"]`,
@@ -113,7 +113,7 @@ func TestChartJSON(t *testing.T) {
 				`"backgroundColor":["green","red"]`,
 			},
 		},
-		"single color": {
+		"single_color": {
 			chart: barChart(
 				[]string{"feeds"},
 				dataset("Feeds", numbers(3), color("green")),
@@ -144,19 +144,19 @@ func TestConditionalCharts(t *testing.T) {
 	cases := map[string]struct {
 		chart string
 	}{
-		"request phases": {
+		"request_phases": {
 			chart: requestPhaseChart(&stats.Run{}),
 		},
-		"item disposition": {
+		"item_disposition": {
 			chart: itemDispositionChart(&stats.Run{}),
 		},
 		"delivery": {
 			chart: deliveryFailureChart(&stats.Run{}),
 		},
-		"delivery latency": {
+		"delivery_latency": {
 			chart: deliveryLatencyChart(&stats.Run{}),
 		},
-		"http status": {
+		"http_status": {
 			chart: httpStatusChart(&stats.Run{}),
 		},
 	}

@@ -31,24 +31,24 @@ func TestRun(t *testing.T) {
 		wantInStdout       string
 		wantInStderr       string
 	}{
-		"without directory": {
+		"without_directory": {
 			args:    []string{},
 			wantErr: cli.ErrInvalidArgs,
 		},
-		"version flag": {
+		"version_flag": {
 			args:    []string{"-version"},
 			wantErr: cli.ErrExitVersion,
 		},
-		"nonexistent directory": {
+		"nonexistent_directory": {
 			args:    []string{"nonexistent"},
 			wantErr: fs.ErrNotExist,
 		},
-		"lookup nondup": {
+		"lookup_nondup": {
 			args:               []string{"[TMPDIR]"},
 			extractTxtar:       "testdata/nondup.txtar",
 			wantNothingPrinted: true,
 		},
-		"lookup dup": {
+		"lookup_dup": {
 			args:         []string{"[TMPDIR]"},
 			extractTxtar: "testdata/dup.txtar",
 			wantInStderr: "Duplicate file b.txt of a.txt.\nDuplicate file d.txt of c.txt.",

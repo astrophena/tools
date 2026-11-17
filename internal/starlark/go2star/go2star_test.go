@@ -84,15 +84,15 @@ func TestToValue(t *testing.T) {
 		},
 
 		// Boundary float values.
-		"math.MaxInt64 as float": {
+		"max_int64_as_float": {
 			float64(math.MaxInt64),
 			starlark.Float(float64(math.MaxInt64)),
 		},
-		"math.MinInt64 as float": {
+		"min_int64_as_float": {
 			float64(math.MinInt64),
 			starlark.MakeInt64(math.MinInt64),
 		},
-		"-math.MinInt64 as float": {
+		"positive_int64_limit_as_float": {
 			-float64(math.MinInt64),
 			starlark.Float(-float64(math.MinInt64)),
 		},

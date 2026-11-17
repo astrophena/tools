@@ -38,7 +38,7 @@ func TestRun(t *testing.T) {
 	clitest.Run(t, func(t *testing.T) *app {
 		return new(app)
 	}, map[string]clitest.Case[*app]{
-		"prints usage with help flag": {
+		"prints_usage_with_help_flag": {
 			Args:    []string{"-h"},
 			WantErr: flag.ErrHelp,
 		},
@@ -46,44 +46,44 @@ func TestRun(t *testing.T) {
 			Args:    []string{"-version"},
 			WantErr: cli.ErrExitVersion,
 		},
-		"nonexistent file": {
+		"nonexistent_file": {
 			Args:    []string{"nonexistent.kdbx", "foo"},
 			WantErr: fs.ErrNotExist,
 		},
-		"invalid format": {
+		"invalid_format": {
 			Args:    []string{"-f", "{{", dbPath, "foo"},
 			WantErr: errInvalidFormat,
 		},
-		"missing entry error": {
+		"missing_entry_error": {
 			Args:    []string{dbPath},
 			WantErr: cli.ErrInvalidArgs,
 		},
-		"missing db": {
+		"missing_db": {
 			Args:    []string{},
 			WantErr: cli.ErrInvalidArgs,
 		},
-		"single entry": {
+		"single_entry": {
 			Args: []string{dbPath, "foo"},
 			Env: map[string]string{
 				"KP_PASSWORD": "test",
 			},
 			WantInStdout: "bar",
 		},
-		"nonexistent entry": {
+		"nonexistent_entry": {
 			Args: []string{dbPath, "foobar"},
 			Env: map[string]string{
 				"KP_PASSWORD": "test",
 			},
 			WantErr: errNotFound,
 		},
-		"custom template": {
+		"custom_template": {
 			Args: []string{"-f", "{{ .GetTitle }}", dbPath, "foo"},
 			Env: map[string]string{
 				"KP_PASSWORD": "test",
 			},
 			WantInStdout: "foo",
 		},
-		"invalid field in custom template": {
+		"invalid_field_in_custom_template": {
 			Args: []string{"-f", "{{ .Foo }}", dbPath, "foo"},
 			Env: map[string]string{
 				"KP_PASSWORD": "test",
@@ -97,14 +97,14 @@ func TestRun(t *testing.T) {
 			},
 			WantInStdout: "bar\nfoo",
 		},
-		"list (invalid password)": {
+		"list_invalid_password": {
 			Args: []string{"-l", dbPath},
 			Env: map[string]string{
 				"KP_PASSWORD": "foo",
 			},
 			WantErr: errFailOpen,
 		},
-		"custom format for list": {
+		"custom_format_for_list": {
 			Args: []string{"-l", "-f", "{{ .GetTitle }}", dbPath},
 			Env: map[string]string{
 				"KP_PASSWORD": "test",
@@ -123,7 +123,7 @@ func TestLookup(t *testing.T) {
 		wantErr   error
 		checkFunc func(t *testing.T, e *gokeepasslib.Entry) // invoked when e is not nil
 	}{
-		"existing entry": {
+		"existing_entry": {
 			r:        dbr(),
 			entry:    "foo",
 			password: "test",
@@ -131,13 +131,13 @@ func TestLookup(t *testing.T) {
 				testutil.AssertEqual(t, e.GetPassword(), "bar")
 			},
 		},
-		"non-existent entry": {
+		"non_existent_entry": {
 			r:        dbr(),
 			entry:    "foobar",
 			password: "test",
 			wantErr:  errNotFound,
 		},
-		"invalid password": {
+		"invalid_password": {
 			r:         dbr(),
 			entry:     "foobar",
 			password:  "nottest",

@@ -28,12 +28,12 @@ func TestRun(t *testing.T) {
 		wantMissing  []string
 		check        func(t *testing.T, root string)
 	}{
-		"missing command": {
+		"missing_command": {
 			args:        nil,
 			wantErr:     cli.ErrInvalidArgs,
 			wantErrText: "usage: boot [flags...] <list|plan|apply>",
 		},
-		"missing default recipe": {
+		"missing_default_recipe": {
 			args:        []string{"plan"},
 			noRecipe:    true,
 			wantErr:     cli.ErrInvalidArgs,
@@ -52,7 +52,7 @@ func TestRun(t *testing.T) {
 				"Create cache",
 			},
 		},
-		"plan does not modify filesystem": {
+		"plan_does_not_modify_filesystem": {
 			args: []string{"plan"},
 			wantInOutput: []string{
 				"[1/2] Planning task dotfiles: Link dotfiles",
@@ -67,7 +67,7 @@ func TestRun(t *testing.T) {
 				}
 			},
 		},
-		"apply is idempotent": {
+		"apply_is_idempotent": {
 			args: []string{"apply"},
 			setup: func(t *testing.T, root string) {
 				t.Helper()
@@ -86,7 +86,7 @@ func TestRun(t *testing.T) {
 			},
 			wantMissing: []string{"summary:", "change dotfiles:", "skip dotfiles:"},
 		},
-		"apply verbose prints actions": {
+		"apply_verbose_prints_actions": {
 			args: []string{"-verbose", "apply"},
 			wantInOutput: []string{
 				"[1/2] Applying task dotfiles: Link dotfiles",
@@ -101,7 +101,7 @@ func TestRun(t *testing.T) {
 				}
 			},
 		},
-		"only filters tasks": {
+		"only_filters_tasks": {
 			args: []string{"-only", "cache", "list"},
 			wantInOutput: []string{
 				"cache",
@@ -113,7 +113,7 @@ func TestRun(t *testing.T) {
 				"Link dotfiles",
 			},
 		},
-		"tag filters tasks": {
+		"tag_filters_tasks": {
 			args: []string{"-tag", "shell", "list"},
 			wantInOutput: []string{
 				"dotfiles",

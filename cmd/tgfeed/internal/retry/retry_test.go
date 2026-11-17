@@ -25,27 +25,27 @@ func TestTelegramRSSBridge(t *testing.T) {
 		want  time.Duration
 		found bool
 	}{
-		"flood wait": {
+		"flood_wait": {
 			body:  `{"errors":["FLOOD_WAIT_42"]}`,
 			want:  42 * time.Second,
 			found: true,
 		},
-		"unlock access": {
+		"unlock_access": {
 			body:  `{"errors":["Time to unlock access: 01:02:03"]}`,
 			want:  1*time.Hour + 2*time.Minute + 3*time.Second,
 			found: true,
 		},
-		"mixed errors picks first valid": {
+		"mixed_errors_picks_first_valid": {
 			body:  `{"errors":[123,"oops","FLOOD_WAIT_5"]}`,
 			want:  5 * time.Second,
 			found: true,
 		},
-		"unknown format": {
+		"unknown_format": {
 			body:  `{"errors":["something else"]}`,
 			want:  0,
 			found: false,
 		},
-		"invalid json": {
+		"invalid_json": {
 			body:  `{`,
 			want:  0,
 			found: false,
@@ -79,22 +79,22 @@ func TestRetryAfter(t *testing.T) {
 			want:   120 * time.Second,
 			found:  true,
 		},
-		"invalid delay-seconds": {
+		"invalid_delay_seconds": {
 			header: "-5",
 			want:   0,
 			found:  false,
 		},
-		"http-date future": {
+		"http_date_future": {
 			header: time.Now().Add(5 * time.Minute).Format(time.RFC1123),
 			want:   5 * time.Minute,
 			found:  true, // exact duration might be slightly less, handled below
 		},
-		"http-date past": {
+		"http_date_past": {
 			header: time.Now().Add(-5 * time.Minute).Format(time.RFC1123),
 			want:   0,
 			found:  true,
 		},
-		"invalid format": {
+		"invalid_format": {
 			header: "not a date or number",
 			want:   0,
 			found:  false,

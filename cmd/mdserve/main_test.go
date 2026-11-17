@@ -35,7 +35,7 @@ func TestEngineMain(t *testing.T) {
 		e.noServerStart = true
 		return e
 	}, map[string]clitest.Case[*engine]{
-		"prints usage with help flag": {
+		"prints_usage_with_help_flag": {
 			Args:    []string{"-h"},
 			WantErr: flag.ErrHelp,
 		},
@@ -43,7 +43,7 @@ func TestEngineMain(t *testing.T) {
 			Args:    []string{"-version"},
 			WantErr: cli.ErrExitVersion,
 		},
-		"serves in current dir when passed no args": {
+		"serves_in_current_dir_when_passed_no_args": {
 			Args: []string{},
 			CheckFunc: func(t *testing.T, e *engine) {
 				addr, err := netip.ParseAddrPort(e.srv.Addr)
@@ -56,19 +56,19 @@ func TestEngineMain(t *testing.T) {
 				testutil.AssertEqual(t, addr.Port(), uint16(3000))
 			},
 		},
-		"serves on IPv4 address": {
+		"serves_on_ipv4_address": {
 			Args: []string{"-addr", "127.0.0.1:3001"},
 			CheckFunc: func(t *testing.T, e *engine) {
 				testutil.AssertEqual(t, e.srv.Addr, "127.0.0.1:3001")
 			},
 		},
-		"serves on IPv6 address": {
+		"serves_on_ipv6_address": {
 			Args: []string{"-addr", "[::1]:3001"},
 			CheckFunc: func(t *testing.T, e *engine) {
 				testutil.AssertEqual(t, e.srv.Addr, "[::1]:3001")
 			},
 		},
-		"serves on wildcard address": {
+		"serves_on_wildcard_address": {
 			Args: []string{"-addr", ":3001"},
 			CheckFunc: func(t *testing.T, e *engine) {
 				testutil.AssertEqual(t, e.srv.Addr, ":3001")
@@ -100,12 +100,12 @@ func TestServe(t *testing.T) {
 		wantInBody string
 		failRead   bool
 	}{
-		"not found": {
+		"not_found": {
 			path:       "/404.md",
 			wantStatus: http.StatusNotFound,
 			wantInBody: "404 Not Found",
 		},
-		"without title and infers index.md": {
+		"without_title_and_infers_index_md": {
 			files: map[string]string{
 				"index.md": "Hello, world!",
 			},
@@ -113,7 +113,7 @@ func TestServe(t *testing.T) {
 			wantStatus: http.StatusOK,
 			wantInBody: "<p>Hello, world!</p>",
 		},
-		"infers README.md when index.md does not exist": {
+		"infers_readme_md_when_index_md_does_not_exist": {
 			files: map[string]string{
 				"README.md": "Hello, world!",
 			},
@@ -121,7 +121,7 @@ func TestServe(t *testing.T) {
 			wantStatus: http.StatusOK,
 			wantInBody: "<p>Hello, world!</p>",
 		},
-		"infers index.md when both index.md and README.md does exist": {
+		"infers_index_md_when_both_index_md_and_readme_md_does_exist": {
 			files: map[string]string{
 				"README.md": "Hello, world from README.md!",
 				"index.md":  "Hello, world from index.md!",
@@ -130,7 +130,7 @@ func TestServe(t *testing.T) {
 			wantStatus: http.StatusOK,
 			wantInBody: "<p>Hello, world from index.md!</p>",
 		},
-		"correctly parses title": {
+		"correctly_parses_title": {
 			files: map[string]string{
 				"index.md": `# Hello, world!
 
@@ -141,7 +141,7 @@ This is bla bla bla.
 			wantStatus: http.StatusOK,
 			wantInBody: "<title>Hello, world!</title>",
 		},
-		"serves static file": {
+		"serves_static_file": {
 			files: map[string]string{
 				"hello.js": `alert("Hello, world!");`,
 			},
@@ -149,7 +149,7 @@ This is bla bla bla.
 			wantStatus: http.StatusOK,
 			wantInBody: `alert("Hello, world!");`,
 		},
-		"returns 404 when requesting directory": {
+		"returns_404_when_requesting_directory": {
 			files: map[string]string{
 				"hello/world": "foobar",
 			},
@@ -157,7 +157,7 @@ This is bla bla bla.
 			wantStatus: http.StatusNotFound,
 			wantInBody: "404 Not Found",
 		},
-		"correctly handles files in directory": {
+		"correctly_handles_files_in_directory": {
 			files: map[string]string{
 				"hello/world": "foobar",
 			},
@@ -165,14 +165,14 @@ This is bla bla bla.
 			wantStatus: http.StatusOK,
 			wantInBody: "foobar",
 		},
-		"returns 500 when fails to read": {
+		"returns_500_when_fails_to_read": {
 			files:      map[string]string{},
 			path:       "/hello",
 			wantStatus: http.StatusInternalServerError,
 			wantInBody: "500 Internal Server Error",
 			failRead:   true,
 		},
-		"renders image": {
+		"renders_image": {
 			files: map[string]string{
 				"index.md": "![A beautiful landscape](sample.jpg)",
 			},

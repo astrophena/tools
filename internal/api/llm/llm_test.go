@@ -158,7 +158,7 @@ func TestResponseOutputText(t *testing.T) {
 		body string
 		want string
 	}{
-		"output array": {
+		"output_array": {
 			body: `{
 				"output": [
 					{
@@ -176,7 +176,7 @@ func TestResponseOutputText(t *testing.T) {
 			}`,
 			want: "hello world",
 		},
-		"output text": {
+		"output_text": {
 			body: `{
 				"output_text": "hello from gateway",
 				"usage": {

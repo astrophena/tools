@@ -45,16 +45,16 @@ func TestGet(t *testing.T) {
 			args: starlark.Tuple{starlark.String("BAR")},
 			want: "",
 		},
-		"missing with default": {
+		"missing_with_default": {
 			args: starlark.Tuple{starlark.String("BAR"), starlark.String("baz")},
 			want: "baz",
 		},
-		"missing with default kwarg": {
+		"missing_with_default_kwarg": {
 			args:   starlark.Tuple{starlark.String("BAR")},
 			kwargs: []starlark.Tuple{{starlark.String("default"), starlark.String("qux")}},
 			want:   "qux",
 		},
-		"too many args": {
+		"too_many_args": {
 			args:    starlark.Tuple{starlark.String("FOO"), starlark.String("bar"), starlark.String("baz")},
 			wantErr: "env.get: got 3 arguments, want at most 2",
 		},

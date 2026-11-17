@@ -57,7 +57,7 @@ print(response)
 			mockResponse:   `{"ok": false, "error_code": 400, "description": "Bad Request: chat not found"}`,
 			wantErr:        "telegram.call: failed to make request",
 		},
-		"invalid args": {
+		"invalid_args": {
 			script: `
 response = telegram.call(
     "sendMessage",
@@ -71,7 +71,7 @@ print(response)
 `,
 			wantErr: `telegram.call: unexpected positional arguments`,
 		},
-		"invalid JSON": {
+		"invalid_json": {
 			script: `
 response = telegram.call(
 	method="sendMessage", 
