@@ -44,16 +44,16 @@ func loadConfig(ctx context.Context, env *cli.Env) (configOptions, error) {
 	if err != nil {
 		return configOptions{}, err
 	}
-	if _, err := os.Stat(path); errors.Is(err, fs.ErrNotExist) {
+	src, err := os.ReadFile(path)
+	if errors.Is(err, fs.ErrNotExist) {
 		return configOptions{}, nil
-	} else if err != nil {
+	}
+	if err != nil {
 		return configOptions{}, err
 	}
 
-	cfg := configOptions{}
-	thread := &starlark.Thread{
-		Name: "boot:config",
-	}
+	var cfg configOptions
+	thread := &starlark.Thread{Name: "boot:config"}
 	predeclared := starlark.StringDict{
 		"boot": &starlarkstruct.Module{
 			Name: "boot",
@@ -62,13 +62,11 @@ func loadConfig(ctx context.Context, env *cli.Env) (configOptions, error) {
 			},
 		},
 	}
-	if _, err := starlark.ExecFileOptions(&syntax.FileOptions{}, thread, path, nil, predeclared); err != nil {
+	if _, err := starlark.ExecFileOptions(&syntax.FileOptions{}, thread, path, src, predeclared); err != nil {
 		return configOptions{}, fmt.Errorf("%s: %w", path, err)
 	}
-	select {
-	case <-ctx.Done():
-		return configOptions{}, ctx.Err()
-	default:
+	if err := ctx.Err(); err != nil {
+		return configOptions{}, err
 	}
 	return cfg, nil
 }

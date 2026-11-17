@@ -56,9 +56,6 @@ func (e *Engine) Selected(selection Selection) ([]*Task, error) {
 	return SortTasks(tasks)
 }
 
-// validateSelectedDependencies checks the graph after user filters are applied.
-// It only sees selected tasks; unknown task IDs are rejected earlier against the
-// full recipe task list.
 func validateSelectedDependencies(tasks []*Task) error {
 	selected := make(map[string]bool)
 	for _, task := range tasks {
@@ -88,50 +85,39 @@ func validateSelectedDependencies(tasks []*Task) error {
 // SortTasks orders tasks after their dependencies, retaining recipe order among
 // tasks with no dependencies.
 func SortTasks(tasks []*Task) ([]*Task, error) {
-	inDegree := make(map[string]int)
+	inDegree := make(map[string]int, len(tasks))
 	graph := make(map[string][]*Task)
-	taskMap := make(map[string]*Task)
-
-	for _, t := range tasks {
-		taskMap[t.ID] = t
-		inDegree[t.ID] = 0
+	for _, task := range tasks {
+		inDegree[task.ID] = 0
 	}
-
-	for _, t := range tasks {
-		for _, dep := range t.DependsOn {
-			if _, ok := taskMap[dep]; ok {
-				graph[dep] = append(graph[dep], t)
-				inDegree[t.ID]++
+	for _, task := range tasks {
+		for _, dep := range task.DependsOn {
+			if _, ok := inDegree[dep]; ok {
+				graph[dep] = append(graph[dep], task)
+				inDegree[task.ID]++
 			}
 		}
 	}
 
-	var zeroInDegree []*Task
-	for _, t := range tasks {
-		if inDegree[t.ID] == 0 {
-			zeroInDegree = append(zeroInDegree, t)
+	var ready []*Task
+	for _, task := range tasks {
+		if inDegree[task.ID] == 0 {
+			ready = append(ready, task)
 		}
 	}
 
-	var sorted []*Task
-	for len(zeroInDegree) > 0 {
-		n := zeroInDegree[0]
-		zeroInDegree = zeroInDegree[1:]
-		sorted = append(sorted, n)
-
-		for _, m := range graph[n.ID] {
-			inDegree[m.ID]--
-			if inDegree[m.ID] == 0 {
-				zeroInDegree = append(zeroInDegree, m)
+	for i := 0; i < len(ready); i++ {
+		for _, next := range graph[ready[i].ID] {
+			inDegree[next.ID]--
+			if inDegree[next.ID] == 0 {
+				ready = append(ready, next)
 			}
 		}
 	}
-
-	if len(sorted) != len(tasks) {
+	if len(ready) != len(tasks) {
 		return nil, errors.New("cycle detected in task dependencies")
 	}
-
-	return sorted, nil
+	return ready, nil
 }
 
 func (task *Task) hasAnyTag(tags []string) bool {
@@ -143,11 +129,7 @@ func (task *Task) hasAnyTag(tags []string) bool {
 	return false
 }
 
-// starlarkTask implements the recipe-level task(...) builtin.
-//
-// The builtin records metadata and the Starlark callable but does not run the
-// callable. Deferring execution until plan/apply lets command-line task filters
-// work without evaluating every machine-specific task body.
+// starlarkTask registers a task so selection can run before its body.
 func (e *Engine) starlarkTask(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	var (
 		id              string

@@ -15,9 +15,7 @@ import (
 // RunCommand runs argv and includes combined output in returned errors.
 func RunCommand(ctx context.Context, dir string, argv ...string) error {
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
-	if dir != "" {
-		cmd.Dir = dir
-	}
+	cmd.Dir = dir
 	return RunCmd(cmd)
 }
 
@@ -35,14 +33,12 @@ func RunCmd(cmd *exec.Cmd) error {
 // CommandOutput runs argv and returns stdout, including combined output in returned errors.
 func CommandOutput(ctx context.Context, dir string, argv ...string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
-	if dir != "" {
-		cmd.Dir = dir
-	}
+	cmd.Dir = dir
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()
 	if err != nil {
-		combined := append(append([]byte{}, out...), stderr.Bytes()...)
+		combined := append(out, stderr.Bytes()...)
 		return nil, CommandError(cmd.Args, combined, err)
 	}
 	return out, nil

@@ -47,7 +47,6 @@ type app struct {
 	only        multiFlag
 	skip        multiFlag
 	tags        multiFlag
-	dryRun      bool
 	verbose     flagValue[bool]
 	json        flagValue[bool]
 	concurrency flagValue[int]
@@ -79,10 +78,6 @@ func (a *app) Run(ctx context.Context) error {
 	}
 
 	command := env.Args[0]
-	if a.dryRun {
-		command = "plan"
-	}
-
 	cfg, err := loadConfig(ctx, env)
 	if err != nil {
 		return fmt.Errorf("%w: %v", cli.ErrInvalidArgs, err)
@@ -102,36 +97,29 @@ func (a *app) Run(ctx context.Context) error {
 		Skip: a.skip,
 		Tags: a.tags,
 	}
+	opts := boot.RunOptions{
+		FailFast:    a.failFast.value,
+		Interactive: interactive(env),
+		Concurrency: a.concurrency.value,
+		Color:       env.Getenv("NO_COLOR") == "",
+		Verbose:     a.verbose.value,
+		JSON:        a.json.value,
+	}
 	switch command {
 	case "list":
 		return engine.List(env.Stdout, selection)
 	case "plan", "check":
-		return engine.Run(ctx, env.Stdout, selection, boot.RunOptions{
-			DryRun:      true,
-			FailFast:    a.failFast.value,
-			Interactive: interactive(env),
-			Concurrency: a.concurrency.value,
-			Color:       env.Getenv("NO_COLOR") == "",
-			Verbose:     a.verbose.value,
-			JSON:        a.json.value,
-		})
+		opts.DryRun = true
 	case "apply":
 		lock, err := acquireLock(rootLockPath(engine.Runtime.Root))
 		if err != nil {
 			return err
 		}
 		defer lock.Close()
-		return engine.Run(ctx, env.Stdout, selection, boot.RunOptions{
-			FailFast:    a.failFast.value,
-			Interactive: interactive(env),
-			Concurrency: a.concurrency.value,
-			Color:       env.Getenv("NO_COLOR") == "",
-			Verbose:     a.verbose.value,
-			JSON:        a.json.value,
-		})
 	default:
 		return fmt.Errorf("%w: no such command %q", cli.ErrInvalidArgs, command)
 	}
+	return engine.Run(ctx, env.Stdout, selection, opts)
 }
 
 func rootLockPath(root string) string {
@@ -145,7 +133,7 @@ func acquireLock(path string) (*os.File, error) {
 		return lock, nil
 	}
 	if errors.Is(err, filelock.ErrLocked) {
-		return nil, fmt.Errorf("another boot apply is already running for this recipe")
+		return nil, errors.New("another boot apply is already running for this recipe")
 	}
 	return nil, err
 }
@@ -284,7 +272,7 @@ func parsePositiveInt(value string) (int, error) {
 		return 0, err
 	}
 	if n < 1 {
-		return 0, fmt.Errorf("must be at least 1")
+		return 0, errors.New("must be at least 1")
 	}
 	return n, nil
 }
