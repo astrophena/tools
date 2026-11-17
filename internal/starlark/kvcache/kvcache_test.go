@@ -9,14 +9,14 @@ import (
 	"testing/synctest"
 	"time"
 
-	"go.astrophena.name/tools/internal/store"
+	"go.astrophena.name/tools/internal/cache"
 
 	"go.starlark.net/starlark"
 	"go.starlark.net/starlarkstruct"
 )
 
 func TestSetGet(t *testing.T) {
-	s := store.NewMemStore(t.Context(), time.Minute)
+	s := cache.NewMemStore(t.Context(), time.Minute)
 	mod := Module(t.Context(), s)
 	thread := &starlark.Thread{
 		Name: t.Name(),
@@ -82,7 +82,7 @@ func TestSetGet(t *testing.T) {
 func TestTTL(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		ttl := 50 * time.Millisecond
-		s := store.NewMemStore(t.Context(), ttl)
+		s := cache.NewMemStore(t.Context(), ttl)
 		mod := Module(t.Context(), s)
 		thread := &starlark.Thread{
 			Name: t.Name(),
@@ -123,7 +123,7 @@ func TestTTL(t *testing.T) {
 func TestTTL_ResetOnGet(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		ttl := 100 * time.Millisecond
-		s := store.NewMemStore(t.Context(), ttl)
+		s := cache.NewMemStore(t.Context(), ttl)
 		mod := Module(t.Context(), s)
 		thread := &starlark.Thread{
 			Name: "TestKVCache_TTL_ResetOnGet",

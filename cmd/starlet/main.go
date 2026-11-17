@@ -23,8 +23,8 @@ import (
 	"go.astrophena.name/tools/cmd/starlet/internal/bot"
 	"go.astrophena.name/tools/internal/api/gist"
 	"go.astrophena.name/tools/internal/api/llm"
+	"go.astrophena.name/tools/internal/cache"
 	"go.astrophena.name/tools/internal/starlark/kvcache"
-	"go.astrophena.name/tools/internal/store"
 )
 
 const tgAPI = "https://api.telegram.org"
@@ -41,7 +41,7 @@ type engine struct {
 	mux      *http.ServeMux
 	adminMux *http.ServeMux
 	scrubber *strings.Replacer
-	store    store.Store
+	store    cache.Store
 
 	// configuration, read-only after initialization
 	databasePath string
@@ -132,13 +132,13 @@ func (e *engine) doInit(ctx context.Context) error {
 
 	const kvCacheTTL = 24 * time.Hour
 	if e.databasePath != "" {
-		s, err := store.NewJSONFile(ctx, e.databasePath, kvCacheTTL)
+		s, err := cache.NewJSONFile(ctx, e.databasePath, kvCacheTTL)
 		if err != nil {
 			return err
 		}
 		e.store = s
 	} else {
-		e.store = store.NewMemStore(ctx, kvCacheTTL)
+		e.store = cache.NewMemStore(ctx, kvCacheTTL)
 	}
 
 	if e.llmUsagePath == "" {

@@ -18,7 +18,7 @@ import (
 	"go.astrophena.name/base/humanfmt"
 	"go.astrophena.name/base/logger"
 	"go.astrophena.name/base/web"
-	"go.astrophena.name/tools/internal/store"
+	"go.astrophena.name/tools/internal/cache"
 
 	"rsc.io/markdown"
 )
@@ -68,7 +68,7 @@ func (e *engine) initRoutes() {
 	dbg.KVFunc("Loaded Starlark modules", func() any {
 		return fmt.Sprintf("%+v", e.bot.Visited())
 	})
-	if s, ok := e.store.(*store.JSONFile); ok {
+	if s, ok := e.store.(*cache.JSONFile); ok {
 		dbg.KVFunc("KV cache store", func() any {
 			stats := s.Stats()
 			return fmt.Sprintf(

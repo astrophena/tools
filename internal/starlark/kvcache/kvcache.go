@@ -9,14 +9,14 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"go.astrophena.name/tools/internal/store"
+	"go.astrophena.name/tools/internal/cache"
 
 	"go.starlark.net/starlark"
 	"go.starlark.net/starlarkstruct"
 )
 
 // Module returns a Starlark module that exposes key-value caching functionality.
-func Module(ctx context.Context, s store.Store) *starlarkstruct.Module {
+func Module(ctx context.Context, s cache.Store) *starlarkstruct.Module {
 	m := &module{
 		ctx:   ctx,
 		store: s,
@@ -32,7 +32,7 @@ func Module(ctx context.Context, s store.Store) *starlarkstruct.Module {
 
 type module struct {
 	ctx   context.Context
-	store store.Store
+	store cache.Store
 }
 
 func (m *module) get(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {

@@ -22,8 +22,8 @@ import (
 	"go.astrophena.name/base/txtar"
 	"go.astrophena.name/base/web"
 	"go.astrophena.name/tools/cmd/starlet/internal/bot"
+	"go.astrophena.name/tools/internal/cache"
 	"go.astrophena.name/tools/internal/starlark/kvcache"
-	"go.astrophena.name/tools/internal/store"
 )
 
 // Typical Telegram Bot API token, copied from docs.
@@ -100,7 +100,7 @@ func testBot(t *testing.T, m *mux, files map[string]string) *bot.Bot {
 		BotID:       987654321,
 		BotUsername: "testbot",
 		HTTPClient:  testutil.MockHTTPClient(m.mux),
-		KVCache:     kvcache.Module(t.Context(), store.NewMemStore(t.Context(), 1*time.Minute)),
+		KVCache:     kvcache.Module(t.Context(), cache.NewMemStore(t.Context(), 1*time.Minute)),
 		Logger:      slog.New(slog.NewTextHandler(t.Output(), nil)),
 	})
 	if err := b.Load(t.Context(), files); err != nil {
