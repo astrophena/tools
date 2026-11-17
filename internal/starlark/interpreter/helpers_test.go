@@ -17,31 +17,12 @@ package interpreter
 import (
 	"context"
 	"fmt"
-	"sort"
+	"maps"
+	"slices"
 	"strings"
-	"unicode"
 
 	"go.starlark.net/starlark"
 )
-
-func deindent(s string) string {
-	lines := strings.Split(s, "\n")
-	indent := ""
-	for _, line := range lines {
-		idx := strings.IndexFunc(line, func(r rune) bool { return !unicode.IsSpace(r) })
-		if idx != -1 {
-			indent = line[:idx]
-			break
-		}
-	}
-	if indent == "" {
-		return s
-	}
-	for i, line := range lines {
-		lines[i] = strings.TrimPrefix(line, indent)
-	}
-	return strings.Join(lines, "\n")
-}
 
 type interpreterResult struct {
 	keys    []string
@@ -82,7 +63,7 @@ func runInterpreter(ctx context.Context, main, stdlib, custom map[string]string,
 		}),
 		"imported_sym": starlark.MakeInt(123),
 		"load_src": starlark.NewBuiltin("load_src", func(th *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, _ []starlark.Tuple) (starlark.Value, error) {
-			src, err := GetThreadInterpreter(th).LoadSource(th, args[0].(starlark.String).GoString())
+			src, err := intr.LoadSource(th, args[0].(starlark.String).GoString())
 			return starlark.String(src), err
 		}),
 	}
@@ -94,11 +75,7 @@ func runInterpreter(ctx context.Context, main, stdlib, custom map[string]string,
 		dict, err := intr.ExecModule(ctx, MainPkg, "main.star")
 		result.err = err
 		if err == nil {
-			result.keys = make([]string, 0, len(dict))
-			for key := range dict {
-				result.keys = append(result.keys, key)
-			}
-			sort.Strings(result.keys)
+			result.keys = slices.Sorted(maps.Keys(dict))
 		}
 	}
 	result.visited = intr.Visited()

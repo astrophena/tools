@@ -28,30 +28,7 @@ import (
 
 var update = flag.Bool("update", false, "update golden files in testdata")
 
-func TestDeindent(t *testing.T) {
-	t.Parallel()
-	got := deindent(`
-
-		a
-			b
-				c
-			d
-
-		e
-		`)
-	want := `
-
-a
-	b
-		c
-	d
-
-e
-`
-	testutil.AssertEqual(t, got, want)
-}
-
-func TestMakeModuleKey(t *testing.T) {
+func TestResolveModule(t *testing.T) {
 	t.Parallel()
 	thread := new(starlark.Thread)
 	thread.SetLocal(threadModKey, ModuleKey{
@@ -139,10 +116,10 @@ func TestMakeModuleKey(t *testing.T) {
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			got, err := MakeModuleKey(tc.thread, tc.ref)
+			got, err := resolveModule(tc.thread, tc.ref)
 			if tc.err != "" {
 				if err == nil || !strings.Contains(err.Error(), tc.err) {
-					t.Fatalf("MakeModuleKey() error = %v, want mention %q", err, tc.err)
+					t.Fatalf("resolveModule() error = %v, want mention %q", err, tc.err)
 				}
 				return
 			}
