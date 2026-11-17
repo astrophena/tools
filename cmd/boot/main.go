@@ -41,34 +41,35 @@ const defaultEntry = "BOOT.star"
 func main() { cli.Main(new(app)) }
 
 type app struct {
-	root        flagValue[string]
-	entry       flagValue[string]
-	failFast    flagValue[bool]
-	only        multiFlag
-	skip        multiFlag
-	tags        multiFlag
-	verbose     flagValue[bool]
-	json        flagValue[bool]
-	concurrency flagValue[int]
+	options
+	flags *flag.FlagSet
+	only  multiFlag
+	skip  multiFlag
+	tags  multiFlag
 }
 
 func (a *app) Flags(fs *flag.FlagSet) {
-	a.root = newFlagValue(".", parseString)
-	a.entry = newFlagValue(defaultEntry, parseString)
-	a.failFast = newBoolFlagValue(false)
-	a.verbose = newBoolFlagValue(false)
-	a.json = newBoolFlagValue(false)
-	a.concurrency = newFlagValue(1, parsePositiveInt)
-
-	fs.Var(&a.root, "C", "Run as if boot was started in `dir`.")
-	fs.Var(&a.entry, "f", "Recipe entrypoint `file`.")
-	fs.Var(&a.failFast, "fail-fast", "Stop on the first failed task.")
-	fs.Var(&a.verbose, "verbose", "Print detailed action output when applying changes.")
-	fs.Var(&a.json, "json", "Print machine-readable JSON output.")
+	a.flags = fs
+	a.concurrency = 1
+	fs.StringVar(&a.workspace, "C", ".", "Run as if boot was started in `dir`.")
+	fs.StringVar(&a.entry, "f", defaultEntry, "Recipe entrypoint `file`.")
+	fs.BoolVar(&a.failFast, "fail-fast", false, "Stop on the first failed task.")
+	fs.BoolVar(&a.verbose, "verbose", false, "Print detailed action output when applying changes.")
+	fs.BoolVar(&a.json, "json", false, "Print machine-readable JSON output.")
 	fs.Var(&a.only, "only", "Run only the specified task ID. May be repeated.")
 	fs.Var(&a.skip, "skip", "Skip the specified task ID. May be repeated.")
 	fs.Var(&a.tags, "tag", "Run tasks with the specified tag. May be repeated.")
-	fs.Var(&a.concurrency, "j", "Number of tasks and eligible actions to run in parallel.")
+	fs.Func("j", "Number of tasks and eligible actions to run in parallel (default 1).", func(value string) error {
+		n, err := strconv.Atoi(value)
+		if err != nil {
+			return err
+		}
+		if n < 1 {
+			return errors.New("must be at least 1")
+		}
+		a.concurrency = n
+		return nil
+	})
 }
 
 func (a *app) Run(ctx context.Context) error {
@@ -78,11 +79,9 @@ func (a *app) Run(ctx context.Context) error {
 	}
 
 	command := env.Args[0]
-	cfg, err := loadConfig(ctx, env)
-	if err != nil {
+	if err := a.loadOptions(ctx, env); err != nil {
 		return fmt.Errorf("%w: %v", cli.ErrInvalidArgs, err)
 	}
-	a.applyConfig(env, cfg)
 
 	engine, err := a.engine(env)
 	if err != nil {
@@ -98,12 +97,12 @@ func (a *app) Run(ctx context.Context) error {
 		Tags: a.tags,
 	}
 	opts := boot.RunOptions{
-		FailFast:    a.failFast.value,
+		FailFast:    a.failFast,
 		Interactive: interactive(env),
-		Concurrency: a.concurrency.value,
+		Concurrency: a.concurrency,
 		Color:       env.Getenv("NO_COLOR") == "",
-		Verbose:     a.verbose.value,
-		JSON:        a.json.value,
+		Verbose:     a.verbose,
+		JSON:        a.json,
 	}
 	switch command {
 	case "list":
@@ -147,29 +146,35 @@ func interactive(env *cli.Env) bool {
 	return inOK && outOK && term.IsTerminal(int(in.Fd())) && term.IsTerminal(int(out.Fd()))
 }
 
-func (a *app) applyConfig(env *cli.Env, cfg configOptions) {
-	if cfg.workspace.set && !a.root.set {
-		a.root.value = expandHome(env, cfg.workspace.value)
+func (a *app) loadOptions(ctx context.Context, env *cli.Env) error {
+	cfg := a.options
+	if err := loadConfig(ctx, env, &cfg); err != nil {
+		return err
 	}
-	if cfg.entry.set && !a.entry.set {
-		a.entry.value = cfg.entry.value
-	}
-	if cfg.concurrency.set && !a.concurrency.set {
-		a.concurrency.value = cfg.concurrency.value
-	}
-	if cfg.failFast.set && !a.failFast.set {
-		a.failFast.value = cfg.failFast.value
-	}
-	if cfg.verbose.set && !a.verbose.set {
-		a.verbose.value = cfg.verbose.value
-	}
-	if cfg.json.set && !a.json.set {
-		a.json.value = cfg.json.value
-	}
+
+	cfg.workspace = expandHome(env, cfg.workspace)
+	a.flags.Visit(func(f *flag.Flag) {
+		switch f.Name {
+		case "C":
+			cfg.workspace = a.workspace
+		case "f":
+			cfg.entry = a.entry
+		case "j":
+			cfg.concurrency = a.concurrency
+		case "fail-fast":
+			cfg.failFast = a.failFast
+		case "verbose":
+			cfg.verbose = a.verbose
+		case "json":
+			cfg.json = a.json
+		}
+	})
+	a.options = cfg
+	return nil
 }
 
 func (a *app) engine(env *cli.Env) (*boot.Engine, error) {
-	root, err := filepath.Abs(a.root.value)
+	root, err := filepath.Abs(a.workspace)
 	if err != nil {
 		return nil, err
 	}
@@ -192,7 +197,7 @@ func (a *app) engine(env *cli.Env) (*boot.Engine, error) {
 
 	return &boot.Engine{
 		Runtime: rt,
-		Entry:   a.entry.value,
+		Entry:   a.entry,
 		Modules: []*starlarkstruct.Module{
 			bootconsent.Module(rt),
 			bootenv.Module(rt),
@@ -220,59 +225,4 @@ func (f *multiFlag) String() string {
 func (f *multiFlag) Set(value string) error {
 	*f = append(*f, value)
 	return nil
-}
-
-type flagValue[T any] struct {
-	value  T
-	set    bool
-	isBool bool
-	parse  func(string) (T, error)
-}
-
-func newFlagValue[T any](value T, parse func(string) (T, error)) flagValue[T] {
-	return flagValue[T]{
-		value: value,
-		parse: parse,
-	}
-}
-
-func newBoolFlagValue(value bool) flagValue[bool] {
-	return flagValue[bool]{
-		value:  value,
-		isBool: true,
-		parse:  strconv.ParseBool,
-	}
-}
-
-func (f *flagValue[T]) String() string {
-	return fmt.Sprint(f.value)
-}
-
-func (f *flagValue[T]) Set(value string) error {
-	parsed, err := f.parse(value)
-	if err != nil {
-		return err
-	}
-	f.value = parsed
-	f.set = true
-	return nil
-}
-
-func (f *flagValue[T]) IsBoolFlag() bool {
-	return f.isBool
-}
-
-func parseString(value string) (string, error) {
-	return value, nil
-}
-
-func parsePositiveInt(value string) (int, error) {
-	n, err := strconv.Atoi(value)
-	if err != nil {
-		return 0, err
-	}
-	if n < 1 {
-		return 0, errors.New("must be at least 1")
-	}
-	return n, nil
 }

@@ -47,6 +47,11 @@ func TestConfig(t *testing.T) {
 			args:       []string{"-C", "{root}", "list"},
 			wantOutput: "dotfiles",
 		},
+		"explicit_false_overrides_config": {
+			config:     "boot.configure(workspace = \"{root}\")\nboot.configure(json = True)",
+			args:       []string{"-json=false", "plan"},
+			wantOutput: "2 tasks · 3 would change · 0 skipped",
+		},
 		"invalid_concurrency": {
 			config:      `boot.configure(concurrency = 0)`,
 			args:        []string{"list"},
