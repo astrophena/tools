@@ -27,7 +27,6 @@ import (
 	bootgit "go.astrophena.name/tools/cmd/boot/internal/git"
 	bootgo "go.astrophena.name/tools/cmd/boot/internal/golang"
 	bootpkg "go.astrophena.name/tools/cmd/boot/internal/packages"
-	bootpacman "go.astrophena.name/tools/cmd/boot/internal/pacman"
 	bootprogram "go.astrophena.name/tools/cmd/boot/internal/program"
 	bootrescue "go.astrophena.name/tools/cmd/boot/internal/rescue"
 	bootssh "go.astrophena.name/tools/cmd/boot/internal/ssh"
@@ -201,7 +200,7 @@ func (a *app) engine(env *cli.Env) (*boot.Engine, error) {
 			bootflatpak.Module(rt),
 			bootfs.Module(rt),
 			bootpkg.Module(rt),
-			bootpacman.Module(rt),
+			bootpkg.PacmanModule(rt),
 			bootprogram.Module(rt),
 			bootgit.Module(rt),
 			bootgo.Module(rt),

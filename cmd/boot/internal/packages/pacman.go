@@ -2,8 +2,7 @@
 // Use of this source code is governed by the ISC
 // license that can be found in the LICENSE.md file.
 
-// Package pacman provides boot Starlark primitives for the Pacman package manager.
-package pacman
+package packages
 
 import (
 	"bytes"
@@ -23,24 +22,20 @@ import (
 	"go.starlark.net/starlarkstruct"
 )
 
-// Module returns the Starlark pacman module.
-func Module(rt *boot.Runtime) *starlarkstruct.Module {
-	m := &module{rt: rt}
+// PacmanModule returns the Starlark pacman module.
+func PacmanModule(rt *boot.Runtime) *starlarkstruct.Module {
+	m := &module{rt: rt, managerName: "pacman"}
 	return &starlarkstruct.Module{
 		Name: "pacman",
 		Members: starlark.StringDict{
 			"check_explicit_packages": boot.TaskBuiltin("pacman.check_explicit_packages", m.checkExplicitPackages),
-			"check_orphans":           boot.TaskBuiltin("pacman.check_orphans", m.checkOrphans),
+			"check_orphans":           boot.TaskBuiltin("pacman.check_orphans", checkOrphans),
 			"check_pacnew":            boot.TaskBuiltin("pacman.check_pacnew", m.checkPacnew),
 		},
 	}
 }
 
-type module struct {
-	rt *boot.Runtime
-}
-
-func (m *module) checkOrphans(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+func checkOrphans(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	if err := starlark.UnpackArgs(b.Name(), args, kwargs); err != nil {
 		return nil, err
 	}
@@ -64,44 +59,6 @@ func (m *module) checkOrphans(thread *starlark.Thread, b *starlark.Builtin, args
 				"orphaned packages found:\n%s\nremove them with: sudo pacman -Rns $(pacman -Qtdq)",
 				boot.BulletList(orphans),
 			))
-			return boot.ResultSkip, nil
-		},
-	})
-	return starlark.None, nil
-}
-
-func (m *module) checkExplicitPackages(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	var packages *starlark.List
-	if err := starlark.UnpackArgs(b.Name(), args, kwargs, "packages", &packages); err != nil {
-		return nil, err
-	}
-	defined, err := boot.StringList("packages", packages)
-	if err != nil {
-		return nil, fmt.Errorf("%s: %w", b.Name(), err)
-	}
-	boot.AddAction(thread, boot.Action{
-		Summary: "check pacman explicit package list",
-		Apply: func(ctx context.Context, dryRun bool) (boot.Result, error) {
-			cmd := exec.CommandContext(ctx, "pacman", "-Qqen")
-			out, err := cmd.Output()
-			if err != nil {
-				return "", err
-			}
-			known := make(map[string]bool)
-			for _, pkg := range defined {
-				known[pkg] = true
-			}
-			var extra []string
-			for pkg := range strings.FieldsSeq(string(out)) {
-				if !known[pkg] {
-					extra = append(extra, pkg)
-				}
-			}
-			if len(extra) == 0 {
-				return boot.ResultSkip, nil
-			}
-			slices.Sort(extra)
-			boot.Warn(ctx, fmt.Sprintf("explicit packages missing from recipe:\n%s", boot.BulletList(extra)))
 			return boot.ResultSkip, nil
 		},
 	})
