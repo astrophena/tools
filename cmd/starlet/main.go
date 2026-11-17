@@ -7,8 +7,6 @@ package main
 import (
 	"cmp"
 	"context"
-	_ "embed"
-	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -37,7 +35,6 @@ type engine struct {
 	// initialized by doInit
 	bot      *bot.Bot
 	gistc    *gist.Client
-	logger   *slog.Logger
 	mux      *http.ServeMux
 	adminMux *http.ServeMux
 	scrubber *strings.Replacer
@@ -81,7 +78,7 @@ func (e *engine) endpointConfig(ctx context.Context, admin bool) (*service.Endpo
 	return ec, nil
 }
 
-func (e *engine) Shutdown(ctx context.Context) error { return e.store.Close() }
+func (e *engine) Shutdown(context.Context) error { return e.store.Close() }
 
 func (e *engine) doInit(ctx context.Context) error {
 	env := cli.GetEnv(ctx)
@@ -97,9 +94,6 @@ func (e *engine) doInit(ctx context.Context) error {
 	e.tgOwner = cmp.Or(e.tgOwner, parseInt(env.Getenv("TG_OWNER")))
 	e.tgSecret = cmp.Or(e.tgSecret, env.Getenv("TG_SECRET"))
 	e.tgToken = cmp.Or(e.tgToken, env.Getenv("TG_TOKEN"))
-
-	logger := logger.Get(ctx)
-	e.logger = logger.Logger
 
 	if e.httpc == nil {
 		e.httpc = &http.Client{
@@ -152,7 +146,7 @@ func (e *engine) doInit(ctx context.Context) error {
 		HTTPClient:   e.httpc,
 		KVCache:      kvcache.Module(e.store),
 		Scrubber:     e.scrubber,
-		Logger:       e.logger.WithGroup("bot"),
+		Logger:       logger.Get(ctx).Logger.WithGroup("bot"),
 		LLMUsagePath: e.llmUsagePath,
 	}
 
@@ -188,10 +182,10 @@ func (e *engine) doInit(ctx context.Context) error {
 
 func parseInt(s string) int64 {
 	i, err := strconv.ParseInt(s, 10, 64)
-	if err == nil {
-		return i
+	if err != nil {
+		return 0
 	}
-	return 0
+	return i
 }
 
 func (e *engine) getMe(ctx context.Context) (getMeResponse, error) {
@@ -207,17 +201,9 @@ func (e *engine) getMe(ctx context.Context) (getMeResponse, error) {
 }
 
 type getMeResponse struct {
-	OK     bool `json:"ok"`
 	Result struct {
-		ID                      int64  `json:"id"`
-		IsBot                   bool   `json:"is_bot"`
-		FirstName               string `json:"first_name"`
-		Username                string `json:"username"`
-		CanJoinGroups           bool   `json:"can_join_groups"`
-		CanReadAllGroupMessages bool   `json:"can_read_all_group_messages"`
-		SupportsInlineQueries   bool   `json:"supports_inline_queries"`
-		CanConnectToBusiness    bool   `json:"can_connect_to_business"`
-		HasMainWebApp           bool   `json:"has_main_web_app"`
+		ID       int64  `json:"id"`
+		Username string `json:"username"`
 	} `json:"result"`
 }
 

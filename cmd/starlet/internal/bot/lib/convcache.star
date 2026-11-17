@@ -4,32 +4,20 @@
 
 # vim: ft=starlark shiftwidth=4
 
-"""Provides functions to cache conversation history per chat ID.
-
-Attributes:
-    get(chat_id: int) -> list: Retrieves the conversation history (list of (str, str) tuples,
-        where each tuple is (role, text)) for the given chat ID. Returns an empty list if no history exists.
-    append(chat_id: int, role: str, text: str) -> None: Appends a (role, text) tuple to the
-        conversation history for the given chat ID.
-    reset(chat_id: int) -> None: Clears the conversation history for the
-        given chat ID.
-"""
+"""Stores (role, text) messages by chat ID. Missing histories read as empty lists."""
 
 
 def _get(chat_id):
     """Retrieves the conversation history for a chat ID."""
-    cache_key = _cache_key(chat_id)
-    cur = kvcache.get(cache_key)
-    if cur == None:
-        cur = []
-    return cur
+    history = kvcache.get(_cache_key(chat_id))
+    return [] if history == None else history
 
 
 def _append(chat_id, role, text):
     """Appends a message (role, text) to the conversation history for a chat ID."""
-    cur = _get(chat_id)
-    cur.append((role, text))
-    kvcache.set(_cache_key(chat_id), cur)
+    history = _get(chat_id)
+    history.append((role, text))
+    kvcache.set(_cache_key(chat_id), history)
 
 
 def _reset(chat_id):

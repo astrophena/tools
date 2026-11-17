@@ -8,18 +8,7 @@
 
 
 def _forward_message(to, from_chat_id, message_id):
-    """Forwards a message from one chat to another.
-
-    This function calls the Telegram Bot API's 'forwardMessage' method.
-
-    Args:
-        to: The chat ID (integer or string) where the message should be forwarded to.
-        from_chat_id: The chat ID (integer or string) from where the message should be forwarded.
-        message_id: The ID of the message to forward (integer).
-
-    Returns:
-        The result of the 'forwardMessage' Telegram Bot API call.
-    """
+    """Forwards a message and returns the API response."""
     return telegram.call(
         method="forwardMessage",
         args={
@@ -41,43 +30,17 @@ def _message_id(message):
 
 
 def _send_message(to, text, reply_markup=None, link_preview=False):
-    """Sends a text message to a Telegram chat.
-
-    This function handles message splitting for messages exceeding Telegram's
-    message length limit (4096 characters). It also applies Markdown formatting
-    to the message text and allows disabling link previews.
-
-    Args:
-        to: The chat ID (integer or string) where the message should be sent.
-        text: The text content of the message to send.
-        reply_markup: (optional) A reply markup object (e.g., InlineKeyboardMarkup, ReplyKeyboardMarkup)
-            to attach to the message. Defaults to an empty dictionary (no reply markup).
-        link_preview: (optional) A boolean indicating whether to disable link previews in the message.
-            Defaults to False (link previews are enabled by default in Telegram).
-
-    Returns:
-        None. The function sends messages via Telegram Bot API calls.
-    """
+    """Sends Markdown to a chat, splitting long messages. Set link_preview to enable previews."""
     if reply_markup == None:
         reply_markup = {}
 
     args = {
         "chat_id": to,
         "reply_markup": reply_markup,
-        "link_preview_options": {
-            "is_disabled": True,
-        },
+        "link_preview_options": {"is_disabled": not link_preview},
     }
-    if link_preview:
-        args["link_preview_options"]["is_disabled"] = not link_preview
-
     for chunk in _split_message(text):
-        msg = markdown.convert(chunk)
-        args |= msg
-        telegram.call(
-            method="sendMessage",
-            args=args,
-        )
+        telegram.call(method="sendMessage", args=args | markdown.convert(chunk))
 
 
 def _reply(message, text, reply_markup=None, link_preview=False):
@@ -147,28 +110,15 @@ def _leave_chat(chat_id):
 
 def _get_largest_photo_file(message):
     """Downloads the largest photo attached to a Telegram message."""
-    if "photo" not in message or len(message["photo"]) == 0:
+    photos = message.get("photo", [])
+    if len(photos) == 0:
         return None
 
-    photo = message["photo"][len(message["photo"]) - 1]
-    return telegram.get_file(photo["file_id"])
+    return telegram.get_file(photos[-1]["file_id"])
 
 
 def _split_message(message):
-    """Splits a message into chunks if it exceeds Telegram's message length limit.
-
-    Telegram Bot API has a message length limit (currently 4096 characters).
-    This function splits a long message into chunks that are within this limit,
-    attempting to split at line breaks to maintain readability.
-
-    Args:
-        message: The message string to be split.
-
-    Returns:
-        A list of strings, where each string is a chunk of the original message
-        that is within the Telegram message length limit. If the original message
-        is already within the limit, it returns a list containing only the original message.
-    """
+    """Splits long messages at line breaks where possible."""
     limit = 4096
     if len(message) <= limit:
         return [message]
