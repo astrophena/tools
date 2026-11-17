@@ -14,7 +14,6 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"go.astrophena.name/base/cli/progressbar"
 	"go.astrophena.name/tools/internal/starlark/interpreter"
 
 	"go.starlark.net/starlark"
@@ -187,7 +186,7 @@ func (e *Engine) Run(ctx context.Context, w io.Writer, selection Selection, opts
 	}
 
 	warnings := &warningCollector{}
-	var pb *progressbar.Bar
+	var progress *runProgress
 	if prepare(ctx, runs, opts, warnings) {
 		if !opts.DryRun {
 			var prepared []*Task
@@ -205,21 +204,15 @@ func (e *Engine) Run(ctx context.Context, w io.Writer, selection Selection, opts
 			}
 		}
 
-		taskDone := func(*Task) {}
-		if !opts.DryRun && !opts.Verbose && !opts.JSON {
-			pb = progressbar.New(w, len(runs), opts.Interactive)
-			pb.Start()
-			taskDone = func(task *Task) {
-				pb.SetTitle(task.Name)
-				pb.Increment()
-			}
+		if opts.Interactive && !opts.DryRun && !opts.Verbose && !opts.JSON {
+			progress = startProgress(w, len(runs))
 		}
-		execute(ctx, runs, opts, warnings, taskDone)
+		execute(ctx, runs, opts, warnings, progress)
 	}
 
 	summary := summarize(runs)
-	if pb != nil {
-		pb.Stop(summary.Failed > 0)
+	if progress != nil {
+		progress.bar.Stop(summary.Failed > 0)
 	}
 	collectedWarnings := warnings.all()
 	summary.Warnings = len(collectedWarnings)

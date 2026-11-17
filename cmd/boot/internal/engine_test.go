@@ -726,72 +726,55 @@ func TestApplyReportsWarningsAfterProgress(t *testing.T) {
 	}
 }
 
-func TestApplyProgressTitleReportsCompletedTask(t *testing.T) {
+func TestApplyProgressTitleReportsRunningAction(t *testing.T) {
 	slowStarted := make(chan struct{})
 	fastReported := make(chan struct{})
 	out := &notifyingBuffer{
 		done: fastReported,
 		match: func(output string) bool {
-			return renderContains(output, "Fast task", "1/2")
+			return renderContains(output, "wait for slow operation", "1/2")
 		},
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 
-	engine := &Engine{
-		Tasks: []*Task{
-			{
-				ID:   "slow",
-				Name: "Slow task",
-				Run: starlark.NewBuiltin("slow", func(thread *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, _ []starlark.Tuple) (starlark.Value, error) {
-					AddAction(thread, Action{
-						Summary: "wait",
-						Apply: func(context.Context, bool) (Result, error) {
-							close(slowStarted)
-							select {
-							case <-fastReported:
-								return ResultSkip, nil
-							case <-ctx.Done():
-								return "", ctx.Err()
-							}
-						},
-					})
-					return starlark.None, nil
-				}),
-			},
-			{
-				ID:   "fast",
-				Name: "Fast task",
-				Run: starlark.NewBuiltin("fast", func(thread *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, _ []starlark.Tuple) (starlark.Value, error) {
-					AddAction(thread, Action{
-						Summary: "finish",
-						Apply: func(context.Context, bool) (Result, error) {
-							select {
-							case <-slowStarted:
-								return ResultSkip, nil
-							case <-ctx.Done():
-								return "", ctx.Err()
-							}
-						},
-					})
-					return starlark.None, nil
-				}),
-			},
+	slow := testTask("slow", Action{
+		Summary: "wait for slow operation",
+		Apply: func(ctx context.Context, _ bool) (Result, error) {
+			close(slowStarted)
+			select {
+			case <-fastReported:
+				return ResultSkip, nil
+			case <-ctx.Done():
+				return "", ctx.Err()
+			}
 		},
-	}
+	})
+	fast := testTask("fast", Action{
+		Summary: "finish quickly",
+		Apply: func(ctx context.Context, _ bool) (Result, error) {
+			select {
+			case <-slowStarted:
+				return ResultSkip, nil
+			case <-ctx.Done():
+				return "", ctx.Err()
+			}
+		},
+	})
+	engine := &Engine{Tasks: []*Task{slow, fast}}
 
 	if err := engine.Run(ctx, out, Selection{}, RunOptions{
 		Concurrency: 2,
 		Interactive: true,
 	}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("apply: %v\n%s", err, out.String())
 	}
 	got := out.String()
-	if !renderContains(got, "Fast task", "1/2") {
-		t.Fatalf("progress output did not report fast completion:\n%s", got)
+	if !renderContains(got, "(+1)", "0/2") {
+		t.Fatalf("progress did not report the overlapping actions:\n%s", got)
 	}
-	if renderContains(got, "Slow task", "0/2") {
-		t.Fatalf("progress output reported slow task title before completion:\n%s", got)
+	if renderContains(got, "finish quickly", "1/2") || renderContains(got, "wait for slow operation", "2/2") {
+		t.Fatalf("progress displayed a completed action:\n%s", got)
 	}
 }
 

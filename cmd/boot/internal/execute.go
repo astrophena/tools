@@ -39,7 +39,7 @@ const (
 	taskFailed
 )
 
-func execute(ctx context.Context, runs []taskRun, opts RunOptions, warnings *warningCollector, taskDone func(*Task)) {
+func execute(ctx context.Context, runs []taskRun, opts RunOptions, warnings *warningCollector, progress *runProgress) {
 	limit := max(opts.Concurrency, 1)
 	limiter := make(actionLimiter, limit)
 	results := make(chan *taskRun)
@@ -48,7 +48,7 @@ func execute(ctx context.Context, runs []taskRun, opts RunOptions, warnings *war
 		r := &runs[i]
 		byID[r.task.ID] = r
 		if r.status != taskPending {
-			taskDone(r.task)
+			progress.taskDone()
 		}
 	}
 
@@ -72,7 +72,7 @@ func execute(ctx context.Context, runs []taskRun, opts RunOptions, warnings *war
 				if dep != "" {
 					r.err = fmt.Errorf("dependency %s failed", dep)
 					r.status = taskFailed
-					taskDone(r.task)
+					progress.taskDone()
 					if opts.FailFast && !r.task.ContinueOnError {
 						stopping = true
 						break
@@ -83,7 +83,7 @@ func execute(ctx context.Context, runs []taskRun, opts RunOptions, warnings *war
 				r.status = taskRunning
 				active++
 				go func() {
-					r.execute(ctx, opts, warnings, limiter)
+					r.execute(ctx, opts, warnings, limiter, progress)
 					results <- r
 				}()
 			}
@@ -100,11 +100,11 @@ func execute(ctx context.Context, runs []taskRun, opts RunOptions, warnings *war
 			r.status = taskFailed
 			stopping = stopping || opts.FailFast && !r.task.ContinueOnError
 		}
-		taskDone(r.task)
+		progress.taskDone()
 	}
 }
 
-func (r *taskRun) execute(ctx context.Context, opts RunOptions, warnings *warningCollector, limiter actionLimiter) {
+func (r *taskRun) execute(ctx context.Context, opts RunOptions, warnings *warningCollector, limiter actionLimiter, progress *runProgress) {
 	actions := r.task.Actions
 	for start := 0; start < len(actions); {
 		end := start + 1
@@ -118,12 +118,12 @@ func (r *taskRun) execute(ctx context.Context, opts RunOptions, warnings *warnin
 		r.actions = append(r.actions, make([]actionResult, end-start)...)
 		batch := r.actions[offset:]
 		if len(batch) == 1 {
-			batch[0] = r.apply(ctx, actions[start], opts.DryRun, warnings, limiter)
+			batch[0] = r.apply(ctx, &actions[start], opts.DryRun, warnings, limiter, progress)
 		} else {
 			var group sync.WaitGroup
-			for i, action := range actions[start:end] {
+			for i := range batch {
 				group.Go(func() {
-					batch[i] = r.apply(ctx, action, opts.DryRun, warnings, limiter)
+					batch[i] = r.apply(ctx, &actions[start+i], opts.DryRun, warnings, limiter, progress)
 				})
 			}
 			group.Wait()
@@ -139,12 +139,14 @@ func (r *taskRun) execute(ctx context.Context, opts RunOptions, warnings *warnin
 	}
 }
 
-func (r *taskRun) apply(ctx context.Context, action Action, dryRun bool, warnings *warningCollector, limiter actionLimiter) actionResult {
+func (r *taskRun) apply(ctx context.Context, action *Action, dryRun bool, warnings *warningCollector, limiter actionLimiter, progress *runProgress) actionResult {
 	if err := limiter.acquire(ctx); err != nil {
 		return actionResult{description: action.description(), err: err}
 	}
 	defer limiter.release()
-	return r.runAction(ctx, action, dryRun, warnings)
+	progress.startAction(action)
+	defer progress.finishAction(action)
+	return r.runAction(ctx, *action, dryRun, warnings)
 }
 
 func (r *taskRun) runAction(ctx context.Context, action Action, dryRun bool, warnings *warningCollector) actionResult {
