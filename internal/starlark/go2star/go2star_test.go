@@ -72,18 +72,14 @@ func TestToValue(t *testing.T) {
 			3.1415,
 			starlark.Float(3.1415),
 		},
-
-		// Floats that can be represented as ints.
-		"float10.0": {
+		"integral_float": {
 			10.0,
 			starlark.MakeInt(10),
 		},
-		"float32-5.0": {
+		"negative_integral_float32": {
 			float32(-5.0),
 			starlark.MakeInt(-5),
 		},
-
-		// Boundary float values.
 		"max_int64_as_float": {
 			float64(math.MaxInt64),
 			starlark.Float(float64(math.MaxInt64)),
@@ -108,14 +104,10 @@ func TestToValue(t *testing.T) {
 			math.Inf(-1),
 			starlark.Float(math.Inf(-1)),
 		},
-
-		// Time.
 		"time.Time": {
 			time.Date(2023, 8, 15, 14, 30, 0, 0, time.UTC),
 			starlarktime.Time(time.Date(2023, 8, 15, 14, 30, 0, 0, time.UTC)),
 		},
-
-		// Slices.
 		"slice_int": {
 			[]int{1, 2, 3},
 			starlark.NewList([]starlark.Value{starlark.MakeInt(1), starlark.MakeInt(2), starlark.MakeInt(3)}),
@@ -124,8 +116,6 @@ func TestToValue(t *testing.T) {
 			[]string{"a", "b"},
 			starlark.NewList([]starlark.Value{starlark.String("a"), starlark.String("b")}),
 		},
-
-		// Maps.
 		"map": {
 			map[string]int{"one": 1},
 			func() starlark.Value {
@@ -134,8 +124,6 @@ func TestToValue(t *testing.T) {
 				return dict
 			}(),
 		},
-
-		// Structs.
 		"struct": {
 			struct {
 				Name string
@@ -151,15 +139,12 @@ func TestToValue(t *testing.T) {
 				return dict
 			}(),
 		},
-		"struct_nested": {
+		"struct_nested_values": {
 			struct {
 				Name  string
 				Age   int
 				Slice []string
 				Map   map[string]bool
-				// We used only one member of the map because Go has randomized map order,
-				// so it leads to flaky tests. We can sort map keys during conversion, but
-				// I don't give a fuck.
 			}{
 				"Alice",
 				25,
@@ -177,8 +162,6 @@ func TestToValue(t *testing.T) {
 				return dict
 			}(),
 		},
-
-		// Nested structs.
 		"nested_structs": {
 			struct {
 				Person struct {
@@ -202,9 +185,7 @@ func TestToValue(t *testing.T) {
 				return dict
 			}(),
 		},
-
-		// Structs with tagged fields.
-		"struct_starlark_tags": {
+		"struct_with_starlark_tags": {
 			struct {
 				Name string `starlark:"name"`
 				Age  int    `starlark:"age"`
@@ -219,7 +200,7 @@ func TestToValue(t *testing.T) {
 				return dict
 			}(),
 		},
-		"struct_starlark_json_tags": {
+		"struct_with_starlark_json_tags": {
 			struct {
 				A string `starlark:"a" json:"aa"`
 				B int    `starlark:"b" json:"bb"`
@@ -234,7 +215,7 @@ func TestToValue(t *testing.T) {
 				return dict
 			}(),
 		},
-		"struct_json_tags": {
+		"struct_with_json_tags": {
 			struct {
 				A string `json:"a"`
 				B int    `json:"b"`
@@ -249,8 +230,14 @@ func TestToValue(t *testing.T) {
 				return dict
 			}(),
 		},
-
-		// Custom types.
+		"pointer": {
+			new(42),
+			starlark.MakeInt(42),
+		},
+		"nil_pointer": {
+			(*int)(nil),
+			starlark.None,
+		},
 		"customString": {
 			customString("foobar"),
 			starlark.String("foobar"),
@@ -259,7 +246,7 @@ func TestToValue(t *testing.T) {
 			customBool(true),
 			starlark.Bool(true),
 		},
-		"struct_custom_types": {
+		"struct_with_custom_types": {
 			struct {
 				Type   customString `starlark:"type"`
 				Active customBool   `starlark:"active"`
@@ -280,24 +267,23 @@ func TestToValue(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			got, err := To(tc.in)
 			if err != nil {
-				t.Fatalf("ToValue(%v) returned error: %v", tc.in, err)
+				t.Fatalf("To(%v) returned error: %v", tc.in, err)
 			}
 
-			// Special case for NaN because reflect.DeepEqual(NaN, NaN) is false.
 			if f, ok := tc.in.(float64); ok && math.IsNaN(f) {
 				if gotFloat, ok := got.(starlark.Float); ok && math.IsNaN(float64(gotFloat)) {
 					return
 				}
-				t.Errorf("ToValue(%v) = %v, want NaN", tc.in, got)
+				t.Errorf("To(%v) = %v, want NaN", tc.in, got)
 				return
 			}
 
 			eq, err := starlark.Equal(got, tc.want)
 			if err != nil {
-				t.Errorf("ToValue(%v) = %v, got error when comparing: %v", tc.in, got, err)
+				t.Errorf("To(%v) = %v, got error when comparing: %v", tc.in, got, err)
 			}
 			if !eq {
-				t.Errorf("ToValue(%v) = %v (%T), want %v (%T)", tc.in, got, got, tc.want, tc.want)
+				t.Errorf("To(%v) = %v (%T), want %v (%T)", tc.in, got, got, tc.want, tc.want)
 			}
 		})
 	}
