@@ -56,37 +56,33 @@ func (a *app) Run(ctx context.Context) error {
 	}
 	defer root.Close()
 
-	// Drop privileges if not in tests.
 	restrict.DoUnlessTesting(ctx, landlock.RWDirs(dir))
 
 	files, err := fs.ReadDir(root.FS(), ".")
 	if err != nil {
 		return err
 	}
-	var fis = map[string]fs.FileInfo{}
-	for _, f := range files {
-		fi, err := f.Info()
-		if err != nil {
-			return err
-		}
-		fis[f.Name()] = fi
-	}
-	getFileInfo := func(de fs.DirEntry) fs.FileInfo {
-		return fis[de.Name()]
-	}
-
 	switch a.sort {
 	case "name":
+		// ReadDir already sorts by name.
+	case "time", "size":
+		keys := make(map[string]int64, len(files))
+		for _, f := range files {
+			if f.IsDir() {
+				continue
+			}
+			info, err := f.Info()
+			if err != nil {
+				return err
+			}
+			if a.sort == "time" {
+				keys[f.Name()] = info.ModTime().Unix()
+			} else {
+				keys[f.Name()] = info.Size()
+			}
+		}
 		slices.SortStableFunc(files, func(a, b fs.DirEntry) int {
-			return cmp.Compare(a.Name(), b.Name())
-		})
-	case "time":
-		slices.SortStableFunc(files, func(a, b fs.DirEntry) int {
-			return cmp.Compare(getFileInfo(a).ModTime().Unix(), getFileInfo(b).ModTime().Unix())
-		})
-	case "size":
-		slices.SortStableFunc(files, func(a, b fs.DirEntry) int {
-			return cmp.Compare(getFileInfo(a).Size(), getFileInfo(b).Size())
+			return cmp.Compare(keys[a.Name()], keys[b.Name()])
 		})
 	case "type":
 		slices.SortStableFunc(files, func(a, b fs.DirEntry) int {
@@ -102,28 +98,31 @@ func (a *app) Run(ctx context.Context) error {
 func (a *app) rename(ctx context.Context, root *os.Root, dir string, files []fs.DirEntry) error {
 	for _, d := range files {
 		if d.IsDir() {
-			return nil
+			continue
 		}
 
 		var (
 			ext        = filepath.Ext(d.Name())
-			oldname    = d.Name()
-			newname    = fmt.Sprintf("%d%s", a.start, ext)
-			oldLogPath = filepath.Join(dir, oldname)
-			newLogPath = filepath.Join(dir, newname)
+			oldName    = d.Name()
+			newName    = fmt.Sprintf("%d%s", a.start, ext)
+			oldLogPath = filepath.Join(dir, oldName)
+			newLogPath = filepath.Join(dir, newName)
 		)
 
-		if _, err := root.Stat(newname); !errors.Is(err, fs.ErrNotExist) {
+		switch _, err := root.Stat(newName); {
+		case err == nil:
 			logger.Info(ctx, "file already exists, skipping", slog.String("path", newLogPath))
 			a.start++
 			continue
+		case !errors.Is(err, fs.ErrNotExist):
+			return err
 		}
 
 		if a.dry {
 			logger.Info(ctx, "would rename", slog.String("from", oldLogPath), slog.String("to", newLogPath))
 		} else {
 			logger.Info(ctx, "renaming", slog.String("from", oldLogPath), slog.String("to", newLogPath))
-			if err := root.Rename(oldname, newname); err != nil {
+			if err := root.Rename(oldName, newName); err != nil {
 				return err
 			}
 		}

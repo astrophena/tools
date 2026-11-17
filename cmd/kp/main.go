@@ -51,13 +51,13 @@ func (a *app) Run(ctx context.Context) error {
 
 	if len(env.Args) == 0 {
 		return fmt.Errorf("%w: missing required argument 'file'", cli.ErrInvalidArgs)
-	} else if !a.list && len(env.Args) < 2 {
+	}
+	if !a.list && len(env.Args) < 2 {
 		return fmt.Errorf("%w: missing required arguments 'file' and/or 'entry'", cli.ErrInvalidArgs)
 	}
 
 	file := env.Args[0]
 
-	// Drop privileges if not inside tests.
 	restrict.DoUnlessTesting(ctx, landlock.ROFiles(file))
 
 	f, err := os.Open(file)
@@ -93,11 +93,7 @@ func (a *app) Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if err := printEntry(tmpl, e, env.Stdout); err != nil {
-		return err
-	}
-
-	return nil
+	return printEntry(tmpl, e, env.Stdout)
 }
 
 func printEntry(tmpl *template.Template, e *gokeepasslib.Entry, stdout io.Writer) error {
@@ -106,8 +102,8 @@ func printEntry(tmpl *template.Template, e *gokeepasslib.Entry, stdout io.Writer
 		return err
 	}
 	buf.WriteString("\n")
-	buf.WriteTo(stdout)
-	return nil
+	_, err := buf.WriteTo(stdout)
+	return err
 }
 
 func open(r io.Reader, password string) (*gokeepasslib.Database, error) {
@@ -149,12 +145,12 @@ func findEntry(g gokeepasslib.Group, title string) *gokeepasslib.Entry {
 	return nil
 }
 
-func ask(file string, stderr io.Writer) (password string, err error) {
+func ask(file string, stderr io.Writer) (string, error) {
 	fmt.Fprintf(stderr, "Password for %s (will not be visible on the screen): ", file)
 	b, err := term.ReadPassword(int(syscall.Stdin))
 	if err != nil {
 		return "", err
 	}
-	fmt.Fprintf(stderr, "\n")
+	fmt.Fprintln(stderr)
 	return string(b), nil
 }

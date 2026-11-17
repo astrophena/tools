@@ -49,6 +49,11 @@ func TestRun(t *testing.T) {
 			extractTxtar: "testdata/name.txtar",
 			writeGolden:  true,
 		},
+		"skip_subdirectory": {
+			args:         []string{"[TMPDIR]"},
+			extractTxtar: "testdata/subdirectory.txtar",
+			writeGolden:  true,
+		},
 		"rename_size_sort_mode": {
 			args:         []string{"-sort", "size", "[TMPDIR]"},
 			extractTxtar: "testdata/size.txtar",
