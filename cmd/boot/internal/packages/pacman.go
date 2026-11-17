@@ -40,6 +40,7 @@ func checkOrphans(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tu
 		return nil, err
 	}
 	boot.AddAction(thread, boot.Action{
+		Title:   "pacman orphans",
 		Summary: "check pacman orphaned packages",
 		Apply: func(ctx context.Context, dryRun bool) (boot.Result, error) {
 			cmd := exec.CommandContext(ctx, "pacman", "-Qtdq")
@@ -73,6 +74,7 @@ func (m *module) checkPacnew(thread *starlark.Thread, b *starlark.Builtin, args 
 	managedEtc = m.rt.ResolveSource(managedEtc)
 
 	boot.AddAction(thread, boot.Action{
+		Title:   "pacman .pacnew",
 		Summary: "check pacman .pacnew files",
 		Apply: func(ctx context.Context, dryRun bool) (boot.Result, error) {
 			files, err := pacnewFiles("/etc")

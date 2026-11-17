@@ -9,6 +9,7 @@ import (
 	"io"
 	"slices"
 	"sync"
+	"unicode/utf8"
 
 	"go.astrophena.name/base/cli/progressbar"
 )
@@ -48,14 +49,25 @@ func (p *runProgress) finishAction(action *Action) {
 }
 
 func (p *runProgress) updateTitle() {
-	switch len(p.running) {
-	case 0:
+	n := len(p.running)
+	if n == 0 {
 		p.bar.SetTitle("")
-	case 1:
-		p.bar.SetTitle(p.running[0].Summary)
-	default:
-		p.bar.SetTitle(fmt.Sprintf("(+%d) %s", len(p.running)-1, p.running[0].Summary))
+		return
 	}
+
+	action := p.running[0]
+	title := action.Title
+	if title == "" {
+		title = action.Summary
+	}
+	if n > 1 {
+		title = fmt.Sprintf("(+%d) %s", n-1, title)
+	}
+	const maxTitleRunes = 28
+	if utf8.RuneCountInString(title) > maxTitleRunes {
+		title = fmt.Sprintf("%.*s…", maxTitleRunes-1, title)
+	}
+	p.bar.SetTitle(title)
 }
 
 func (p *runProgress) taskDone() {

@@ -727,19 +727,24 @@ func TestApplyReportsWarningsAfterProgress(t *testing.T) {
 }
 
 func TestApplyProgressTitleReportsRunningAction(t *testing.T) {
+	const (
+		slowTitle   = "update slow"
+		slowSummary = "update program: /some/path/to/slow --with-a-long-flag"
+	)
 	slowStarted := make(chan struct{})
 	fastReported := make(chan struct{})
 	out := &notifyingBuffer{
 		done: fastReported,
 		match: func(output string) bool {
-			return renderContains(output, "wait for slow operation", "1/2")
+			return renderContains(output, slowTitle, "1/2")
 		},
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 
 	slow := testTask("slow", Action{
-		Summary: "wait for slow operation",
+		Title:   slowTitle,
+		Summary: slowSummary,
 		Apply: func(ctx context.Context, _ bool) (Result, error) {
 			close(slowStarted)
 			select {
@@ -773,7 +778,10 @@ func TestApplyProgressTitleReportsRunningAction(t *testing.T) {
 	if !renderContains(got, "(+1)", "0/2") {
 		t.Fatalf("progress did not report the overlapping actions:\n%s", got)
 	}
-	if renderContains(got, "finish quickly", "1/2") || renderContains(got, "wait for slow operation", "2/2") {
+	if strings.Contains(got, "update program:") {
+		t.Fatalf("progress displayed the full action summary:\n%s", got)
+	}
+	if renderContains(got, "finish quickly", "1/2") || renderContains(got, slowTitle, "2/2") {
 		t.Fatalf("progress displayed a completed action:\n%s", got)
 	}
 }

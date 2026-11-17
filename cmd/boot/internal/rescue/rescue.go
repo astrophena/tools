@@ -66,6 +66,7 @@ func (m *module) update(thread *starlark.Thread, b *starlark.Builtin, args starl
 	}
 
 	boot.AddAction(thread, boot.Action{
+		Title:   "update rescue image",
 		Summary: summary,
 		Describe: func() string {
 			summaryMu.Lock()

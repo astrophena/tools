@@ -30,6 +30,7 @@ actions should:
 
 - Register with `TaskBuiltin` and parse arguments with `starlark.UnpackArgs`.
 - Use `Runtime` path and environment helpers for recipe inputs and host targets.
+- Set a short progress `Title` when the `Summary` includes paths or other details.
 - Add actions without changing the host during recipe evaluation.
 - Make dry-run checks read-only and report command failures with useful output.
 

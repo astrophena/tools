@@ -61,6 +61,7 @@ func (m *module) key(thread *starlark.Thread, b *starlark.Builtin, args starlark
 	abs := m.rt.ResolveTarget(path)
 
 	boot.AddAction(thread, boot.Action{
+		Title:   "ssh-keygen " + filepath.Base(abs),
 		Summary: fmt.Sprintf("ssh-keygen %s %s", keyType, abs),
 		Apply: func(ctx context.Context, dryRun bool) (boot.Result, error) {
 			if _, err := os.Stat(abs); err == nil {

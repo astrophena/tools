@@ -45,7 +45,9 @@ type Task struct {
 // host but must not change it when dryRun is true. It returns ResultChange only
 // when it changed the host or would do so in dry-run mode.
 type Action struct {
-	// Summary describes the action in plan, apply, and failure output.
+	// Title is the short progress label. It defaults to Summary.
+	Title string
+	// Summary describes the action in plan, verbose, and failure output.
 	Summary string
 	// Describe can refine Summary after probing the host.
 	Describe func() string

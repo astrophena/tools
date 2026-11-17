@@ -115,6 +115,7 @@ func addInstallAction(thread *starlark.Thread, rt *boot.Runtime, pkg, cwd, ldfla
 	}
 
 	boot.AddAction(thread, boot.Action{
+		Title:   "go install " + path.Base(packagePath(pkg)),
 		Summary: summary,
 		Apply: func(ctx context.Context, dryRun bool) (boot.Result, error) {
 			if conditionDir != "" {

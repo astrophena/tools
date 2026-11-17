@@ -8,6 +8,7 @@ package program
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"slices"
 	"strings"
 
@@ -40,6 +41,7 @@ func update(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, k
 	}
 
 	boot.AddAction(thread, boot.Action{
+		Title:   "update " + filepath.Base(argv[0]),
 		Summary: "update program: " + strings.Join(argv, " "),
 		Apply: func(ctx context.Context, dryRun bool) (boot.Result, error) {
 			checkArgv := append(slices.Clone(argv), checkFlag)

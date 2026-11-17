@@ -75,6 +75,7 @@ func (m *module) sync(thread *starlark.Thread, b *starlark.Builtin, args starlar
 	}
 
 	boot.AddAction(thread, boot.Action{
+		Title:      "git sync " + filepath.Base(dst),
 		Summary:    summary,
 		Concurrent: true,
 		Apply: func(ctx context.Context, dryRun bool) (boot.Result, error) {
@@ -109,6 +110,7 @@ func (m *module) pull(thread *starlark.Thread, b *starlark.Builtin, args starlar
 	dst := m.rt.ResolveTarget(dest)
 
 	boot.AddAction(thread, boot.Action{
+		Title:      "git pull " + filepath.Base(dst),
 		Summary:    fmt.Sprintf("git pull %s", dst),
 		Concurrent: true,
 		Apply: func(ctx context.Context, dryRun bool) (boot.Result, error) {
@@ -148,6 +150,7 @@ func (m *module) clone(thread *starlark.Thread, b *starlark.Builtin, args starla
 	}
 
 	boot.AddAction(thread, boot.Action{
+		Title:      "git clone " + filepath.Base(dst),
 		Summary:    summary,
 		Concurrent: true,
 		Apply: func(ctx context.Context, dryRun bool) (boot.Result, error) {

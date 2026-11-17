@@ -32,6 +32,7 @@ func update(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, k
 	}
 
 	boot.AddAction(thread, boot.Action{
+		Title:   "flatpak update",
 		Summary: "update flatpak applications",
 		Apply: func(ctx context.Context, dryRun bool) (boot.Result, error) {
 			if _, err := exec.LookPath("flatpak"); err != nil {

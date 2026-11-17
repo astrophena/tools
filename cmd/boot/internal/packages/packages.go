@@ -91,6 +91,7 @@ func (m *module) install(thread *starlark.Thread, b *starlark.Builtin, args star
 	}
 
 	boot.AddAction(thread, boot.Action{
+		Title:        pm.name + " install",
 		Summary:      fmt.Sprintf("install packages with %s: %s", pm.name, strings.Join(names, ", ")),
 		RequiresSudo: pm.requiresSudo,
 		Apply: func(ctx context.Context, dryRun bool) (boot.Result, error) {
@@ -131,6 +132,7 @@ func (m *module) addUpdateActions(thread *starlark.Thread, pm packageManager) {
 	currentSummary := summary
 	var summaryMu sync.Mutex
 	boot.AddAction(thread, boot.Action{
+		Title:   pm.name + " upgrade",
 		Summary: summary,
 		Describe: func() string {
 			summaryMu.Lock()
@@ -190,6 +192,7 @@ func (m *module) checkExplicitPackages(thread *starlark.Thread, b *starlark.Buil
 		return nil, err
 	}
 	boot.AddAction(thread, boot.Action{
+		Title:   pm.name + " package check",
 		Summary: fmt.Sprintf("check explicit packages with %s", pm.name),
 		Apply: func(ctx context.Context, dryRun bool) (boot.Result, error) {
 			installed, err := pm.explicit(ctx)

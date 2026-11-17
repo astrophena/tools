@@ -63,6 +63,7 @@ func (m *module) chmod(thread *starlark.Thread, b *starlark.Builtin, args starla
 		return nil, fmt.Errorf("%s: %w", b.Name(), err)
 	}
 	boot.AddAction(thread, boot.Action{
+		Title:   "chmod " + filepath.Base(abs),
 		Summary: fmt.Sprintf("chmod %04o %s", targetMode.Perm(), abs),
 		Apply: func(_ context.Context, dryRun bool) (boot.Result, error) {
 			info, err := os.Stat(abs)
@@ -91,6 +92,7 @@ func (m *module) remove(thread *starlark.Thread, b *starlark.Builtin, args starl
 	}
 	abs := m.rt.ResolveTarget(path)
 	boot.AddAction(thread, boot.Action{
+		Title:   "remove " + filepath.Base(abs),
 		Summary: "remove " + abs,
 		Apply: func(_ context.Context, dryRun bool) (boot.Result, error) {
 			_, err := os.Lstat(abs)
@@ -144,6 +146,7 @@ func (m *module) syncTree(thread *starlark.Thread, b *starlark.Builtin, args sta
 	}
 
 	boot.AddAction(thread, boot.Action{
+		Title:        "rsync " + filepath.Base(dst),
 		Summary:      summary,
 		RequiresSudo: sudo,
 		Apply: func(ctx context.Context, dryRun bool) (boot.Result, error) {
@@ -239,6 +242,7 @@ func (m *module) file(thread *starlark.Thread, b *starlark.Builtin, args starlar
 func (m *module) addFile(thread *starlark.Thread, path, content string, mode os.FileMode) {
 	abs := m.rt.ResolveTarget(path)
 	boot.AddAction(thread, boot.Action{
+		Title:   "write " + filepath.Base(abs),
 		Summary: "file " + abs,
 		Apply: func(_ context.Context, dryRun bool) (boot.Result, error) {
 			info, err := os.Stat(abs)
@@ -353,6 +357,7 @@ func (m *module) dir(thread *starlark.Thread, b *starlark.Builtin, args starlark
 	}
 	abs := m.rt.ResolveTarget(path)
 	boot.AddAction(thread, boot.Action{
+		Title:   "mkdir " + filepath.Base(abs),
 		Summary: "dir " + abs,
 		Apply: func(_ context.Context, dryRun bool) (boot.Result, error) {
 			info, err := os.Stat(abs)
@@ -391,6 +396,7 @@ func (m *module) symlink(thread *starlark.Thread, b *starlark.Builtin, args star
 	dst := m.rt.ResolveTarget(target)
 
 	boot.AddAction(thread, boot.Action{
+		Title:   "link " + filepath.Base(dst),
 		Summary: fmt.Sprintf("symlink %s -> %s", dst, src),
 		Apply: func(_ context.Context, dryRun bool) (boot.Result, error) {
 			info, err := os.Lstat(dst)

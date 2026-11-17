@@ -63,6 +63,7 @@ func (m *module) unit(thread *starlark.Thread, b *starlark.Builtin, user bool, a
 	}
 
 	boot.AddAction(thread, boot.Action{
+		Title:        "systemd " + name,
 		Summary:      "systemd " + scopeName(user) + " unit " + name,
 		RequiresSudo: !user && m.rt.NeedsSudo(),
 		Apply: func(ctx context.Context, dryRun bool) (boot.Result, error) {

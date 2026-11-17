@@ -66,6 +66,7 @@ func (m *module) file(thread *starlark.Thread, b *starlark.Builtin, args starlar
 	}
 
 	boot.AddAction(thread, boot.Action{
+		Title:   "fetch " + filepath.Base(abs),
 		Summary: fmt.Sprintf("fetch %s to %s", url, abs),
 		Apply: func(ctx context.Context, dryRun bool) (boot.Result, error) {
 			ok, err := fileMatches(abs, checksum, targetMode)
