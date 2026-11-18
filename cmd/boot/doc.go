@@ -3,9 +3,9 @@
 // license that can be found in the LICENSE.md file.
 
 /*
-Boot runs Starlark recipes to set up a host. Recipes register tasks that use
-built-in modules to check or change files, packages, repositories, and services.
-Actions skip work when the host already matches the recipe.
+Boot runs Starlark recipes to set up a Unix host. Recipes register tasks that
+use built-in modules to check or change files, packages, repositories, and
+services. Actions skip work when the host already matches the recipe.
 
 # Usage
 

@@ -17,7 +17,6 @@ import (
 
 	"go.starlark.net/starlark"
 	"go.starlark.net/starlarkstruct"
-	"golang.org/x/sys/unix"
 )
 
 // Module returns the Starlark consent module.
@@ -121,26 +120,4 @@ func ask(ctx context.Context, rt *boot.Runtime, message string, defaultYes bool)
 type promptReader struct {
 	ctx  context.Context
 	file *os.File
-}
-
-func (r promptReader) Read(p []byte) (int, error) {
-	fds := []unix.PollFd{{Fd: int32(r.file.Fd()), Events: unix.POLLIN}}
-	for {
-		if err := r.ctx.Err(); err != nil {
-			return 0, err
-		}
-		n, err := unix.Poll(fds, 100)
-		if err == unix.EINTR {
-			continue
-		}
-		if err != nil {
-			return 0, err
-		}
-		if n != 0 {
-			if err := r.ctx.Err(); err != nil {
-				return 0, err
-			}
-			return r.file.Read(p)
-		}
-	}
 }
