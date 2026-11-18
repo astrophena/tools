@@ -48,54 +48,32 @@ Reads the content of a file.
 
 ## `llm`
 
-LLM provider.
+`llm.generate(model, contents, usage_key, image?, instructions?)`
+returns text from the configured Responses API provider. Pass a list of
+`(role, text)` tuples as `contents`. Pass raw bytes as `image` and a string as `instructions`.
+Token counts are recorded under `usage_key` when usage tracking is enabled.
 
-The module sends chat-style contents, optional image bytes, and optional
-instructions to the configured OpenAI Responses-compatible /responses endpoint.
-It returns the response's text output as a single string and records token usage
-under a caller-provided usage key.
+```python
+text = llm.generate(
+    model="gpt-4.1-mini",
+    contents=[("user", "Describe this image.")],
+    usage_key="chat:123",
+    image=files.read("cat.jpg"),
+    instructions="Be concise.",
+)
+```
 
-This is useful with the OpenAI API and with other AI providers that expose a
-compatible endpoint, such as OpenRouter.
-
-This module provides two functions: generate and usage.
-
-usage(key, date?) returns cumulative token usage for the key.
-If date is provided (YYYY-MM-DD), it returns usage only for that exact UTC day.
-
-generate accepts the following keyword arguments:
-
-  - model (str): Model name to generate with.
-  - contents (list of (str, str) tuples): A list of (role, content) messages.
-  - usage_key (str): Arbitrary key used to accumulate persistent token usage stats.
-  - image (bytes, optional): Optional raw image bytes to upload as input_image.
-  - instructions (str, optional): Optional high-level instructions for the model.
-
-For example:
-
-	text = llm.generate(
-	    model="gpt-4.1-mini",
-	    contents=[
-	        ("user", "Describe this image briefly.")
-	    ],
-	    image=files.read("cat.jpg"),
-	    usage_key="chat:123",
-	    instructions="Be concise."
-	)
-
-The return value is a single string from the response output message text.
+`llm.usage(key, date="")` returns `input_tokens`, `output_tokens`, and
+`total_tokens`. Pass a date in `YYYY-MM-DD` format for a single UTC day.
 
 ## `kvcache`
 
-This module provides two functions for using a simple key-value cache:
+`kvcache.get(key)` returns the cached value or `None` if the key is missing or
+expired. A successful read resets the expiration timer.
 
-  - get(key: str) -> any | None: Retrieves the value associated with the
-    given string key. Returns the stored value if the key exists and has
-    not expired. Returns None if the key is not found or if the entry
-    has expired. Accessing a key resets its TTL timer.
-  - set(key: str, value: any): Stores the given value under the specified
-    string key. Any existing value for the key is overwritten. Storing a
-    value resets the TTL timer for that key.
+`kvcache.set(key, value)` stores or replaces a value and resets its expiration
+timer. Keys are strings. Values can be `None`, booleans, strings, signed 64-bit
+integers, finite floats, lists, tuples, structs, or dictionaries with string keys.
 
 ## `markdown`
 
@@ -115,32 +93,18 @@ Instantiates an immutable struct from the specified keyword arguments.
 
 ## `telegram`
 
-This module provides two functions for working with the Telegram Bot API: call and get_file.
+`telegram.call(method=..., args=...)` calls a Bot API method with a dictionary
+of arguments and returns the decoded response. Both arguments must be passed by
+keyword.
 
-The call function takes two arguments:
+```python
+response = telegram.call(
+    method="sendMessage",
+    args={"chat_id": 123456789, "text": "Hello, world!"},
+)
+```
 
-  - method (str): The Telegram Bot API method to call.
-  - args (dict): The arguments to pass to the method.
-
-For example, to send a message to a chat:
-
-	response = telegram.call(
-	    method="sendMessage",
-	    args={
-	        "chat_id": 123456789,
-	        "text": "Hello, world!",
-	    }
-	)
-
-The response variable will contain the response from the Telegram Bot API.
-
-The get_file function takes one argument:
-
-  - file_id (str): The ID of the file to download.
-
-It returns the content of the file as bytes. For example:
-
-	file_content = telegram.get_file(file_id="...")
+`telegram.get_file(file_id)` downloads a Telegram file and returns its bytes.
 
 ## `time`
 

@@ -69,8 +69,9 @@ directory.
   `BOOT_PACKAGE_MANAGER`, then detects an installed manager.
 - `pkg.manager()` returns the selected or detected manager name.
 - `pkg.install(packages)` installs missing packages.
-- `pkg.update()` upgrades available packages. A pacman plan checks the local
-  package database; apply refreshes a separate database before upgrading and
+- `pkg.update()` upgrades available packages. Plans read the local package
+  indexes. On apply, APT refreshes its indexes and upgrades only when its
+  simulation finds pending changes. Pacman refreshes a separate database and
   warns when an update requires a reboot.
 - `pkg.check_explicit_packages(packages)` warns about manually installed
   packages missing from the list, when the manager supports that check.

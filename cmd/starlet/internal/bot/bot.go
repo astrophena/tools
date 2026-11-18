@@ -1,13 +1,12 @@
 // © 2025 Ilya Mateyko. All rights reserved.
 // Use of this source code is governed by the ISC
-// license that can befound in the LICENSE.md file.
+// license that can be found in the LICENSE.md file.
 
-// Package bot implements the core logic of the Starlet bot. It is responsible
-// for handling Telegram webhooks, loading and executing Starlark code, and
-// providing a set of built-in functions to the Starlark environment.
+// Package bot runs Starlet bots written in Starlark.
 package bot
 
 import (
+	"cmp"
 	"context"
 	"embed"
 	"encoding/json"
@@ -15,8 +14,10 @@ import (
 	"fmt"
 	"io/fs"
 	"log/slog"
+	"maps"
 	"net/http"
 	"strings"
+	"sync"
 	"sync/atomic"
 
 	"go.astrophena.name/base/request"
@@ -26,6 +27,7 @@ import (
 	"go.astrophena.name/tools/internal/api/llm"
 	"go.astrophena.name/tools/internal/starlark/go2star"
 	"go.astrophena.name/tools/internal/starlark/interpreter"
+	starllm "go.astrophena.name/tools/internal/starlark/llm"
 
 	"go.starlark.net/starlark"
 	"go.starlark.net/starlarkstruct"
@@ -56,32 +58,21 @@ func must[T any](val T, err error) T {
 	return val
 }
 
-// Bot represents a Starlet bot instance.
+// Bot serves Telegram updates using the currently loaded Starlark code.
 type Bot struct {
-	tgToken       string
-	tgSecret      string
-	tgOwner       int64
-	tgBotID       int64
-	tgBotUsername string
-
-	httpc        *http.Client
-	llmc         *llm.Client
-	llmUsagePath string
-	kvCache      *starlarkstruct.Module
-	scrubber     *strings.Replacer
-	logger       *slog.Logger
-
+	opts     Opts
+	llm      func() *starlarkstruct.Module
 	instance atomic.Pointer[instance]
 }
 
 // instance holds the state that can be hot-reloaded.
 type instance struct {
 	errorTemplate string
-	files         map[string]string
 	intr          *interpreter.Interpreter
+	handle        starlark.Value
 }
 
-// Opts is the options for creating a new Bot.
+// Opts configures a Bot.
 type Opts struct {
 	// Token is the Telegram Bot API token.
 	Token string
@@ -97,38 +88,29 @@ type Opts struct {
 	HTTPClient *http.Client
 	// LLMClient is the client for interacting with an OpenAI-compatible LLM API.
 	LLMClient *llm.Client
-	// LLMUsagePath is path to persistent usage stats JSON for llm module.
+	// LLMUsagePath stores the llm module’s token counts.
 	LLMUsagePath string
 	// KVCache is the key-value cache for Starlark.
 	KVCache *starlarkstruct.Module
 	// Scrubber is used to scrub sensitive information from logs.
 	Scrubber *strings.Replacer
-	// Logger is a slog.Logger used for logging.
+	// Logger defaults to slog.Default.
 	Logger *slog.Logger
 }
 
-// New creates a new Bot instance.
+// New creates a bot. Call Load before serving updates.
 func New(opts Opts) *Bot {
+	opts.Logger = cmp.Or(opts.Logger, slog.Default())
 	return &Bot{
-		tgToken:       opts.Token,
-		tgSecret:      opts.Secret,
-		tgOwner:       opts.Owner,
-		tgBotID:       opts.BotID,
-		tgBotUsername: opts.BotUsername,
-		httpc:         opts.HTTPClient,
-		llmc:          opts.LLMClient,
-		llmUsagePath:  opts.LLMUsagePath,
-		kvCache:       opts.KVCache,
-		scrubber:      opts.Scrubber,
-		logger:        opts.Logger,
+		opts: opts,
+		llm: sync.OnceValue(func() *starlarkstruct.Module {
+			return starllm.Module(opts.LLMClient, opts.LLMUsagePath)
+		}),
 	}
 }
 
-// Documentation generates and returns Markdown-formatted documentation for the
-// bot's Starlark environment.
-func (b *Bot) Documentation() string {
-	return b.environment().Markdown()
-}
+// Documentation returns Markdown help for the Starlark environment.
+func (b *Bot) Documentation() string { return b.environment(nil, nil).markdown() }
 
 // Visited returns a list of modules visited by the interpreter.
 func (b *Bot) Visited() []interpreter.ModuleKey {
@@ -140,15 +122,15 @@ func (b *Bot) Visited() []interpreter.ModuleKey {
 
 // Load loads the bot's Starlark code and assets from the provided files map.
 func (b *Bot) Load(ctx context.Context, files map[string]string) error {
-	_, exists := files[mainFile]
-	if !exists {
+	if _, ok := files[mainFile]; !ok {
 		return errNoMainFile
 	}
 
-	starlarkLogger := b.logger.WithGroup("starlark")
+	files = maps.Clone(files)
+	starlarkLogger := b.opts.Logger.WithGroup("starlark")
 
 	intr := &interpreter.Interpreter{
-		Predeclared: b.environment().StringDict(),
+		Predeclared: b.environment(files, b.llm()).stringDict(),
 		Logger: func(file string, line int, message string) {
 			starlarkLogger.Info(message, "file", file, "line", line)
 		},
@@ -166,29 +148,23 @@ func (b *Bot) Load(ctx context.Context, files map[string]string) error {
 		return err
 	}
 	if hook, ok := mod["on_load"]; ok {
-		_, err = starlark.Call(intr.Thread(ctx), hook, starlark.Tuple{}, nil)
-		if err != nil {
+		if _, err := starlark.Call(intr.Thread(ctx), hook, nil, nil); err != nil {
 			return err
 		}
 	}
 
-	newInst := &instance{
-		files: files,
-		intr:  intr,
-	}
-	if errorTmpl, exists := files[errorTemplateFile]; exists {
-		newInst.errorTemplate = errorTmpl
-	} else {
-		newInst.errorTemplate = defaultErrorTemplate
-	}
-	b.instance.Store(newInst)
+	b.instance.Store(&instance{
+		intr:          intr,
+		handle:        mod["handle"],
+		errorTemplate: cmp.Or(files[errorTemplateFile], defaultErrorTemplate),
+	})
 
 	return nil
 }
 
 // HandleTelegramWebhook handles a Telegram webhook request.
 func (b *Bot) HandleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
-	if r.Header.Get("X-Telegram-Bot-Api-Secret-Token") != b.tgSecret {
+	if r.Header.Get("X-Telegram-Bot-Api-Secret-Token") != b.opts.Secret {
 		web.RespondJSONError(w, r, web.ErrNotFound)
 		return
 	}
@@ -204,23 +180,19 @@ func (b *Bot) HandleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var (
-		chatID = b.lookupChatID(rawUpdate)
-		inst   = b.instance.Load()
-	)
-	mod, err := inst.intr.LoadModule(r.Context(), interpreter.MainPkg, mainFile)
-	if err != nil {
-		b.reportError(r.Context(), chatID, w, err)
+	inst := b.instance.Load()
+	if inst == nil {
+		web.RespondJSONError(w, r, web.ErrInternalServerError)
 		return
 	}
-	f, found := mod["handle"]
-	if !found {
-		b.reportError(r.Context(), chatID, w, errNoHandleFunc)
+
+	ctx := r.Context()
+	if inst.handle == nil {
+		b.reportError(ctx, inst.errorTemplate, b.lookupChatID(rawUpdate), w, errNoHandleFunc)
 		return
 	}
-	_, err = starlark.Call(inst.intr.Thread(r.Context()), f, starlark.Tuple{update}, nil)
-	if err != nil {
-		b.reportError(r.Context(), chatID, w, err)
+	if _, err := starlark.Call(inst.intr.Thread(ctx), inst.handle, starlark.Tuple{update}, nil); err != nil {
+		b.reportError(ctx, inst.errorTemplate, b.lookupChatID(rawUpdate), w, err)
 		return
 	}
 
@@ -234,12 +206,12 @@ var ok = map[string]string{
 func (b *Bot) lookupChatID(update map[string]any) int64 {
 	msg, ok := update["message"].(map[string]any)
 	if !ok {
-		return b.tgOwner
+		return b.opts.Owner
 	}
 
 	chat, ok := msg["chat"].(map[string]any)
 	if !ok {
-		return b.tgOwner
+		return b.opts.Owner
 	}
 
 	id, ok := chat["id"].(int64)
@@ -252,7 +224,7 @@ func (b *Bot) lookupChatID(update map[string]any) int64 {
 		return int64(fid)
 	}
 
-	return b.tgOwner
+	return b.opts.Owner
 }
 
 type linkPreviewOptions struct {
@@ -265,13 +237,13 @@ type message struct {
 	LinkPreviewOptions linkPreviewOptions `json:"link_preview_options"`
 }
 
-func (b *Bot) reportError(ctx context.Context, chatID int64, w http.ResponseWriter, err error) {
+func (b *Bot) reportError(ctx context.Context, tmpl string, chatID int64, w http.ResponseWriter, err error) {
 	errMsg := err.Error()
 	if evalErr, ok := err.(*starlark.EvalError); ok {
 		errMsg = evalErr.Backtrace()
 	}
-	if b.scrubber != nil {
-		errMsg = b.scrubber.Replace(errMsg)
+	if b.opts.Scrubber != nil {
+		errMsg = b.opts.Scrubber.Replace(errMsg)
 	}
 
 	msg := message{
@@ -281,24 +253,20 @@ func (b *Bot) reportError(ctx context.Context, chatID int64, w http.ResponseWrit
 		},
 	}
 
-	errTmpl := b.instance.Load().errorTemplate
-	if errTmpl == "" {
-		errTmpl = defaultErrorTemplate
-	}
-	msg.Message = tgmarkup.FromMarkdown(fmt.Sprintf(errTmpl, errMsg))
+	msg.Message = tgmarkup.FromMarkdown(fmt.Sprintf(tmpl, errMsg))
 
 	_, sendErr := request.Make[request.IgnoreResponse](ctx, request.Params{
 		Method:     http.MethodPost,
-		URL:        "https://api.telegram.org/bot" + b.tgToken + "/sendMessage",
+		URL:        "https://api.telegram.org/bot" + b.opts.Token + "/sendMessage",
 		Body:       msg,
-		HTTPClient: b.httpc,
+		HTTPClient: b.opts.HTTPClient,
 		Headers: map[string]string{
 			"User-Agent": version.UserAgent(),
 		},
-		Scrubber: b.scrubber,
+		Scrubber: b.opts.Scrubber,
 	})
 	if sendErr != nil {
-		b.logger.Error("reporting an error failed", "err", err, "bot_owner", b.tgOwner, "send_err", sendErr)
+		b.opts.Logger.Error("reporting an error failed", "err", err, "bot_owner", b.opts.Owner, "send_err", sendErr)
 	}
 
 	web.RespondJSON(w, ok)

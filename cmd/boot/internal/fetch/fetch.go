@@ -21,33 +21,27 @@ import (
 	boot "go.astrophena.name/tools/cmd/boot/internal"
 
 	"go.starlark.net/starlark"
+	"go.starlark.net/starlarkstruct"
 )
 
 // Module returns the Starlark fetch module.
-func Module() boot.Module { return module{} }
-
-type module struct{}
-
-func (module) Name() string { return "fetch" }
-
-func (module) Members(rt *boot.Runtime) starlark.StringDict {
-	m := &impl{
+func Module(rt *boot.Runtime) *starlarkstruct.Module {
+	m := &module{
 		rt: rt,
 	}
-	return starlark.StringDict{
-		"file": starlark.NewBuiltin("fetch.file", m.file),
+	return &starlarkstruct.Module{
+		Name: "fetch",
+		Members: starlark.StringDict{
+			"file": boot.TaskBuiltin("fetch.file", m.file),
+		},
 	}
 }
 
-type impl struct {
+type module struct {
 	rt *boot.Runtime
 }
 
-func (m *impl) file(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	if err := boot.RequireTask(thread, b); err != nil {
-		return nil, err
-	}
-
+func (m *module) file(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	var (
 		url      string
 		path     string
@@ -74,6 +68,7 @@ func (m *impl) file(thread *starlark.Thread, b *starlark.Builtin, args starlark.
 	}
 
 	boot.AddAction(thread, boot.Action{
+		Title:   "fetch " + filepath.Base(abs),
 		Summary: fmt.Sprintf("fetch %s to %s", url, abs),
 		Apply: func(ctx context.Context, dryRun bool) (boot.Result, error) {
 			ok, err := fileMatches(abs, checksum, targetMode)

@@ -4,23 +4,7 @@
 
 # vim: ft=starlark shiftwidth=4
 
-"""Provides helpers for defining Telegram bots in Starlark.
-
-This module is the higher-level companion to `@starlet//tg.star`. The `tg`
-module is a convenience wrapper around Telegram Bot API calls; `tgbot` is a
-small router for the repetitive parts of Telegram bot code:
-
-  - reading user-visible text from either `message["text"]` or
-    `message["caption"]`;
-  - parsing only real Telegram `bot_command` entities at offset zero;
-  - accepting `/command@this_bot` in groups while silently ignoring commands
-    addressed to other bots;
-  - registering commands with descriptions and argument policy;
-  - publishing per-chat Telegram command menus during `on_load`;
-  - deciding whether group messages should be handled, ignored, or treated as
-    addressed to the bot;
-  - enforcing a simple allowed-chat policy;
-  - optionally forwarding unauthorized private messages to the owner.
+"""Routes Telegram messages and commands in Starlark.
 
 Minimal bot:
 
@@ -83,10 +67,6 @@ the leading command token, already stripped of surrounding whitespace. If a
 command was registered with `require_args=True` and `args` is empty, the router
 sends either `usage_text.format(usage)` or `empty_args_text` instead of calling
 the command handler.
-
-The standalone helpers exposed on `tgbot` (`text`, `parse_command`,
-`is_group_chat`, `is_reply_to_bot`, and related functions) are useful when app
-code needs the same Telegram semantics outside the router.
 """
 
 load("@starlet//tg.star", "tg")

@@ -17,15 +17,15 @@ func TestNeedsSudo(t *testing.T) {
 		env  map[string]string
 		want bool
 	}{
-		"standard user": {
+		"standard_user": {
 			env:  nil,
 			want: os.Geteuid() != 0,
 		},
-		"termux by version": {
+		"termux_by_version": {
 			env:  map[string]string{"TERMUX_VERSION": "0.118.0"},
 			want: false,
 		},
-		"termux by prefix": {
+		"termux_by_prefix": {
 			env:  map[string]string{"PREFIX": "/data/data/com.termux/files/usr"},
 			want: false,
 		},

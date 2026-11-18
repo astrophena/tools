@@ -66,9 +66,6 @@ func TestRetryExhaustionCountsAsFailure(t *testing.T) {
 		if err := f.run(t.Context()); err != nil {
 			t.Fatal(err)
 		}
-		if err := f.statsStore.Close(); err != nil {
-			t.Fatal(err)
-		}
 
 		state := env.state(t)
 
@@ -363,7 +360,7 @@ func TestDecideFeedItem(t *testing.T) {
 		wantMarkSeen         string
 		wantSkip             tgstats.FeedItemDecisionReason
 	}{
-		"always_send_new_items skips old entries": {
+		"always_send_new_items_skips_old_entries": {
 			fd: &feed{
 				alwaysSendNewItems: true,
 			},
@@ -380,7 +377,7 @@ func TestDecideFeedItem(t *testing.T) {
 			wantMarkSeen: "",
 			wantSkip:     tgstats.FeedItemSkipReasonOld,
 		},
-		"always_send_new_items prefers published over updated for lookback": {
+		"always_send_new_items_prefers_published_over_updated_for_lookback": {
 			fd: &feed{
 				alwaysSendNewItems: true,
 			},
@@ -398,7 +395,7 @@ func TestDecideFeedItem(t *testing.T) {
 			wantMarkSeen: "",
 			wantSkip:     tgstats.FeedItemSkipReasonOld,
 		},
-		"always_send_new_items falls back to updated when published is missing": {
+		"always_send_new_items_falls_back_to_updated_when_published_is_missing": {
 			fd: &feed{
 				alwaysSendNewItems: true,
 			},
@@ -414,7 +411,7 @@ func TestDecideFeedItem(t *testing.T) {
 			wantProcess:  true,
 			wantMarkSeen: "updated-only",
 		},
-		"always_send_new_items includes new entry for existing feed": {
+		"always_send_new_items_includes_new_entry_for_existing_feed": {
 			fd: &feed{
 				alwaysSendNewItems: true,
 			},
@@ -430,7 +427,7 @@ func TestDecideFeedItem(t *testing.T) {
 			wantProcess:  true,
 			wantMarkSeen: "new",
 		},
-		"always_send_new_items suppresses first run": {
+		"always_send_new_items_suppresses_first_run": {
 			fd: &feed{
 				alwaysSendNewItems: true,
 			},
@@ -447,7 +444,7 @@ func TestDecideFeedItem(t *testing.T) {
 			wantMarkSeen: "first",
 			wantSkip:     tgstats.FeedItemSkipReasonUnknown,
 		},
-		"always_send_new_items suppresses seen-items migration run": {
+		"always_send_new_items_suppresses_seen_items_migration_run": {
 			fd: &feed{
 				alwaysSendNewItems: true,
 			},
@@ -465,7 +462,7 @@ func TestDecideFeedItem(t *testing.T) {
 			wantMarkSeen:         "migration",
 			wantSkip:             tgstats.FeedItemSkipReasonUnknown,
 		},
-		"always_send_new_items skips already seen": {
+		"always_send_new_items_skips_already_seen": {
 			fd: &feed{
 				alwaysSendNewItems: true,
 			},
@@ -484,7 +481,7 @@ func TestDecideFeedItem(t *testing.T) {
 			wantMarkSeen: "",
 			wantSkip:     tgstats.FeedItemSkipReasonSeen,
 		},
-		"regular mode ignores recently updated item with old published date": {
+		"regular_mode_ignores_recently_updated_item_with_old_published_date": {
 			fd: &feed{},
 			state: &state.Feed{
 				LastUpdated: now,
@@ -500,7 +497,7 @@ func TestDecideFeedItem(t *testing.T) {
 			wantMarkSeen: "",
 			wantSkip:     tgstats.FeedItemSkipReasonOld,
 		},
-		"regular mode falls back to updated when published is missing": {
+		"regular_mode_falls_back_to_updated_when_published_is_missing": {
 			fd: &feed{},
 			state: &state.Feed{
 				LastUpdated: old,
@@ -514,7 +511,7 @@ func TestDecideFeedItem(t *testing.T) {
 			wantProcess:  true,
 			wantMarkSeen: "regular-updated-only",
 		},
-		"nil published timestamp is accepted in regular mode": {
+		"nil_published_timestamp_is_accepted_in_regular_mode": {
 			fd: &feed{},
 			state: &state.Feed{
 				LastUpdated: now,
@@ -527,7 +524,7 @@ func TestDecideFeedItem(t *testing.T) {
 			wantProcess:  true,
 			wantMarkSeen: "regular-nil",
 		},
-		"missing item identity is skipped": {
+		"missing_item_identity_is_skipped": {
 			fd: &feed{},
 			state: &state.Feed{
 				SeenItems: map[string]time.Time{},
@@ -585,11 +582,12 @@ func TestFeedItemPassesRules(t *testing.T) {
 	}
 
 	cases := map[string]struct {
-		fd   *feed
-		item *gofeed.Item
-		want bool
+		fd      *feed
+		item    *gofeed.Item
+		want    bool
+		wantErr bool
 	}{
-		"passes without rules": {
+		"passes_without_rules": {
 			fd: &feed{
 				digest: false,
 			},
@@ -598,7 +596,7 @@ func TestFeedItemPassesRules(t *testing.T) {
 			},
 			want: true,
 		},
-		"skip when blocked": {
+		"skip_when_blocked": {
 			fd: &feed{
 				digest:    false,
 				blockRule: makeRule(t, "def rule(item):\n  return True\n", "rule"),
@@ -608,7 +606,7 @@ func TestFeedItemPassesRules(t *testing.T) {
 			},
 			want: false,
 		},
-		"skip when keep rule rejects": {
+		"skip_when_keep_rule_rejects": {
 			fd: &feed{
 				digest:   true,
 				keepRule: makeRule(t, "def rule(item):\n  return False\n", "rule"),
@@ -618,7 +616,8 @@ func TestFeedItemPassesRules(t *testing.T) {
 			},
 			want: false,
 		},
-		"return rule error": {
+		"return_rule_error": {
+			wantErr: true,
 			fd: &feed{
 				blockRule: makeRule(t, "def rule(item):\n  return 1 / 0\n", "rule"),
 			},
@@ -632,7 +631,7 @@ func TestFeedItemPassesRules(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			f := newTestFetcher(t, newTestEnv(t, nil, nil))
 			got, err := f.feedItemPassesRules(tc.fd, tc.item, f.itemToStarlark(tc.item))
-			if name == "return rule error" {
+			if tc.wantErr {
 				if err == nil {
 					t.Fatal("want error")
 				}
@@ -679,13 +678,14 @@ func TestHandleFeedStatus(t *testing.T) {
 		reqURL               string
 		statusCode           int
 		body                 string
+		retryAfter           string
 		initialState         state.Feed
 		wantNotModified      bool
-		wantRetryIn          time.Duration
+		wantRetryIn          *time.Duration
 		wantErrContains      string
 		wantNotModifiedFeeds int
 	}{
-		"not modified": {
+		"not_modified": {
 			reqURL:     "https://example.com/feed.xml",
 			statusCode: http.StatusNotModified,
 			initialState: state.Feed{
@@ -693,28 +693,31 @@ func TestHandleFeedStatus(t *testing.T) {
 				LastError:  "oops",
 			},
 			wantNotModified:      true,
-			wantRetryIn:          0,
 			wantNotModifiedFeeds: 1,
 		},
-		"200 status": {
+		"status_ok": {
 			reqURL:          "https://example.com/feed.xml",
 			statusCode:      http.StatusOK,
 			wantNotModified: false,
-			wantRetryIn:     0,
 		},
-		"tg.i-c-a.su retry": {
+		"telegram_rss_bridge_retry": {
 			reqURL:          "https://tg.i-c-a.su/feed.json",
 			statusCode:      http.StatusTooManyRequests,
 			body:            `{"errors":["FLOOD_WAIT_15"]}`,
 			wantNotModified: false,
-			wantRetryIn:     15 * time.Second,
+			wantRetryIn:     new(15 * time.Second),
 		},
-		"non-200 returns error": {
+		"retry_immediately": {
+			reqURL:      "https://example.com/feed.xml",
+			statusCode:  http.StatusTooManyRequests,
+			retryAfter:  "0",
+			wantRetryIn: new(time.Duration(0)),
+		},
+		"unexpected_status_returns_error": {
 			reqURL:          "https://example.com/feed.xml",
 			statusCode:      http.StatusTeapot,
 			body:            "teapot",
 			wantNotModified: false,
-			wantRetryIn:     0,
 			wantErrContains: "want 200, got 418: teapot",
 		},
 	}
@@ -737,6 +740,7 @@ func TestHandleFeedStatus(t *testing.T) {
 			}
 
 			rec := httptest.NewRecorder()
+			rec.Header().Set("Retry-After", tc.retryAfter)
 			rec.WriteHeader(tc.statusCode)
 			if tc.body != "" {
 				rec.WriteString(tc.body)
@@ -851,20 +855,20 @@ func TestDeliverUpdatesCommitsOnlyAfterSuccess(t *testing.T) {
 		wantSeen      bool
 		wantAck       bool
 	}{
-		"successful delivery": {
+		"successful_delivery": {
 			wantSeen: true,
 			wantAck:  true,
 		},
-		"failed delivery": {
+		"failed_delivery": {
 			sendErr: errors.New("send failed"),
 			wantErr: true,
 		},
-		"failed acknowledgment": {
+		"failed_acknowledgment": {
 			ackErr:  errors.New("ack failed"),
 			wantErr: true,
 			wantAck: true,
 		},
-		"canceled parent context drains delivery": {
+		"canceled_parent_context_drains_delivery": {
 			cancelContext: true,
 			wantSeen:      true,
 			wantAck:       true,

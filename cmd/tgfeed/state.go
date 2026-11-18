@@ -21,8 +21,6 @@ import (
 	"go.starlark.net/starlark"
 )
 
-// Configuration model.
-
 type feed struct {
 	url                string
 	title              string
@@ -37,7 +35,7 @@ type feed struct {
 func newFeedBuiltin(feeds *[]*feed) *starlark.Builtin {
 	return starlark.NewBuiltin("feed", func(_ *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 		if len(args) > 0 {
-			return nil, fmt.Errorf("unexpected positional arguments")
+			return nil, errors.New("unexpected positional arguments")
 		}
 
 		f := new(feed)
@@ -58,8 +56,6 @@ func newFeedBuiltin(feeds *[]*feed) *starlark.Builtin {
 		return starlark.None, nil
 	})
 }
-
-// Configuration parsing and validation.
 
 func (f *fetcher) parseConfig(ctx context.Context, config string) ([]*feed, error) {
 	var feeds []*feed
@@ -150,8 +146,6 @@ func (f *fetcher) validateFeedFormat(fd *feed) error {
 
 	return nil
 }
-
-// Snapshot loading and state access.
 
 func (f *fetcher) loadState(ctx context.Context) error {
 	snapshot, err := f.store.LoadSnapshot(ctx)
@@ -246,14 +240,11 @@ func (f *fetcher) pruneFeedState(keep map[string]struct{}) {
 	defer f.stateMu.Unlock()
 
 	for url := range f.state {
-		if _, ok := keep[url]; ok {
-			continue
+		if _, ok := keep[url]; !ok {
+			delete(f.state, url)
 		}
-		delete(f.state, url)
 	}
 }
-
-// Run locking.
 
 func (f *fetcher) acquireRunLock() error {
 	lockPath := filepath.Join(f.stateDir, ".run.lock")

@@ -22,11 +22,11 @@ func TestRequire(t *testing.T) {
 		dryRun      bool
 		want        boot.Result
 	}{
-		"dry run plans change": {
+		"dry_run_plans_change": {
 			dryRun: true,
 			want:   boot.ResultChange,
 		},
-		"non-interactive stops task": {
+		"non_interactive_stops_task": {
 			want: boot.ResultStop,
 		},
 		"accepted": {
@@ -39,7 +39,7 @@ func TestRequire(t *testing.T) {
 			input:       "no\n",
 			want:        boot.ResultStop,
 		},
-		"default accepted": {
+		"default_accepted": {
 			interactive: true,
 			defaultYes:  true,
 			input:       "\n",
@@ -56,7 +56,7 @@ func TestRequire(t *testing.T) {
 			}
 
 			h := testutil.NewTask(t, "test")
-			m := &impl{
+			m := &module{
 				rt: rt,
 			}
 

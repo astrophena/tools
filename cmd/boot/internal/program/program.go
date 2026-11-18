@@ -8,34 +8,29 @@ package program
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"slices"
 	"strings"
 
 	boot "go.astrophena.name/tools/cmd/boot/internal"
 
 	"go.starlark.net/starlark"
+	"go.starlark.net/starlarkstruct"
 )
 
 const checkFlag = "-check"
 
 // Module returns the Starlark program module.
-func Module() boot.Module { return module{} }
-
-type module struct{}
-
-func (module) Name() string { return "program" }
-
-func (m module) Members(*boot.Runtime) starlark.StringDict {
-	return starlark.StringDict{
-		"update": starlark.NewBuiltin("program.update", m.update),
+func Module(*boot.Runtime) *starlarkstruct.Module {
+	return &starlarkstruct.Module{
+		Name: "program",
+		Members: starlark.StringDict{
+			"update": boot.TaskBuiltin("program.update", update),
+		},
 	}
 }
 
-func (module) update(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	if err := boot.RequireTask(thread, b); err != nil {
-		return nil, err
-	}
-
+func update(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	var list *starlark.List
 	if err := starlark.UnpackArgs(b.Name(), args, kwargs, "argv", &list); err != nil {
 		return nil, err
@@ -46,6 +41,7 @@ func (module) update(thread *starlark.Thread, b *starlark.Builtin, args starlark
 	}
 
 	boot.AddAction(thread, boot.Action{
+		Title:   "update " + filepath.Base(argv[0]),
 		Summary: "update program: " + strings.Join(argv, " "),
 		Apply: func(ctx context.Context, dryRun bool) (boot.Result, error) {
 			checkArgv := append(slices.Clone(argv), checkFlag)

@@ -5,11 +5,9 @@
 package gist
 
 import (
-	"maps"
 	"net/http"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"testing"
 
@@ -38,9 +36,7 @@ func TestGet(t *testing.T) {
 
 	testutil.AssertEqual(t, len(gist.Files), 1)
 
-	name, file := getFirstFile(gist)
-	testutil.AssertEqual(t, name, "proxy.go")
-	testutil.AssertEqual(t, strings.HasPrefix(file.Content, "// The proxy binary"), true)
+	testutil.AssertEqual(t, strings.HasPrefix(gist.Files["proxy.go"].Content, "// The proxy binary"), true)
 }
 
 // Updating this test:
@@ -78,9 +74,7 @@ func TestUpdate(t *testing.T) {
 	}
 
 	testutil.AssertEqual(t, len(gist.Files), 2)
-	name, file := getFirstFile(gist)
-	testutil.AssertEqual(t, name, "bar.txt")
-	testutil.AssertEqual(t, file.Content, "foo\n")
+	testutil.AssertEqual(t, gist.Files["bar.txt"].Content, "foo\n")
 
 	gist.Files["bar.txt"] = File{
 		Content: "foo\n",
@@ -90,9 +84,4 @@ func TestUpdate(t *testing.T) {
 		t.Fatal(err)
 	}
 	testutil.AssertEqual(t, len(gist.Files), 2)
-}
-
-func getFirstFile(g *Gist) (name string, file File) {
-	keys := slices.Sorted(maps.Keys(g.Files))
-	return keys[0], g.Files[keys[0]]
 }

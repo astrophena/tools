@@ -29,12 +29,9 @@ func TestInstallRequiresSudo(t *testing.T) {
 		t.Skip("sudo is not needed when running as root")
 	}
 	h := testutil.NewTask(t, "test")
-	mod := &module{
-		manager: "apt",
-	}
-	m := &impl{
-		rt:  &boot.Runtime{},
-		mod: mod,
+	m := &module{
+		rt:          &boot.Runtime{},
+		managerName: "apt",
 	}
 	packages := starlark.NewList([]starlark.Value{starlark.String("curl")})
 	action := h.EmitOne("pkg.install", m.install, nil, []starlark.Tuple{
@@ -102,25 +99,109 @@ exit 0
 }
 
 func TestPackageManagerAptUpdate(t *testing.T) {
+	t.Setenv("TERMUX_VERSION", "")
+	t.Setenv("PREFIX", "")
+
 	testutil.Commands(t, map[string]string{
-		"sh": `#!/bin/sh
-case "$2" in
-"apt update && apt upgrade -y") exit 0 ;;
-"sudo apt update && sudo apt upgrade -y") exit 0 ;;
-*) exit 1 ;;
+		"apt-get": `#!/bin/sh
+case "$*" in
+"--error-on=any update") phase=refresh ;;
+"--simulate --with-new-pkgs -o Dir::Cache::pkgcache= -o Dir::Cache::srcpkgcache= upgrade") phase=simulate ;;
+"--with-new-pkgs --assume-yes upgrade") phase=upgrade ;;
+*) printf 'unexpected apt-get arguments: %s\n' "$*" >&2; exit 2 ;;
 esac
+printf '%s\n' "$phase" >> "$BOOT_APT_LOG"
+if [ "$phase" = "$BOOT_APT_FAILURE" ]; then
+    printf '%s failed in fixture\n' "$phase" >&2
+    exit 100
+fi
+case "$phase" in
+simulate)
+    if [ ! -f "$BOOT_APT_STATE" ]; then
+        printf '%s\n' 'Inst git [1.0] (1.1 local [arm64])' 'Conf git (1.1 local [arm64])' 'Conf curl (1.0 local [arm64])'
+    else
+        printf '%s\n' '0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.'
+    fi ;;
+upgrade) : > "$BOOT_APT_STATE" ;;
+esac
+`,
+		"sudo": `#!/bin/sh
+printf 'sudo ' >> "$BOOT_APT_LOG"
+exec "$@"
 `,
 	})
 
-	rt := &boot.Runtime{
-		Getenv: os.Getenv,
+	cases := map[string]struct {
+		dryRun      bool
+		failure     string
+		wantResults []boot.Result
+		wantCalls   []string
+	}{
+		"plan": {
+			dryRun:      true,
+			wantResults: []boot.Result{boot.ResultChange},
+			wantCalls:   []string{"simulate"},
+		},
+		"apply_then_skip": {
+			wantResults: []boot.Result{boot.ResultChange, boot.ResultSkip},
+			wantCalls:   []string{"refresh", "simulate", "upgrade", "refresh", "simulate"},
+		},
+		"refresh_failed": {
+			failure:     "refresh",
+			wantResults: []boot.Result{""},
+			wantCalls:   []string{"refresh"},
+		},
+		"simulation_failed": {
+			failure:     "simulate",
+			wantResults: []boot.Result{""},
+			wantCalls:   []string{"refresh", "simulate"},
+		},
 	}
-	pm, err := packageManagerByName(rt, "apt")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := pm.update(t.Context()); err != nil {
-		t.Fatalf("update failed: %v", err)
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			log := filepath.Join(dir, "apt.log")
+			t.Setenv("BOOT_APT_LOG", log)
+			t.Setenv("BOOT_APT_STATE", filepath.Join(dir, "upgraded"))
+			t.Setenv("BOOT_APT_FAILURE", tc.failure)
+
+			h := testutil.NewTask(t, "test")
+			m := &module{
+				rt:          &boot.Runtime{},
+				managerName: "apt",
+			}
+			for _, want := range tc.wantResults {
+				action := h.EmitOne("pkg.update", m.update, nil, nil)
+				result, err := action.Apply(t.Context(), tc.dryRun)
+				if tc.failure == "" {
+					if err != nil {
+						t.Fatal(err)
+					}
+				} else if err == nil || !strings.Contains(err.Error(), tc.failure+" failed in fixture") {
+					t.Fatalf("error = %v, want %s failure", err, tc.failure)
+				}
+				if result != want {
+					t.Fatalf("result = %q, want %q", result, want)
+				}
+				if tc.dryRun && action.Describe() != "update system with apt: would update curl, git" {
+					t.Fatalf("description = %q", action.Describe())
+				}
+			}
+
+			calls, err := os.ReadFile(log)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := slices.Clone(tc.wantCalls)
+			if !tc.dryRun && m.rt.NeedsSudo() {
+				for i := range want {
+					want[i] = "sudo " + want[i]
+				}
+			}
+			if got := strings.Split(strings.TrimSpace(string(calls)), "\n"); !slices.Equal(got, want) {
+				t.Fatalf("APT calls = %q, want %q", got, want)
+			}
+		})
 	}
 }
 
@@ -182,7 +263,7 @@ func TestPacmanRebootRequired(t *testing.T) {
 		want     []string
 		wantErr  bool
 	}{
-		"kernel module owners": {
+		"kernel_module_owners": {
 			packages: []string{"linux", "git", "nvidia-open"},
 			output: strings.Join([]string{
 				"linux /usr/lib/modules/6.15.1-arch1-1/kernel/fs/btrfs/btrfs.ko.zst",
@@ -191,7 +272,7 @@ func TestPacmanRebootRequired(t *testing.T) {
 			}, "\n"),
 			want: []string{"linux", "nvidia-open"},
 		},
-		"duplicate module paths": {
+		"duplicate_module_paths": {
 			packages: []string{"linux"},
 			output: strings.Join([]string{
 				"linux /usr/lib/modules/",
@@ -199,11 +280,11 @@ func TestPacmanRebootRequired(t *testing.T) {
 			}, "\n"),
 			want: []string{"linux"},
 		},
-		"ordinary packages": {
+		"ordinary_packages": {
 			packages: []string{"git"},
 			output:   "git /usr/bin/git",
 		},
-		"query failure": {
+		"query_failure": {
 			packages: []string{"linux"},
 			exitCode: 1,
 			wantErr:  true,
@@ -243,11 +324,9 @@ esac
 `,
 	})
 	h := testutil.NewTask(t, "test")
-	m := &impl{
-		rt: rt,
-		mod: &module{
-			manager: "pacman",
-		},
+	m := &module{
+		rt:          rt,
+		managerName: "pacman",
 	}
 	action := h.EmitOne("pkg.update", m.update, nil, nil)
 	result, warnings, err := testutil.RunAction(t.Context(), action, true)
@@ -298,15 +377,15 @@ func TestUpdateReportsRebootAfterSuccessfulApply(t *testing.T) {
 		updateErr      error
 		wantWarning    string
 	}{
-		"kernel modules updated": {
+		"kernel_modules_updated": {
 			updates:        []string{"linux", "git", "nvidia-open"},
 			rebootPackages: []string{"linux", "nvidia-open"},
 			wantWarning:    "machine needs rebooting after updating linux, nvidia-open",
 		},
-		"ordinary package updated": {
+		"ordinary_package_updated": {
 			updates: []string{"git"},
 		},
-		"update failed": {
+		"update_failed": {
 			updates:        []string{"linux"},
 			rebootPackages: []string{"linux"},
 			updateErr:      errors.New("update failed"),
@@ -315,10 +394,7 @@ func TestUpdateReportsRebootAfterSuccessfulApply(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			h := testutil.NewTask(t, "test")
-			m := &impl{
-				rt:  &boot.Runtime{},
-				mod: &module{},
-			}
+			var m module
 			m.addUpdateActions(h.Thread, packageManager{
 				name: "pacman",
 				updates: func(context.Context, bool) ([]string, error) {
@@ -331,10 +407,10 @@ func TestUpdateReportsRebootAfterSuccessfulApply(t *testing.T) {
 					return tc.updateErr
 				},
 			})
-			if len(h.Task.Actions) != 1 {
-				t.Fatalf("actions = %d, want 1", len(h.Task.Actions))
+			if len(h.Actions) != 1 {
+				t.Fatalf("actions = %d, want 1", len(h.Actions))
 			}
-			result, warnings, err := testutil.RunAction(t.Context(), h.Task.Actions[0], false)
+			result, warnings, err := testutil.RunAction(t.Context(), h.Actions[0], false)
 			if !errors.Is(err, tc.updateErr) {
 				t.Fatalf("update error = %v, want %v", err, tc.updateErr)
 			}

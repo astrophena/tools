@@ -6,7 +6,7 @@ See documentation at https://go.astrophena.name/tools.
 
 > [!WARNING]
 > These tools are for personal use, subject to change without notice and may gain or lose functionality at any time. Don't depend on them (or do, I don't care).
-> 
+>
 > In addition, I use AI agents to help me work on these tools. This is not vibe coding (I read what these soulless machines write!), but there may be (and will be!) bugs in this code.
 
 ## Development
@@ -25,6 +25,8 @@ To run the tests, run:
 ```sh
 $ go test ./...
 ```
+
+Use `snake_case` for table-driven test keys so they work directly with `go test -run`.
 
 To set up the Git pre-commit hook for development:
 

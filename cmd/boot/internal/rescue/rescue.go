@@ -21,32 +21,27 @@ import (
 	boot "go.astrophena.name/tools/cmd/boot/internal"
 
 	"go.starlark.net/starlark"
+	"go.starlark.net/starlarkstruct"
 )
 
 // Module returns the Starlark rescue module.
-func Module() boot.Module { return module{} }
-
-type module struct{}
-
-func (module) Name() string { return "rescue" }
-
-func (module) Members(rt *boot.Runtime) starlark.StringDict {
-	m := &impl{
+func Module(rt *boot.Runtime) *starlarkstruct.Module {
+	m := &module{
 		rt: rt,
 	}
-	return starlark.StringDict{
-		"update": starlark.NewBuiltin("rescue.update", m.update),
+	return &starlarkstruct.Module{
+		Name: "rescue",
+		Members: starlark.StringDict{
+			"update": boot.TaskBuiltin("rescue.update", m.update),
+		},
 	}
 }
 
-type impl struct {
+type module struct {
 	rt *boot.Runtime
 }
 
-func (m *impl) update(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	if err := boot.RequireTask(thread, b); err != nil {
-		return nil, err
-	}
+func (m *module) update(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	var (
 		source string
 		espDir string = "/efi/EFI/Linux"
@@ -73,6 +68,7 @@ func (m *impl) update(thread *starlark.Thread, b *starlark.Builtin, args starlar
 	}
 
 	boot.AddAction(thread, boot.Action{
+		Title:   "update rescue image",
 		Summary: summary,
 		Describe: func() string {
 			summaryMu.Lock()

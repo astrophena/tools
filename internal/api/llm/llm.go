@@ -2,8 +2,7 @@
 // Use of this source code is governed by the ISC
 // license that can be found in the LICENSE.md file.
 
-// Package llm provides a minimal client for OpenAI Responses API compatible
-// gateways.
+// Package llm sends requests to Responses API gateways.
 package llm
 
 import (
@@ -17,21 +16,19 @@ import (
 	"go.astrophena.name/base/version"
 )
 
-// Client holds configuration for interacting with an LLM API gateway.
+// Client sends requests to a Responses API gateway.
 type Client struct {
 	// APIURL is the API root URL, for example https://api.openai.com/v1.
 	APIURL string
 	// APIKey is the API key used for bearer authentication.
 	APIKey string
-	// HTTPClient is an optional HTTP client to use for requests. Defaults to
-	// request.DefaultClient.
+	// HTTPClient defaults to [request.DefaultClient].
 	HTTPClient *http.Client
-	// Scrubber is an optional strings.Replacer that scrubs unwanted data from
-	// error messages.
+	// Scrubber redacts sensitive text from request errors.
 	Scrubber *strings.Replacer
 }
 
-// ContentPart is a single item inside a message content.
+// ContentPart is a text or image item in a message.
 type ContentPart struct {
 	Type     string `json:"type"`
 	Text     string `json:"text,omitempty"`
@@ -54,7 +51,6 @@ type ResponseParams struct {
 // Response is a subset of the OpenAI Responses API response.
 type Response struct {
 	OutputText string `json:"output_text"`
-	output     []responseOutputItem
 	Usage      struct {
 		InputTokens  int64 `json:"input_tokens"`
 		OutputTokens int64 `json:"output_tokens"`
@@ -71,8 +67,8 @@ type responseOutputContent struct {
 	Text string `json:"text"`
 }
 
-// UnmarshalJSON fills OutputText from the Responses API output array when the
-// gateway does not provide the SDK-style output_text convenience field.
+// UnmarshalJSON decodes the response and derives OutputText from the output
+// array when output_text is empty.
 func (r *Response) UnmarshalJSON(data []byte) error {
 	type response Response
 	var resp struct {
@@ -83,16 +79,15 @@ func (r *Response) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	*r = Response(resp.response)
-	r.output = resp.Output
 	if r.OutputText == "" {
-		r.OutputText = r.outputText()
+		r.OutputText = outputText(resp.Output)
 	}
 	return nil
 }
 
-func (r *Response) outputText() string {
+func outputText(items []responseOutputItem) string {
 	var b strings.Builder
-	for _, output := range r.output {
+	for _, output := range items {
 		if output.Type != "" && output.Type != "message" {
 			continue
 		}
@@ -123,7 +118,6 @@ func (c *Client) CreateResponse(ctx context.Context, params ResponseParams) (*Re
 		URL:    strings.TrimRight(c.APIURL, "/") + "/responses",
 		Headers: map[string]string{
 			"Authorization": "Bearer " + c.APIKey,
-			"Content-Type":  "application/json",
 			"User-Agent":    version.UserAgent(),
 		},
 		Body:       params,

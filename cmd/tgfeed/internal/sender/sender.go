@@ -2,7 +2,7 @@
 // Use of this source code is governed by the ISC
 // license that can be found in the LICENSE.md file.
 
-// Package sender defines a transport-agnostic message delivery interface.
+// Package sender defines outgoing feed messages.
 package sender
 
 import "context"
@@ -12,7 +12,7 @@ type Sender interface {
 	Send(ctx context.Context, msg Message) error
 }
 
-// Message is a transport-agnostic outgoing message.
+// Message is a message ready for delivery.
 type Message struct {
 	Body    string
 	Target  Target

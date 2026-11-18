@@ -22,46 +22,32 @@ import (
 	"go.starlark.net/starlarkstruct"
 )
 
-// Environment is a collection of documented members of the Starlark environment.
-type Environment []Member
+type environment []member
 
-// Member defines a documented Starlark environment member.
-type Member struct {
-	// Name is the name of the member.
-	Name string
-	// Doc is the documentation string for the member.
-	Doc string
-	// Args is the arguments for builtins.
-	Args []string
-	// Value is the Starlark value. If Members is not nil, this should be nil,
-	// as the value will be a module constructed from the members.
-	Value starlark.Value
-	// Members is a list of sub-members, used if this member is a module.
-	Members []Member
+type member struct {
+	Name    string
+	Doc     string
+	Args    []string
+	Value   starlark.Value
+	Members environment
 }
 
-// StringDict converts the Environment into a [starlark.StringDict] that can be
-// used as a global environment for a Starlark interpreter.
-func (d Environment) StringDict() starlark.StringDict {
-	dict := make(starlark.StringDict)
+func (d environment) stringDict() starlark.StringDict {
+	dict := make(starlark.StringDict, len(d))
 	for _, m := range d {
-		var val starlark.Value
+		val := m.Value
 		if len(m.Members) > 0 {
-			// This member is a module.
 			val = &starlarkstruct.Module{
 				Name:    m.Name,
-				Members: Environment(m.Members).StringDict(),
+				Members: m.Members.stringDict(),
 			}
-		} else {
-			val = m.Value
 		}
 		dict[m.Name] = val
 	}
 	return dict
 }
 
-// Markdown generates a Markdown documentation string for the Starlark environment.
-func (d Environment) Markdown() string {
+func (d environment) markdown() string {
 	var b strings.Builder
 	b.WriteString("# Starlark Environment\n\n")
 	b.WriteString("These built-in functions and modules are available in the Starlark environment.\n\n")
@@ -69,7 +55,7 @@ func (d Environment) Markdown() string {
 	return strings.TrimSpace(b.String()) + "\n"
 }
 
-func (d Environment) render(b *strings.Builder, level int, prefix string) {
+func (d environment) render(b *strings.Builder, level int, prefix string) {
 	for _, m := range d {
 		b.WriteString(strings.Repeat("#", level))
 		b.WriteString(" `")
@@ -77,18 +63,9 @@ func (d Environment) render(b *strings.Builder, level int, prefix string) {
 		b.WriteString(m.Name)
 
 		if _, ok := m.Value.(*starlark.Builtin); ok {
-			if len(m.Args) > 0 {
-				b.WriteString("(")
-				for i, arg := range m.Args {
-					b.WriteString(arg)
-					if i+1 != len(m.Args) {
-						b.WriteString(", ")
-					}
-				}
-				b.WriteString(")")
-			} else {
-				b.WriteString("()")
-			}
+			b.WriteString("(")
+			b.WriteString(strings.Join(m.Args, ", "))
+			b.WriteString(")")
 		}
 		b.WriteString("`\n\n")
 
@@ -96,31 +73,31 @@ func (d Environment) render(b *strings.Builder, level int, prefix string) {
 		b.WriteString("\n\n")
 
 		if len(m.Members) > 0 {
-			Environment(m.Members).render(b, level+1, prefix+m.Name+".")
+			m.Members.render(b, level+1, prefix+m.Name+".")
 		}
 	}
 }
 
-func (b *Bot) environment() Environment {
-	return Environment{
+func (b *Bot) environment(files map[string]string, llmModule *starlarkstruct.Module) environment {
+	return environment{
 		{
 			Name: "config",
 			Doc:  "A module containing configuration information about the bot.",
-			Members: []Member{
+			Members: environment{
 				{
 					Name:  "bot_id",
 					Doc:   "The Telegram ID of the bot.",
-					Value: starlark.MakeInt64(b.tgBotID),
+					Value: starlark.MakeInt64(b.opts.BotID),
 				},
 				{
 					Name:  "bot_username",
 					Doc:   "The username of the bot.",
-					Value: starlark.String(b.tgBotUsername),
+					Value: starlark.String(b.opts.BotUsername),
 				},
 				{
 					Name:  "owner_id",
 					Doc:   "The Telegram ID of the bot owner.",
-					Value: starlark.MakeInt64(b.tgOwner),
+					Value: starlark.MakeInt64(b.opts.Owner),
 				},
 				{
 					Name:  "version",
@@ -132,7 +109,7 @@ func (b *Bot) environment() Environment {
 		{
 			Name: "debug",
 			Doc:  "A module containing debugging utilities.",
-			Members: []Member{
+			Members: environment{
 				{
 					Name:  "stack",
 					Doc:   "Returns a string describing the current call stack.",
@@ -154,29 +131,29 @@ func (b *Bot) environment() Environment {
 		{
 			Name: "files",
 			Doc:  "A module for accessing files provided to the bot.",
-			Members: []Member{
+			Members: environment{
 				{
 					Name:  "read",
 					Doc:   "Reads the content of a file.",
 					Args:  []string{"name: str"},
-					Value: starlark.NewBuiltin("files.read", b.starlarkFilesRead),
+					Value: filesReadBuiltin(files),
 				},
 			},
 		},
 		{
 			Name:  "llm",
 			Doc:   llm.Documentation(),
-			Value: llm.Module(b.llmc, b.llmUsagePath),
+			Value: llmModule,
 		},
 		{
 			Name:  "kvcache",
 			Doc:   kvcache.Documentation(),
-			Value: b.kvCache,
+			Value: b.opts.KVCache,
 		},
 		{
 			Name: "markdown",
 			Doc:  "A module for Markdown conversion.",
-			Members: []Member{
+			Members: environment{
 				{
 					Name:  "convert",
 					Args:  []string{"s: str"},
@@ -200,7 +177,7 @@ func (b *Bot) environment() Environment {
 		{
 			Name:  "telegram",
 			Doc:   telegram.Documentation(),
-			Value: telegram.Module(b.tgToken, b.httpc),
+			Value: telegram.Module(b.opts.Token, b.opts.HTTPClient),
 		},
 		{
 			Name:  "time",
@@ -236,16 +213,18 @@ func starlarkFail(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, 
 	return nil, errors.New(errStr)
 }
 
-func (b *Bot) starlarkFilesRead(_ *starlark.Thread, built *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	var name string
-	if err := starlark.UnpackArgs(built.Name(), args, kwargs, "name", &name); err != nil {
-		return nil, err
-	}
-	file, ok := b.instance.Load().files[name]
-	if !ok {
-		return nil, fmt.Errorf("%s: no such file", name)
-	}
-	return starlark.String(file), nil
+func filesReadBuiltin(files map[string]string) *starlark.Builtin {
+	return starlark.NewBuiltin("files.read", func(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+		var name string
+		if err := starlark.UnpackArgs(b.Name(), args, kwargs, "name", &name); err != nil {
+			return nil, err
+		}
+		file, ok := files[name]
+		if !ok {
+			return nil, fmt.Errorf("%s: no such file", name)
+		}
+		return starlark.String(file), nil
+	})
 }
 
 func starlarkMarkdownConvert(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {

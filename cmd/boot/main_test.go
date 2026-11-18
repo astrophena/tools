@@ -28,16 +28,27 @@ func TestRun(t *testing.T) {
 		wantMissing  []string
 		check        func(t *testing.T, root string)
 	}{
-		"missing command": {
+		"missing_command": {
 			args:        nil,
 			wantErr:     cli.ErrInvalidArgs,
 			wantErrText: "usage: boot [flags...] <list|plan|apply>",
 		},
-		"missing default recipe": {
+		"missing_default_recipe": {
 			args:        []string{"plan"},
 			noRecipe:    true,
 			wantErr:     cli.ErrInvalidArgs,
 			wantErrText: "recipe BOOT.star not found",
+		},
+		"action_outside_task": {
+			args: []string{"plan"},
+			setup: func(t *testing.T, root string) {
+				t.Helper()
+				if err := os.WriteFile(filepath.Join(root, "BOOT.star"), []byte("program.update([\"updater\"])\n"), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			},
+			wantErr:     cli.ErrInvalidArgs,
+			wantErrText: "program.update: can only be called from a task",
 		},
 		"list": {
 			args: []string{"list"},
@@ -52,13 +63,13 @@ func TestRun(t *testing.T) {
 				"Create cache",
 			},
 		},
-		"plan does not modify filesystem": {
+		"plan_does_not_modify_filesystem": {
 			args: []string{"plan"},
 			wantInOutput: []string{
 				"[1/2] Planning task dotfiles: Link dotfiles",
 				"change dotfiles: dir ",
 				"change dotfiles: symlink ",
-				"summary: 2 tasks, 3 actions, 3 would change, 0 skipped, 0 warnings, 0 failed",
+				"\n2 tasks · 3 would change · 0 skipped\n",
 			},
 			check: func(t *testing.T, root string) {
 				t.Helper()
@@ -67,7 +78,7 @@ func TestRun(t *testing.T) {
 				}
 			},
 		},
-		"apply is idempotent": {
+		"apply_is_idempotent": {
 			args: []string{"apply"},
 			setup: func(t *testing.T, root string) {
 				t.Helper()
@@ -79,20 +90,17 @@ func TestRun(t *testing.T) {
 				}
 			},
 			wantInOutput: []string{
-				"Report:",
-				"Boot ran 2 tasks and checked 3 actions.",
-				"It changed 1 action and skipped 2 actions.",
-				"No actions failed.",
+				"2 tasks · 1 changed · 2 skipped\n",
 			},
-			wantMissing: []string{"summary:", "change dotfiles:", "skip dotfiles:"},
+			wantMissing: []string{"Apply", "Report:", "change dotfiles:", "skip dotfiles:"},
 		},
-		"apply verbose prints actions": {
+		"apply_verbose_prints_actions": {
 			args: []string{"-verbose", "apply"},
 			wantInOutput: []string{
 				"[1/2] Applying task dotfiles: Link dotfiles",
 				"change dotfiles: dir ",
 				"change dotfiles: symlink ",
-				"Report:",
+				"\n2 tasks · 3 changed · 0 skipped\n",
 			},
 			check: func(t *testing.T, root string) {
 				t.Helper()
@@ -101,7 +109,7 @@ func TestRun(t *testing.T) {
 				}
 			},
 		},
-		"only filters tasks": {
+		"only_filters_tasks": {
 			args: []string{"-only", "cache", "list"},
 			wantInOutput: []string{
 				"cache",
@@ -113,7 +121,7 @@ func TestRun(t *testing.T) {
 				"Link dotfiles",
 			},
 		},
-		"tag filters tasks": {
+		"tag_filters_tasks": {
 			args: []string{"-tag", "shell", "list"},
 			wantInOutput: []string{
 				"dotfiles",

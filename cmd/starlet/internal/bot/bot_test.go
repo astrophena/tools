@@ -22,8 +22,8 @@ import (
 	"go.astrophena.name/base/txtar"
 	"go.astrophena.name/base/web"
 	"go.astrophena.name/tools/cmd/starlet/internal/bot"
+	"go.astrophena.name/tools/internal/cache"
 	"go.astrophena.name/tools/internal/starlark/kvcache"
-	"go.astrophena.name/tools/internal/store"
 )
 
 // Typical Telegram Bot API token, copied from docs.
@@ -91,6 +91,25 @@ func TestHandleTelegramWebhook(t *testing.T) {
 	}, *update)
 }
 
+func TestLoadReadsItsOwnAssets(t *testing.T) {
+	t.Parallel()
+	const script = `
+def on_load():
+    if files.read("asset") != "current":
+        fail("wrong asset")
+`
+	b := testBot(t, testMux(t, nil), map[string]string{
+		"bot.star": script,
+		"asset":    "current",
+	})
+	if err := b.Load(t.Context(), map[string]string{
+		"bot.star": strings.Replace(script, "current", "updated", 1),
+		"asset":    "updated",
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func testBot(t *testing.T, m *mux, files map[string]string) *bot.Bot {
 	t.Helper()
 	b := bot.New(bot.Opts{
@@ -100,7 +119,7 @@ func testBot(t *testing.T, m *mux, files map[string]string) *bot.Bot {
 		BotID:       987654321,
 		BotUsername: "testbot",
 		HTTPClient:  testutil.MockHTTPClient(m.mux),
-		KVCache:     kvcache.Module(t.Context(), store.NewMemStore(t.Context(), 1*time.Minute)),
+		KVCache:     kvcache.Module(cache.NewMem(t.Context(), 1*time.Minute)),
 		Logger:      slog.New(slog.NewTextHandler(t.Output(), nil)),
 	})
 	if err := b.Load(t.Context(), files); err != nil {

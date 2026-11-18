@@ -44,12 +44,12 @@ func TestLoaders(t *testing.T) {
 			path:   "a/module.star",
 			want:   "value = 1\n",
 		},
-		"filesystem missing": {
+		"filesystem_missing": {
 			loader:  FileSystemLoader(dir),
 			path:    "missing.star",
 			wantErr: ErrNoModule,
 		},
-		"filesystem outside": {
+		"filesystem_outside": {
 			loader:  FileSystemLoader(dir),
 			path:    "../module.star",
 			wantErr: errors.New("outside the package root"),
@@ -63,7 +63,7 @@ func TestLoaders(t *testing.T) {
 			path: "module.star",
 			want: "value = 2\n",
 		},
-		"fs missing": {
+		"fs_missing": {
 			loader:  FSLoader(fstest.MapFS{}),
 			path:    "missing.star",
 			wantErr: ErrNoModule,
@@ -73,7 +73,7 @@ func TestLoaders(t *testing.T) {
 			path:   "module.star",
 			want:   "value = 3\n",
 		},
-		"memory missing": {
+		"memory_missing": {
 			loader:  MemoryLoader(nil),
 			path:    "missing.star",
 			wantErr: ErrNoModule,

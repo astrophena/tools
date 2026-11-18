@@ -26,7 +26,7 @@ func TestSSHKeySkipsExistingKey(t *testing.T) {
 		Root: root,
 	}
 	h := testutil.NewTask(t, "test")
-	m := &impl{
+	m := &module{
 		rt: rt,
 	}
 	action := h.EmitOne("ssh.key", m.key, nil, []starlark.Tuple{

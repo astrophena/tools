@@ -24,7 +24,7 @@ func TestFSDir(t *testing.T) {
 		Root: root,
 	}
 	h := testutil.NewTask(t, "test")
-	m := &impl{
+	m := &module{
 		rt: rt,
 	}
 	dirPath := filepath.Join(root, "testdir")
@@ -61,7 +61,7 @@ func TestFSFile(t *testing.T) {
 		Root: root,
 	}
 	h := testutil.NewTask(t, "test")
-	m := &impl{
+	m := &module{
 		rt: rt,
 	}
 
@@ -135,7 +135,7 @@ func TestFSTemplate(t *testing.T) {
 		Root: root,
 	}
 	h := testutil.NewTask(t, "test")
-	m := &impl{
+	m := &module{
 		rt: rt,
 	}
 
@@ -166,7 +166,7 @@ func TestFSChmod(t *testing.T) {
 		Root: root,
 	}
 	h := testutil.NewTask(t, "test")
-	m := &impl{
+	m := &module{
 		rt: rt,
 	}
 	filePath := filepath.Join(root, "testfile.txt")
@@ -211,7 +211,7 @@ func TestFSRemoveDanglingSymlink(t *testing.T) {
 		Root: root,
 	}
 	h := testutil.NewTask(t, "test")
-	m := &impl{
+	m := &module{
 		rt: rt,
 	}
 	linkPath := filepath.Join(root, "dangling")
@@ -238,7 +238,7 @@ func TestFSSymlink(t *testing.T) {
 		Root: root,
 	}
 	h := testutil.NewTask(t, "test")
-	m := &impl{
+	m := &module{
 		rt: rt,
 	}
 
@@ -300,7 +300,7 @@ func TestFSSyncTreeChangeCheck(t *testing.T) {
 		Root: root,
 	}
 	h := testutil.NewTask(t, "test")
-	m := &impl{
+	m := &module{
 		rt: rt,
 	}
 	action := h.EmitOne("fs.sync_tree", m.syncTree, nil, []starlark.Tuple{
@@ -355,7 +355,7 @@ func TestFSSyncTreePlanWithoutSudo(t *testing.T) {
 		"sudo": "#!/bin/sh\ntouch " + marker + "\n",
 	})
 	h := testutil.NewTask(t, "test")
-	m := &impl{
+	m := &module{
 		rt: &boot.Runtime{
 			Root: root,
 		},

@@ -35,20 +35,20 @@ func TestParseFormattedMessage(t *testing.T) {
 			input:    starlark.String("hello"),
 			wantBody: "hello",
 		},
-		"tuple with keyboard": {
+		"tuple_with_keyboard": {
 			input:      starlark.Tuple{starlark.String("formatted"), keyboard},
 			wantBody:   "formatted",
 			wantAction: true,
 		},
-		"tuple malformed first element": {
+		"tuple_malformed_first_element": {
 			input:      starlark.Tuple{starlark.MakeInt(1)},
 			wantReason: "invalid_field_type",
 		},
-		"tuple empty title": {
+		"tuple_empty_title": {
 			input:      starlark.Tuple{starlark.String("")},
 			wantReason: "empty_title",
 		},
-		"tuple with media": {
+		"tuple_with_media": {
 			input: starlark.Tuple{
 				starlark.String("formatted"),
 				starlark.NewList(nil), // empty actions
@@ -64,11 +64,11 @@ func TestParseFormattedMessage(t *testing.T) {
 			wantBody:  "formatted",
 			wantMedia: true,
 		},
-		"tuple malformed keyboard": {
+		"tuple_malformed_keyboard": {
 			input:      starlark.Tuple{starlark.String("formatted"), starlark.MakeInt(1)},
 			wantReason: "invalid_field_type",
 		},
-		"tuple invalid length": {
+		"tuple_invalid_length": {
 			input:      starlark.Tuple{starlark.String("one"), starlark.NewList(nil), starlark.NewList(nil), starlark.String("four")},
 			wantReason: "invalid_tuple_length",
 		},
@@ -116,7 +116,7 @@ func TestBuildFormatInput(t *testing.T) {
 		update    Update
 		wantTitle string
 	}{
-		"single item uses fallback title": {
+		"single_item_uses_fallback_title": {
 			update: Update{
 				Feed: Feed{},
 				Items: []*gofeed.Item{
@@ -128,7 +128,7 @@ func TestBuildFormatInput(t *testing.T) {
 			},
 			wantTitle: "https://example.com/a",
 		},
-		"digest uses feed URL when title is empty": {
+		"digest_uses_feed_url_when_title_is_empty": {
 			update: Update{
 				Feed: Feed{
 					Digest: true,

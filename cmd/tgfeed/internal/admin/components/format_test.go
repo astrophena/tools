@@ -19,47 +19,47 @@ func TestHumanFormatting(t *testing.T) {
 		got  string
 		want string
 	}{
-		"date and time": {
+		"date_and_time": {
 			got:  formatDateTime(now),
 			want: "11.07.2026, 12:00:00 UTC",
 		},
-		"relative hours": {
+		"relative_hours": {
 			got:  formatRelativeTime(now.Add(-3*time.Hour), now),
 			want: "3h ago",
 		},
-		"relative seconds": {
+		"relative_seconds": {
 			got:  formatRelativeTime(now.Add(-42*time.Second), now),
 			want: "42s ago",
 		},
-		"relative minutes": {
+		"relative_minutes": {
 			got:  formatRelativeTime(now.Add(-17*time.Minute), now),
 			want: "17m ago",
 		},
-		"relative days": {
+		"relative_days": {
 			got:  formatRelativeTime(now.Add(-49*time.Hour), now),
 			want: "2d ago",
 		},
-		"future time": {
+		"future_time": {
 			got:  formatRelativeTime(now.Add(time.Second), now),
 			want: "just now",
 		},
-		"sub-second milliseconds": {
+		"sub_second_milliseconds": {
 			got:  formatMilliseconds(842),
 			want: "842 ms",
 		},
-		"milliseconds as seconds": {
+		"milliseconds_as_seconds": {
 			got:  formatMilliseconds(20_838),
 			want: "20.8 s",
 		},
-		"milliseconds as minutes": {
+		"milliseconds_as_minutes": {
 			got:  formatMilliseconds(75_000),
 			want: "1m 15s",
 		},
-		"zero date": {
+		"zero_date": {
 			got:  formatDateTime(time.Time{}),
 			want: "n/a",
 		},
-		"zero relative": {
+		"zero_relative": {
 			got:  formatRelativeTime(time.Time{}, now),
 			want: "n/a",
 		},
@@ -83,7 +83,7 @@ func TestMemoryDelta(t *testing.T) {
 		wantChange  string
 		wantTone    string
 	}{
-		"no previous run": {
+		"no_previous_run": {
 			latest:     1024,
 			wantChange: "vs prev run: n/a",
 			wantTone:   "neutral",
@@ -95,7 +95,7 @@ func TestMemoryDelta(t *testing.T) {
 			wantChange:  "no change vs prev run",
 			wantTone:    "neutral",
 		},
-		"sub kibibyte change": {
+		"sub_kibibyte_change": {
 			latest:      2047,
 			previous:    1024,
 			hasPrevious: true,
@@ -138,7 +138,7 @@ func TestDurationDelta(t *testing.T) {
 		wantChange  string
 		wantTone    string
 	}{
-		"no previous run": {
+		"no_previous_run": {
 			latest:     time.Second,
 			wantChange: "vs prev run: n/a",
 			wantTone:   "neutral",
@@ -150,21 +150,21 @@ func TestDurationDelta(t *testing.T) {
 			wantChange:  "no change vs prev run",
 			wantTone:    "neutral",
 		},
-		"millisecond increase": {
+		"millisecond_increase": {
 			latest:      1500 * time.Millisecond,
 			previous:    time.Second,
 			hasPrevious: true,
 			wantChange:  "+500 ms vs prev run",
 			wantTone:    "bad",
 		},
-		"second increase": {
+		"second_increase": {
 			latest:      3500 * time.Millisecond,
 			previous:    time.Second,
 			hasPrevious: true,
 			wantChange:  "+2.5 s vs prev run",
 			wantTone:    "bad",
 		},
-		"minute decrease": {
+		"minute_decrease": {
 			latest:      time.Minute,
 			previous:    6 * time.Minute,
 			hasPrevious: true,

@@ -8,6 +8,7 @@ package stats
 import (
 	"context"
 	"errors"
+	"maps"
 	"math"
 	"net"
 	"slices"
@@ -217,11 +218,7 @@ func percentileValue(sorted []int64, percentile float64) int64 {
 
 // TopFeedStats calculates top-N feed summaries according to provided comparator.
 func TopFeedStats(input map[string]*FeedStats, less func(a *FeedStats, b *FeedStats) int) []FeedStatsSummary {
-	all := make([]*FeedStats, 0, len(input))
-	for _, item := range input {
-		all = append(all, item)
-	}
-	slices.SortFunc(all, less)
+	all := slices.SortedFunc(maps.Values(input), less)
 	all = all[:min(topFeedStatCount, len(all))]
 	result := make([]FeedStatsSummary, 0, len(all))
 	for _, item := range all {
@@ -304,21 +301,16 @@ func (r *Run) AddHTTPStatusClass(url string, statusCode int) {
 
 // ClassifyFailure increments failure counters based on error type.
 func (r *Run) ClassifyFailure(url string, err error) {
-	if netErr, ok := errors.AsType[net.Error](err); ok {
-		r.NetworkErrorCount += 1
-		if netErr.Timeout() {
-			r.TimeoutCount += 1
-		}
-		r.FeedStats(url).LastStatusClass = 0
-		return
-	}
-	if errors.Is(err, context.DeadlineExceeded) {
-		r.TimeoutCount += 1
-		r.NetworkErrorCount += 1
-		r.FeedStats(url).LastStatusClass = 0
-		return
-	}
 	r.FeedStats(url).LastStatusClass = 0
+	if netErr, ok := errors.AsType[net.Error](err); ok {
+		r.NetworkErrorCount++
+		if netErr.Timeout() {
+			r.TimeoutCount++
+		}
+	} else if errors.Is(err, context.DeadlineExceeded) {
+		r.TimeoutCount++
+		r.NetworkErrorCount++
+	}
 }
 
 // RecordItemDecision counts item skip reasons.

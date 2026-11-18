@@ -70,7 +70,6 @@ func (a *app) Run(ctx context.Context) error {
 	}
 	defer root.Close()
 
-	// Drop privileges if not inside tests.
 	restrict.DoUnlessTesting(ctx, landlock.RWDirs(dir))
 
 	vlog := func(msg string, attrs ...slog.Attr) {
@@ -79,6 +78,7 @@ func (a *app) Run(ctx context.Context) error {
 		}
 	}
 
+	stripSlashes := strings.NewReplacer("/", "", "\\", "")
 	var processed, existing, renamed int
 
 	if err := fs.WalkDir(root.FS(), ".", func(path string, d fs.DirEntry, err error) error {
@@ -89,37 +89,34 @@ func (a *app) Run(ctx context.Context) error {
 			return nil
 		}
 
-		f, err := root.Open(filepath.FromSlash(path))
+		rel := filepath.FromSlash(path)
+		f, err := root.Open(rel)
 		if err != nil {
 			return err
 		}
 		defer f.Close()
 
 		if format, typ, err := tag.Identify(f); typ == "" || format == "" {
-			// Unknown file or tag format, skip.
 			return nil
 		} else if err != nil {
-			return fmt.Errorf("identifying %q: %v", path, err)
+			return fmt.Errorf("identify %q: %w", path, err)
 		}
 
 		m, err := tag.ReadFrom(f)
 		if err != nil {
-			return fmt.Errorf("reading tags from %q: %v", path, err)
+			return fmt.Errorf("read tags from %q: %w", path, err)
 		}
 
 		processed++
-
-		reldir := filepath.Dir(filepath.FromSlash(path))
 
 		var buf bytes.Buffer
 		if err := tmpl.Execute(&buf, m); err != nil {
 			return err
 		}
-		// Strip slashes from the new name to make it a valid filename.
-		newname := strings.NewReplacer("/", "", "\\", "").Replace(buf.String())
-		newname = filepath.Join(reldir, newname+filepath.Ext(path))
+		name := stripSlashes.Replace(buf.String())
+		dest := filepath.Join(filepath.Dir(rel), name+filepath.Ext(rel))
 
-		if path == newname {
+		if rel == dest {
 			vlog("already exists, no need to rename", slog.String("path", path))
 			existing++
 			return nil
@@ -129,9 +126,9 @@ func (a *app) Run(ctx context.Context) error {
 		if a.dry {
 			logMsg = "would rename"
 		}
-		vlog(logMsg, slog.String("from", path), slog.String("to", newname))
+		vlog(logMsg, slog.String("from", path), slog.String("to", dest))
 		if !a.dry {
-			if err := root.Rename(filepath.FromSlash(path), newname); err != nil {
+			if err := root.Rename(rel, dest); err != nil {
 				return err
 			}
 		}

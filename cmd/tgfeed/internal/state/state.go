@@ -2,23 +2,7 @@
 // Use of this source code is governed by the ISC
 // license that can be found in the LICENSE.md file.
 
-// Package state persists tgfeed configuration, per-feed runtime state, and
-// error templates.
-//
-// Use [NewStore] with [Options] to select where data is stored:
-//
-//   - local files in [Options.StateDir] (config.star, state.json, error.tmpl)
-//   - a remote admin API at [Options.RemoteURL]
-//
-// A typical flow is:
-//
-//   - call [Store.LoadSnapshot] during startup
-//   - mutate feed state with [Feed] methods such as [Feed.MarkFetchSuccess],
-//     [Feed.MarkPending], [Feed.CommitPending], and [Feed.MarkFetchFailure]
-//   - call [Store.SaveState] to persist the updated state map
-//
-// For admin endpoints that accept raw JSON, [Store.SaveStateJSON] and
-// [UnmarshalStateMap] avoid duplicate encoding/decoding paths.
+// Package state reads and writes tgfeed configuration, feed state, and error templates.
 package state
 
 import (
@@ -40,10 +24,7 @@ import (
 	"go.astrophena.name/base/version"
 )
 
-// Feed stores persisted runtime information for a single feed.
-//
-// The concrete JSON representation is private to this package.
-// Callers should mutate feed state via methods rather than raw field access.
+// Feed is the persisted state of a feed.
 type Feed struct {
 	Disabled              bool                 `json:"disabled"`
 	DisabledNotifyPending bool                 `json:"disabled_notify_pending,omitempty"`
@@ -77,7 +58,7 @@ type Snapshot struct {
 
 // Options configures [NewStore].
 type Options struct {
-	// StateDir is a local directory used when [RemoteURL] is empty.
+	// StateDir is a local directory used when RemoteURL is empty.
 	StateDir string
 	// RemoteURL enables remote mode when non-empty.
 	//
@@ -93,15 +74,29 @@ type Options struct {
 
 // Store reads and writes tgfeed persisted state.
 type Store struct {
-	opts Options
+	opts       Options
+	baseURL    string
+	httpClient *http.Client
 }
 
-// NewStore constructs a store that persists state locally or remotely,
-// depending on opts.
+// NewStore opens local files or configures a remote admin API client.
 func NewStore(opts Options) *Store {
-	return &Store{
-		opts: opts,
+	s := &Store{
+		opts:       opts,
+		baseURL:    opts.RemoteURL,
+		httpClient: opts.HTTPClient,
 	}
+	if strings.HasPrefix(opts.RemoteURL, "/") {
+		s.baseURL = "http://unix"
+		s.httpClient = &http.Client{
+			Transport: &http.Transport{
+				DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+					return (&net.Dialer{}).DialContext(ctx, "unix", opts.RemoteURL)
+				},
+			},
+		}
+	}
+	return s
 }
 
 type errorResponse struct {
@@ -177,23 +172,20 @@ func (s *Store) LoadErrorTemplate(ctx context.Context) (string, error) {
 	return string(b), nil
 }
 
-func (s *Store) fetch(ctx context.Context, url string) ([]byte, error) {
+func (s *Store) fetch(ctx context.Context, endpoint string) ([]byte, error) {
 	b, err := request.Make[request.Bytes](ctx, request.Params{
 		Method:     http.MethodGet,
 		Headers:    map[string]string{"User-Agent": version.UserAgent()},
-		URL:        s.apiURL(url),
-		HTTPClient: s.httpClient(),
+		URL:        s.baseURL + endpoint,
+		HTTPClient: s.httpClient,
 	})
-	if err != nil {
-		if statusErr, ok := errors.AsType[*request.StatusError](err); ok {
-			var errResp *errorResponse
-			if jsonErr := json.Unmarshal(statusErr.Body, &errResp); jsonErr == nil {
-				err = errors.New(errResp.Error)
-			}
+	if statusErr, ok := errors.AsType[*request.StatusError](err); ok {
+		var response errorResponse
+		if json.Unmarshal(statusErr.Body, &response) == nil && response.Error != "" {
+			return nil, errors.New(response.Error)
 		}
-		return nil, err
 	}
-	return b, nil
+	return b, err
 }
 
 func (s *Store) SaveState(ctx context.Context, state map[string]*Feed) error {
@@ -208,15 +200,7 @@ func (s *Store) SaveStateJSON(ctx context.Context, content []byte) error {
 	if s.opts.RemoteURL == "" {
 		return safefile.WriteFile(filepath.Join(s.opts.StateDir, "state.json"), content, 0o644)
 	}
-	_, err := request.Make[request.IgnoreResponse](ctx, request.Params{
-		Method:         http.MethodPut,
-		URL:            s.apiURL("/api/state"),
-		Body:           content,
-		Headers:        map[string]string{"Content-Type": "application/json", "User-Agent": version.UserAgent()},
-		WantStatusCode: http.StatusNoContent,
-		HTTPClient:     s.httpClient(),
-	})
-	if err != nil {
+	if err := s.saveRemote(ctx, "/api/state", "application/json", content); err != nil {
 		return fmt.Errorf("failed to save state to remote: %w", err)
 	}
 	return nil
@@ -226,15 +210,7 @@ func (s *Store) SaveConfig(ctx context.Context, config string) error {
 	if s.opts.RemoteURL == "" {
 		return safefile.WriteFile(filepath.Join(s.opts.StateDir, "config.star"), []byte(config), 0o644)
 	}
-	_, err := request.Make[request.IgnoreResponse](ctx, request.Params{
-		Method:         http.MethodPut,
-		URL:            s.apiURL("/api/config"),
-		Body:           []byte(config),
-		Headers:        map[string]string{"Content-Type": "text/plain", "User-Agent": version.UserAgent()},
-		WantStatusCode: http.StatusNoContent,
-		HTTPClient:     s.httpClient(),
-	})
-	if err != nil {
+	if err := s.saveRemote(ctx, "/api/config", "text/plain", []byte(config)); err != nil {
 		return fmt.Errorf("failed to save config to remote: %w", err)
 	}
 	return nil
@@ -244,15 +220,7 @@ func (s *Store) SaveErrorTemplate(ctx context.Context, content string) error {
 	if s.opts.RemoteURL == "" {
 		return safefile.WriteFile(filepath.Join(s.opts.StateDir, "error.tmpl"), []byte(content), 0o644)
 	}
-	_, err := request.Make[request.IgnoreResponse](ctx, request.Params{
-		Method:         http.MethodPut,
-		URL:            s.apiURL("/api/error-template"),
-		Body:           []byte(content),
-		Headers:        map[string]string{"Content-Type": "text/plain", "User-Agent": version.UserAgent()},
-		WantStatusCode: http.StatusNoContent,
-		HTTPClient:     s.httpClient(),
-	})
-	if err != nil {
+	if err := s.saveRemote(ctx, "/api/error-template", "text/plain", []byte(content)); err != nil {
 		return fmt.Errorf("failed to save error template to remote: %w", err)
 	}
 	return nil
@@ -277,22 +245,14 @@ func UnmarshalStateMap(b []byte) (map[string]*Feed, error) {
 	return stateMap, nil
 }
 
-func (s *Store) httpClient() *http.Client {
-	if strings.HasPrefix(s.opts.RemoteURL, "/") {
-		return &http.Client{
-			Transport: &http.Transport{
-				DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-					return (&net.Dialer{}).DialContext(ctx, "unix", s.opts.RemoteURL)
-				},
-			},
-		}
-	}
-	return s.opts.HTTPClient
-}
-
-func (s *Store) apiURL(endpoint string) string {
-	if strings.HasPrefix(s.opts.RemoteURL, "/") {
-		return "http://unix" + endpoint
-	}
-	return s.opts.RemoteURL + endpoint
+func (s *Store) saveRemote(ctx context.Context, endpoint, contentType string, content []byte) error {
+	_, err := request.Make[request.IgnoreResponse](ctx, request.Params{
+		Method:         http.MethodPut,
+		URL:            s.baseURL + endpoint,
+		Body:           content,
+		Headers:        map[string]string{"Content-Type": contentType, "User-Agent": version.UserAgent()},
+		WantStatusCode: http.StatusNoContent,
+		HTTPClient:     s.httpClient,
+	})
+	return err
 }

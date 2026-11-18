@@ -36,30 +36,16 @@ func newUsageStore(path string) (*usageStore, error) {
 	}
 
 	f, err := jsonfile.Load[usageData](path)
-	if err != nil {
-		if !isNotExist(err) {
-			return nil, err
-		}
+	if errors.Is(err, fs.ErrNotExist) {
 		f, err = jsonfile.New[usageData](path)
-		if err != nil {
-			return nil, err
-		}
 	}
-
-	if err := f.Write(func(d *usageData) error {
-		if d.ByKey == nil {
-			d.ByKey = make(map[string]usageKeyStats)
-		}
-		return nil
-	}); err != nil {
+	if err != nil {
 		return nil, err
 	}
 	return &usageStore{
 		f: f,
 	}, nil
 }
-
-func isNotExist(err error) bool { return errors.Is(err, fs.ErrNotExist) }
 
 func (s *usageStore) add(key string, now time.Time, input, output int64) error {
 	if key == "" {
@@ -85,18 +71,15 @@ func (s *usageStore) add(key string, now time.Time, input, output int64) error {
 	})
 }
 
-func (s *usageStore) get(key string, date string) usageStats {
-	var out usageStats
+func (s *usageStore) get(key, date string) usageStats {
+	var stats usageStats
 	s.f.Read(func(d *usageData) {
-		v, ok := d.ByKey[key]
-		if !ok {
-			return
-		}
+		v := d.ByKey[key]
 		if date == "" {
-			out = v.Total
+			stats = v.Total
 			return
 		}
-		out = v.ByDay[date]
+		stats = v.ByDay[date]
 	})
-	return out
+	return stats
 }

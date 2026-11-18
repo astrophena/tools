@@ -16,33 +16,27 @@ import (
 	boot "go.astrophena.name/tools/cmd/boot/internal"
 
 	"go.starlark.net/starlark"
+	"go.starlark.net/starlarkstruct"
 )
 
 // Module returns the Starlark consent module.
-func Module() boot.Module { return module{} }
-
-type module struct{}
-
-func (module) Name() string { return "consent" }
-
-func (module) Members(rt *boot.Runtime) starlark.StringDict {
-	m := &impl{
+func Module(rt *boot.Runtime) *starlarkstruct.Module {
+	m := &module{
 		rt: rt,
 	}
-	return starlark.StringDict{
-		"require": starlark.NewBuiltin("consent.require", m.require),
+	return &starlarkstruct.Module{
+		Name: "consent",
+		Members: starlark.StringDict{
+			"require": boot.TaskBuiltin("consent.require", m.require),
+		},
 	}
 }
 
-type impl struct {
+type module struct {
 	rt *boot.Runtime
 }
 
-func (m *impl) require(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	if err := boot.RequireTask(thread, b); err != nil {
-		return nil, err
-	}
-
+func (m *module) require(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	var (
 		message    string
 		defaultYes bool
@@ -61,14 +55,14 @@ func (m *impl) require(thread *starlark.Thread, b *starlark.Builtin, args starla
 	boot.AddAction(thread, boot.Action{
 		Summary:   "would ask for consent: " + message,
 		IsConsent: true,
-		Apply: func(_ context.Context, dryRun bool) (boot.Result, error) {
+		Apply: func(ctx context.Context, dryRun bool) (boot.Result, error) {
 			if dryRun {
 				return boot.ResultChange, nil
 			}
 			if m.rt != nil && !m.rt.Interactive {
 				return boot.ResultStop, nil
 			}
-			ok, err := ask(m.rt, message, defaultYes)
+			ok, err := ask(ctx, m.rt, message, defaultYes)
 			if err != nil {
 				return "", err
 			}
@@ -81,7 +75,7 @@ func (m *impl) require(thread *starlark.Thread, b *starlark.Builtin, args starla
 	return starlark.None, nil
 }
 
-func ask(rt *boot.Runtime, message string, defaultYes bool) (bool, error) {
+func ask(ctx context.Context, rt *boot.Runtime, message string, defaultYes bool) (bool, error) {
 	in := io.Reader(os.Stdin)
 	out := io.Writer(os.Stdout)
 	if rt != nil {
@@ -101,7 +95,17 @@ func ask(rt *boot.Runtime, message string, defaultYes bool) (bool, error) {
 		return false, err
 	}
 
+	if file, ok := in.(*os.File); ok && ctx.Done() != nil {
+		in = promptReader{
+			ctx:  ctx,
+			file: file,
+		}
+	}
 	line, err := bufio.NewReader(in).ReadString('\n')
+	if canceled := ctx.Err(); canceled != nil {
+		fmt.Fprintln(out)
+		return false, canceled
+	}
 	if err != nil && err != io.EOF {
 		return false, err
 	}
@@ -116,4 +120,9 @@ func ask(rt *boot.Runtime, message string, defaultYes bool) (bool, error) {
 	default:
 		return false, nil
 	}
+}
+
+type promptReader struct {
+	ctx  context.Context
+	file *os.File
 }

@@ -26,40 +26,36 @@ type BuiltinFunc func(*starlark.Thread, *starlark.Builtin, starlark.Tuple, []sta
 // TaskHarness emits actions from module builtins without repeating Starlark
 // task setup in every module test.
 type TaskHarness struct {
-	t      *testing.T
-	Task   *boot.Task
-	Thread *starlark.Thread
+	t       *testing.T
+	Actions []boot.Action
+	Thread  *starlark.Thread
 }
 
-// NewTask returns a test task and its associated Starlark thread.
+// NewTask returns an action collector and its Starlark thread.
 func NewTask(t *testing.T, id string) *TaskHarness {
 	t.Helper()
-	task := &boot.Task{
-		ID: id,
+	h := &TaskHarness{
+		t: t,
+		Thread: &starlark.Thread{
+			Name: id,
+		},
 	}
-	thread := &starlark.Thread{
-		Name: id,
-	}
-	boot.SetTask(thread, task)
-	return &TaskHarness{
-		t:      t,
-		Task:   task,
-		Thread: thread,
-	}
+	boot.CollectActions(h.Thread, &h.Actions)
+	return h
 }
 
 // EmitOne calls a module builtin and returns its single emitted action.
 // Previous actions are cleared so calling EmitOne again models a fresh run.
 func (h *TaskHarness) EmitOne(name string, fn BuiltinFunc, args starlark.Tuple, kwargs []starlark.Tuple) boot.Action {
 	h.t.Helper()
-	h.Task.Actions = nil
+	h.Actions = nil
 	if _, err := fn(h.Thread, starlark.NewBuiltin(name, fn), args, kwargs); err != nil {
 		h.t.Fatal(err)
 	}
-	if len(h.Task.Actions) != 1 {
-		h.t.Fatalf("actions = %d, want 1", len(h.Task.Actions))
+	if len(h.Actions) != 1 {
+		h.t.Fatalf("actions = %d, want 1", len(h.Actions))
 	}
-	return h.Task.Actions[0]
+	return h.Actions[0]
 }
 
 func writeCommand(t *testing.T, dir, name, content string) {

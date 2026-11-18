@@ -206,7 +206,7 @@ func TestFailFastStopsBeforeStartingLaterTasks(t *testing.T) {
 				DryRun: true,
 			},
 		},
-		"verbose apply": {
+		"verbose_apply": {
 			opts: RunOptions{
 				Verbose: true,
 			},
@@ -270,6 +270,7 @@ func TestApplySkipsDependentTaskAfterDependencyFailure(t *testing.T) {
 	if ranDependent {
 		t.Fatal("dependent task ran after dependency failure")
 	}
+	assertContains(t, out.String(), " · \x1b[31m2 failures\x1b[0m\n", "failure count")
 	assertContains(t, out.String(), "dependency setup failed", "failure output")
 }
 
@@ -302,9 +303,56 @@ func TestApplyFailFastPreservesContinueOnError(t *testing.T) {
 	if !ranSecond {
 		t.Fatal("second task did not run after continuable failure")
 	}
-	if !strings.Contains(out.String(), "1 action failed") {
+	if !strings.Contains(out.String(), "1 failure") {
 		t.Fatalf("output does not report the continuable failure:\n%s", out.String())
 	}
+}
+
+func TestApplyConsentErrorDoesNotRunTask(t *testing.T) {
+	var (
+		prompts                               int
+		ranTask, ranDependent, ranIndependent bool
+	)
+	mark := func(ran *bool) Action {
+		return Action{
+			Apply: func(context.Context, bool) (Result, error) {
+				*ran = true
+				return ResultChange, nil
+			},
+		}
+	}
+	guarded := testTask("guarded", Action{
+		Summary:   "request consent",
+		IsConsent: true,
+		Apply: func(context.Context, bool) (Result, error) {
+			prompts++
+			return "", errors.New("consent unavailable")
+		},
+	}, mark(&ranTask))
+	guarded.ContinueOnError = true
+
+	dependent := testTask("dependent", mark(&ranDependent))
+	dependent.DependsOn = []string{guarded.ID}
+	dependent.ContinueOnError = true
+	independent := testTask("independent", mark(&ranIndependent))
+
+	engine := &Engine{
+		Tasks: []*Task{guarded, dependent, independent},
+	}
+	var out bytes.Buffer
+	if err := engine.Run(t.Context(), &out, Selection{}, RunOptions{
+		Interactive: true,
+		FailFast:    true,
+		JSON:        true,
+	}); err == nil {
+		t.Fatal("Run succeeded, want consent failure")
+	}
+	if prompts != 1 || ranTask || ranDependent || !ranIndependent {
+		t.Fatalf("prompts = %d, ran guarded = %t, dependent = %t, independent = %t",
+			prompts, ranTask, ranDependent, ranIndependent)
+	}
+	assertContains(t, out.String(), "consent unavailable", "JSON report")
+	assertContains(t, out.String(), "dependency guarded failed", "JSON report")
 }
 
 func TestApplyStopsCurrentTaskOnResultStop(t *testing.T) {
@@ -413,11 +461,14 @@ func TestPrepareSudo(t *testing.T) {
 		Runtime: &Runtime{},
 	}
 	var out bytes.Buffer
-	if err := newSudoPrompter(engine).prepare(t.Context(), &out, []*Task{
+	if err := engine.prepareSudo(t.Context(), &out, []taskRun{
 		{
-			ID:           "root_task",
-			Name:         "Root task",
-			RequiresSudo: true,
+			task: &Task{
+				ID:           "root_task",
+				Name:         "Root task",
+				RequiresSudo: true,
+			},
+			status: taskPending,
 		},
 	}); err != nil {
 		t.Fatal(err)
@@ -439,13 +490,11 @@ case "$*" in
 esac
 `)
 
-	prompter := newSudoPrompter(&Engine{
-		Runtime: &Runtime{
-			Interactive: true,
-		},
-	})
+	rt := &Runtime{
+		Interactive: true,
+	}
 	var out bytes.Buffer
-	if err := prompter.authenticate(t.Context(), &out); err != nil {
+	if err := authenticateSudo(t.Context(), rt, &out); err != nil {
 		t.Fatal(err)
 	}
 	if out.Len() != 0 {
@@ -468,14 +517,12 @@ case "$*" in
 esac
 `)
 
-	prompter := newSudoPrompter(&Engine{
-		Runtime: &Runtime{
-			Stdin:       strings.NewReader("password\n"),
-			Interactive: true,
-		},
-	})
+	rt := &Runtime{
+		Stdin:       strings.NewReader("password\n"),
+		Interactive: true,
+	}
 	var out bytes.Buffer
-	if err := prompter.authenticate(t.Context(), &out); err != nil {
+	if err := authenticateSudo(t.Context(), rt, &out); err != nil {
 		t.Fatal(err)
 	}
 	assertContains(t, out.String(), "[sudo] password for test:\n", "sudo prompt output")
@@ -495,10 +542,8 @@ case "$*" in
 esac
 `)
 
-	prompter := newSudoPrompter(&Engine{
-		Runtime: &Runtime{},
-	})
-	err := prompter.authenticate(t.Context(), io.Discard)
+	rt := &Runtime{}
+	err := authenticateSudo(t.Context(), rt, io.Discard)
 	if err == nil {
 		t.Fatal("sudo authentication succeeded, want failure")
 	}
@@ -512,12 +557,15 @@ esac
 }
 
 func TestSudoReasonsPreferActionDetails(t *testing.T) {
-	reasons := sudoReasons([]*Task{
+	reasons := sudoReasons([]taskRun{
 		{
-			ID:           "setup_etc",
-			Name:         "Install /etc files",
-			RequiresSudo: true,
-			Actions: []Action{
+			task: &Task{
+				ID:           "setup_etc",
+				Name:         "Install /etc files",
+				RequiresSudo: true,
+			},
+			status: taskPending,
+			prepared: []Action{
 				{
 					Summary:      "sync tree prefs/etc to /etc (sudo)",
 					RequiresSudo: true,
@@ -679,83 +727,144 @@ func TestApplyReportsWarningsAfterProgress(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	got := out.String()
-	assertContains(t, got, "\x1b[33mWarnings:\x1b[0m", "colored warning report")
-	assertContains(t, got, "It reported \x1b[33m2 warnings\x1b[0m.", "warning count")
-	assertContains(t, got, "orphaned packages found:", "warning report")
-	assertContains(t, got, "  - oldlib", "warning report")
-	assertContains(t, got, "reboot required", "warning report")
-	if strings.Index(got, "Report:") > strings.Index(got, "Warnings:") {
-		t.Fatalf("warnings were printed before the report:\n%s", got)
-	}
+	want := "\n1 task · \x1b[32m0 changed\x1b[0m · 1 skipped · \x1b[33m2 warnings\x1b[0m\n" +
+		"\x1b[33mWarnings\x1b[0m\n" +
+		`  packages · check packages
+    orphaned packages found:
+      - oldlib
+    reboot required
+`
+	assertContains(t, out.String(), want, "report")
 }
 
-func TestApplyProgressTitleReportsCompletedTask(t *testing.T) {
+func TestApplyProgressTitleReportsRunningAction(t *testing.T) {
+	const (
+		slowTitle   = "update slow"
+		slowSummary = "update program: /some/path/to/slow --with-a-long-flag"
+	)
 	slowStarted := make(chan struct{})
 	fastReported := make(chan struct{})
 	out := &notifyingBuffer{
 		done: fastReported,
 		match: func(output string) bool {
-			return renderContains(output, "Fast task", "1/2")
+			return renderContains(output, slowTitle, "1/2")
 		},
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 
-	engine := &Engine{
-		Tasks: []*Task{
-			{
-				ID:   "slow",
-				Name: "Slow task",
-				Run: starlark.NewBuiltin("slow", func(thread *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, _ []starlark.Tuple) (starlark.Value, error) {
-					AddAction(thread, Action{
-						Summary: "wait",
-						Apply: func(context.Context, bool) (Result, error) {
-							close(slowStarted)
-							select {
-							case <-fastReported:
-								return ResultSkip, nil
-							case <-ctx.Done():
-								return "", ctx.Err()
-							}
-						},
-					})
-					return starlark.None, nil
-				}),
-			},
-			{
-				ID:   "fast",
-				Name: "Fast task",
-				Run: starlark.NewBuiltin("fast", func(thread *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, _ []starlark.Tuple) (starlark.Value, error) {
-					AddAction(thread, Action{
-						Summary: "finish",
-						Apply: func(context.Context, bool) (Result, error) {
-							select {
-							case <-slowStarted:
-								return ResultSkip, nil
-							case <-ctx.Done():
-								return "", ctx.Err()
-							}
-						},
-					})
-					return starlark.None, nil
-				}),
-			},
+	slow := testTask("slow", Action{
+		Title:   slowTitle,
+		Summary: slowSummary,
+		Apply: func(ctx context.Context, _ bool) (Result, error) {
+			close(slowStarted)
+			select {
+			case <-fastReported:
+				return ResultSkip, nil
+			case <-ctx.Done():
+				return "", ctx.Err()
+			}
 		},
+	})
+	fast := testTask("fast", Action{
+		Summary: "finish quickly",
+		Apply: func(ctx context.Context, _ bool) (Result, error) {
+			select {
+			case <-slowStarted:
+				return ResultSkip, nil
+			case <-ctx.Done():
+				return "", ctx.Err()
+			}
+		},
+	})
+	engine := &Engine{
+		Tasks: []*Task{slow, fast},
 	}
 
 	if err := engine.Run(ctx, out, Selection{}, RunOptions{
 		Concurrency: 2,
 		Interactive: true,
 	}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("apply: %v\n%s", err, out.String())
 	}
 	got := out.String()
-	if !renderContains(got, "Fast task", "1/2") {
-		t.Fatalf("progress output did not report fast completion:\n%s", got)
+	if !renderContains(got, "(+1)", "0/2") {
+		t.Fatalf("progress did not report the overlapping actions:\n%s", got)
 	}
-	if renderContains(got, "Slow task", "0/2") {
-		t.Fatalf("progress output reported slow task title before completion:\n%s", got)
+	if strings.Contains(got, "update program:") {
+		t.Fatalf("progress displayed the full action summary:\n%s", got)
+	}
+	if renderContains(got, "finish quickly", "1/2") || renderContains(got, slowTitle, "2/2") {
+		t.Fatalf("progress displayed a completed action:\n%s", got)
+	}
+}
+
+func TestFailureReportLogsLongOutput(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("TMPDIR", dir)
+	var out bytes.Buffer
+	long := "command failed\n" + strings.Repeat("command output\n", 9) + "last line"
+	printFailure(&out, "packages", "install packages", errors.New(long))
+	printFailure(&out, "repos", "", errors.New("dependency failed"))
+
+	got := out.String()
+	assertContains(t, got, "  packages · install packages\n    command failed\n", "failure")
+	assertContains(t, got, "  repos\n    dependency failed\n", "failure")
+	if strings.Contains(got, "last line") {
+		t.Fatalf("failure showed full output:\n%s", got)
+	}
+	logs, err := filepath.Glob(filepath.Join(dir, "boot-error-*.log"))
+	if err != nil || len(logs) != 1 {
+		t.Fatalf("logs = %v, err = %v, want one log", logs, err)
+	}
+	assertContains(t, got, "    log: "+logs[0]+"\n", "failure")
+	if got := readFile(t, logs[0]); got != "packages · install packages\n"+long+"\n" {
+		t.Fatalf("unexpected log contents:\n%s", got)
+	}
+}
+
+func TestApplyInterrupted(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("TMPDIR", dir)
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	interrupt := Action{
+		Summary: "interrupt",
+		Apply: func(context.Context, bool) (Result, error) {
+			cancel()
+			return "", errors.New("signal: interrupt\n" + strings.Repeat("command output\n", 10))
+		},
+	}
+	var laterRuns int
+	later := Action{
+		Summary: "later",
+		Apply: func(context.Context, bool) (Result, error) {
+			laterRuns++
+			return ResultChange, nil
+		},
+	}
+	engine := &Engine{
+		Tasks: []*Task{
+			testTask("first", interrupt, later),
+			testTask("second", later),
+		},
+	}
+	var out bytes.Buffer
+	if err := engine.Run(ctx, &out, Selection{}, RunOptions{
+		Interactive: true,
+	}); !errors.Is(err, context.Canceled) {
+		t.Fatalf("Run returned %v, want context.Canceled", err)
+	}
+	if laterRuns != 0 {
+		t.Fatalf("ran %d actions after cancellation", laterRuns)
+	}
+	if strings.Contains(out.String(), "Failures") || strings.Contains(out.String(), "command output") {
+		t.Fatalf("interrupted run printed a failure report:\n%s", &out)
+	}
+	logs, err := filepath.Glob(filepath.Join(dir, "boot-error-*.log"))
+	if err != nil || len(logs) != 0 {
+		t.Fatalf("logs = %v, err = %v, want no logs", logs, err)
 	}
 }
 

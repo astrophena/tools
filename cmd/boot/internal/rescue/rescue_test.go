@@ -36,7 +36,7 @@ func TestUpdateDescribesPlannedRescueImageBuild(t *testing.T) {
 		t.Fatal(err)
 	}
 	h := testutil.NewTask(t, "test")
-	m := &impl{
+	m := &module{
 		rt: &boot.Runtime{
 			Root:   root,
 			Home:   filepath.Join(root, "home"),

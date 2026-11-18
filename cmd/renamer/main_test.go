@@ -31,7 +31,7 @@ func TestRun(t *testing.T) {
 		wantInStdout string
 		wantInStderr string
 	}{
-		"usage (no directory passed)": {
+		"usage_no_directory_passed": {
 			args:    []string{},
 			wantErr: cli.ErrInvalidArgs,
 		},
@@ -39,31 +39,36 @@ func TestRun(t *testing.T) {
 			args:    []string{"-version"},
 			wantErr: cli.ErrExitVersion,
 		},
-		"rename (existing numbered)": {
+		"rename_existing_numbered": {
 			args:         []string{"[TMPDIR]"},
 			extractTxtar: "testdata/existing.txtar",
 			writeGolden:  true,
 		},
-		"rename (name sort mode)": {
+		"rename_name_sort_mode": {
 			args:         []string{"[TMPDIR]"},
 			extractTxtar: "testdata/name.txtar",
 			writeGolden:  true,
 		},
-		"rename (size sort mode)": {
+		"skip_subdirectory": {
+			args:         []string{"[TMPDIR]"},
+			extractTxtar: "testdata/subdirectory.txtar",
+			writeGolden:  true,
+		},
+		"rename_size_sort_mode": {
 			args:         []string{"-sort", "size", "[TMPDIR]"},
 			extractTxtar: "testdata/size.txtar",
 			writeGolden:  true,
 		},
-		"rename (type sort mode)": {
+		"rename_type_sort_mode": {
 			args:         []string{"-sort", "type", "[TMPDIR]"},
 			extractTxtar: "testdata/type.txtar",
 			writeGolden:  true,
 		},
-		"rename (unknown sort mode)": {
+		"rename_unknown_sort_mode": {
 			args:    []string{"-sort", "foo", "[TMPDIR]"},
 			wantErr: errUnknownSortMode,
 		},
-		"dry run": {
+		"dry_run": {
 			args:         []string{"-dry", "[TMPDIR]"},
 			extractTxtar: "testdata/name.txtar",
 			wantInStderr: `"msg":"would rename"`,

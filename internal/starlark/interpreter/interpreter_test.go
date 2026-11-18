@@ -15,6 +15,8 @@
 package interpreter
 
 import (
+	"context"
+	"errors"
 	"flag"
 	"path/filepath"
 	"strings"
@@ -28,30 +30,42 @@ import (
 
 var update = flag.Bool("update", false, "update golden files in testdata")
 
-func TestDeindent(t *testing.T) {
+func TestLoadModuleAfterCancellation(t *testing.T) {
 	t.Parallel()
-	got := deindent(`
 
-		a
-			b
-				c
-			d
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	intr := &Interpreter{
+		Predeclared: starlark.StringDict{
+			"interrupt": starlark.NewBuiltin("interrupt", func(*starlark.Thread, *starlark.Builtin, starlark.Tuple, []starlark.Tuple) (starlark.Value, error) {
+				cancel()
+				return starlark.None, nil
+			}),
+		},
+		Packages: map[string]Loader{
+			MainPkg: MemoryLoader(map[string]string{
+				"main.star": `load("dep.star", "value"); result = value`,
+				"dep.star":  `interrupt(); value = 42`,
+			}),
+		},
+	}
+	if err := intr.Init(t.Context()); err != nil {
+		t.Fatal(err)
+	}
 
-		e
-		`)
-	want := `
-
-a
-	b
-		c
-	d
-
-e
-`
-	testutil.AssertEqual(t, got, want)
+	if _, err := intr.LoadModule(ctx, MainPkg, "main.star"); !errors.Is(err, context.Canceled) {
+		t.Fatalf("first load: %v, want %v", err, context.Canceled)
+	}
+	globals, err := intr.LoadModule(t.Context(), MainPkg, "main.star")
+	if err != nil {
+		t.Fatalf("retry load: %v", err)
+	}
+	if got, want := globals["result"], starlark.MakeInt(42); got != want {
+		t.Fatalf("result = %v, want %v", got, want)
+	}
 }
 
-func TestMakeModuleKey(t *testing.T) {
+func TestResolveModule(t *testing.T) {
 	t.Parallel()
 	thread := new(starlark.Thread)
 	thread.SetLocal(threadModKey, ModuleKey{
@@ -72,7 +86,7 @@ func TestMakeModuleKey(t *testing.T) {
 				Path:    "some/mod",
 			},
 		},
-		"clean absolute": {
+		"clean_absolute": {
 			thread: thread,
 			ref:    "//some/mod/../blah",
 			want: ModuleKey{
@@ -88,7 +102,7 @@ func TestMakeModuleKey(t *testing.T) {
 				Path:    "dir/some/mod",
 			},
 		},
-		"dot relative": {
+		"dot_relative": {
 			thread: thread,
 			ref:    "./mod",
 			want: ModuleKey{
@@ -96,7 +110,7 @@ func TestMakeModuleKey(t *testing.T) {
 				Path:    "dir/mod",
 			},
 		},
-		"parent relative": {
+		"parent_relative": {
 			thread: thread,
 			ref:    "../mod",
 			want: ModuleKey{
@@ -104,34 +118,34 @@ func TestMakeModuleKey(t *testing.T) {
 				Path:    "mod",
 			},
 		},
-		"package absolute": {
+		"package_absolute": {
 			ref: "@pkg//some/mod",
 			want: ModuleKey{
 				Package: "pkg",
 				Path:    "some/mod",
 			},
 		},
-		"empty package": {
+		"empty_package": {
 			thread: thread,
 			ref:    "@//mod",
 			err:    "package alias can't be empty",
 		},
-		"malformed package": {
+		"malformed_package": {
 			thread: thread,
 			ref:    "@mod",
 			err:    "module path should be",
 		},
-		"outside absolute": {
+		"outside_absolute": {
 			thread: thread,
 			ref:    "//..",
 			err:    "outside the package root",
 		},
-		"outside relative": {
+		"outside_relative": {
 			thread: thread,
 			ref:    "../../mod",
 			err:    "outside the package root",
 		},
-		"missing local": {
+		"missing_local": {
 			thread: new(starlark.Thread),
 			ref:    "//some/mod",
 			err:    "no current package name",
@@ -139,10 +153,10 @@ func TestMakeModuleKey(t *testing.T) {
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			got, err := MakeModuleKey(tc.thread, tc.ref)
+			got, err := resolveModule(tc.thread, tc.ref)
 			if tc.err != "" {
 				if err == nil || !strings.Contains(err.Error(), tc.err) {
-					t.Fatalf("MakeModuleKey() error = %v, want mention %q", err, tc.err)
+					t.Fatalf("resolveModule() error = %v, want mention %q", err, tc.err)
 				}
 				return
 			}

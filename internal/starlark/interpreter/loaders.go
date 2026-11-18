@@ -25,9 +25,9 @@ import (
 	"go.starlark.net/starlark"
 )
 
-// FSLoader returns a loader that loads files from a fs.FS implementation.
+// FSLoader loads files from fsys.
 func FSLoader(fsys fs.FS) Loader {
-	return func(path string) (_ starlark.StringDict, src string, err error) {
+	return func(path string) (starlark.StringDict, string, error) {
 		switch body, err := fs.ReadFile(fsys, path); {
 		case errors.Is(err, fs.ErrNotExist):
 			return nil, "", ErrNoModule
@@ -39,13 +39,13 @@ func FSLoader(fsys fs.FS) Loader {
 	}
 }
 
-// FileSystemLoader returns a loader that loads files from the file system.
+// FileSystemLoader loads files relative to root.
 func FileSystemLoader(root string) Loader {
 	root, err := filepath.Abs(root)
 	if err != nil {
 		panic(err)
 	}
-	return func(path string) (_ starlark.StringDict, src string, err error) {
+	return func(path string) (starlark.StringDict, string, error) {
 		abs := filepath.Join(root, filepath.FromSlash(path))
 		rel, err := filepath.Rel(root, abs)
 		if err != nil {
@@ -55,16 +55,16 @@ func FileSystemLoader(root string) Loader {
 			return nil, "", errors.New("outside the package root")
 		}
 		body, err := os.ReadFile(abs)
-		if os.IsNotExist(err) {
+		if errors.Is(err, fs.ErrNotExist) {
 			return nil, "", ErrNoModule
 		}
 		return nil, string(body), err
 	}
 }
 
-// MemoryLoader returns a loader that loads files from the given map.
+// MemoryLoader loads source strings from files.
 func MemoryLoader(files map[string]string) Loader {
-	return func(path string) (_ starlark.StringDict, src string, err error) {
+	return func(path string) (starlark.StringDict, string, error) {
 		body, ok := files[path]
 		if !ok {
 			return nil, "", ErrNoModule

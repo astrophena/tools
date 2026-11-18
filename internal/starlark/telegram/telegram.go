@@ -20,11 +20,11 @@ import (
 )
 
 const (
-	tgURL     = "https://api.telegram.org/bot"
-	tgFileURL = "https://api.telegram.org/file/bot"
+	botURL  = "https://api.telegram.org/bot"
+	fileURL = "https://api.telegram.org/file/bot"
 )
 
-// Module returns a Starlark module that exposes the Telegram Bot API.
+// Module returns the telegram Starlark module.
 func Module(token string, client *http.Client) *starlarkstruct.Module {
 	m := &module{
 		httpc:    client,
@@ -51,38 +51,26 @@ func (m *module) call(thread *starlark.Thread, b *starlark.Builtin, args starlar
 		return starlark.None, fmt.Errorf("%s: unexpected positional arguments", b.Name())
 	}
 	var (
-		method   starlark.String
-		argsDict *starlark.Dict
+		method string
+		params *starlark.Dict
 	)
-	if err := starlark.UnpackArgs(b.Name(), args, kwargs, "method", &method, "args", &argsDict); err != nil {
+	if err := starlark.UnpackArgs(b.Name(), args, kwargs, "method", &method, "args", &params); err != nil {
 		return nil, err
 	}
 
-	rawReqVal, err := starlark.Call(thread, starlarkjson.Module.Members["encode"], starlark.Tuple{argsDict}, []starlark.Tuple{})
+	encoded, err := starlark.Call(thread, starlarkjson.Module.Members["encode"], starlark.Tuple{params}, nil)
 	if err != nil {
 		return nil, fmt.Errorf("%s: failed to encode received args to JSON: %v", b.Name(), err)
 	}
-	rawReq, ok := rawReqVal.(starlark.String)
-	if !ok {
-		return nil, fmt.Errorf("%s: unexpected return type of json.encode Starlark function", b.Name())
-	}
+	body := json.RawMessage(encoded.(starlark.String))
 
-	ctx := interpreter.Context(thread)
-	rawResp, err := request.Make[json.RawMessage](ctx, request.Params{
-		Method: http.MethodPost,
-		URL:    tgURL + m.token + "/" + string(method),
-		Body:   json.RawMessage(rawReq),
-		Headers: map[string]string{
-			"User-Agent": version.UserAgent(),
-		},
-		HTTPClient: m.httpc,
-		Scrubber:   m.scrubber,
-	})
+	resp, err := request.Make[json.RawMessage](interpreter.Context(thread),
+		m.requestParams(http.MethodPost, botURL+m.token+"/"+method, body))
 	if err != nil {
 		return nil, fmt.Errorf("%s: failed to make request: %s", b.Name(), err)
 	}
 
-	return starlark.Call(thread, starlarkjson.Module.Members["decode"], starlark.Tuple{starlark.String(rawResp)}, []starlark.Tuple{})
+	return starlark.Call(thread, starlarkjson.Module.Members["decode"], starlark.Tuple{starlark.String(resp)}, nil)
 }
 
 func (m *module) getFile(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
@@ -98,35 +86,28 @@ func (m *module) getFile(thread *starlark.Thread, b *starlark.Builtin, args star
 			FilePath string `json:"file_path"`
 		} `json:"result"`
 	}
-
-	fi, err := request.Make[fileInfo](ctx, request.Params{
-		Method: http.MethodPost,
-		URL:    tgURL + m.token + "/getFile",
-		Headers: map[string]string{
-			"User-Agent": version.UserAgent(),
-		},
-		Body: map[string]string{
-			"file_id": fileID,
-		},
-		HTTPClient: m.httpc,
-		Scrubber:   m.scrubber,
-	})
+	fi, err := request.Make[fileInfo](ctx, m.requestParams(http.MethodPost,
+		botURL+m.token+"/getFile", map[string]string{"file_id": fileID}))
 	if err != nil {
 		return nil, fmt.Errorf("%s: failed to call getFile on file %q: %v", b.Name(), fileID, err)
 	}
 
-	buf, err := request.Make[request.Bytes](ctx, request.Params{
-		Method: http.MethodGet,
-		URL:    tgFileURL + m.token + "/" + fi.Result.FilePath,
-		Headers: map[string]string{
-			"User-Agent": version.UserAgent(),
-		},
-		HTTPClient: m.httpc,
-		Scrubber:   m.scrubber,
-	})
+	buf, err := request.Make[request.Bytes](ctx, m.requestParams(http.MethodGet,
+		fileURL+m.token+"/"+fi.Result.FilePath, nil))
 	if err != nil {
 		return nil, fmt.Errorf("%s: failed to download file %q: %v", b.Name(), fileID, err)
 	}
 
 	return starlark.Bytes(buf), nil
+}
+
+func (m *module) requestParams(method, url string, body any) request.Params {
+	return request.Params{
+		Method:     method,
+		URL:        url,
+		Headers:    map[string]string{"User-Agent": version.UserAgent()},
+		Body:       body,
+		HTTPClient: m.httpc,
+		Scrubber:   m.scrubber,
+	}
 }

@@ -61,14 +61,14 @@ func TestParseConfigFormatValidation(t *testing.T) {
 		config       string
 		wantContains string
 	}{
-		"runtime error in formatter call": {
+		"runtime_error_in_formatter_call": {
 			config: `feed(
 	url="https://example.com/feed.xml",
 	format=lambda item: "oops" (item.title),
 )`,
 			wantContains: "invalid call of non-function (string)",
 		},
-		"invalid formatter output type": {
+		"invalid_formatter_output_type": {
 			config: `feed(
 	url="https://example.com/feed.xml",
 	format=lambda item: 123,
@@ -104,7 +104,7 @@ func TestFeedStateMarkFetchFailure(t *testing.T) {
 		wantErrorCount   int
 		wantFetchFailure int64
 	}{
-		"below threshold does not disable": {
+		"below_threshold_does_not_disable": {
 			state:            &state.Feed{},
 			threshold:        3,
 			err:              errors.New("boom"),
@@ -113,7 +113,7 @@ func TestFeedStateMarkFetchFailure(t *testing.T) {
 			wantErrorCount:   1,
 			wantFetchFailure: 1,
 		},
-		"reaching threshold disables": {
+		"reaching_threshold_disables": {
 			state: &state.Feed{
 				ErrorCount: 2,
 			},
@@ -124,7 +124,7 @@ func TestFeedStateMarkFetchFailure(t *testing.T) {
 			wantErrorCount:   3,
 			wantFetchFailure: 1,
 		},
-		"already disabled does not trigger disable transition again": {
+		"already_disabled_does_not_trigger_disable_transition_again": {
 			state: &state.Feed{
 				Disabled:   true,
 				ErrorCount: 5,
@@ -179,13 +179,13 @@ func TestFeedStatePrepareSeenItems(t *testing.T) {
 		wantPruned       int
 		wantSeenItemKeys []string
 	}{
-		"initializes nil map": {
+		"initializes_nil_map": {
 			state:            &state.Feed{},
 			wantJustEnabled:  true,
 			wantPruned:       0,
 			wantSeenItemKeys: []string{},
 		},
-		"keeps recent and removes stale": {
+		"keeps_recent_and_removes_stale": {
 			state: &state.Feed{
 				SeenItems: map[string]time.Time{
 					"stale":  old,
@@ -245,7 +245,7 @@ func TestStateMapJSON(t *testing.T) {
 		jsonInput   []byte
 		wantMapSize int
 	}{
-		"marshal and unmarshal roundtrip": {
+		"marshal_and_unmarshal_roundtrip": {
 			input: map[string]*state.Feed{
 				"https://example.com/feed.xml": {
 					LastUpdated:  time.Date(2026, time.January, 1, 1, 2, 3, 0, time.UTC),
@@ -257,7 +257,7 @@ func TestStateMapJSON(t *testing.T) {
 			},
 			wantMapSize: 1,
 		},
-		"unmarshal empty bytes returns empty map": {
+		"unmarshal_empty_bytes_returns_empty_map": {
 			jsonInput:   nil,
 			wantMapSize: 0,
 		},

@@ -23,17 +23,17 @@ func TestUpdate(t *testing.T) {
 		want      boot.Result
 		wantApply bool
 	}{
-		"applies needed update": {
+		"applies_needed_update": {
 			check:     "true",
 			want:      boot.ResultChange,
 			wantApply: true,
 		},
-		"plans needed update": {
+		"plans_needed_update": {
 			check:  "true",
 			dryRun: true,
 			want:   boot.ResultChange,
 		},
-		"skips current program": {
+		"skips_current_program": {
 			check: "false",
 			want:  boot.ResultSkip,
 		},
@@ -53,8 +53,8 @@ fi
 			})
 
 			h := testutil.NewTask(t, "test")
-			m := module{}
-			action := h.EmitOne("program.update", m.update, starlark.Tuple{
+
+			action := h.EmitOne("program.update", update, starlark.Tuple{
 				starlark.NewList([]starlark.Value{
 					starlark.String("updater"),
 					starlark.String("update"),
@@ -83,8 +83,8 @@ func TestUpdateRejectsInvalidCheckResult(t *testing.T) {
 		"updater": "#!/bin/sh\necho maybe\n",
 	})
 	h := testutil.NewTask(t, "test")
-	m := module{}
-	action := h.EmitOne("program.update", m.update, starlark.Tuple{
+
+	action := h.EmitOne("program.update", update, starlark.Tuple{
 		starlark.NewList([]starlark.Value{
 			starlark.String("updater"),
 		}),
@@ -100,11 +100,11 @@ func TestUpdateReportsCommandFailures(t *testing.T) {
 		script string
 		want   string
 	}{
-		"check failure": {
+		"check_failure": {
 			script: "#!/bin/sh\necho check failed >&2\nexit 1\n",
 			want:   "check failed",
 		},
-		"apply failure": {
+		"apply_failure": {
 			script: `#!/bin/sh
 if [ "$1" = "-check" ]; then
 	echo true
@@ -120,8 +120,8 @@ exit 1
 		t.Run(name, func(t *testing.T) {
 			testutil.Commands(t, map[string]string{"updater": tc.script})
 			h := testutil.NewTask(t, "test")
-			m := module{}
-			action := h.EmitOne("program.update", m.update, starlark.Tuple{
+
+			action := h.EmitOne("program.update", update, starlark.Tuple{
 				starlark.NewList([]starlark.Value{
 					starlark.String("updater"),
 				}),
@@ -139,34 +139,27 @@ func TestUpdateRejectsInvalidArgv(t *testing.T) {
 		argv *starlark.List
 		want string
 	}{
-		"empty list": {
+		"empty_list": {
 			argv: starlark.NewList(nil),
 			want: "argv cannot be empty",
 		},
-		"empty argument": {
+		"empty_argument": {
 			argv: starlark.NewList([]starlark.Value{starlark.String("")}),
 			want: "argv[0] cannot be empty",
 		},
-		"non-string argument": {
+		"non_string_argument": {
 			argv: starlark.NewList([]starlark.Value{starlark.MakeInt(1)}),
 			want: "argv[0] is not a string",
 		},
-		"reserved flag": {
+		"reserved_flag": {
 			argv: starlark.NewList([]starlark.Value{starlark.String("updater"), starlark.String("-check")}),
 			want: "uses reserved flag -check",
 		},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			task := &boot.Task{
-				ID: "test",
-			}
-			thread := &starlark.Thread{
-				Name: "test",
-			}
-			boot.SetTask(thread, task)
-			m := module{}
-			_, err := m.update(thread, starlark.NewBuiltin("program.update", m.update), starlark.Tuple{tc.argv}, nil)
+			h := testutil.NewTask(t, "test")
+			_, err := update(h.Thread, starlark.NewBuiltin("program.update", update), starlark.Tuple{tc.argv}, nil)
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("error = %v, want mention %q", err, tc.want)
 			}

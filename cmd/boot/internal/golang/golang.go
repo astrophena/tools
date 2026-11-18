@@ -23,37 +23,31 @@ import (
 	boot "go.astrophena.name/tools/cmd/boot/internal"
 
 	"go.starlark.net/starlark"
+	"go.starlark.net/starlarkstruct"
 	modulepkg "golang.org/x/mod/module"
 )
 
 var goProxyURL = "https://proxy.golang.org"
 
 // Module returns the Starlark go module.
-func Module() boot.Module { return module{} }
-
-type module struct{}
-
-func (module) Name() string { return "go" }
-
-func (module) Members(rt *boot.Runtime) starlark.StringDict {
-	m := &impl{
+func Module(rt *boot.Runtime) *starlarkstruct.Module {
+	m := &module{
 		rt: rt,
 	}
-	return starlark.StringDict{
-		"install":       starlark.NewBuiltin("go.install", m.install),
-		"install_local": starlark.NewBuiltin("go.install_local", m.installLocal),
+	return &starlarkstruct.Module{
+		Name: "go",
+		Members: starlark.StringDict{
+			"install":       boot.TaskBuiltin("go.install", m.install),
+			"install_local": boot.TaskBuiltin("go.install_local", m.installLocal),
+		},
 	}
 }
 
-type impl struct {
+type module struct {
 	rt *boot.Runtime
 }
 
-func (m *impl) install(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	if err := boot.RequireTask(thread, b); err != nil {
-		return nil, err
-	}
-
+func (m *module) install(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	var (
 		packages *starlark.List
 		cwd      string
@@ -82,11 +76,7 @@ func (m *impl) install(thread *starlark.Thread, b *starlark.Builtin, args starla
 	return starlark.None, nil
 }
 
-func (m *impl) installLocal(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	if err := boot.RequireTask(thread, b); err != nil {
-		return nil, err
-	}
-
+func (m *module) installLocal(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	var (
 		pkg            string
 		cwd            string
@@ -127,6 +117,7 @@ func addInstallAction(thread *starlark.Thread, rt *boot.Runtime, pkg, cwd, ldfla
 	}
 
 	boot.AddAction(thread, boot.Action{
+		Title:   "go install " + path.Base(packagePath(pkg)),
 		Summary: summary,
 		Apply: func(ctx context.Context, dryRun bool) (boot.Result, error) {
 			if conditionDir != "" {

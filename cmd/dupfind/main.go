@@ -34,7 +34,6 @@ func run(ctx context.Context) error {
 		dir = realdir
 	}
 
-	// Drop privileges if not inside tests.
 	restrict.DoUnlessTesting(ctx, landlock.RODirs(dir))
 
 	dups, err := lookup(dir)
@@ -62,7 +61,7 @@ func lookup(dir string) ([]dup, error) {
 
 	var (
 		dups   []dup
-		hashes = make(map[string]string)
+		hashes = make(map[[sha256.Size]byte]string)
 	)
 
 	if err := fs.WalkDir(root.FS(), ".", func(path string, d fs.DirEntry, err error) error {
@@ -85,9 +84,10 @@ func lookup(dir string) ([]dup, error) {
 			return err
 		}
 
-		hh := fmt.Sprintf("%x", h.Sum(nil))
+		var sum [sha256.Size]byte
+		h.Sum(sum[:0])
 
-		prev, hasDup := hashes[hh]
+		prev, hasDup := hashes[sum]
 		if hasDup {
 			dups = append(dups, dup{
 				cur:  filepath.FromSlash(path),
@@ -96,7 +96,7 @@ func lookup(dir string) ([]dup, error) {
 			return nil
 		}
 
-		hashes[hh] = path
+		hashes[sum] = path
 		return nil
 	}); err != nil {
 		return nil, err

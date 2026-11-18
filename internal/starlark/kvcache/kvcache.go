@@ -5,20 +5,19 @@
 package kvcache
 
 import (
-	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
-	"go.astrophena.name/tools/internal/store"
+	"go.astrophena.name/tools/internal/cache"
 
 	"go.starlark.net/starlark"
 	"go.starlark.net/starlarkstruct"
 )
 
-// Module returns a Starlark module that exposes key-value caching functionality.
-func Module(ctx context.Context, s store.Store) *starlarkstruct.Module {
+// Module returns the kvcache Starlark module backed by s.
+func Module(s cache.Store) *starlarkstruct.Module {
 	m := &module{
-		ctx:   ctx,
 		store: s,
 	}
 	return &starlarkstruct.Module{
@@ -31,21 +30,19 @@ func Module(ctx context.Context, s store.Store) *starlarkstruct.Module {
 }
 
 type module struct {
-	ctx   context.Context
-	store store.Store
+	store cache.Store
 }
 
-func (m *module) get(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+func (m *module) get(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	var key string
 	if err := starlark.UnpackArgs(b.Name(), args, kwargs, "key", &key); err != nil {
 		return nil, err
 	}
 
-	data, err := m.store.Get(m.ctx, key)
+	data, err := m.store.Get(key)
 	if err != nil {
 		return nil, err
 	}
-
 	if data == nil {
 		return starlark.None, nil
 	}
@@ -53,7 +50,7 @@ func (m *module) get(thread *starlark.Thread, b *starlark.Builtin, args starlark
 	return jsonToStarlark(data)
 }
 
-func (m *module) set(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+func (m *module) set(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	var (
 		key   string
 		value starlark.Value
@@ -67,81 +64,79 @@ func (m *module) set(thread *starlark.Thread, b *starlark.Builtin, args starlark
 		return nil, err
 	}
 
-	return starlark.None, m.store.Set(m.ctx, key, data)
+	return starlark.None, m.store.Set(key, data)
 }
 
+// Tuples and structs carry a tag so they survive a JSON round trip.
+const typeKey = "__starlark_type__"
+
 func starlarkToJSON(v starlark.Value) ([]byte, error) {
+	value, err := toJSONValue(v)
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(value)
+}
+
+func toJSONValue(v starlark.Value) (any, error) {
 	switch v := v.(type) {
 	case starlark.NoneType:
-		return json.Marshal(nil)
+		return nil, nil
 	case starlark.Bool:
-		return json.Marshal(bool(v))
+		return bool(v), nil
 	case starlark.Int:
 		i, ok := v.Int64()
 		if !ok {
-			return nil, fmt.Errorf("int too large: %s", v.String())
+			return nil, fmt.Errorf("int too large: %s", v)
 		}
-		return json.Marshal(i)
+		return i, nil
 	case starlark.Float:
-		return json.Marshal(float64(v))
+		return float64(v), nil
 	case starlark.String:
-		return json.Marshal(v.GoString())
-	case *starlark.List:
-		list := make([]any, 0, v.Len())
-		for i := 0; i < v.Len(); i++ {
-			item, err := starlarkToJSON(v.Index(i))
+		return v.GoString(), nil
+	case *starlark.List, starlark.Tuple:
+		items := v.(starlark.Indexable)
+		list := make([]any, items.Len())
+		for i := range list {
+			value, err := toJSONValue(items.Index(i))
 			if err != nil {
 				return nil, err
 			}
-			list = append(list, json.RawMessage(item))
+			list[i] = value
 		}
-		return json.Marshal(list)
+		if _, tuple := v.(starlark.Tuple); tuple {
+			return map[string]any{typeKey: "tuple", "values": list}, nil
+		}
+		return list, nil
 	case *starlark.Dict:
 		dict := make(map[string]any, v.Len())
 		for _, item := range v.Items() {
-			k, v := item[0], item[1]
-			key, ok := k.(starlark.String)
+			key, ok := starlark.AsString(item[0])
 			if !ok {
-				return nil, fmt.Errorf("dict key is not a string: %s", k.Type())
+				return nil, fmt.Errorf("dict key is not a string: %s", item[0].Type())
 			}
-			val, err := starlarkToJSON(v)
+			value, err := toJSONValue(item[1])
 			if err != nil {
 				return nil, err
 			}
-			dict[key.GoString()] = json.RawMessage(val)
+			dict[key] = value
 		}
-		return json.Marshal(dict)
-	case starlark.Tuple:
-		list := make([]any, 0, v.Len())
-		for i := 0; i < v.Len(); i++ {
-			item, err := starlarkToJSON(v.Index(i))
-			if err != nil {
-				return nil, err
-			}
-			list = append(list, json.RawMessage(item))
-		}
-		return json.Marshal(map[string]any{
-			"__starlark_type__": "tuple",
-			"values":            list,
-		})
+		return dict, nil
 	case *starlarkstruct.Struct:
 		names := v.AttrNames()
-		dict := make(map[string]any, len(names))
+		fields := make(map[string]any, len(names))
 		for _, name := range names {
-			val, err := v.Attr(name)
+			attr, err := v.Attr(name)
 			if err != nil {
 				return nil, err
 			}
-			item, err := starlarkToJSON(val)
+			value, err := toJSONValue(attr)
 			if err != nil {
 				return nil, err
 			}
-			dict[name] = json.RawMessage(item)
+			fields[name] = value
 		}
-		return json.Marshal(map[string]any{
-			"__starlark_type__": "struct",
-			"values":            dict,
-		})
+		return map[string]any{typeKey: "struct", "values": fields}, nil
 	default:
 		return nil, fmt.Errorf("unsupported type: %s", v.Type())
 	}
@@ -152,10 +147,10 @@ func jsonToStarlark(data []byte) (starlark.Value, error) {
 	if err := json.Unmarshal(data, &v); err != nil {
 		return nil, err
 	}
-	return jsonToStarlarkValue(v)
+	return fromJSONValue(v)
 }
 
-func jsonToStarlarkValue(v any) (starlark.Value, error) {
+func fromJSONValue(v any) (starlark.Value, error) {
 	switch v := v.(type) {
 	case nil:
 		return starlark.None, nil
@@ -169,60 +164,67 @@ func jsonToStarlarkValue(v any) (starlark.Value, error) {
 	case string:
 		return starlark.String(v), nil
 	case []any:
-		list := make([]starlark.Value, 0, len(v))
-		for _, item := range v {
-			val, err := jsonToStarlarkValue(item)
-			if err != nil {
-				return nil, err
-			}
-			list = append(list, val)
+		list, err := fromJSONArray(v)
+		if err != nil {
+			return nil, err
 		}
 		return starlark.NewList(list), nil
 	case map[string]any:
-		if t, ok := v["__starlark_type__"].(string); ok {
-			switch t {
-			case "tuple":
-				values, ok := v["values"].([]any)
-				if !ok {
-					return nil, fmt.Errorf("invalid tuple format")
-				}
-				list := make([]starlark.Value, 0, len(values))
-				for _, item := range values {
-					val, err := jsonToStarlarkValue(item)
-					if err != nil {
-						return nil, err
-					}
-					list = append(list, val)
-				}
-				return starlark.Tuple(list), nil
-			case "struct":
-				values, ok := v["values"].(map[string]any)
-				if !ok {
-					return nil, fmt.Errorf("invalid struct format")
-				}
-				tuples := make([]starlark.Tuple, 0, len(values))
-				for k, item := range values {
-					val, err := jsonToStarlarkValue(item)
-					if err != nil {
-						return nil, err
-					}
-					tuples = append(tuples, starlark.Tuple{starlark.String(k), val})
-				}
-				return starlarkstruct.FromKeywords(starlark.String("struct"), tuples), nil
-			}
+		return fromJSONObject(v)
+	default:
+		return nil, fmt.Errorf("unsupported type: %T", v)
+	}
+}
+
+func fromJSONArray(values []any) ([]starlark.Value, error) {
+	list := make([]starlark.Value, len(values))
+	for i, item := range values {
+		value, err := fromJSONValue(item)
+		if err != nil {
+			return nil, err
 		}
-		dict := starlark.NewDict(0)
-		for k, item := range v {
-			val, err := jsonToStarlarkValue(item)
+		list[i] = value
+	}
+	return list, nil
+}
+
+func fromJSONObject(obj map[string]any) (starlark.Value, error) {
+	switch obj[typeKey] {
+	case "tuple":
+		items, ok := obj["values"].([]any)
+		if !ok {
+			return nil, errors.New("invalid tuple format")
+		}
+		list, err := fromJSONArray(items)
+		if err != nil {
+			return nil, err
+		}
+		return starlark.Tuple(list), nil
+	case "struct":
+		fields, ok := obj["values"].(map[string]any)
+		if !ok {
+			return nil, errors.New("invalid struct format")
+		}
+		dict := make(starlark.StringDict, len(fields))
+		for name, item := range fields {
+			value, err := fromJSONValue(item)
 			if err != nil {
 				return nil, err
 			}
-			if err := dict.SetKey(starlark.String(k), val); err != nil {
+			dict[name] = value
+		}
+		return starlarkstruct.FromStringDict(starlark.String("struct"), dict), nil
+	default:
+		dict := starlark.NewDict(len(obj))
+		for key, item := range obj {
+			value, err := fromJSONValue(item)
+			if err != nil {
+				return nil, err
+			}
+			if err := dict.SetKey(starlark.String(key), value); err != nil {
 				return nil, err
 			}
 		}
 		return dict, nil
-	default:
-		return nil, fmt.Errorf("unsupported type: %T", v)
 	}
 }

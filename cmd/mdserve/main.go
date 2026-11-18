@@ -112,7 +112,6 @@ func (e *engine) Run(ctx context.Context) error {
 }
 
 func (e *engine) doInit() {
-	// Serve by default from current directory.
 	if e.fs == nil {
 		root, err := os.OpenRoot(".")
 		if err != nil {
@@ -183,7 +182,7 @@ func (e *engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	doc := e.md.Parse(string(b))
-	doc.Blocks = walk(doc.Blocks, transformImageBlock)
+	walk(doc.Blocks, transformImageBlock)
 	sections := tableOfContents(doc.Blocks)
 	intro, content := splitDocument(doc)
 	data := pageData{
@@ -214,12 +213,13 @@ type pageData struct {
 func splitDocument(doc *markdown.Document) (intro, content string) {
 	for i, b := range doc.Blocks {
 		if _, ok := b.(*markdown.Heading); ok {
-			return markdown.ToHTML(&markdown.Document{
-					Blocks: doc.Blocks[:i+1],
-				}),
-				markdown.ToHTML(&markdown.Document{
-					Blocks: doc.Blocks[i+1:],
-				})
+			intro := markdown.ToHTML(&markdown.Document{
+				Blocks: doc.Blocks[:i+1],
+			})
+			content := markdown.ToHTML(&markdown.Document{
+				Blocks: doc.Blocks[i+1:],
+			})
+			return intro, content
 		}
 	}
 	return "", markdown.ToHTML(doc)
@@ -297,18 +297,13 @@ func (e *engine) findIndexFile() string {
 }
 
 func parseTitle(b []byte) string {
-	var title string
 	s := bufio.NewScanner(bytes.NewReader(b))
 	for s.Scan() {
-		if strings.HasPrefix(s.Text(), "#") {
-			title = strings.TrimPrefix(s.Text(), "# ")
-			break
+		if line := s.Text(); strings.HasPrefix(line, "#") {
+			return strings.TrimPrefix(line, "# ")
 		}
 	}
-	if title == "" {
-		return ""
-	}
-	return title
+	return ""
 }
 
 func getInnerText(inlines []markdown.Inline) string {
@@ -361,19 +356,17 @@ func transformImageBlock(b markdown.Block) markdown.Block {
 	}
 }
 
-func walk(blocks []markdown.Block, fn func(markdown.Block) markdown.Block) []markdown.Block {
-	newBlocks := make([]markdown.Block, 0, len(blocks))
-	for _, b := range blocks {
+func walk(blocks []markdown.Block, fn func(markdown.Block) markdown.Block) {
+	for i, b := range blocks {
 		b = fn(b)
+		blocks[i] = b
 		switch b := b.(type) {
 		case *markdown.List:
-			for _, item := range b.Items {
-				item.(*markdown.Item).Blocks = walk(item.(*markdown.Item).Blocks, fn)
+			for _, block := range b.Items {
+				walk(block.(*markdown.Item).Blocks, fn)
 			}
 		case *markdown.Quote:
-			b.Blocks = walk(b.Blocks, fn)
+			walk(b.Blocks, fn)
 		}
-		newBlocks = append(newBlocks, b)
 	}
-	return newBlocks
 }

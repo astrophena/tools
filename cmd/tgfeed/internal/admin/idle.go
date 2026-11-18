@@ -2,8 +2,6 @@
 // Use of this source code is governed by the ISC
 // license that can be found in the LICENSE.md file.
 
-// Package idle provides a helper for exiting services after a period of
-// inactivity.
 package admin
 
 import (
@@ -14,7 +12,7 @@ import (
 	"time"
 )
 
-// tracker is an idle tracker.
+// tracker cancels the admin server after a period without requests.
 type tracker struct {
 	lastActivity atomic.Int64
 	exitIdleTime time.Duration
@@ -45,7 +43,7 @@ func isSocketActivated() bool {
 	return os.Getenv("LISTEN_PID") != ""
 }
 
-// handler is a [web.Middleware] that updates the last activity time.
+// handler records activity before serving the request.
 func (t *tracker) handler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.lastActivity.Store(time.Now().Unix())

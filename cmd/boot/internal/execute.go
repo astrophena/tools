@@ -12,256 +12,180 @@ import (
 )
 
 type actionResult struct {
-	task        *Task
-	taskIndex   int
-	action      Action
-	actionIndex int
+	description string
 	result      Result
 	err         error
 }
 
-type execution struct {
-	planned  map[string]bool
-	summary  Summary
-	actions  []actionResult
-	failures []failure
+type taskRun struct {
+	task         *Task
+	prepared     []Action
+	status       taskStatus
+	err          error
+	actions      []actionResult
+	consentCount int
 }
 
-func (r execution) orderedActions() []actionResult {
-	actions := slices.Clone(r.actions)
-	slices.SortStableFunc(actions, func(a, b actionResult) int {
-		if a.taskIndex != b.taskIndex {
-			return a.taskIndex - b.taskIndex
-		}
-		return a.actionIndex - b.actionIndex
-	})
-	return actions
-}
+func (r *taskRun) executionActions() []actionResult { return r.actions[r.consentCount:] }
 
-type taskResult struct {
-	task     *Task
-	actions  []actionResult
-	failures []failure
-	failed   bool
-}
+type taskStatus int
 
-// execute runs every prepared task through the same dependency-aware
-// scheduler. A concurrency limit of one is ordinary scheduler configuration,
-// not a separate execution mode.
-func (e *Engine) execute(ctx context.Context, tasks []*Task, run execution, opts RunOptions, warnings *warningCollector, taskDone func(*Task)) execution {
+const (
+	taskUnprepared taskStatus = iota
+	taskSkipped
+	taskPrepareFailed
+	taskPending
+	taskRunning
+	taskSucceeded
+	taskFailed
+)
+
+func execute(ctx context.Context, runs []taskRun, opts RunOptions, warnings *warningCollector, progress *runProgress) {
 	limit := max(opts.Concurrency, 1)
-	status := initialTaskStatus(tasks, run.planned, run.failures)
-	actions := newActionLimiter(limit)
-	results := make(chan taskResult)
-	active := 0
-	stopping := opts.FailFast && run.summary.Failed > 0
-
-	for _, task := range tasks {
-		if !run.planned[task.ID] {
-			taskDone(task)
+	limiter := make(actionLimiter, limit)
+	results := make(chan *taskRun)
+	byID := make(map[string]*taskRun, len(runs))
+	for i := range runs {
+		r := &runs[i]
+		byID[r.task.ID] = r
+		if r.status != taskPending {
+			progress.taskDone()
 		}
 	}
 
+	active := 0
+	stopping := false
 	for {
-		started := false
 		if !stopping {
-			for taskIndex, task := range tasks {
-				if active == limit {
+			for i := range runs {
+				if active == limit || ctx.Err() != nil {
 					break
 				}
-				if !run.planned[task.ID] || status[task.ID] != taskPending {
+				r := &runs[i]
+				if r.status != taskPending {
 					continue
 				}
-				dep, waiting := taskDependency(status, task)
+				dep, waiting := taskDependency(byID, r.task)
 				if waiting {
 					continue
 				}
+
 				if dep != "" {
-					err := fmt.Errorf("dependency %s failed", dep)
-					run.summary.Failed++
-					run.failures = append(run.failures, failure{
-						TaskID:   task.ID,
-						TaskName: task.Name,
-						Err:      err,
-					})
-					status[task.ID] = taskFailed
-					taskDone(task)
-					started = true
-					if opts.FailFast && !task.ContinueOnError {
+					r.err = fmt.Errorf("dependency %s failed", dep)
+					r.status = taskFailed
+					progress.taskDone()
+					if opts.FailFast && !r.task.ContinueOnError {
 						stopping = true
 						break
 					}
 					continue
 				}
 
-				status[task.ID] = taskRunning
+				r.status = taskRunning
 				active++
-				started = true
 				go func() {
-					results <- e.executeTask(ctx, task, taskIndex, opts, warnings, actions)
+					r.execute(ctx, opts, warnings, limiter, progress)
+					results <- r
 				}()
 			}
 		}
 
 		if active == 0 {
-			if !started {
-				break
-			}
-			continue
+			return
 		}
 
-		result := <-results
+		r := <-results
 		active--
-		run.actions = append(run.actions, result.actions...)
-		run.failures = append(run.failures, result.failures...)
-		for _, action := range result.actions {
-			run.summary.Actions++
-			if action.err != nil {
-				run.summary.Failed++
-				continue
-			}
-			switch action.result {
-			case ResultChange:
-				run.summary.Changed++
-			case ResultSkip, ResultStop:
-				run.summary.Skipped++
-			}
-		}
-		if result.failed {
-			status[result.task.ID] = taskFailed
-			if opts.FailFast && !result.task.ContinueOnError {
-				stopping = true
-			}
-		} else {
-			status[result.task.ID] = taskSucceeded
-		}
-		taskDone(result.task)
-	}
-
-	return run
-}
-
-func (e *Engine) executeTask(ctx context.Context, task *Task, taskIndex int, opts RunOptions, warnings *warningCollector, limiter actionLimiter) taskResult {
-	run := taskResult{
-		task: task,
-	}
-	execute := func(actionIndex int) actionResult {
-		action := task.Actions[actionIndex]
-		result := actionResult{
-			task:        task,
-			taskIndex:   taskIndex,
-			action:      action,
-			actionIndex: actionIndex,
-		}
-		if err := limiter.acquire(ctx); err != nil {
-			result.err = err
-			return result
-		}
-		result.result, result.err = warnings.run(ctx, task, action, opts.DryRun)
-		limiter.release()
-		return result
-	}
-
-	for i := 0; i < len(task.Actions); {
-		if !task.Actions[i].Concurrent || opts.Concurrency <= 1 {
-			result := execute(i)
-			run.add(result)
-			i++
-			if result.result == ResultStop && !opts.DryRun || result.err != nil && opts.FailFast && !task.ContinueOnError {
-				break
-			}
+		if ctx.Err() != nil {
 			continue
 		}
-
-		end := i + 1
-		for end < len(task.Actions) && task.Actions[end].Concurrent {
-			end++
+		r.status = taskSucceeded
+		if slices.ContainsFunc(r.executionActions(), func(a actionResult) bool { return a.err != nil }) {
+			r.status = taskFailed
+			stopping = stopping || opts.FailFast && !r.task.ContinueOnError
 		}
-		results := make(chan actionResult, end-i)
-		var group sync.WaitGroup
-		for actionIndex := i; actionIndex < end; actionIndex++ {
-			group.Go(func() { results <- execute(actionIndex) })
-		}
-		group.Wait()
-		close(results)
-		stop := false
-		for result := range results {
-			run.add(result)
-			stop = stop || result.result == ResultStop && !opts.DryRun || result.err != nil && opts.FailFast && !task.ContinueOnError
-		}
-		if stop {
-			break
-		}
-		i = end
+		progress.taskDone()
 	}
-	slices.SortStableFunc(run.actions, func(a, b actionResult) int { return a.actionIndex - b.actionIndex })
-	return run
 }
 
-func (r *taskResult) add(result actionResult) {
-	r.actions = append(r.actions, result)
-	if result.err == nil {
-		return
-	}
-	r.failed = true
-	r.failures = append(r.failures, failure{
-		TaskID:   r.task.ID,
-		TaskName: r.task.Name,
-		Action:   result.action.description(),
-		Err:      result.err,
-	})
-}
-
-func initialTaskStatus(tasks []*Task, planned map[string]bool, failures []failure) map[string]taskStatus {
-	status := make(map[string]taskStatus)
-	for _, task := range tasks {
-		status[task.ID] = taskPending
-		if planned[task.ID] {
-			continue
+func (r *taskRun) execute(ctx context.Context, opts RunOptions, warnings *warningCollector, limiter actionLimiter, progress *runProgress) {
+	actions := r.prepared
+	for start := 0; start < len(actions) && ctx.Err() == nil; {
+		end := start + 1
+		if opts.Concurrency > 1 && actions[start].Concurrent {
+			for end < len(actions) && actions[end].Concurrent {
+				end++
+			}
 		}
-		if _, ok := taskFailure(failures, task); ok {
-			status[task.ID] = taskFailed
+
+		offset := len(r.actions)
+		r.actions = append(r.actions, make([]actionResult, end-start)...)
+		batch := r.actions[offset:]
+		if len(batch) == 1 {
+			batch[0] = r.apply(ctx, &actions[start], opts.DryRun, warnings, limiter, progress)
 		} else {
-			status[task.ID] = taskSucceeded
+			var group sync.WaitGroup
+			for i := range batch {
+				group.Go(func() {
+					batch[i] = r.apply(ctx, &actions[start+i], opts.DryRun, warnings, limiter, progress)
+				})
+			}
+			group.Wait()
 		}
+
+		for _, action := range batch {
+			if action.result == ResultStop && !opts.DryRun ||
+				action.err != nil && opts.FailFast && !r.task.ContinueOnError {
+				return
+			}
+		}
+		start = end
 	}
-	return status
 }
 
-func taskDependency(status map[string]taskStatus, task *Task) (failed string, waiting bool) {
+func (r *taskRun) apply(ctx context.Context, action *Action, dryRun bool, warnings *warningCollector, limiter actionLimiter, progress *runProgress) actionResult {
+	if err := limiter.acquire(ctx); err != nil {
+		return actionResult{
+			description: action.description(),
+			err:         err,
+		}
+	}
+	defer limiter.release()
+	progress.startAction(action)
+	defer progress.finishAction(action)
+	return r.runAction(ctx, *action, dryRun, warnings)
+}
+
+func (r *taskRun) runAction(ctx context.Context, action Action, dryRun bool, warnings *warningCollector) actionResult {
+	result, err := warnings.run(ctx, r.task, action, dryRun)
+	return actionResult{
+		description: action.description(),
+		result:      result,
+		err:         err,
+	}
+}
+
+func taskDependency(byID map[string]*taskRun, task *Task) (failed string, waiting bool) {
 	for _, dep := range task.DependsOn {
-		switch status[dep] {
+		switch byID[dep].status {
 		case taskPending, taskRunning:
 			waiting = true
-		case taskFailed:
+		case taskPrepareFailed, taskFailed:
 			return dep, false
 		}
 	}
 	return "", waiting
 }
 
-type taskStatus int
-
-const (
-	taskPending taskStatus = iota
-	taskRunning
-	taskSucceeded
-	taskFailed
-)
-
-type actionLimiter struct {
-	ch chan struct{}
-}
-
-func newActionLimiter(limit int) actionLimiter {
-	return actionLimiter{
-		ch: make(chan struct{}, max(limit, 1)),
-	}
-}
+type actionLimiter chan struct{}
 
 func (l actionLimiter) acquire(ctx context.Context) error {
 	select {
-	case l.ch <- struct{}{}:
+	case l <- struct{}{}:
+		if err := ctx.Err(); err != nil {
+			l.release()
+			return err
+		}
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
@@ -269,7 +193,7 @@ func (l actionLimiter) acquire(ctx context.Context) error {
 }
 
 func (l actionLimiter) release() {
-	<-l.ch
+	<-l
 }
 
 // colorCode is tiny instead of using a terminal styling package; boot only
@@ -277,7 +201,6 @@ func (l actionLimiter) release() {
 type colorCode string
 
 const (
-	colorBold   colorCode = "\033[1m"
 	colorGreen  colorCode = "\033[32m"
 	colorYellow colorCode = "\033[33m"
 	colorRed    colorCode = "\033[31m"

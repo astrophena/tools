@@ -55,7 +55,7 @@ func TestFetcherMain(t *testing.T) {
 			},
 		}))
 	}, map[string]clitest.Case[*fetcher]{
-		"returns an error without flags": {
+		"returns_an_error_without_flags": {
 			Args:    []string{},
 			WantErr: cli.ErrInvalidArgs,
 		},
@@ -63,25 +63,25 @@ func TestFetcherMain(t *testing.T) {
 			Args:               []string{"run"},
 			WantNothingPrinted: true,
 		},
-		"run (dry)": {
+		"run_dry": {
 			Args: []string{"-dry", "run"},
 		},
 		"version": {
 			Args:    []string{"-version"},
 			WantErr: cli.ErrExitVersion,
 		},
-		"edit without defined editor": {
+		"edit_without_defined_editor": {
 			Args:    []string{"edit"},
 			WantErr: errNoEditor,
 		},
-		"list feeds": {
+		"list_feeds": {
 			Args: []string{"feeds"},
 		},
-		"reenable command without arguments": {
+		"reenable_command_without_arguments": {
 			Args:    []string{"reenable"},
 			WantErr: cli.ErrInvalidArgs,
 		},
-		"reenable disabled feed": {
+		"reenable_disabled_feed": {
 			Args:               []string{"reenable", "https://example.com/disabled.xml"},
 			WantNothingPrinted: true,
 			CheckFunc: func(t *testing.T, f *fetcher) {
@@ -90,7 +90,7 @@ func TestFetcherMain(t *testing.T) {
 				testutil.AssertEqual(t, st.Disabled, false)
 			},
 		},
-		"reenable non-existent feed": {
+		"reenable_non_existent_feed": {
 			Args:    []string{"reenable", "https://example.com/non-existent.xml"},
 			WantErr: errNoFeed,
 		},

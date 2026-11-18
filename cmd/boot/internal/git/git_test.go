@@ -32,7 +32,7 @@ func TestGitClone(t *testing.T) {
 		Root: root,
 	}
 	h := testutil.NewTask(t, "test")
-	m := &impl{
+	m := &module{
 		rt: rt,
 	}
 
@@ -78,7 +78,7 @@ func TestGitSync(t *testing.T) {
 		Root: root,
 	}
 	h := testutil.NewTask(t, "test")
-	m := &impl{
+	m := &module{
 		rt: rt,
 	}
 
@@ -121,7 +121,7 @@ func TestGitPullAlreadyCurrent(t *testing.T) {
 		Root: root,
 	}
 	h := testutil.NewTask(t, "test")
-	m := &impl{
+	m := &module{
 		rt: rt,
 	}
 
@@ -147,7 +147,7 @@ func TestGitSyncRevision(t *testing.T) {
 		Root: root,
 	}
 	h := testutil.NewTask(t, "test")
-	m := &impl{
+	m := &module{
 		rt: rt,
 	}
 	dest := filepath.Join(root, "local")

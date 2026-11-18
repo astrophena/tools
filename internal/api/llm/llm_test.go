@@ -9,11 +9,9 @@ import (
 	"bytes"
 	"cmp"
 	"encoding/json"
-	"errors"
 	"io"
 	"net/http"
 	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -34,21 +32,7 @@ import (
 // history)
 
 func TestCreateResponse(t *testing.T) {
-	recFile := filepath.Join("testdata", "create_response.httprr")
-	recording, err := rr.Recording(recFile)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if recording {
-		if err := os.MkdirAll(filepath.Dir(recFile), 0o755); err != nil {
-			t.Fatal(err)
-		}
-	} else if _, err := os.Stat(recFile); errors.Is(err, os.ErrNotExist) {
-		t.Skipf("%s is not recorded; see update command above", recFile)
-	} else if err != nil {
-		t.Fatal(err)
-	}
-
+	const recFile = "testdata/create_response.httprr"
 	rec, err := rr.Open(recFile, http.DefaultTransport)
 	if err != nil {
 		t.Fatal(err)
@@ -101,9 +85,11 @@ func TestCreateResponse(t *testing.T) {
 		return resp.Write(b)
 	})
 
-	apiURL := "https://llm.example/v1"
-	apiKey := "example"
-	model := "gpt-4.1-mini"
+	var (
+		apiURL = "https://llm.example/v1"
+		apiKey = "example"
+		model  = "gpt-4.1-mini"
+	)
 	if rec.Recording() {
 		apiURL = os.Getenv("LLM_API_URL")
 		apiKey = os.Getenv("LLM_API_KEY")
@@ -158,7 +144,7 @@ func TestResponseOutputText(t *testing.T) {
 		body string
 		want string
 	}{
-		"output array": {
+		"output_array": {
 			body: `{
 				"output": [
 					{
@@ -176,7 +162,7 @@ func TestResponseOutputText(t *testing.T) {
 			}`,
 			want: "hello world",
 		},
-		"output text": {
+		"output_text": {
 			body: `{
 				"output_text": "hello from gateway",
 				"usage": {

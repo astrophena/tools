@@ -27,12 +27,12 @@ import (
 	bootgit "go.astrophena.name/tools/cmd/boot/internal/git"
 	bootgo "go.astrophena.name/tools/cmd/boot/internal/golang"
 	bootpkg "go.astrophena.name/tools/cmd/boot/internal/packages"
-	bootpacman "go.astrophena.name/tools/cmd/boot/internal/pacman"
 	bootprogram "go.astrophena.name/tools/cmd/boot/internal/program"
 	bootrescue "go.astrophena.name/tools/cmd/boot/internal/rescue"
 	bootssh "go.astrophena.name/tools/cmd/boot/internal/ssh"
 	bootsystemd "go.astrophena.name/tools/cmd/boot/internal/systemd"
 
+	"go.starlark.net/starlarkstruct"
 	"golang.org/x/term"
 )
 
@@ -41,53 +41,53 @@ const defaultEntry = "BOOT.star"
 func main() { cli.Main(new(app)) }
 
 type app struct {
-	root        flagValue[string]
-	entry       flagValue[string]
-	failFast    flagValue[bool]
-	only        multiFlag
-	skip        multiFlag
-	tags        multiFlag
-	dryRun      bool
-	verbose     flagValue[bool]
-	json        flagValue[bool]
-	concurrency flagValue[int]
+	options
+	flags *flag.FlagSet
+	only  multiFlag
+	skip  multiFlag
+	tags  multiFlag
 }
 
 func (a *app) Flags(fs *flag.FlagSet) {
-	a.root = newFlagValue(".", parseString)
-	a.entry = newFlagValue(defaultEntry, parseString)
-	a.failFast = newBoolFlagValue(false)
-	a.verbose = newBoolFlagValue(false)
-	a.json = newBoolFlagValue(false)
-	a.concurrency = newFlagValue(1, parsePositiveInt)
-
-	fs.Var(&a.root, "C", "Run as if boot was started in `dir`.")
-	fs.Var(&a.entry, "f", "Recipe entrypoint `file`.")
-	fs.Var(&a.failFast, "fail-fast", "Stop on the first failed task.")
-	fs.Var(&a.verbose, "verbose", "Print detailed action output when applying changes.")
-	fs.Var(&a.json, "json", "Print machine-readable JSON output.")
+	a.flags = fs
+	a.concurrency = 1
+	fs.StringVar(&a.workspace, "C", ".", "Run as if boot was started in `dir`.")
+	fs.StringVar(&a.entry, "f", defaultEntry, "Recipe entrypoint `file`.")
+	fs.BoolVar(&a.failFast, "fail-fast", false, "Stop on the first failed task.")
+	fs.BoolVar(&a.verbose, "verbose", false, "Print detailed action output when applying changes.")
+	fs.BoolVar(&a.json, "json", false, "Print machine-readable JSON output.")
 	fs.Var(&a.only, "only", "Run only the specified task ID. May be repeated.")
 	fs.Var(&a.skip, "skip", "Skip the specified task ID. May be repeated.")
 	fs.Var(&a.tags, "tag", "Run tasks with the specified tag. May be repeated.")
-	fs.Var(&a.concurrency, "j", "Number of tasks and eligible actions to run in parallel.")
+	fs.Func("j", "Number of tasks and eligible actions to run in parallel (default 1).", func(value string) error {
+		n, err := strconv.Atoi(value)
+		if err != nil {
+			return err
+		}
+		if n < 1 {
+			return errors.New("must be at least 1")
+		}
+		a.concurrency = n
+		return nil
+	})
 }
 
-func (a *app) Run(ctx context.Context) error {
+func (a *app) Run(ctx context.Context) (err error) {
+	defer func() {
+		if ctx.Err() == context.Canceled {
+			err = errors.New("interrupted")
+		}
+	}()
+
 	env := cli.GetEnv(ctx)
 	if len(env.Args) != 1 {
 		return fmt.Errorf("%w: command is required\nusage: boot [flags...] <list|plan|apply>\nrun 'boot -help' for details", cli.ErrInvalidArgs)
 	}
 
 	command := env.Args[0]
-	if a.dryRun {
-		command = "plan"
-	}
-
-	cfg, err := loadConfig(ctx, env)
-	if err != nil {
+	if err := a.loadOptions(ctx, env); err != nil {
 		return fmt.Errorf("%w: %v", cli.ErrInvalidArgs, err)
 	}
-	a.applyConfig(env, cfg)
 
 	engine, err := a.engine(env)
 	if err != nil {
@@ -102,36 +102,29 @@ func (a *app) Run(ctx context.Context) error {
 		Skip: a.skip,
 		Tags: a.tags,
 	}
+	opts := boot.RunOptions{
+		FailFast:    a.failFast,
+		Interactive: interactive(env),
+		Concurrency: a.concurrency,
+		Color:       env.Getenv("NO_COLOR") == "",
+		Verbose:     a.verbose,
+		JSON:        a.json,
+	}
 	switch command {
 	case "list":
 		return engine.List(env.Stdout, selection)
 	case "plan", "check":
-		return engine.Run(ctx, env.Stdout, selection, boot.RunOptions{
-			DryRun:      true,
-			FailFast:    a.failFast.value,
-			Interactive: interactive(env),
-			Concurrency: a.concurrency.value,
-			Color:       env.Getenv("NO_COLOR") == "",
-			Verbose:     a.verbose.value,
-			JSON:        a.json.value,
-		})
+		opts.DryRun = true
 	case "apply":
 		lock, err := acquireLock(rootLockPath(engine.Runtime.Root))
 		if err != nil {
 			return err
 		}
 		defer lock.Close()
-		return engine.Run(ctx, env.Stdout, selection, boot.RunOptions{
-			FailFast:    a.failFast.value,
-			Interactive: interactive(env),
-			Concurrency: a.concurrency.value,
-			Color:       env.Getenv("NO_COLOR") == "",
-			Verbose:     a.verbose.value,
-			JSON:        a.json.value,
-		})
 	default:
 		return fmt.Errorf("%w: no such command %q", cli.ErrInvalidArgs, command)
 	}
+	return engine.Run(ctx, env.Stdout, selection, opts)
 }
 
 func rootLockPath(root string) string {
@@ -145,7 +138,7 @@ func acquireLock(path string) (*os.File, error) {
 		return lock, nil
 	}
 	if errors.Is(err, filelock.ErrLocked) {
-		return nil, fmt.Errorf("another boot apply is already running for this recipe")
+		return nil, errors.New("another boot apply is already running for this recipe")
 	}
 	return nil, err
 }
@@ -159,29 +152,35 @@ func interactive(env *cli.Env) bool {
 	return inOK && outOK && term.IsTerminal(int(in.Fd())) && term.IsTerminal(int(out.Fd()))
 }
 
-func (a *app) applyConfig(env *cli.Env, cfg configOptions) {
-	if cfg.workspace.set && !a.root.set {
-		a.root.value = expandHome(env, cfg.workspace.value)
+func (a *app) loadOptions(ctx context.Context, env *cli.Env) error {
+	cfg := a.options
+	if err := loadConfig(ctx, env, &cfg); err != nil {
+		return err
 	}
-	if cfg.entry.set && !a.entry.set {
-		a.entry.value = cfg.entry.value
-	}
-	if cfg.concurrency.set && !a.concurrency.set {
-		a.concurrency.value = cfg.concurrency.value
-	}
-	if cfg.failFast.set && !a.failFast.set {
-		a.failFast.value = cfg.failFast.value
-	}
-	if cfg.verbose.set && !a.verbose.set {
-		a.verbose.value = cfg.verbose.value
-	}
-	if cfg.json.set && !a.json.set {
-		a.json.value = cfg.json.value
-	}
+
+	cfg.workspace = expandHome(env, cfg.workspace)
+	a.flags.Visit(func(f *flag.Flag) {
+		switch f.Name {
+		case "C":
+			cfg.workspace = a.workspace
+		case "f":
+			cfg.entry = a.entry
+		case "j":
+			cfg.concurrency = a.concurrency
+		case "fail-fast":
+			cfg.failFast = a.failFast
+		case "verbose":
+			cfg.verbose = a.verbose
+		case "json":
+			cfg.json = a.json
+		}
+	})
+	a.options = cfg
+	return nil
 }
 
 func (a *app) engine(env *cli.Env) (*boot.Engine, error) {
-	root, err := filepath.Abs(a.root.value)
+	root, err := filepath.Abs(a.workspace)
 	if err != nil {
 		return nil, err
 	}
@@ -204,21 +203,21 @@ func (a *app) engine(env *cli.Env) (*boot.Engine, error) {
 
 	return &boot.Engine{
 		Runtime: rt,
-		Entry:   a.entry.value,
-		Modules: []boot.Module{
-			bootconsent.Module(),
-			bootenv.Module(),
-			bootfetch.Module(),
-			bootflatpak.Module(),
-			bootfs.Module(),
-			bootpkg.Module(),
-			bootpacman.Module(),
-			bootprogram.Module(),
-			bootgit.Module(),
-			bootgo.Module(),
-			bootrescue.Module(),
-			bootssh.Module(),
-			bootsystemd.Module(),
+		Entry:   a.entry,
+		Modules: []*starlarkstruct.Module{
+			bootconsent.Module(rt),
+			bootenv.Module(rt),
+			bootfetch.Module(rt),
+			bootflatpak.Module(rt),
+			bootfs.Module(rt),
+			bootpkg.Module(rt),
+			bootpkg.PacmanModule(rt),
+			bootprogram.Module(rt),
+			bootgit.Module(rt),
+			bootgo.Module(rt),
+			bootrescue.Module(rt),
+			bootssh.Module(rt),
+			bootsystemd.Module(rt),
 		},
 	}, nil
 }
@@ -232,59 +231,4 @@ func (f *multiFlag) String() string {
 func (f *multiFlag) Set(value string) error {
 	*f = append(*f, value)
 	return nil
-}
-
-type flagValue[T any] struct {
-	value  T
-	set    bool
-	isBool bool
-	parse  func(string) (T, error)
-}
-
-func newFlagValue[T any](value T, parse func(string) (T, error)) flagValue[T] {
-	return flagValue[T]{
-		value: value,
-		parse: parse,
-	}
-}
-
-func newBoolFlagValue(value bool) flagValue[bool] {
-	return flagValue[bool]{
-		value:  value,
-		isBool: true,
-		parse:  strconv.ParseBool,
-	}
-}
-
-func (f *flagValue[T]) String() string {
-	return fmt.Sprint(f.value)
-}
-
-func (f *flagValue[T]) Set(value string) error {
-	parsed, err := f.parse(value)
-	if err != nil {
-		return err
-	}
-	f.value = parsed
-	f.set = true
-	return nil
-}
-
-func (f *flagValue[T]) IsBoolFlag() bool {
-	return f.isBool
-}
-
-func parseString(value string) (string, error) {
-	return value, nil
-}
-
-func parsePositiveInt(value string) (int, error) {
-	n, err := strconv.Atoi(value)
-	if err != nil {
-		return 0, err
-	}
-	if n < 1 {
-		return 0, fmt.Errorf("must be at least 1")
-	}
-	return n, nil
 }

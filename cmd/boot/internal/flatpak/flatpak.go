@@ -13,30 +13,26 @@ import (
 	boot "go.astrophena.name/tools/cmd/boot/internal"
 
 	"go.starlark.net/starlark"
+	"go.starlark.net/starlarkstruct"
 )
 
 // Module returns the Starlark flatpak module.
-func Module() boot.Module { return module{} }
-
-type module struct{}
-
-func (module) Name() string { return "flatpak" }
-
-func (m module) Members(*boot.Runtime) starlark.StringDict {
-	return starlark.StringDict{
-		"update": starlark.NewBuiltin("flatpak.update", m.update),
+func Module(*boot.Runtime) *starlarkstruct.Module {
+	return &starlarkstruct.Module{
+		Name: "flatpak",
+		Members: starlark.StringDict{
+			"update": boot.TaskBuiltin("flatpak.update", update),
+		},
 	}
 }
 
-func (module) update(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	if err := boot.RequireTask(thread, b); err != nil {
-		return nil, err
-	}
+func update(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	if err := starlark.UnpackArgs(b.Name(), args, kwargs); err != nil {
 		return nil, err
 	}
 
 	boot.AddAction(thread, boot.Action{
+		Title:   "flatpak update",
 		Summary: "update flatpak applications",
 		Apply: func(ctx context.Context, dryRun bool) (boot.Result, error) {
 			if _, err := exec.LookPath("flatpak"); err != nil {

@@ -66,14 +66,12 @@ func OpenMemory(name string) *Store {
 	if name == "" {
 		name = "tgfeed_stats"
 	}
+	uri := "file:/" + name + "?vfs=memdb"
 	return &Store{
-		path: "file:/" + name + "?vfs=memdb",
-		uri:  "file:/" + name + "?vfs=memdb",
+		path: uri,
+		uri:  uri,
 	}
 }
-
-// Path returns the absolute SQLite path.
-func (s *Store) Path() string { return s.path }
 
 // Close releases the underlying database handle.
 func (s *Store) Close() error {
@@ -136,33 +134,9 @@ func (s *Store) SaveRun(ctx context.Context, run *Run) error {
 	return err
 }
 
-// ListRuns returns latest run JSON payloads.
-func (s *Store) ListRuns(ctx context.Context, limit int) ([]json.RawMessage, error) {
-	return s.listRuns(ctx, limit, nil)
-}
-
-// ListRunsBefore returns latest run JSON payloads older than beforeStartedAt.
-func (s *Store) ListRunsBefore(ctx context.Context, limit int, beforeStartedAt int64) ([]json.RawMessage, error) {
-	return s.listRuns(ctx, limit, &beforeStartedAt)
-}
-
-func (s *Store) listRuns(ctx context.Context, limit int, beforeStartedAt *int64) ([]json.RawMessage, error) {
-	db, err := s.open(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	limit = normalizeLimit(limit)
-	query := `SELECT json(payload_json) FROM runs`
-	args := []any{}
-	if beforeStartedAt != nil {
-		query += ` WHERE started_at_unix < ?`
-		args = append(args, *beforeStartedAt)
-	}
-	query += ` ORDER BY started_at_unix DESC LIMIT ?;`
-	args = append(args, limit)
-
-	rows, err := db.QueryContext(ctx, query, args...)
+// ListRuns returns the latest run payloads, optionally before beforeStartedAt.
+func (s *Store) ListRuns(ctx context.Context, limit int, beforeStartedAt *int64) ([]json.RawMessage, error) {
+	rows, err := s.queryRuns(ctx, `SELECT json(payload_json) FROM runs`, limit, beforeStartedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -184,12 +158,6 @@ func (s *Store) listRuns(ctx context.Context, limit int, beforeStartedAt *int64)
 
 // ListRunSummaries returns lightweight run rows for dashboard overview panels.
 func (s *Store) ListRunSummaries(ctx context.Context, limit int, beforeStartedAt *int64) ([]RunSummary, error) {
-	db, err := s.open(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	limit = normalizeLimit(limit)
 	query := `SELECT
 	started_at_unix,
 	duration_ms,
@@ -208,15 +176,7 @@ func (s *Store) ListRunSummaries(ctx context.Context, limit int, beforeStartedAt
 	COALESCE(CAST(json_extract(payload_json, '$.fetch_latency_ms.max') AS INTEGER), 0) AS fetch_latency_max,
 	COALESCE(CAST(json_extract(payload_json, '$.memory_usage') AS INTEGER), 0) AS memory_usage
 FROM runs`
-	args := []any{}
-	if beforeStartedAt != nil {
-		query += ` WHERE started_at_unix < ?`
-		args = append(args, *beforeStartedAt)
-	}
-	query += ` ORDER BY started_at_unix DESC LIMIT ?;`
-	args = append(args, limit)
-
-	rows, err := db.QueryContext(ctx, query, args...)
+	rows, err := s.queryRuns(ctx, query, limit, beforeStartedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -293,11 +253,22 @@ func (s *Store) LoadRunByStartedAt(ctx context.Context, startedAtUnix int64) (*R
 	return run, nil
 }
 
-func normalizeLimit(limit int) int {
-	if limit <= 0 {
-		return defaultListLimit
+func (s *Store) queryRuns(ctx context.Context, query string, limit int, before *int64) (*sql.Rows, error) {
+	db, err := s.open(ctx)
+	if err != nil {
+		return nil, err
 	}
-	return limit
+
+	if limit <= 0 {
+		limit = defaultListLimit
+	}
+	var args []any
+	if before != nil {
+		query += ` WHERE started_at_unix < ?`
+		args = append(args, *before)
+	}
+	query += ` ORDER BY started_at_unix DESC LIMIT ?;`
+	return db.QueryContext(ctx, query, append(args, limit)...)
 }
 
 func (s *Store) open(ctx context.Context) (*sql.DB, error) {

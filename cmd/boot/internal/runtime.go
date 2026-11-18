@@ -10,17 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-
-	"go.starlark.net/starlark"
 )
-
-// Module provides a Starlark global and its members.
-type Module interface {
-	// Name is the Starlark global name for this module.
-	Name() string
-	// Members returns the module members for the given runtime.
-	Members(*Runtime) starlark.StringDict
-}
 
 // Runtime holds paths, environment, and I/O shared by Starlark modules. Root
 // anchors relative paths; Home may differ from the process home directory.
@@ -33,24 +23,6 @@ type Runtime struct {
 	Stdout      io.Writer
 	Interactive bool
 	Color       bool
-}
-
-const taskKey = "boot:task"
-
-// SetTask associates a task with a Starlark thread.
-func SetTask(thread *starlark.Thread, task *Task) {
-	thread.SetLocal(taskKey, task)
-}
-
-// AddAction appends an action to the thread's current task.
-func AddAction(thread *starlark.Thread, action Action) {
-	task := thread.Local(taskKey).(*Task)
-	task.Actions = append(task.Actions, action)
-}
-
-// InTask reports whether the thread has a current task.
-func InTask(thread *starlark.Thread) bool {
-	return thread.Local(taskKey) != nil
 }
 
 // ResolveSource resolves a path from the recipe. Relative paths and paths

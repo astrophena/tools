@@ -11,12 +11,27 @@ import (
 	"go.starlark.net/starlark"
 )
 
-// RequireTask reports an error when a builtin that emits actions is called outside a task.
-func RequireTask(thread *starlark.Thread, b *starlark.Builtin) error {
-	if !InTask(thread) {
-		return fmt.Errorf("%s: can only be called from a task", b.Name())
-	}
-	return nil
+const actionsKey = "boot:actions"
+
+// CollectActions directs actions emitted by a Starlark thread to dst.
+func CollectActions(thread *starlark.Thread, dst *[]Action) {
+	thread.SetLocal(actionsKey, dst)
+}
+
+// AddAction appends an action to the thread's current task.
+func AddAction(thread *starlark.Thread, action Action) {
+	dst := thread.Local(actionsKey).(*[]Action)
+	*dst = append(*dst, action)
+}
+
+// TaskBuiltin returns a builtin that can only be called from a task.
+func TaskBuiltin(name string, fn func(*starlark.Thread, *starlark.Builtin, starlark.Tuple, []starlark.Tuple) (starlark.Value, error)) *starlark.Builtin {
+	return starlark.NewBuiltin(name, func(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+		if thread.Local(actionsKey) == nil {
+			return nil, fmt.Errorf("%s: can only be called from a task", b.Name())
+		}
+		return fn(thread, b, args, kwargs)
+	})
 }
 
 // FileMode validates an integer Starlark file mode and returns its permission bits.

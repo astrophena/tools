@@ -28,7 +28,7 @@ func TestContentPartType(t *testing.T) {
 			role: "assistant",
 			want: "output_text",
 		},
-		"legacy model": {
+		"legacy_model": {
 			role: "model",
 			want: "output_text",
 		},
@@ -132,19 +132,19 @@ func TestGenerateRejectsInvalidContents(t *testing.T) {
 		item starlark.Value
 		want string
 	}{
-		"not tuple": {
+		"not_tuple": {
 			item: starlark.String("hello"),
 			want: "contents[0] is not a tuple",
 		},
-		"wrong tuple length": {
+		"wrong_tuple_length": {
 			item: starlark.Tuple{starlark.String("user")},
 			want: "must have exactly two elements",
 		},
-		"non-string role": {
+		"non_string_role": {
 			item: starlark.Tuple{starlark.MakeInt(1), starlark.String("hello")},
 			want: "role must be a string",
 		},
-		"non-string content": {
+		"non_string_content": {
 			item: starlark.Tuple{starlark.String("user"), starlark.MakeInt(1)},
 			want: "content must be a string",
 		},

@@ -3,9 +3,9 @@
 // license that can be found in the LICENSE.md file.
 
 /*
-Boot runs Starlark recipes to set up a host. Recipes register tasks that use
-built-in modules to check or change files, packages, repositories, and services.
-Actions skip work when the host already matches the recipe.
+Boot runs Starlark recipes to set up a Unix host. Recipes register tasks that
+use built-in modules to check or change files, packages, repositories, and
+services. Actions skip work when the host already matches the recipe.
 
 # Usage
 
@@ -27,7 +27,7 @@ use module functions inside tasks to create actions:
 	task(id="dotfiles", name="Link dotfiles", run=dotfiles)
 
 Tasks can declare dependencies and tags. Use -only, -skip, and -tag to select
-tasks. See cmd/boot/modules.md for built-in functions and modules.
+tasks. See [cmd/boot/modules.md] for built-in functions and modules.
 
 Use consent.require in a task to ask before applying later actions. Apply holds
 a lock so two runs of the same recipe cannot overlap.
@@ -38,6 +38,8 @@ Boot reads $XDG_CONFIG_HOME/boot/config.star, or ~/.config/boot/config.star if
 XDG_CONFIG_HOME is unset. The file may call boot.configure to set workspace,
 entry, concurrency, fail_fast, verbose, and json defaults. Flags override these
 defaults.
+
+[cmd/boot/modules.md]: https://github.com/astrophena/tools/blob/master/cmd/boot/modules.md
 */
 package main
 

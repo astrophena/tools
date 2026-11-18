@@ -12,9 +12,9 @@ Top-level code should register tasks; task functions create actions through
 modules.
 
 When a task runs, the engine stores it on the Starlark thread. Module functions
-call `RequireTask` before `AddAction` to attach an action to that task. Each
-action has a `Summary` and an `Apply(ctx, dryRun)` function. The function checks
-the host in dry-run mode and makes the change during apply. It returns:
+use `AddAction` to attach actions to that task. Each action has a `Summary` and
+an `Apply(ctx, dryRun)` function. The function checks the host in dry-run mode
+and makes the change during apply. It returns:
 
 - `ResultSkip` if the host already matches;
 - `ResultChange` if it changed the host or would change it;
@@ -24,12 +24,13 @@ Use `Warn` to add a non-fatal message to the run's final report.
 
 ## Modules
 
-A module implements `Name() string` and `Members(*Runtime) starlark.StringDict`.
+A module constructs a `starlarkstruct.Module` with the shared `Runtime`.
 Keep its Starlark functions focused on recipe operations. Functions that emit
 actions should:
 
-- Call `RequireTask` and parse arguments with `starlark.UnpackArgs`.
+- Register with `TaskBuiltin` and parse arguments with `starlark.UnpackArgs`.
 - Use `Runtime` path and environment helpers for recipe inputs and host targets.
+- Set a short progress `Title` when the `Summary` includes paths or other details.
 - Add actions without changing the host during recipe evaluation.
 - Make dry-run checks read-only and report command failures with useful output.
 

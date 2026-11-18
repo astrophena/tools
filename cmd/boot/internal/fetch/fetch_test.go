@@ -24,7 +24,7 @@ func TestFetchFileRejectsInvalidChecksum(t *testing.T) {
 		Root: t.TempDir(),
 	}
 	h := testutil.NewTask(t, "test")
-	m := &impl{
+	m := &module{
 		rt: rt,
 	}
 	_, err := m.file(h.Thread, starlark.NewBuiltin("fetch.file", m.file), nil, []starlark.Tuple{
@@ -56,7 +56,7 @@ func TestFetchFileUpdatesModeWithoutChecksum(t *testing.T) {
 		Root: root,
 	}
 	h := testutil.NewTask(t, "test")
-	m := &impl{
+	m := &module{
 		rt: rt,
 	}
 	action := h.EmitOne("fetch.file", m.file, nil, []starlark.Tuple{
@@ -92,7 +92,7 @@ func TestFetchFile(t *testing.T) {
 		Root: root,
 	}
 	h := testutil.NewTask(t, "test")
-	m := &impl{
+	m := &module{
 		rt: rt,
 	}
 	path := filepath.Join(root, "dir", "file.txt")

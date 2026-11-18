@@ -26,12 +26,12 @@ func TestConfig(t *testing.T) {
 		wantErrText string
 		wantOutput  string
 	}{
-		"default workspace": {
+		"default_workspace": {
 			config:     `boot.configure(workspace = "{root}")`,
 			args:       []string{"list"},
 			wantOutput: "dotfiles",
 		},
-		"default entry": {
+		"default_entry": {
 			config: `boot.configure(workspace = "{root}", entry = "CUSTOM.star")`,
 			args:   []string{"list"},
 			setup: func(t *testing.T, root string, other string) {
@@ -42,12 +42,17 @@ func TestConfig(t *testing.T) {
 			},
 			wantOutput: "dotfiles",
 		},
-		"flag workspace overrides config": {
+		"flag_workspace_overrides_config": {
 			config:     `boot.configure(workspace = "{other}")`,
 			args:       []string{"-C", "{root}", "list"},
 			wantOutput: "dotfiles",
 		},
-		"invalid concurrency": {
+		"explicit_false_overrides_config": {
+			config:     "boot.configure(workspace = \"{root}\")\nboot.configure(json = True)",
+			args:       []string{"-json=false", "plan"},
+			wantOutput: "2 tasks · 3 would change · 0 skipped",
+		},
+		"invalid_concurrency": {
 			config:      `boot.configure(concurrency = 0)`,
 			args:        []string{"list"},
 			wantErr:     cli.ErrInvalidArgs,
