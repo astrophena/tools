@@ -16,7 +16,7 @@ import (
 )
 
 func TestSetGet(t *testing.T) {
-	s := cache.NewMemStore(t.Context(), time.Minute)
+	s := cache.NewMem(t.Context(), time.Minute)
 	mod := Module(s)
 	thread := &starlark.Thread{
 		Name: t.Name(),
@@ -78,7 +78,7 @@ func TestSetGet(t *testing.T) {
 func TestTTL(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		ttl := 50 * time.Millisecond
-		s := cache.NewMemStore(t.Context(), ttl)
+		s := cache.NewMem(t.Context(), ttl)
 		mod := Module(s)
 		thread := &starlark.Thread{
 			Name: t.Name(),
@@ -115,7 +115,7 @@ func TestTTL(t *testing.T) {
 func TestTTL_ResetOnGet(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		ttl := 100 * time.Millisecond
-		s := cache.NewMemStore(t.Context(), ttl)
+		s := cache.NewMem(t.Context(), ttl)
 		mod := Module(s)
 		thread := &starlark.Thread{
 			Name: t.Name(),

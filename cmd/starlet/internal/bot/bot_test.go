@@ -119,7 +119,7 @@ func testBot(t *testing.T, m *mux, files map[string]string) *bot.Bot {
 		BotID:       987654321,
 		BotUsername: "testbot",
 		HTTPClient:  testutil.MockHTTPClient(m.mux),
-		KVCache:     kvcache.Module(cache.NewMemStore(t.Context(), 1*time.Minute)),
+		KVCache:     kvcache.Module(cache.NewMem(t.Context(), 1*time.Minute)),
 		Logger:      slog.New(slog.NewTextHandler(t.Output(), nil)),
 	})
 	if err := b.Load(t.Context(), files); err != nil {

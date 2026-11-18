@@ -10,64 +10,64 @@ import (
 	"time"
 )
 
-// MemStore stores values in memory.
-type MemStore struct {
+// Mem stores values in memory.
+type Mem struct {
 	ttl time.Duration
 
 	mu    sync.Mutex
 	cache map[string]entry
 }
 
-// NewMemStore creates a cache with the given TTL. The context controls the
+// NewMem creates a cache with the given TTL. The context controls the
 // lifetime of its background eviction loop.
-func NewMemStore(ctx context.Context, ttl time.Duration) *MemStore {
-	s := &MemStore{
+func NewMem(ctx context.Context, ttl time.Duration) *Mem {
+	s := &Mem{
 		ttl: ttl,
 	}
 	go evictPeriodically(ctx, ttl, s.evictExpired)
 	return s
 }
 
-func (s *MemStore) evictExpired() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+func (m *Mem) evictExpired() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
-	for key, e := range s.cache {
-		if time.Since(e.LastAccessed) > s.ttl {
-			delete(s.cache, key)
+	for key, e := range m.cache {
+		if time.Since(e.LastAccessed) > m.ttl {
+			delete(m.cache, key)
 		}
 	}
 }
 
 // Get retrieves a copy of the stored value and refreshes its expiration.
-func (s *MemStore) Get(key string) ([]byte, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+func (m *Mem) Get(key string) ([]byte, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
-	e, ok := s.cache[key]
+	e, ok := m.cache[key]
 	if !ok {
 		return nil, nil
 	}
 
-	if time.Since(e.LastAccessed) > s.ttl {
-		delete(s.cache, key)
+	if time.Since(e.LastAccessed) > m.ttl {
+		delete(m.cache, key)
 		return nil, nil
 	}
 
 	e.LastAccessed = time.Now()
-	s.cache[key] = e
+	m.cache[key] = e
 	return append([]byte(nil), e.Value...), nil
 }
 
 // Set stores a copy of value and refreshes its expiration.
-func (s *MemStore) Set(key string, value []byte) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+func (m *Mem) Set(key string, value []byte) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
-	if s.cache == nil {
-		s.cache = make(map[string]entry)
+	if m.cache == nil {
+		m.cache = make(map[string]entry)
 	}
-	s.cache[key] = entry{
+	m.cache[key] = entry{
 		Value:        append([]byte(nil), value...),
 		LastAccessed: time.Now(),
 	}
@@ -75,4 +75,4 @@ func (s *MemStore) Set(key string, value []byte) error {
 }
 
 // Close returns nil. Eviction stops when the constructor's context is canceled.
-func (s *MemStore) Close() error { return nil }
+func (m *Mem) Close() error { return nil }

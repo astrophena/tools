@@ -14,7 +14,7 @@ import (
 
 func TestMemStore(t *testing.T) {
 	t.Parallel()
-	testStore(t, NewMemStore(t.Context(), time.Hour))
+	testStore(t, NewMem(t.Context(), time.Hour))
 }
 
 func TestJSONFile(t *testing.T) {

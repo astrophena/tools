@@ -102,11 +102,11 @@ func NewJSONFile(ctx context.Context, path string, ttl time.Duration) (*JSONFile
 	return s, nil
 }
 
-func (s *JSONFile) evictExpired() {
+func (jf *JSONFile) evictExpired() {
 	var deleted uint64
-	err := s.f.Write(func(js *jsonStore) error {
+	err := jf.f.Write(func(js *jsonStore) error {
 		for key, e := range js.Data {
-			if time.Since(e.LastAccessed) > s.ttl {
+			if time.Since(e.LastAccessed) > jf.ttl {
 				delete(js.Data, key)
 				deleted++
 			}
@@ -114,27 +114,27 @@ func (s *JSONFile) evictExpired() {
 		return nil
 	})
 	if err == nil && deleted > 0 {
-		s.cleanupDeletes.Add(deleted)
-		s.recordRewrite()
+		jf.cleanupDeletes.Add(deleted)
+		jf.recordRewrite()
 	}
 }
 
 // Get retrieves the stored value and refreshes its expiration.
-func (s *JSONFile) Get(key string) ([]byte, error) {
-	s.gets.Add(1)
+func (jf *JSONFile) Get(key string) ([]byte, error) {
+	jf.gets.Add(1)
 	var (
 		val     []byte
 		hit     bool
 		expired bool
 	)
-	err := s.f.Write(func(js *jsonStore) error {
+	err := jf.f.Write(func(js *jsonStore) error {
 		e, ok := js.Data[key]
 		if !ok {
 			return nil
 		}
 
 		hit = true
-		if time.Since(e.LastAccessed) > s.ttl {
+		if time.Since(e.LastAccessed) > jf.ttl {
 			delete(js.Data, key)
 			expired = true
 			return nil
@@ -146,23 +146,23 @@ func (s *JSONFile) Get(key string) ([]byte, error) {
 		return nil
 	})
 	if hit {
-		s.getHits.Add(1)
+		jf.getHits.Add(1)
 	} else {
-		s.getMisses.Add(1)
+		jf.getMisses.Add(1)
 	}
 	if err == nil && expired {
-		s.expired.Add(1)
+		jf.expired.Add(1)
 	}
 	if err == nil && hit {
-		s.recordRewrite()
+		jf.recordRewrite()
 	}
 	return val, err
 }
 
 // Set stores a value and refreshes its expiration.
-func (s *JSONFile) Set(key string, val []byte) error {
-	s.sets.Add(1)
-	err := s.f.Write(func(js *jsonStore) error {
+func (jf *JSONFile) Set(key string, val []byte) error {
+	jf.sets.Add(1)
+	err := jf.f.Write(func(js *jsonStore) error {
 		if js.Data == nil {
 			js.Data = make(map[string]entry)
 		}
@@ -173,24 +173,24 @@ func (s *JSONFile) Set(key string, val []byte) error {
 		return nil
 	})
 	if err == nil {
-		s.recordRewrite()
+		jf.recordRewrite()
 	}
 	return err
 }
 
 // Close saves the cumulative cache metrics.
-func (s *JSONFile) Close() error {
-	return writePersistedStats(s.metricsPath, s.persisted.add(s.sessionStats()))
+func (jf *JSONFile) Close() error {
+	return writePersistedStats(jf.metricsPath, jf.persisted.add(jf.sessionStats()))
 }
 
 // Stats returns the current cache metrics.
-func (s *JSONFile) Stats() JSONFileStats {
-	session := s.sessionStats()
-	totals := s.persisted.add(session)
+func (jf *JSONFile) Stats() JSONFileStats {
+	session := jf.sessionStats()
+	totals := jf.persisted.add(session)
 	stats := JSONFileStats{
-		Path:                s.path,
-		MetricsPath:         s.metricsPath,
-		TTL:                 s.ttl,
+		Path:                jf.path,
+		MetricsPath:         jf.metricsPath,
+		TTL:                 jf.ttl,
 		Gets:                session.Gets,
 		GetHits:             session.GetHits,
 		GetMisses:           session.GetMisses,
@@ -214,23 +214,23 @@ func (s *JSONFile) Stats() JSONFileStats {
 	return stats
 }
 
-func (s *JSONFile) recordRewrite() {
-	s.rewrites.Add(1)
-	if info, err := os.Stat(s.path); err == nil {
-		s.rewriteBytes.Add(uint64(info.Size()))
+func (jf *JSONFile) recordRewrite() {
+	jf.rewrites.Add(1)
+	if info, err := os.Stat(jf.path); err == nil {
+		jf.rewriteBytes.Add(uint64(info.Size()))
 	}
 }
 
-func (s *JSONFile) sessionStats() persistedStats {
+func (jf *JSONFile) sessionStats() persistedStats {
 	return persistedStats{
-		Gets:           s.gets.Load(),
-		GetHits:        s.getHits.Load(),
-		GetMisses:      s.getMisses.Load(),
-		Expired:        s.expired.Load(),
-		Sets:           s.sets.Load(),
-		Rewrites:       s.rewrites.Load(),
-		RewriteBytes:   s.rewriteBytes.Load(),
-		CleanupDeletes: s.cleanupDeletes.Load(),
+		Gets:           jf.gets.Load(),
+		GetHits:        jf.getHits.Load(),
+		GetMisses:      jf.getMisses.Load(),
+		Expired:        jf.expired.Load(),
+		Sets:           jf.sets.Load(),
+		Rewrites:       jf.rewrites.Load(),
+		RewriteBytes:   jf.rewriteBytes.Load(),
+		CleanupDeletes: jf.cleanupDeletes.Load(),
 	}
 }
 

@@ -132,7 +132,7 @@ func (e *engine) doInit(ctx context.Context) error {
 		}
 		e.store = s
 	} else {
-		e.store = cache.NewMemStore(ctx, kvCacheTTL)
+		e.store = cache.NewMem(ctx, kvCacheTTL)
 	}
 
 	if e.llmUsagePath == "" {
