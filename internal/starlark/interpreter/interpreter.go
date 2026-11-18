@@ -18,10 +18,10 @@
 // relative to the current module, to "//path" within the current package,
 // or to "@alias//path" in another package.
 //
-// A load evaluates a module once and reuses its globals. An exec runs a
+// A load caches the result of evaluation unless interrupted. An exec runs a
 // script once for its side effects and returns its globals. Only scripts
-// started by ExecModule or exec can call exec. The first operation reserves
-// the module for future loads or marks it as executed.
+// started by ExecModule or exec can call exec. A completed load reserves
+// the module for future loads. An exec marks it as executed.
 //
 // If present, @stdlib//builtins.star contributes its public symbols to the
 // predeclared globals. Paths in the main package appear as "//path" in errors.
@@ -199,6 +199,7 @@ func (intr *Interpreter) Init(ctx context.Context) error {
 }
 
 // LoadModule loads a file from pkg and caches its globals or error.
+// An interrupted load can be retried.
 // If the module is already being loaded, LoadModule reports a cycle.
 func (intr *Interpreter) LoadModule(ctx context.Context, pkg, path string) (starlark.StringDict, error) {
 	key, err := resolveModule(nil, "@"+pkg+"//"+path)
@@ -221,7 +222,13 @@ func (intr *Interpreter) loadModule(ctx context.Context, key ModuleKey) (starlar
 	}
 
 	m := &loadedModule{err: fmt.Errorf("panic when loading %q", key)}
-	defer func() { intr.modules.Store(key, m) }()
+	defer func() {
+		if errors.Is(m.err, context.Canceled) || errors.Is(m.err, context.DeadlineExceeded) {
+			intr.modules.Delete(key)
+			return
+		}
+		intr.modules.Store(key, m)
+	}()
 
 	m.dict, m.err = intr.runModule(ctx, key, threadLoading)
 	return m.dict, m.err

@@ -15,6 +15,8 @@
 package interpreter
 
 import (
+	"context"
+	"errors"
 	"flag"
 	"path/filepath"
 	"strings"
@@ -27,6 +29,41 @@ import (
 )
 
 var update = flag.Bool("update", false, "update golden files in testdata")
+
+func TestLoadModuleAfterCancellation(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	intr := &Interpreter{
+		Predeclared: starlark.StringDict{
+			"interrupt": starlark.NewBuiltin("interrupt", func(*starlark.Thread, *starlark.Builtin, starlark.Tuple, []starlark.Tuple) (starlark.Value, error) {
+				cancel()
+				return starlark.None, nil
+			}),
+		},
+		Packages: map[string]Loader{
+			MainPkg: MemoryLoader(map[string]string{
+				"main.star": `load("dep.star", "value"); result = value`,
+				"dep.star":  `interrupt(); value = 42`,
+			}),
+		},
+	}
+	if err := intr.Init(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := intr.LoadModule(ctx, MainPkg, "main.star"); !errors.Is(err, context.Canceled) {
+		t.Fatalf("first load: %v, want %v", err, context.Canceled)
+	}
+	globals, err := intr.LoadModule(t.Context(), MainPkg, "main.star")
+	if err != nil {
+		t.Fatalf("retry load: %v", err)
+	}
+	if got, want := globals["result"], starlark.MakeInt(42); got != want {
+		t.Fatalf("result = %v, want %v", got, want)
+	}
+}
 
 func TestResolveModule(t *testing.T) {
 	t.Parallel()
