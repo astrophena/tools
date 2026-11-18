@@ -145,7 +145,10 @@ func (r *taskRun) execute(ctx context.Context, opts RunOptions, warnings *warnin
 
 func (r *taskRun) apply(ctx context.Context, action *Action, dryRun bool, warnings *warningCollector, limiter actionLimiter, progress *runProgress) actionResult {
 	if err := limiter.acquire(ctx); err != nil {
-		return actionResult{description: action.description(), err: err}
+		return actionResult{
+			description: action.description(),
+			err:         err,
+		}
 	}
 	defer limiter.release()
 	progress.startAction(action)
@@ -155,7 +158,11 @@ func (r *taskRun) apply(ctx context.Context, action *Action, dryRun bool, warnin
 
 func (r *taskRun) runAction(ctx context.Context, action Action, dryRun bool, warnings *warningCollector) actionResult {
 	result, err := warnings.run(ctx, r.task, action, dryRun)
-	return actionResult{description: action.description(), result: result, err: err}
+	return actionResult{
+		description: action.description(),
+		result:      result,
+		err:         err,
+	}
 }
 
 func taskDependency(byID map[string]*taskRun, task *Task) (failed string, waiting bool) {

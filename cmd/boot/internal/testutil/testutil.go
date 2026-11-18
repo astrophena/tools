@@ -34,7 +34,12 @@ type TaskHarness struct {
 // NewTask returns an action collector and its Starlark thread.
 func NewTask(t *testing.T, id string) *TaskHarness {
 	t.Helper()
-	h := &TaskHarness{t: t, Thread: &starlark.Thread{Name: id}}
+	h := &TaskHarness{
+		t: t,
+		Thread: &starlark.Thread{
+			Name: id,
+		},
+	}
 	boot.CollectActions(h.Thread, &h.Actions)
 	return h
 }

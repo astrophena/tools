@@ -17,7 +17,9 @@ import (
 
 // Module returns the kvcache Starlark module backed by s.
 func Module(s cache.Store) *starlarkstruct.Module {
-	m := &module{store: s}
+	m := &module{
+		store: s,
+	}
 	return &starlarkstruct.Module{
 		Name: "kvcache",
 		Members: starlark.StringDict{

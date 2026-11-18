@@ -67,7 +67,10 @@ func OpenMemory(name string) *Store {
 		name = "tgfeed_stats"
 	}
 	uri := "file:/" + name + "?vfs=memdb"
-	return &Store{path: uri, uri: uri}
+	return &Store{
+		path: uri,
+		uri:  uri,
+	}
 }
 
 // Close releases the underlying database handle.

@@ -21,7 +21,9 @@ import (
 
 // Module returns the Starlark consent module.
 func Module(rt *boot.Runtime) *starlarkstruct.Module {
-	m := &module{rt: rt}
+	m := &module{
+		rt: rt,
+	}
 	return &starlarkstruct.Module{
 		Name: "consent",
 		Members: starlark.StringDict{
@@ -94,7 +96,10 @@ func ask(ctx context.Context, rt *boot.Runtime, message string, defaultYes bool)
 	}
 
 	if file, ok := in.(*os.File); ok && ctx.Done() != nil {
-		in = promptReader{ctx: ctx, file: file}
+		in = promptReader{
+			ctx:  ctx,
+			file: file,
+		}
 	}
 	line, err := bufio.NewReader(in).ReadString('\n')
 	if canceled := ctx.Err(); canceled != nil {

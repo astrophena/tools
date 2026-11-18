@@ -26,7 +26,9 @@ import (
 
 // Module returns the Starlark rescue module.
 func Module(rt *boot.Runtime) *starlarkstruct.Module {
-	m := &module{rt: rt}
+	m := &module{
+		rt: rt,
+	}
 	return &starlarkstruct.Module{
 		Name: "rescue",
 		Members: starlark.StringDict{

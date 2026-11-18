@@ -24,7 +24,10 @@ import (
 
 // PacmanModule returns the Starlark pacman module.
 func PacmanModule(rt *boot.Runtime) *starlarkstruct.Module {
-	m := &module{rt: rt, managerName: "pacman"}
+	m := &module{
+		rt:          rt,
+		managerName: "pacman",
+	}
 	return &starlarkstruct.Module{
 		Name: "pacman",
 		Members: starlark.StringDict{

@@ -261,7 +261,9 @@ func prepare(ctx context.Context, runs []taskRun, opts RunOptions, warnings *war
 func (r *taskRun) prepare(ctx context.Context, opts RunOptions, warnings *warningCollector) {
 	task := r.task
 	var actions []Action
-	thread := &starlark.Thread{Name: "boot:" + task.ID}
+	thread := &starlark.Thread{
+		Name: "boot:" + task.ID,
+	}
 	CollectActions(thread, &actions)
 	stop := context.AfterFunc(ctx, func() { thread.Cancel(ctx.Err().Error()) })
 	_, err := starlark.Call(thread, task.Run, nil, nil)
@@ -305,7 +307,9 @@ func (r *taskRun) prepare(ctx context.Context, opts RunOptions, warnings *warnin
 }
 
 func summarize(runs []taskRun) Summary {
-	s := Summary{Tasks: len(runs)}
+	s := Summary{
+		Tasks: len(runs),
+	}
 	for i := range runs {
 		r := &runs[i]
 		if r.err != nil {

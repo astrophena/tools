@@ -42,7 +42,9 @@ func newUsageStore(path string) (*usageStore, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &usageStore{f: f}, nil
+	return &usageStore{
+		f: f,
+	}, nil
 }
 
 func (s *usageStore) add(key string, now time.Time, input, output int64) error {

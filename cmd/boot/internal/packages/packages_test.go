@@ -29,7 +29,10 @@ func TestInstallRequiresSudo(t *testing.T) {
 		t.Skip("sudo is not needed when running as root")
 	}
 	h := testutil.NewTask(t, "test")
-	m := &module{rt: &boot.Runtime{}, managerName: "apt"}
+	m := &module{
+		rt:          &boot.Runtime{},
+		managerName: "apt",
+	}
 	packages := starlark.NewList([]starlark.Value{starlark.String("curl")})
 	action := h.EmitOne("pkg.install", m.install, nil, []starlark.Tuple{
 		{starlark.String("packages"), packages},
@@ -163,7 +166,10 @@ exec "$@"
 			t.Setenv("BOOT_APT_FAILURE", tc.failure)
 
 			h := testutil.NewTask(t, "test")
-			m := &module{rt: &boot.Runtime{}, managerName: "apt"}
+			m := &module{
+				rt:          &boot.Runtime{},
+				managerName: "apt",
+			}
 			for _, want := range tc.wantResults {
 				action := h.EmitOne("pkg.update", m.update, nil, nil)
 				result, err := action.Apply(t.Context(), tc.dryRun)
@@ -318,7 +324,10 @@ esac
 `,
 	})
 	h := testutil.NewTask(t, "test")
-	m := &module{rt: rt, managerName: "pacman"}
+	m := &module{
+		rt:          rt,
+		managerName: "pacman",
+	}
 	action := h.EmitOne("pkg.update", m.update, nil, nil)
 	result, warnings, err := testutil.RunAction(t.Context(), action, true)
 	if err != nil {

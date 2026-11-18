@@ -309,13 +309,17 @@ func TestApplyFailFastPreservesContinueOnError(t *testing.T) {
 }
 
 func TestApplyConsentErrorDoesNotRunTask(t *testing.T) {
-	var prompts int
-	var ranTask, ranDependent, ranIndependent bool
+	var (
+		prompts                               int
+		ranTask, ranDependent, ranIndependent bool
+	)
 	mark := func(ran *bool) Action {
-		return Action{Apply: func(context.Context, bool) (Result, error) {
-			*ran = true
-			return ResultChange, nil
-		}}
+		return Action{
+			Apply: func(context.Context, bool) (Result, error) {
+				*ran = true
+				return ResultChange, nil
+			},
+		}
 	}
 	guarded := testTask("guarded", Action{
 		Summary:   "request consent",
@@ -332,14 +336,15 @@ func TestApplyConsentErrorDoesNotRunTask(t *testing.T) {
 	dependent.ContinueOnError = true
 	independent := testTask("independent", mark(&ranIndependent))
 
-	engine := &Engine{Tasks: []*Task{guarded, dependent, independent}}
+	engine := &Engine{
+		Tasks: []*Task{guarded, dependent, independent},
+	}
 	var out bytes.Buffer
-	err := engine.Run(t.Context(), &out, Selection{}, RunOptions{
+	if err := engine.Run(t.Context(), &out, Selection{}, RunOptions{
 		Interactive: true,
 		FailFast:    true,
 		JSON:        true,
-	})
-	if err == nil {
+	}); err == nil {
 		t.Fatal("Run succeeded, want consent failure")
 	}
 	if prompts != 1 || ranTask || ranDependent || !ranIndependent {
@@ -458,7 +463,11 @@ func TestPrepareSudo(t *testing.T) {
 	var out bytes.Buffer
 	if err := engine.prepareSudo(t.Context(), &out, []taskRun{
 		{
-			task:   &Task{ID: "root_task", Name: "Root task", RequiresSudo: true},
+			task: &Task{
+				ID:           "root_task",
+				Name:         "Root task",
+				RequiresSudo: true,
+			},
 			status: taskPending,
 		},
 	}); err != nil {
@@ -550,7 +559,11 @@ esac
 func TestSudoReasonsPreferActionDetails(t *testing.T) {
 	reasons := sudoReasons([]taskRun{
 		{
-			task:   &Task{ID: "setup_etc", Name: "Install /etc files", RequiresSudo: true},
+			task: &Task{
+				ID:           "setup_etc",
+				Name:         "Install /etc files",
+				RequiresSudo: true,
+			},
 			status: taskPending,
 			prepared: []Action{
 				{
@@ -764,7 +777,9 @@ func TestApplyProgressTitleReportsRunningAction(t *testing.T) {
 			}
 		},
 	})
-	engine := &Engine{Tasks: []*Task{slow, fast}}
+	engine := &Engine{
+		Tasks: []*Task{slow, fast},
+	}
 
 	if err := engine.Run(ctx, out, Selection{}, RunOptions{
 		Concurrency: 2,
@@ -829,12 +844,16 @@ func TestApplyInterrupted(t *testing.T) {
 			return ResultChange, nil
 		},
 	}
-	engine := &Engine{Tasks: []*Task{
-		testTask("first", interrupt, later),
-		testTask("second", later),
-	}}
+	engine := &Engine{
+		Tasks: []*Task{
+			testTask("first", interrupt, later),
+			testTask("second", later),
+		},
+	}
 	var out bytes.Buffer
-	if err := engine.Run(ctx, &out, Selection{}, RunOptions{Interactive: true}); !errors.Is(err, context.Canceled) {
+	if err := engine.Run(ctx, &out, Selection{}, RunOptions{
+		Interactive: true,
+	}); !errors.Is(err, context.Canceled) {
 		t.Fatalf("Run returned %v, want context.Canceled", err)
 	}
 	if laterRuns != 0 {

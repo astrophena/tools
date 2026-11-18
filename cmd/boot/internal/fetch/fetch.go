@@ -26,7 +26,9 @@ import (
 
 // Module returns the Starlark fetch module.
 func Module(rt *boot.Runtime) *starlarkstruct.Module {
-	m := &module{rt: rt}
+	m := &module{
+		rt: rt,
+	}
 	return &starlarkstruct.Module{
 		Name: "fetch",
 		Members: starlark.StringDict{

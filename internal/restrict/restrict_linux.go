@@ -11,8 +11,9 @@ import (
 	"log/slog"
 	"testing"
 
-	"github.com/landlock-lsm/go-landlock/landlock"
 	"go.astrophena.name/base/logger"
+
+	"github.com/landlock-lsm/go-landlock/landlock"
 )
 
 // DoUnlessTesting applies Landlock rules and logs any failure. It skips go test.

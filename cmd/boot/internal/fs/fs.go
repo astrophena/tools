@@ -28,7 +28,9 @@ import (
 
 // Module returns the Starlark fs module.
 func Module(rt *boot.Runtime) *starlarkstruct.Module {
-	m := &module{rt: rt}
+	m := &module{
+		rt: rt,
+	}
 	return &starlarkstruct.Module{
 		Name: "fs",
 		Members: starlark.StringDict{

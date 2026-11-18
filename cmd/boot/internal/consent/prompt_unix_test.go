@@ -32,7 +32,10 @@ func TestAskCanceledWhileWaitingForInput(t *testing.T) {
 
 	// Unblock the read if it fails to respond to the deadline.
 	watchdog := time.AfterFunc(5*time.Second, func() { w.Close() })
-	_, err = ask(ctx, &boot.Runtime{Stdin: r, Stdout: io.Discard}, "Proceed?", false)
+	_, err = ask(ctx, &boot.Runtime{
+		Stdin:  r,
+		Stdout: io.Discard,
+	}, "Proceed?", false)
 	if !watchdog.Stop() {
 		t.Fatal("prompt waited for the input pipe to close")
 	}

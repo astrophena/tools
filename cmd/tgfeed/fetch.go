@@ -107,7 +107,9 @@ func (f *fetcher) fetch(ctx context.Context, fd *feed, updates chan *update) (re
 		return false, 0
 	}
 
-	t := &timings{start: startTime}
+	t := &timings{
+		start: startTime,
+	}
 	req, err := f.newFeedRequest(ctx, fd, fdState.ETag, fdState.LastModified, t)
 	if err != nil {
 		f.handleFetchFailure(ctx, fd.url, err)

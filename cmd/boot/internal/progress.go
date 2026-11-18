@@ -22,7 +22,9 @@ type runProgress struct {
 }
 
 func startProgress(w io.Writer, tasks int) *runProgress {
-	p := &runProgress{bar: progressbar.New(w, tasks, true)}
+	p := &runProgress{
+		bar: progressbar.New(w, tasks, true),
+	}
 	p.bar.Start()
 	return p
 }

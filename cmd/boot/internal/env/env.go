@@ -20,7 +20,9 @@ import (
 
 // Module returns the Starlark env module.
 func Module(rt *boot.Runtime) *starlarkstruct.Module {
-	m := &module{rt: rt}
+	m := &module{
+		rt: rt,
+	}
 	return &starlarkstruct.Module{
 		Name: "env",
 		Members: starlark.StringDict{

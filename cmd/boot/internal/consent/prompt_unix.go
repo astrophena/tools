@@ -9,7 +9,12 @@ package consent
 import "golang.org/x/sys/unix"
 
 func (r promptReader) Read(p []byte) (int, error) {
-	fds := []unix.PollFd{{Fd: int32(r.file.Fd()), Events: unix.POLLIN}}
+	fds := []unix.PollFd{
+		{
+			Fd:     int32(r.file.Fd()),
+			Events: unix.POLLIN,
+		},
+	}
 	for {
 		if err := r.ctx.Err(); err != nil {
 			return 0, err

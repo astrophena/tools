@@ -149,17 +149,26 @@ func resolveModule(th *starlark.Thread, ref string) (ModuleKey, error) {
 		if pkg == "" {
 			return ModuleKey{}, errors.New("a package alias can't be empty")
 		}
-		key = ModuleKey{Package: pkg, Path: path.Clean(name)}
+		key = ModuleKey{
+			Package: pkg,
+			Path:    path.Clean(name),
+		}
 	case strings.HasPrefix(ref, "//"):
 		if !ok {
 			return ModuleKey{}, errors.New("no current package name in thread locals")
 		}
-		key = ModuleKey{Package: current.Package, Path: path.Clean(ref[2:])}
+		key = ModuleKey{
+			Package: current.Package,
+			Path:    path.Clean(ref[2:]),
+		}
 	default:
 		if !ok {
 			return ModuleKey{}, errors.New("can't resolve relative module path: no current module information in thread locals")
 		}
-		key = ModuleKey{Package: current.Package, Path: path.Join(path.Dir(current.Path), ref)}
+		key = ModuleKey{
+			Package: current.Package,
+			Path:    path.Join(path.Dir(current.Path), ref),
+		}
 	}
 	if key.Path == ".." || strings.HasPrefix(key.Path, "../") {
 		return ModuleKey{}, errors.New("outside the package root")
@@ -221,7 +230,9 @@ func (intr *Interpreter) loadModule(ctx context.Context, key ModuleKey) (starlar
 		}
 	}
 
-	m := &loadedModule{err: fmt.Errorf("panic when loading %q", key)}
+	m := &loadedModule{
+		err: fmt.Errorf("panic when loading %q", key),
+	}
 	defer func() {
 		if errors.Is(m.err, context.Canceled) || errors.Is(m.err, context.DeadlineExceeded) {
 			intr.modules.Delete(key)

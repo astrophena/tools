@@ -28,13 +28,21 @@ test "$*" = "-Qqen" || exit 2
 printf 'zlib\nknown\ngit\n'
 `,
 	})
-	rt := &boot.Runtime{Env: map[string]string{"BOOT_PACKAGE_MANAGER": "apt"}}
+	rt := &boot.Runtime{
+		Env: map[string]string{"BOOT_PACKAGE_MANAGER": "apt"},
+	}
 	cases := map[string]struct {
 		module *starlarkstruct.Module
 		want   string
 	}{
-		"configured_manager": {Module(rt), "  - curl"},
-		"fixed_pacman":       {PacmanModule(rt), "  - git\n  - zlib"},
+		"configured_manager": {
+			Module(rt),
+			"  - curl",
+		},
+		"fixed_pacman": {
+			PacmanModule(rt),
+			"  - git\n  - zlib",
+		},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {

@@ -24,7 +24,9 @@ import (
 
 // Module returns the Starlark pkg module.
 func Module(rt *boot.Runtime) *starlarkstruct.Module {
-	m := &module{rt: rt}
+	m := &module{
+		rt: rt,
+	}
 	return &starlarkstruct.Module{
 		Name: "pkg",
 		Members: starlark.StringDict{
@@ -273,8 +275,14 @@ func sudoArgs(rt *boot.Runtime, args ...string) []string {
 func aptUpdates(ctx context.Context, rt *boot.Runtime, dryRun bool) ([]string, error) {
 	// Keep the simulation read-only, including the generated binary caches.
 	argv := []string{
-		"apt-get", "--simulate", "--with-new-pkgs",
-		"-o", "Dir::Cache::pkgcache=", "-o", "Dir::Cache::srcpkgcache=", "upgrade",
+		"apt-get",
+		"--simulate",
+		"--with-new-pkgs",
+		"-o",
+		"Dir::Cache::pkgcache=",
+		"-o",
+		"Dir::Cache::srcpkgcache=",
+		"upgrade",
 	}
 	if !dryRun {
 		refresh := sudoArgs(rt, "apt-get", "--error-on=any", "update")

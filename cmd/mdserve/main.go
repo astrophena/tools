@@ -213,8 +213,12 @@ type pageData struct {
 func splitDocument(doc *markdown.Document) (intro, content string) {
 	for i, b := range doc.Blocks {
 		if _, ok := b.(*markdown.Heading); ok {
-			intro := markdown.ToHTML(&markdown.Document{Blocks: doc.Blocks[:i+1]})
-			content := markdown.ToHTML(&markdown.Document{Blocks: doc.Blocks[i+1:]})
+			intro := markdown.ToHTML(&markdown.Document{
+				Blocks: doc.Blocks[:i+1],
+			})
+			content := markdown.ToHTML(&markdown.Document{
+				Blocks: doc.Blocks[i+1:],
+			})
 			return intro, content
 		}
 	}

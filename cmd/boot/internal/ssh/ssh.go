@@ -22,7 +22,9 @@ import (
 
 // Module returns the Starlark ssh module.
 func Module(rt *boot.Runtime) *starlarkstruct.Module {
-	m := &module{rt: rt}
+	m := &module{
+		rt: rt,
+	}
 	return &starlarkstruct.Module{
 		Name: "ssh",
 		Members: starlark.StringDict{

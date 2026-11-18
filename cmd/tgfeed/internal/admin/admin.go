@@ -356,8 +356,10 @@ func (a *api) handleGetStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var response any
-	var count int
+	var (
+		response any
+		count    int
+	)
 	if includeDetails {
 		var runs []json.RawMessage
 		runs, err = a.statsStore.ListRuns(r.Context(), limit, beforeStartedAt)

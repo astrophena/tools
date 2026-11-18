@@ -193,7 +193,10 @@ func parseMediaList(v starlark.Value) ([]sender.Media, error) {
 		kind := stringField(mediaDict, "type")
 		url := stringField(mediaDict, "url")
 		if kind != "" && url != "" {
-			media = append(media, sender.Media{Type: kind, URL: url})
+			media = append(media, sender.Media{
+				Type: kind,
+				URL:  url,
+			})
 		}
 	}
 
@@ -238,7 +241,10 @@ func parseInlineKeyboard(v starlark.Value) ([]sender.ActionRow, error) {
 func parseInlineKeyboardButton(button *starlark.Dict) (sender.Action, bool) {
 	label := stringField(button, "text")
 	url := stringField(button, "url")
-	return sender.Action{Label: label, URL: url}, label != "" && url != ""
+	return sender.Action{
+		Label: label,
+		URL:   url,
+	}, label != "" && url != ""
 }
 
 func stringField(dict *starlark.Dict, key string) string {

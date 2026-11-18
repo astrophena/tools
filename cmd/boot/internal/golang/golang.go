@@ -31,7 +31,9 @@ var goProxyURL = "https://proxy.golang.org"
 
 // Module returns the Starlark go module.
 func Module(rt *boot.Runtime) *starlarkstruct.Module {
-	m := &module{rt: rt}
+	m := &module{
+		rt: rt,
+	}
 	return &starlarkstruct.Module{
 		Name: "go",
 		Members: starlark.StringDict{

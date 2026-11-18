@@ -21,7 +21,9 @@ type MemStore struct {
 // NewMemStore creates a cache with the given TTL. The context controls the
 // lifetime of its background eviction loop.
 func NewMemStore(ctx context.Context, ttl time.Duration) *MemStore {
-	s := &MemStore{ttl: ttl}
+	s := &MemStore{
+		ttl: ttl,
+	}
 	go evictPeriodically(ctx, ttl, s.evictExpired)
 	return s
 }
